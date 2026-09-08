@@ -15,7 +15,7 @@ export const cloudConfigured = !!(url && anon)
 let client: SupabaseClient | null = null
 export function supabase(): SupabaseClient {
   if (!cloudConfigured) throw new Error('Supabase 未設定（缺少 VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY）')
-  if (!client) client = createClient(url!, anon!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
+  if (!client) client = createClient(url!, anon!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })
   return client
 }
 
@@ -137,7 +137,7 @@ export async function currentUser(): Promise<User | null> {
   return data.session?.user ?? null
 }
 export async function sendMagicLink(email: string) {
-  const { error } = await supabase().auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin + window.location.pathname + window.location.hash } })
+  const { error } = await supabase().auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}import` } })
   if (error) throw new Error(error.message)
 }
 export async function verifyEmailCode(email: string, token: string) {
