@@ -1,0 +1,1032 @@
+[
+ {
+  "key": "G",
+  "zh": "出賽數",
+  "en": "Games",
+  "group": "打擊",
+  "formula": "出現在打席紀錄的比賽數",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "PA",
+  "zh": "打席",
+  "en": "Plate Appearances",
+  "group": "打擊",
+  "formula": "有打擊結果的打席列數",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "AB",
+  "zh": "打數",
+  "en": "At Bats",
+  "group": "打擊",
+  "formula": "PA − BB − IBB − HBP − SH − SF − 妨礙",
+  "status": "現有",
+  "priority": "P0",
+  "note": "舊表未扣除觸身球，本表已修正"
+ },
+ {
+  "key": "R",
+  "zh": "得分",
+  "en": "Runs",
+  "group": "打擊",
+  "formula": "得分欄加總",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "H",
+  "zh": "安打",
+  "en": "Hits",
+  "group": "打擊",
+  "formula": "一安 + 二安 + 三安 + 全壘打",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "2B",
+  "zh": "二壘安打",
+  "en": "Doubles",
+  "group": "打擊",
+  "formula": "打擊結果 = 二安",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "3B",
+  "zh": "三壘安打",
+  "en": "Triples",
+  "group": "打擊",
+  "formula": "打擊結果 = 三安",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "HR",
+  "zh": "全壘打",
+  "en": "Home Runs",
+  "group": "打擊",
+  "formula": "打擊結果 = 全壘打",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "TB",
+  "zh": "壘打數",
+  "en": "Total Bases",
+  "group": "打擊",
+  "formula": "1B + 2×2B + 3×3B + 4×HR",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "XBH",
+  "zh": "長打",
+  "en": "Extra-Base Hits",
+  "group": "打擊",
+  "formula": "2B + 3B + HR",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "RBI",
+  "zh": "打點",
+  "en": "Runs Batted In",
+  "group": "打擊",
+  "formula": "打點欄加總",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "BB",
+  "zh": "四壞球",
+  "en": "Walks",
+  "group": "打擊",
+  "formula": "保送 + 故四",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "IBB",
+  "zh": "故意四壞",
+  "en": "Intentional Walks",
+  "group": "打擊",
+  "formula": "打擊結果 = 故四",
+  "status": "新增",
+  "priority": "P2",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "HBP",
+  "zh": "觸身球",
+  "en": "Hit By Pitch",
+  "group": "打擊",
+  "formula": "打擊結果 = 觸身",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "SO",
+  "zh": "三振",
+  "en": "Strikeouts",
+  "group": "打擊",
+  "formula": "打擊結果 = 三振（含不死三振）",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "SH",
+  "zh": "犧牲觸擊",
+  "en": "Sacrifice Bunts",
+  "group": "打擊",
+  "formula": "打擊結果 = 犧觸（舊表『犧牲』視同犧觸）",
+  "status": "現有",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "SF",
+  "zh": "犧牲飛球",
+  "en": "Sacrifice Flies",
+  "group": "打擊",
+  "formula": "打擊結果 = 犧飛",
+  "status": "新增",
+  "priority": "P1",
+  "note": "OBP 分母需要"
+ },
+ {
+  "key": "GIDP",
+  "zh": "雙殺打",
+  "en": "Grounded Into Double Play",
+  "group": "打擊",
+  "formula": "打擊結果 = 雙殺",
+  "status": "新增",
+  "priority": "P1",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "ROE",
+  "zh": "失誤上壘",
+  "en": "Reached On Error",
+  "group": "打擊",
+  "formula": "打擊結果 = 失誤",
+  "status": "現有",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "FC",
+  "zh": "野手選擇",
+  "en": "Fielder's Choice",
+  "group": "打擊",
+  "formula": "打擊結果 = 野選",
+  "status": "現有",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "SB",
+  "zh": "盜壘",
+  "en": "Stolen Bases",
+  "group": "打擊",
+  "formula": "盜壘欄加總",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "CS",
+  "zh": "盜壘失敗",
+  "en": "Caught Stealing",
+  "group": "打擊",
+  "formula": "盜壘失敗欄加總",
+  "status": "新增",
+  "priority": "P1",
+  "note": "舊表只記『壘死』，無法算盜壘成功率"
+ },
+ {
+  "key": "SB%",
+  "zh": "盜壘成功率",
+  "en": "Stolen Base %",
+  "group": "打擊",
+  "formula": "SB ÷ (SB + CS)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "AVG",
+  "zh": "打擊率",
+  "en": "Batting Average",
+  "group": "打擊",
+  "formula": "H ÷ AB",
+  "status": "新增",
+  "priority": "P0",
+  "note": "舊表未計算"
+ },
+ {
+  "key": "OBP",
+  "zh": "上壘率",
+  "en": "On-Base Percentage",
+  "group": "打擊",
+  "formula": "(H + BB + HBP) ÷ (AB + BB + HBP + SF)",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "SLG",
+  "zh": "長打率",
+  "en": "Slugging Percentage",
+  "group": "打擊",
+  "formula": "TB ÷ AB",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "OPS",
+  "zh": "整體攻擊指數",
+  "en": "On-base Plus Slugging",
+  "group": "打擊",
+  "formula": "OBP + SLG",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "ISO",
+  "zh": "純長打率",
+  "en": "Isolated Power",
+  "group": "打擊",
+  "formula": "SLG − AVG",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "BABIP",
+  "zh": "場內球安打率",
+  "en": "Batting Avg on Balls In Play",
+  "group": "打擊",
+  "formula": "(H − HR) ÷ (AB − SO − HR + SF)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "判斷運氣成分"
+ },
+ {
+  "key": "wOBA",
+  "zh": "加權上壘率",
+  "en": "Weighted On-Base Average",
+  "group": "打擊",
+  "formula": "(wBB×(BB−IBB) + wHBP×HBP + w1B×1B + w2B×2B + w3B×3B + wHR×HR) ÷ (AB + BB − IBB + SF + HBP)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "權重見『設定』工作表（FanGraphs 線性權重，可更新）"
+ },
+ {
+  "key": "K%",
+  "zh": "三振率",
+  "en": "Strikeout Rate",
+  "group": "打擊",
+  "formula": "SO ÷ PA",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "BB%",
+  "zh": "保送率",
+  "en": "Walk Rate",
+  "group": "打擊",
+  "formula": "BB ÷ PA",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "BB/K",
+  "zh": "保送三振比",
+  "en": "Walk-to-Strikeout",
+  "group": "打擊",
+  "formula": "BB ÷ SO",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "RISP_AVG",
+  "zh": "得點圈打擊率",
+  "en": "AVG with RISP",
+  "group": "打擊",
+  "formula": "得點圈安打 ÷ 得點圈打數（打席前二/三壘有人）",
+  "status": "新增",
+  "priority": "P1",
+  "note": "需要新欄位『壘上(前)』；CPBL 官方紀錄項目"
+ },
+ {
+  "key": "QAB%",
+  "zh": "優質打席率",
+  "en": "Quality At-Bat %",
+  "group": "打擊",
+  "formula": "優質打席 ÷ PA；優質打席 = 安打、保送、觸身、犧打、有打點、6球以上、或強勁擊球",
+  "status": "新增",
+  "priority": "P1",
+  "note": "業餘球隊常用的過程指標"
+ },
+ {
+  "key": "P/PA",
+  "zh": "每打席用球數",
+  "en": "Pitches per PA",
+  "group": "打擊過程",
+  "formula": "用球數 ÷ PA",
+  "status": "新增",
+  "priority": "P1",
+  "note": "從逐球紀錄取得"
+ },
+ {
+  "key": "Swing%",
+  "zh": "揮棒率",
+  "en": "Swing Rate",
+  "group": "打擊過程",
+  "formula": "揮棒(SS+F+IP) ÷ 總球數",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "Whiff%",
+  "zh": "揮空率",
+  "en": "Whiff Rate",
+  "group": "打擊過程",
+  "formula": "揮空(SS) ÷ 揮棒(SS+F+IP)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "MLB Statcast 指標；舊表已有逐球資料即可算"
+ },
+ {
+  "key": "Contact%",
+  "zh": "擊球率",
+  "en": "Contact Rate",
+  "group": "打擊過程",
+  "formula": "1 − Whiff%",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "FirstPitchSwing%",
+  "zh": "首球揮棒率",
+  "en": "First-Pitch Swing %",
+  "group": "打擊過程",
+  "formula": "第一球為 SS/F/IP 的打席 ÷ PA",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "GB%",
+  "zh": "滾地球率",
+  "en": "Ground Ball %",
+  "group": "打擊過程",
+  "formula": "滾地(G) ÷ 場內球",
+  "status": "新增",
+  "priority": "P1",
+  "note": "軌跡欄 G/F/L"
+ },
+ {
+  "key": "FB%",
+  "zh": "飛球率",
+  "en": "Fly Ball %",
+  "group": "打擊過程",
+  "formula": "飛球(F) ÷ 場內球",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "LD%",
+  "zh": "平飛球率",
+  "en": "Line Drive %",
+  "group": "打擊過程",
+  "formula": "平飛(L) ÷ 場內球",
+  "status": "新增",
+  "priority": "P1",
+  "note": "平飛球是安打率最高的擊球型態"
+ },
+ {
+  "key": "Hard%",
+  "zh": "強勁擊球率",
+  "en": "Hard-Hit % (proxy)",
+  "group": "打擊過程",
+  "formula": "強度=強 的場內球 ÷ 場內球",
+  "status": "新增",
+  "priority": "P1",
+  "note": "Statcast Hard-Hit%(≥95 mph) 的人工近似"
+ },
+ {
+  "key": "Pull%",
+  "zh": "拉打率",
+  "en": "Pull %",
+  "group": "打擊過程",
+  "formula": "依落點 1–9 與打者慣用手計算（右打 5/6/7 為拉打）",
+  "status": "新增",
+  "priority": "P2",
+  "note": "需要名單中的打擊慣用手"
+ },
+ {
+  "key": "Oppo%",
+  "zh": "反方向率",
+  "en": "Opposite Field %",
+  "group": "打擊過程",
+  "formula": "右打 3/4/9 為反方向",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "pG",
+  "zh": "出賽",
+  "en": "Games Pitched",
+  "group": "投球",
+  "formula": "出現在投球紀錄的比賽數",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "GS",
+  "zh": "先發",
+  "en": "Games Started",
+  "group": "投球",
+  "formula": "該場第一位投手",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "W",
+  "zh": "勝投",
+  "en": "Wins",
+  "group": "投球",
+  "formula": "比賽清單『勝投』欄",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "L",
+  "zh": "敗投",
+  "en": "Losses",
+  "group": "投球",
+  "formula": "比賽清單『敗投』欄",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "SV",
+  "zh": "救援成功",
+  "en": "Saves",
+  "group": "投球",
+  "formula": "比賽清單『救援』欄",
+  "status": "新增",
+  "priority": "P1",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "HLD",
+  "zh": "中繼成功",
+  "en": "Holds",
+  "group": "投球",
+  "formula": "比賽清單『中繼』欄（可多人，逗號分隔）",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "IP",
+  "zh": "投球局數",
+  "en": "Innings Pitched",
+  "group": "投球",
+  "formula": "出局數 ÷ 3（顯示為 x.1 / x.2）",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "BF",
+  "zh": "面對打者",
+  "en": "Batters Faced",
+  "group": "投球",
+  "formula": "投球紀錄列數",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "PC",
+  "zh": "用球數",
+  "en": "Pitch Count",
+  "group": "投球",
+  "formula": "好球 + 界外 + 壞球",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "Strike%",
+  "zh": "好球率",
+  "en": "Strike %",
+  "group": "投球",
+  "formula": "(好球 + 界外) ÷ 用球數",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pK",
+  "zh": "三振",
+  "en": "Strikeouts",
+  "group": "投球",
+  "formula": "",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pBB",
+  "zh": "四壞球",
+  "en": "Walks",
+  "group": "投球",
+  "formula": "保送 + 故四",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pHBP",
+  "zh": "觸身球",
+  "en": "Hit Batters",
+  "group": "投球",
+  "formula": "",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pH",
+  "zh": "被安打",
+  "en": "Hits Allowed",
+  "group": "投球",
+  "formula": "",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pHR",
+  "zh": "被全壘打",
+  "en": "Home Runs Allowed",
+  "group": "投球",
+  "formula": "",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "pR",
+  "zh": "失分",
+  "en": "Runs Allowed",
+  "group": "投球",
+  "formula": "結果代碼 R + ER",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "ER",
+  "zh": "責失分",
+  "en": "Earned Runs",
+  "group": "投球",
+  "formula": "結果代碼 ER",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "WP",
+  "zh": "暴投",
+  "en": "Wild Pitches",
+  "group": "投球",
+  "formula": "暴投欄加總",
+  "status": "新增",
+  "priority": "P1",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "PK",
+  "zh": "牽制出局",
+  "en": "Pickoffs",
+  "group": "投球",
+  "formula": "牽制出局欄加總",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "SBA",
+  "zh": "被盜壘",
+  "en": "Stolen Bases Allowed",
+  "group": "投球",
+  "formula": "被盜壘欄加總",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "ERA",
+  "zh": "防禦率",
+  "en": "Earned Run Average",
+  "group": "投球",
+  "formula": "ER × 每場局數 ÷ IP",
+  "status": "現有",
+  "priority": "P0",
+  "note": "每場局數在『設定』調整（預設 7；MLB/CPBL 為 9）"
+ },
+ {
+  "key": "WHIP",
+  "zh": "每局被上壘率",
+  "en": "Walks + Hits per IP",
+  "group": "投球",
+  "formula": "(BB + H) ÷ IP",
+  "status": "現有",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "K/9",
+  "zh": "每九局三振",
+  "en": "Strikeouts per 9",
+  "group": "投球",
+  "formula": "K × 9 ÷ IP",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "BB/9",
+  "zh": "每九局保送",
+  "en": "Walks per 9",
+  "group": "投球",
+  "formula": "BB × 9 ÷ IP",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "H/9",
+  "zh": "每九局被安打",
+  "en": "Hits per 9",
+  "group": "投球",
+  "formula": "H × 9 ÷ IP",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "K/BB",
+  "zh": "三振保送比",
+  "en": "Strikeout-to-Walk",
+  "group": "投球",
+  "formula": "K ÷ BB",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "pK%",
+  "zh": "三振率",
+  "en": "Strikeout Rate",
+  "group": "投球",
+  "formula": "K ÷ BF",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "pBB%",
+  "zh": "保送率",
+  "en": "Walk Rate",
+  "group": "投球",
+  "formula": "BB ÷ BF",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "OppAVG",
+  "zh": "被打擊率",
+  "en": "Opponent AVG",
+  "group": "投球",
+  "formula": "被安打 ÷ 對方打數",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "OppOBP",
+  "zh": "被上壘率",
+  "en": "Opponent OBP",
+  "group": "投球",
+  "formula": "(H + BB + HBP) ÷ (AB + BB + HBP + SF)",
+  "status": "新增",
+  "priority": "P2",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "pBABIP",
+  "zh": "被場內球安打率",
+  "en": "BABIP Against",
+  "group": "投球",
+  "formula": "(H − HR) ÷ (AB − K − HR + SF)",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "FIP",
+  "zh": "獨立防禦率",
+  "en": "Fielding Independent Pitching",
+  "group": "投球",
+  "formula": "(13×HR + 3×(BB+HBP) − 2×K) ÷ IP + FIP常數",
+  "status": "新增",
+  "priority": "P1",
+  "note": "常數在『設定』調整（預設 3.10）"
+ },
+ {
+  "key": "pGB%",
+  "zh": "滾地球率",
+  "en": "Ground Ball % Against",
+  "group": "投球",
+  "formula": "滾地 ÷ 場內球",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "pWhiff%",
+  "zh": "揮空率",
+  "en": "Whiff % Induced",
+  "group": "投球",
+  "formula": "SS ÷ (SS + F + IP)",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "CSW%",
+  "zh": "好球＋揮空率",
+  "en": "Called Strikes + Whiffs",
+  "group": "投球",
+  "formula": "(CS + SS) ÷ 用球數",
+  "status": "新增",
+  "priority": "P1",
+  "note": "現代投手評估的核心過程指標"
+ },
+ {
+  "key": "FStrike%",
+  "zh": "首球好球率",
+  "en": "First-Pitch Strike %",
+  "group": "投球",
+  "formula": "第一球為好球/界外/場內 的打席 ÷ BF",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "P/IP",
+  "zh": "每局用球數",
+  "en": "Pitches per Inning",
+  "group": "投球",
+  "formula": "PC ÷ IP",
+  "status": "新增",
+  "priority": "P1",
+  "note": "投手效率"
+ },
+ {
+  "key": "P/BF",
+  "zh": "每打席用球數",
+  "en": "Pitches per Batter",
+  "group": "投球",
+  "formula": "PC ÷ BF",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "LOB%",
+  "zh": "殘壘率",
+  "en": "Left On Base %",
+  "group": "投球",
+  "formula": "(H + BB + HBP − R) ÷ (H + BB + HBP − 1.4×HR)",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "QS",
+  "zh": "優質先發",
+  "en": "Quality Start",
+  "group": "投球",
+  "formula": "先發且 IP ≥ 每場局數×2/3 且 ER ≤ 3",
+  "status": "新增",
+  "priority": "P2",
+  "note": "依 7 局賽制調整為 IP ≥ 5"
+ },
+ {
+  "key": "fG",
+  "zh": "守備出賽",
+  "en": "Games",
+  "group": "守備",
+  "formula": "守備紀錄列數",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "Inn",
+  "zh": "守備局數",
+  "en": "Innings",
+  "group": "守備",
+  "formula": "",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "PO",
+  "zh": "刺殺",
+  "en": "Putouts",
+  "group": "守備",
+  "formula": "",
+  "status": "新增",
+  "priority": "P1",
+  "note": "CPBL 官方紀錄項目"
+ },
+ {
+  "key": "A",
+  "zh": "助殺",
+  "en": "Assists",
+  "group": "守備",
+  "formula": "",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "E",
+  "zh": "失誤",
+  "en": "Errors",
+  "group": "守備",
+  "formula": "",
+  "status": "現有",
+  "priority": "P0",
+  "note": "舊表只有全隊失誤數，無個人歸屬"
+ },
+ {
+  "key": "DP",
+  "zh": "雙殺",
+  "en": "Double Plays",
+  "group": "守備",
+  "formula": "",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "TC",
+  "zh": "守備機會",
+  "en": "Total Chances",
+  "group": "守備",
+  "formula": "PO + A + E",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "FPCT",
+  "zh": "守備率",
+  "en": "Fielding %",
+  "group": "守備",
+  "formula": "(PO + A) ÷ TC",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "RF/G",
+  "zh": "守備範圍因子",
+  "en": "Range Factor per Game",
+  "group": "守備",
+  "formula": "(PO + A) ÷ G",
+  "status": "新增",
+  "priority": "P2",
+  "note": ""
+ },
+ {
+  "key": "PB",
+  "zh": "捕逸",
+  "en": "Passed Balls",
+  "group": "守備",
+  "formula": "捕手",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "cSB",
+  "zh": "被盜壘",
+  "en": "Stolen Bases Allowed",
+  "group": "守備",
+  "formula": "捕手",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "cCS",
+  "zh": "阻殺",
+  "en": "Caught Stealing",
+  "group": "守備",
+  "formula": "捕手",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "CS%",
+  "zh": "阻殺率",
+  "en": "Caught Stealing %",
+  "group": "守備",
+  "formula": "CS ÷ (SB + CS)",
+  "status": "新增",
+  "priority": "P1",
+  "note": ""
+ },
+ {
+  "key": "WinPct",
+  "zh": "勝率",
+  "en": "Winning %",
+  "group": "球隊",
+  "formula": "W ÷ (W + L)",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "RunDiff",
+  "zh": "得失分差",
+  "en": "Run Differential",
+  "group": "球隊",
+  "formula": "得分 − 失分",
+  "status": "新增",
+  "priority": "P0",
+  "note": ""
+ },
+ {
+  "key": "Pythag",
+  "zh": "畢氏期望勝率",
+  "en": "Pythagorean Win %",
+  "group": "球隊",
+  "formula": "RS^1.83 ÷ (RS^1.83 + RA^1.83)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "判斷戰績是否高/低於實力"
+ },
+ {
+  "key": "LOB",
+  "zh": "殘壘",
+  "en": "Left On Base",
+  "group": "球隊",
+  "formula": "結果代碼 L",
+  "status": "現有",
+  "priority": "P1",
+  "note": ""
+ }
+]
