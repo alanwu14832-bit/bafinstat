@@ -5,6 +5,8 @@ import { X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { Tabs } from '../components/ui/Tabs'
+import { BattingPlayByPlay, PitchLegend, PitchingPlayByPlay } from '../components/ui/PlayByPlay'
 import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
@@ -54,6 +56,7 @@ export function GamesPage() {
   const reduced = usePrefersReducedMotion()
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<string | null>(params.get('game'))
+  const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
   useEffect(() => { const g = params.get('game'); if (g) setOpen(g) }, [params])
   const close = () => { setOpen(null); if (params.get('game')) setParams({}, { replace: true }) }
 
@@ -72,10 +75,12 @@ export function GamesPage() {
   const current = s.summaries.find((g) => g.game.id === open) ?? null
   const boxB = useMemo(() => (current ? battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === current.game.id)).sort((a, b) => (s.dataset.batting.find((p) => p.batter === a.name && p.gameId === current.game.id)?.order ?? 99) - (s.dataset.batting.find((p) => p.batter === b.name && p.gameId === current.game.id)?.order ?? 99)) : []), [current, s.dataset])
   const boxP = useMemo(() => (current ? pitchingLines(s.dataset.pitching.filter((p) => p.gameId === current.game.id), [current.game]) : []), [current, s.dataset])
+  const pbpBat = useMemo(() => (current ? s.dataset.batting.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
+  const pbpPit = useMemo(() => (current ? s.dataset.pitching.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
 
   return (
     <>
-      <PageHeader eyebrow="Schedule" title="比賽" description={`${s.summaries.length} 場比賽符合篩選。點選任一場查看逐場攻守成績（Box Score）。`} />
+      <PageHeader eyebrow="Schedule" title="比賽" description={`${s.summaries.length} 場比賽符合篩選。點選任一場查看逐局比分、Box Score 與逐打席的逐球紀錄。`} />
       <DemoBanner />
       <Card flush>
         <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
@@ -85,7 +90,7 @@ export function GamesPage() {
           <motion.div key="box" role="dialog" aria-modal="true" aria-label="逐場成績" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <div className="absolute inset-0 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm" onClick={close} />
             <motion.div initial={reduced ? false : { y: 24, opacity: 0.01 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-t-[var(--radius)] sm:rounded-[var(--radius)] shadow-[var(--shadow-hover)] p-5 md:p-6 flex flex-col gap-5">
+              className="relative w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-t-[var(--radius)] sm:rounded-[var(--radius)] shadow-[var(--shadow-hover)] p-5 md:p-6 flex flex-col gap-5 [&>*]:shrink-0">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="eyebrow">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}</div>
@@ -100,8 +105,15 @@ export function GamesPage() {
                 <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" className="w-9 px-0"><X /></Button>
               </div>
               <LineScore s={current} />
-              <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
-              <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
+              <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
+              {tab === 'box' && (
+                <>
+                  <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
+                  <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
+                </>
+              )}
+              {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席；依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} /></Card>}
+              {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以琥珀色分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} /></Card>}
               {current.game.note && <p className="text-xs text-muted">{current.game.note}</p>}
             </motion.div>
           </motion.div>

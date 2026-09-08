@@ -1,4 +1,4 @@
-# BAFIN Stats — 喝FIN就好BA 棒球數據平台
+# NTU BaFiN Stats — 台大財金系棒球隊數據平台
 
 從「一場一張的單場紀錄表」升級成「全時期資料庫 + 篩選總表 + 網站儀表板」。
 
@@ -9,6 +9,7 @@
 | **數據研究** | `docs/ANALYTICS_RESEARCH.md` | MLB Statcast 2024–2026、CPBL 官方紀錄與 Trackman、差距分析、建議新增欄位、公式附錄 |
 | **設計藍圖** | `docs/BLUEPRINT.md` | 資訊架構、色彩／字體、版面、圖表規格、建置順序 |
 | **雲端資料庫** | `supabase/schema.sql`、`docs/SUPABASE_SETUP.md` | 選用：Supabase 讓全隊共用同一份資料、紀錄員登入寫入、即時同步 |
+| **使用手冊** | `docs/USER_GUIDE.md`（網站「使用指南」頁同內容） | 比賽前／中／後怎麼記、代碼、賽後怎麼看數據 |
 | **數據字典** | `data/stat_dictionary.json` | 103 項指標的單一定義來源（Excel 與網站共用） |
 
 ## 快速開始
