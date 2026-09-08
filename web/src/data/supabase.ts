@@ -144,6 +144,10 @@ export async function verifyEmailCode(email: string, token: string) {
   const { error } = await supabase().auth.verifyOtp({ email, token, type: 'email' })
   if (error) throw new Error(error.message)
 }
+export async function signInWithPassword(email: string, password: string) {
+  const { error } = await supabase().auth.signInWithPassword({ email, password })
+  if (error) throw new Error(error.message === 'Invalid login credentials' ? 'email 或密碼錯誤' : error.message)
+}
 export async function signOut() { await supabase().auth.signOut() }
 export function onAuthChange(cb: (user: User | null) => void) {
   const { data } = supabase().auth.onAuthStateChange((_e, session) => cb(session?.user ?? null))
