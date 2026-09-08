@@ -7,6 +7,7 @@
 import * as XLSX from 'xlsx'
 import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
+import { normalizeDataset } from './normalize'
 
 type Row = Record<string, unknown>
 
@@ -52,11 +53,14 @@ function toLoc(v: unknown): number | undefined {
   return m ? Number(m[1]) : undefined
 }
 
-function sheetRows(wb: XLSX.WorkBook, name: string, headerRow: number): Row[] {
+/** Rows of a log sheet as objects keyed by header. The header row is located by `key` (a column that must exist),
+ *  so the master workbook (title rows above the header) and a backup exported from the site (header on row 1) parse alike. */
+function sheetRows(wb: XLSX.WorkBook, name: string, key: string): Row[] {
   const ws = wb.Sheets[name]
   if (!ws) return []
-  const rows = XLSX.utils.sheet_to_json<Row>(ws, { range: headerRow, defval: '' })
-  return rows
+  const head = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, range: 0, defval: '' }).slice(0, 12)
+  const hdr = Math.max(0, head.findIndex((row) => row.some((c) => str(c) === key)))
+  return XLSX.utils.sheet_to_json<Row>(ws, { range: hdr, defval: '' })
 }
 
 function pitchesOf(r: Row): string[] {
@@ -118,6 +122,8 @@ function parseSingleMeta(wb: XLSX.WorkBook): Game | null {
     id, date: toISODate(meta['日期']), time: toTime(meta['時間']), tournament: str(meta['杯賽']) || '未分類', opponent: str(meta['對手']) || '未知',
     homeAway: (str(meta['主客']) === '客' ? '客' : '主') as HomeAway, venue: str(meta['場地']) || undefined, weather: str(meta['天氣']) || undefined,
     recorder: str(meta['紀錄者']) || undefined, innings: opt(meta['局數']),
+    winningPitcher: str(meta['勝投']) || undefined, losingPitcher: str(meta['敗投']) || undefined, savePitcher: str(meta['救援']) || undefined,
+    holds: str(meta['中繼']) ? str(meta['中繼']).split(/[,，、\s]+/).filter(Boolean) : undefined,
   }
 }
 
@@ -224,7 +230,7 @@ export function parseLegacyGame(wb: XLSX.WorkBook): RawGame {
 export function legacyToDataset(raw: RawGame, overrides: { id: string; tournament: string; opponent?: string }): Dataset {
   const g: RawGame = { ...raw, game_id: overrides.id.trim() || raw.game_id, tournament: overrides.tournament.trim() || raw.tournament, opponent: overrides.opponent?.trim() || raw.opponent }
   g.batting = raw.batting.map((p) => ({ ...p })); g.pitching = raw.pitching.map((p) => ({ ...p }))
-  return rawGameToDataset(g)
+  return normalizeDataset(rawGameToDataset(g)).dataset
 }
 
 export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: ImportReport } {
@@ -232,23 +238,25 @@ export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: Im
   const names = wb.SheetNames
   const warnings: string[] = []
   if (names.includes('打席紀錄') || names.includes('投球紀錄')) {
-    const roster = parseRoster(sheetRows(wb, '球員名單', 2))
-    const games = parseGames(sheetRows(wb, '比賽清單', 2))
-    const batting = parseBatting(sheetRows(wb, '打席紀錄', 0))
-    const pitching = parsePitching(sheetRows(wb, '投球紀錄', 0))
-    const fielding = parseFielding(sheetRows(wb, '守備紀錄', 0))
+    const roster = parseRoster(sheetRows(wb, '球員名單', '姓名'))
+    const games = parseGames(sheetRows(wb, '比賽清單', '比賽ID'))
+    const batting = parseBatting(sheetRows(wb, '打席紀錄', '打者'))
+    const pitching = parsePitching(sheetRows(wb, '投球紀錄', '投手'))
+    const fielding = parseFielding(sheetRows(wb, '守備紀錄', '球員'))
     const ids = new Set(games.map((g) => g.id))
     const orphan = new Set([...batting, ...pitching, ...fielding].map((p) => p.gameId).filter((id) => id && !ids.has(id)))
     if (orphan.size) warnings.push(`有 ${orphan.size} 個比賽ID 在紀錄中出現但不在『比賽清單』：${[...orphan].slice(0, 5).join('、')}`)
     const unknownBatters = new Set(batting.map((p) => p.batter).filter((n) => !roster.some((r) => r.name === n)))
     if (unknownBatters.size) warnings.push(`有 ${unknownBatters.size} 位打者不在『球員名單』：${[...unknownBatters].slice(0, 5).join('、')}`)
-    return { dataset: { roster, games, batting, pitching, fielding }, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: fielding.length, roster: roster.length, warnings } }
+    const norm = normalizeDataset({ roster, games, batting, pitching, fielding })
+    warnings.push(...norm.warnings.map((w) => `${w.gameId}：${w.message}`))
+    return { dataset: norm.dataset, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings } }
   }
   if (names.includes('單場-打擊') || names.includes('單場-摘要')) {
     const game = parseSingleMeta(wb)
     if (!game) throw new Error('『單場-摘要』的 C2 沒有比賽ID')
-    const batting = parseBatting(sheetRows(wb, '單場-打擊', 0), game.id)
-    const pitching = parsePitching(sheetRows(wb, '單場-投球', 0), game.id)
+    const batting = parseBatting(sheetRows(wb, '單場-打擊', '打者'), game.id)
+    const pitching = parsePitching(sheetRows(wb, '單場-投球', '投手'), game.id)
     // fielding block inside 單場-摘要: find the header row that starts with 比賽ID/球員
     const ws = wb.Sheets['單場-摘要']
     const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 })
@@ -258,12 +266,14 @@ export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: Im
       const rows = XLSX.utils.sheet_to_json<Row>(ws, { range: hdrIdx, defval: '' })
       fielding = parseFielding(rows.filter((r) => str(r['球員'])), game.id)
     }
-    return { dataset: { roster: [], games: [game], batting, pitching, fielding }, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: fielding.length, roster: 0, warnings } }
+    const norm = normalizeDataset({ roster: [], games: [game], batting, pitching, fielding })
+    warnings.push(...norm.warnings.map((w) => w.message))
+    return { dataset: norm.dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings } }
   }
   if (names.includes(LEGACY_SUMMARY)) {
     const raw = parseLegacyGame(wb)
-    const dataset = rawGameToDataset(raw)
-    return { dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: dataset.fielding.length, roster: dataset.roster.length, warnings: raw.warnings ?? [], legacy: raw } }
+    const norm = normalizeDataset(rawGameToDataset(raw))
+    return { dataset: norm.dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings: [...(raw.warnings ?? []), ...norm.warnings.map((w) => w.message)], legacy: raw } }
   }
   throw new Error(`找不到可辨識的工作表（需要『打席紀錄』、『單場-打擊』或舊格式的『當日比賽統計』）。目前工作表：${names.join('、')}`)
 }

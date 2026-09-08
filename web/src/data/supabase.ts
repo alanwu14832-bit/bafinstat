@@ -6,6 +6,7 @@
  */
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
+import { normalizeDataset } from './normalize'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -76,7 +77,7 @@ export async function fetchCloudDataset(): Promise<Dataset> {
     selectAll<PlayerRow>('players', ['name']), selectAll<GameRow>('games', ['date', 'id']), selectAll<BattingRow>('batting_pa', ['game_id', 'seq']),
     selectAll<PitchingRow>('pitching_pa', ['game_id', 'seq']), selectAll<FieldingRow>('fielding_lines', ['game_id', 'seq']),
   ])
-  return rowsToDataset({ players, games, batting, pitching, fielding })
+  return normalizeDataset(rowsToDataset({ players, games, batting, pitching, fielding })).dataset
 }
 
 async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 500) {
