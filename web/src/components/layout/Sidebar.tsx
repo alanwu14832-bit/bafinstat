@@ -3,6 +3,7 @@ import { ChevronsLeft, ChevronsRight, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { NAV_ITEMS } from './nav'
+import { TeamLogo } from '../ui/TeamLogo'
 import { useUiStore } from '../../store/ui'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
@@ -87,12 +88,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
 function Brand({ collapsed, reduced }: { collapsed: boolean; reduced: boolean }) {
   return (
     <div className="flex items-center h-16 pl-[14px] pr-3 mx-3 overflow-hidden whitespace-nowrap">
-      <span
-        className="size-8 shrink-0 rounded-[8px] bg-accent text-accent-ink font-display font-bold text-[18px] inline-flex items-center justify-center -ml-1.5"
-        aria-hidden
-      >
-        B
-      </span>
+      <span className="-ml-1.5 inline-flex"><TeamLogo size={34} /></span>
       <motion.div
         className="ml-2.5 leading-none"
         initial={false}
@@ -100,8 +96,8 @@ function Brand({ collapsed, reduced }: { collapsed: boolean; reduced: boolean })
         transition={reduced ? { duration: 0 } : { duration: 0.2, ease: EASE, delay: collapsed ? 0 : 0.05 }}
         aria-hidden={collapsed}
       >
-        <div className="font-display font-bold text-[22px] tracking-wide text-ink">BAFIN</div>
-        <div className="text-[11px] text-muted mt-0.5">喝FIN就好BA 數據平台</div>
+        <div className="font-display font-bold text-[22px] tracking-wide text-ink leading-none">NTU <span className="text-accent">BaFiN</span></div>
+        <div className="text-[11px] text-muted mt-1">台大財金系棒球隊・數據平台</div>
       </motion.div>
     </div>
   )

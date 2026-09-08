@@ -1,7 +1,7 @@
 import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import {
-  BattingPage, DictionaryPage, FieldingPage, GamesPage, ImportPage, NotFoundPage, OverviewPage, PitchingPage, PlayersPage,
+  BattingPage, DictionaryPage, FieldingPage, GamesPage, GuidePage, ImportPage, NotFoundPage, OverviewPage, PitchingPage, PlayersPage,
 } from './pages'
 
 /** GitHub Pages serves from a sub-path; strip the trailing slash for the router basename. */
@@ -19,6 +19,7 @@ export function AppRoutes() {
         <Route path="/games" element={<GamesPage />} />
         <Route path="/import" element={<ImportPage />} />
         <Route path="/dictionary" element={<DictionaryPage />} />
+        <Route path="/guide" element={<GuidePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppShell>

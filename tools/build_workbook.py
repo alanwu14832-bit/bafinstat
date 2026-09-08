@@ -29,7 +29,17 @@ from stat_dictionary import STAT_DICTIONARY
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "data", "BAFIN_棒球數據總表.xlsx")
-GAME = json.load(open(os.path.join(ROOT, "data", "game_20251010_qunfeng.json"), encoding="utf-8"))
+import glob as _glob
+GAMES = [json.load(open(f, encoding="utf-8")) for f in sorted(_glob.glob(os.path.join(ROOT, "data", "games", "*.json")))]
+GAME = GAMES[0]   # first game also seeds the 單場 template as a worked example
+def roster_from_games():
+    seen, out = set(), []
+    for g in GAMES:
+        for l in g["lineup"] + [{"name": p["name"], "pos": "P"} for p in g["pitchers"]]:
+            if l["name"] not in seen:
+                seen.add(l["name"]); out.append({"name": l["name"], "pos": l.get("pos", "")})
+    return out
+ROSTER = roster_from_games()
 
 LOG_ROWS = int(os.environ.get("LOG_ROWS", "3000"))           # pre-formatted rows in each log
 ROSTER_ROWS = 30          # players supported in 總表
@@ -117,7 +127,7 @@ LISTS = {
     "逐球代碼": ["S", "SS", "CS", "F", "IP", "B"],
     "結果代碼": ["I", "II", "III", "L", "R", "ER"],
     "壘上代碼": ["無", "1", "2", "3", "12", "13", "23", "123"],
-    "對手清單": ["群風"],
+    "對手清單": sorted({g["opponent"] for g in GAMES}),
     "主客": ["主", "客"],
     "軌跡": ["G", "F", "L"],
     "強度": ["強", "中", "弱"],
@@ -225,9 +235,9 @@ for i, h in enumerate(ROSTER_COLS):
 for rr in range(4, 4 + ROSTER_ROWS):
     for cc in range(1, 9):
         put(ws, rr, cc, None, f_input, fill_input)
-for i, l in enumerate(GAME["lineup"]):
+for i, l in enumerate(ROSTER[:ROSTER_ROWS]):
     put(ws, 4 + i, 2, l["name"], f_input, fill_input)
-    put(ws, 4 + i, 3, l["pos"], f_input, fill_input)
+    put(ws, 4 + i, 3, l["pos"] if l["pos"] not in ("PH", "PR", "") else "", f_input, fill_input)
     put(ws, 4 + i, 7, "現役", f_input, fill_input)
 dv(ws, "守位清單", f"C4:D{3 + ROSTER_ROWS}")
 ROSTER_NAME = f"球員名單!$B$4:$B${3 + ROSTER_ROWS}"
@@ -268,13 +278,21 @@ dv(ws, "杯賽清單", f"{GL['杯賽']}4:{GL['杯賽']}{3 + GAME_ROWS}")
 dv(ws, "對手清單", f"{GL['對手']}4:{GL['對手']}{3 + GAME_ROWS}")
 dv(ws, "主客", f"{GL['主客']}4:{GL['主客']}{3 + GAME_ROWS}")
 ws.freeze_panes = "C4"
-# seed game
-g = GAME
-seed = {"比賽ID": g["game_id"], "日期": dt.datetime.strptime(g["date"], "%Y-%m-%d"), "時間": dt.time(11, 40), "杯賽": g["tournament"], "對手": g["opponent"],
-        "主客": g["home_away"], "場地": g["venue"], "天氣": g["weather"], "紀錄者": g["recorder"], "局數": g["innings_played"],
-        "勝投": "許振謙", "備註": "由原單場紀錄表轉入；杯賽名稱為假設"}
-for k, v in seed.items():
-    ws.cell(row=4, column=GM[k], value=v)
+# seed games
+def _time(t):
+    try:
+        h, m = str(t).split(":"); return dt.time(int(h), int(m))
+    except Exception:
+        return None
+for gi, g in enumerate(GAMES):
+    win = next((p["name"] for p in g["pitchers"] if p.get("decision") == "W"), None)
+    lose = next((p["name"] for p in g["pitchers"] if p.get("decision") == "L"), None)
+    seed = {"比賽ID": g["game_id"], "日期": dt.datetime.strptime(g["date"], "%Y-%m-%d"), "時間": _time(g.get("time")), "杯賽": g["tournament"], "對手": g["opponent"],
+            "主客": g["home_away"], "場地": g["venue"], "天氣": g["weather"], "紀錄者": g["recorder"], "局數": g["innings_played"],
+            "勝投": win, "敗投": lose, "備註": "由原單場紀錄表轉入；杯賽名稱為假設" + ("；" + "；".join(g["warnings"]) if g.get("warnings") else "")}
+    for k, v in seed.items():
+        if v is not None:
+            ws.cell(row=4 + gi, column=GM[k], value=v)
 GAME_LAST = 3 + GAME_ROWS
 
 # ============================================================================ log sheets
@@ -366,7 +384,7 @@ def pit_formulas(rr):
     for k, v in [("二安", "二安"), ("三安", "三安"), ("全壘打", "全壘打"), ("故四", "故四"), ("觸身", "觸身"), ("三振", "三振"), ("犧飛", "犧飛")]:
         f[k] = f'=IF({X}="{v}",1,0)'
     f["保送"] = f'=IF(OR({X}="保送",{X}="故四"),1,0)'
-    f["出局數"] = f'=IF(OR({CODE}="I",{CODE}="II",{CODE}="III"),IF({X}="雙殺",2,1),0)'
+    f["出局數"] = f'=IF(OR({CODE}="I",{CODE}="II",{CODE}="III"),IF(AND({X}="雙殺",OR(${PL["出局(前)"]}{rr}="",${PL["出局(前)"]}{rr}<=1)),2,1),0)'
     f["失分"] = f'=IF(OR({CODE}="R",{CODE}="ER"),1,0)'
     f["自責"] = f'=IF({CODE}="ER",1,0)'
     f["場內球"] = f'=IF(AND({c("打席")}=1,OR({Z}="G",{Z}="F",{Z}="L")),1,0)'
@@ -409,49 +427,66 @@ d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, sh
 
 # ---- seed logs with the real game
 BASES = {0: "無"}
-def seed_bat(ws, rows, start=2):
+def seed_bat(ws, rows, start=2, game=None):
+    game = game or GAME
     for i, r in enumerate(rows):
         rr = start + i
-        vals = {"比賽ID": GAME["game_id"], "局": r["inning"], "出局(前)": r["outs_before"], "棒次": r["order"], "守位": r.get("pos", ""), "打者": r["name"],
+        vals = {"比賽ID": game["game_id"], "局": r["inning"], "出局(前)": r["outs_before"], "棒次": r["order"], "守位": r.get("pos", ""), "打者": r["name"],
                 "打擊結果": r["result"], "落點": r["loc"], "軌跡": r["traj"], "強度": r["quality"], "盜壘": r["sb"] or None, "失誤進壘": r["adv_err"] or None,
                 "壘死": r["out_on_base"] or None, "得分": r["run"] or None, "打點": r["rbi"] or None, "結果代碼": r["code"], "備註": r["note"]}
         for k, v in vals.items():
             if v not in (None, ""): ws.cell(row=rr, column=BAT[k], value=v)
         for j, p in enumerate(r["pitches"][:PITCH_N]):
             ws.cell(row=rr, column=BAT["球1"] + j, value=p)
-def seed_pit(ws, rows, start=2):
+def seed_pit(ws, rows, start=2, game=None):
+    game = game or GAME
     for i, r in enumerate(rows):
         rr = start + i
-        vals = {"比賽ID": GAME["game_id"], "局": r["inning"], "出局(前)": r["outs_before"], "對方棒次": r["order"], "投手": r["name"],
+        vals = {"比賽ID": game["game_id"], "局": r["inning"], "出局(前)": r["outs_before"], "對方棒次": r["order"], "投手": r["name"],
                 "打擊結果": r["result"], "落點": r["loc"], "軌跡": r["traj"], "強度": r["quality"], "被盜壘": r["sb"] or None, "結果代碼": r["code"], "備註": r["note"]}
         for k, v in vals.items():
             if v not in (None, ""): ws.cell(row=rr, column=PIT[k], value=v)
         for j, p in enumerate(r["pitches"][:PITCH_N]):
             ws.cell(row=rr, column=PIT["球1"] + j, value=p)
-seed_bat(ws_bat, GAME["batting"]); seed_pit(ws_pit, GAME["pitching"])
-# fielding seed: innings by lineup, errors attributed by recorded location (5 team errors; one location unknown)
-err_by_pos = {}
+_b = _p = 2
+for g in GAMES:
+    seed_bat(ws_bat, g["batting"], _b, g); _b += len(g["batting"])
+    seed_pit(ws_pit, g["pitching"], _p, g); _p += len(g["pitching"])
+# fielding seed: per game, innings by lineup; errors attributed by recorded location
 POSN = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF", 8: "CF", 9: "RF"}
-unknown_err = 0
-for r in GAME["pitching"]:
-    if r["result"] == "失誤":
-        if r["loc"]: err_by_pos[POSN[r["loc"]]] = err_by_pos.get(POSN[r["loc"]], 0) + 1
-        else: unknown_err += 1
-pos_player = {l["pos"]: l["name"] for l in GAME["lineup"] if l["starter"]}
-FLD_SEED = []
-for l in GAME["lineup"]:
-    if not l["starter"]: continue
-    e = err_by_pos.get(l["pos"], 0)
-    FLD_SEED.append({"比賽ID": GAME["game_id"], "球員": l["name"], "守位": l["pos"], "局數": 5, "失誤E": e or None,
-                     "備註": "失誤依原表落點推定" if e else None})
-FLD_SEED.append({"比賽ID": GAME["game_id"], "球員": "蔡奇霖", "守位": "P", "局數": 1, "備註": "中繼"})
-FLD_SEED.append({"比賽ID": GAME["game_id"], "球員": "林昱丞", "守位": "P", "局數": 2, "備註": "中繼"})
-FLD_SEED.append({"比賽ID": GAME["game_id"], "球員": "謝昊瑾", "守位": "C", "局數": None, "備註": "替補捕手；局數未記"})
-if unknown_err:
-    FLD_SEED[0]["備註"] = (FLD_SEED[0]["備註"] or "") + f"；另有 {unknown_err} 次失誤原表未記落點，未歸屬個人"
-for i, row in enumerate(FLD_SEED):
-    for k, v in row.items():
-        if v not in (None, ""): ws_fld.cell(row=2 + i, column=FLD[k], value=v)
+def fielding_seed(g):
+    err_by_pos, unknown = {}, 0
+    for r in g["pitching"]:
+        if r["result"] == "失誤":
+            if r["loc"]: err_by_pos[POSN[r["loc"]]] = err_by_pos.get(POSN[r["loc"]], 0) + 1
+            else: unknown += 1
+    innings = g["innings_played"]
+    rows = []
+    starters = {l["name"] for l in g["lineup"] if l["starter"]}
+    for l in g["lineup"]:
+        if not l["starter"] or l["pos"] in ("DH", "PH", "PR", ""):
+            continue
+        e = err_by_pos.get(l["pos"], 0)
+        rows.append({"比賽ID": g["game_id"], "球員": l["name"], "守位": l["pos"], "局數": innings, "失誤E": e or None, "備註": "失誤依原表落點推定" if e else None})
+    # pitchers: innings from their outs
+    outs = {}
+    for r in g["pitching"]:
+        if r["code"] in ("I", "II", "III"):
+            outs[r["name"]] = outs.get(r["name"], 0) + (2 if r["result"] == "雙殺" and r.get("outs_before", 0) <= 1 else 1)
+    for p in g["pitchers"]:
+        ip = round(outs.get(p["name"], 0) / 3, 1)
+        e = err_by_pos.get("P", 0) if p is g["pitchers"][0] else None
+        rows.append({"比賽ID": g["game_id"], "球員": p["name"], "守位": "P", "局數": ip, "失誤E": e or None, "備註": p.get("role", "")})
+    if unknown and rows:
+        rows[0]["備註"] = (rows[0]["備註"] or "") + f"；另有 {unknown} 次失誤原表未記落點，未歸屬個人"
+    return rows
+FLD_SEED = fielding_seed(GAME)
+_f = 2
+for g in GAMES:
+    for row in fielding_seed(g):
+        for k, v in row.items():
+            if v not in (None, ""): ws_fld.cell(row=_f, column=FLD[k], value=v)
+        _f += 1
 
 # ============================================================================ 總表
 ws = wb.create_sheet("總表")

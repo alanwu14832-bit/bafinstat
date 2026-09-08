@@ -6,17 +6,20 @@
  */
 import * as XLSX from 'xlsx'
 import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
+import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
 
 type Row = Record<string, unknown>
 
 export interface ImportReport {
-  mode: 'master' | 'single'
+  mode: 'master' | 'single' | 'legacy'
   games: number
   batting: number
   pitching: number
   fielding: number
   roster: number
   warnings: string[]
+  /** legacy mode: the parsed game so the user can set 比賽ID / 杯賽 before confirming */
+  legacy?: RawGame
 }
 
 const str = (v: unknown): string => (v === undefined || v === null ? '' : String(v).trim())
@@ -118,8 +121,114 @@ function parseSingleMeta(wb: XLSX.WorkBook): Game | null {
   }
 }
 
+
+// ---------------------------------------------------------------- legacy single-game sheet (當日比賽統計 / 打　擊 / 投球守備)
+const LEGACY_SUMMARY = '當日比賽統計'
+const LEGACY_BAT = ['打　擊', '打 擊', '打擊']
+const LEGACY_PIT = ['投球守備']
+const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+
+function findSheet(wb: XLSX.WorkBook, names: string[]): XLSX.WorkSheet | undefined {
+  for (const n of names) if (wb.Sheets[n]) return wb.Sheets[n]
+  const loose = wb.SheetNames.find((n) => names.some((x) => n.replace(/\s|　/g, '') === x.replace(/\s|　/g, '')))
+  return loose ? wb.Sheets[loose] : undefined
+}
+function cellv(ws: XLSX.WorkSheet, ref: string): unknown { return ws[ref]?.v }
+
+/** 'CF(P)' → CF (starter); '(PR)' → PR (sub); '(PH)DH(CF)(LF)' → DH (sub). */
+function parsePos(raw: string): { pos: string; starter: boolean } {
+  const t = raw.trim()
+  if (!t) return { pos: '', starter: true }
+  const outside = t.replace(/\([^)]*\)/g, ' ').trim().split(/\s+/).filter(Boolean)
+  const inside = [...t.matchAll(/\(([^)]*)\)/g)].map((m) => m[1])
+  return { pos: (outside[0] ?? inside[0] ?? t).toUpperCase(), starter: !t.startsWith('(') }
+}
+
+function legacyPAs(ws: XLSX.WorkSheet): RawPA[] {
+  const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:Y1')
+  const out: RawPA[] = []
+  for (let r = 2; r <= range.e.r; r++) { // row index 2 = sheet row 3 (row 2 is the sheet's own example)
+    const at = (c: number) => ws[XLSX.utils.encode_cell({ r, c })]?.v
+    const name = str(at(2))
+    if (!name) continue
+    const pitches: string[] = []
+    for (let c = 3; c <= 11; c++) { const v = str(at(c)).toUpperCase(); if (v) pitches.push(v) }
+    out.push({
+      code: str(at(0)).toUpperCase() || null, order: num(at(1)), name, pitches, result: str(at(15)), loc: toLoc(at(16)) ?? null, traj: (str(at(17)).toUpperCase() || null),
+      quality: str(at(18)) || null, sb: num(at(19)), adv_err: num(at(20)), out_on_base: num(at(21)), run: num(at(22)), rbi: num(at(23)), note: str(at(24)) || null, inning: 0, outs_before: 0,
+    })
+  }
+  return out
+}
+
+/** Same rule as tools/convert_single_game.py: an inning ends after the row producing the 3rd out; a runner out
+ *  recorded on a reaching batter's row keeps the following non-out row in the same inning. */
+function assignInnings(rows: RawPA[]): RawPA[] {
+  let inning = 1, outs = 0
+  const handled = new Set<number>()
+  rows.forEach((r, i) => {
+    if (handled.has(i)) return
+    r.inning = inning; r.outs_before = outs
+    if (r.code === 'I' || r.code === 'II' || r.code === 'III') outs = { I: 1, II: 2, III: 3 }[r.code]
+    if (outs >= 3) {
+      const nxt = rows[i + 1]
+      const runnerOut = r.out_on_base > 0 && REACH.has(r.result)
+      if (runnerOut && nxt && !['I', 'II', 'III'].includes(nxt.code ?? '')) { nxt.inning = inning; nxt.outs_before = 2; handled.add(i + 1) }
+      inning++; outs = 0
+    }
+  })
+  return rows
+}
+
+export function parseLegacyGame(wb: XLSX.WorkBook): RawGame {
+  const sm = wb.Sheets[LEGACY_SUMMARY]
+  const bat = findSheet(wb, LEGACY_BAT); const pit = findSheet(wb, LEGACY_PIT)
+  if (!sm || !bat || !pit) throw new Error('舊格式需要「當日比賽統計」「打　擊」「投球守備」三張工作表')
+  const date = toISODate(cellv(sm, 'S2'))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('「當日比賽統計」S2 的日期無法辨識')
+  const teams = [3, 4].map((r) => ({ name: str(cellv(sm, `D${r}`)), ha: str(cellv(sm, `C${r}`)), line: 'EFGHIJKL'.split('').map((c) => cellv(sm, `${c}${r}`)) })).filter((t) => t.name)
+  let us = teams.find((t) => t.name === TEAM_NAME); let opp = teams.find((t) => t.name !== TEAM_NAME)
+  if (!us) { us = teams[teams.length - 1]; opp = teams[0] }
+  const homeAway: HomeAway = us.ha === '客' ? '客' : '主'
+  const lineup: RawGame['lineup'] = []
+  for (let r = 8; r < 40; r++) {
+    const name = str(cellv(sm, `D${r}`))
+    if (name === '總和') break
+    if (!name) continue
+    const { pos, starter } = parsePos(str(cellv(sm, `C${r}`)))
+    lineup.push({ order: opt(cellv(sm, `B${r}`)) ?? null, pos_raw: str(cellv(sm, `C${r}`)) || null, name, pos, starter })
+  }
+  const pitchers: RawGame['pitchers'] = []
+  for (let r = 18; r < 50; r++) {
+    if (str(cellv(sm, `B${r}`)) === '勝敗' && str(cellv(sm, `C${r}`)) === '任務') {
+      for (let rr = r + 1; rr < r + 12; rr++) { const nm = str(cellv(sm, `D${rr}`)); if (!nm || nm === '總和') break; pitchers.push({ name: nm, role: str(cellv(sm, `C${rr}`)), decision: str(cellv(sm, `B${rr}`)).toUpperCase() === 'W' || str(cellv(sm, `B${rr}`)) === '勝' ? 'W' : str(cellv(sm, `B${rr}`)).toUpperCase() === 'L' || str(cellv(sm, `B${rr}`)) === '敗' ? 'L' : '' }) }
+      break
+    }
+  }
+  const posOf = new Map(lineup.map((l) => [l.name, l.pos]))
+  const batting = assignInnings(legacyPAs(bat)).map((p) => ({ ...p, pos: posOf.get(p.name) ?? '' }))
+  const pitching = assignInnings(legacyPAs(pit))
+  const runsBy = (rows: RawPA[], f: (p: RawPA) => number) => rows.reduce<Record<number, number>>((a, p) => { a[p.inning] = (a[p.inning] ?? 0) + f(p); return a }, {})
+  const rb = runsBy(batting, (p) => p.run), rp = runsBy(pitching, (p) => (p.code === 'R' || p.code === 'ER' ? 1 : 0))
+  const warnings: string[] = []
+  const check = (label: string, line: unknown[], derived: Record<number, number>) => line.forEach((v, i) => { if (v === undefined || v === null || v === '' || String(v).toUpperCase() === 'X') return; if (num(v) !== (derived[i + 1] ?? 0)) warnings.push(`${label}第 ${i + 1} 局：紀錄表 ${num(v)} 分，逐打席推算 ${derived[i + 1] ?? 0} 分`) })
+  check('我隊', us.line, rb); if (opp) check('對手', opp.line, rp)
+  const inningsPlayed = Math.max(1, ...batting.map((p) => p.inning), ...pitching.map((p) => p.inning))
+  return {
+    game_id: `G${date.replace(/-/g, '')}-01`, date, time: toTime(cellv(sm, 'S3')) ?? null, tournament: '未分類', opponent: opp?.name || '未知', home_away: homeAway,
+    venue: str(cellv(sm, 'V2')) || null, weather: str(cellv(sm, 'V3')) || null, recorder: str(cellv(sm, 'V4')) || null, innings_played: inningsPlayed, lineup, pitchers, batting, pitching, warnings,
+  }
+}
+
+/** Re-key a legacy game after the user edits 比賽ID / 杯賽 on the import page. */
+export function legacyToDataset(raw: RawGame, overrides: { id: string; tournament: string; opponent?: string }): Dataset {
+  const g: RawGame = { ...raw, game_id: overrides.id.trim() || raw.game_id, tournament: overrides.tournament.trim() || raw.tournament, opponent: overrides.opponent?.trim() || raw.opponent }
+  g.batting = raw.batting.map((p) => ({ ...p })); g.pitching = raw.pitching.map((p) => ({ ...p }))
+  return rawGameToDataset(g)
+}
+
 export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: ImportReport } {
-  const wb = XLSX.read(data, { type: 'array', cellDates: false })
+  const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
   const warnings: string[] = []
   if (names.includes('打席紀錄') || names.includes('投球紀錄')) {
@@ -151,7 +260,12 @@ export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: Im
     }
     return { dataset: { roster: [], games: [game], batting, pitching, fielding }, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: fielding.length, roster: 0, warnings } }
   }
-  throw new Error(`找不到可辨識的工作表（需要『打席紀錄』或『單場-打擊』）。目前工作表：${names.join('、')}`)
+  if (names.includes(LEGACY_SUMMARY)) {
+    const raw = parseLegacyGame(wb)
+    const dataset = rawGameToDataset(raw)
+    return { dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: dataset.fielding.length, roster: dataset.roster.length, warnings: raw.warnings ?? [], legacy: raw } }
+  }
+  throw new Error(`找不到可辨識的工作表（需要『打席紀錄』、『單場-打擊』或舊格式的『當日比賽統計』）。目前工作表：${names.join('、')}`)
 }
 
 /** Export the current dataset as a CSV bundle (one sheet per log) for backup. */

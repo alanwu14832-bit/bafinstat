@@ -167,8 +167,8 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
   if (HIT_RESULTS.has(r)) l.h++
   if (r === '二安') l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++; if (r === '犧飛') l.sf++
   if (r === '三振') l.k++; if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++
-  // 雙殺 produces two outs but is recorded on one row (see 數據字典 IP)
-  if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' ? 2 : 1
+  // 雙殺 produces two outs but is recorded on one row; only possible with 0–1 outs before the PA (see 數據字典 IP)
+  if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
   l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk
