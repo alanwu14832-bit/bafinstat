@@ -228,7 +228,7 @@ export function legacyToDataset(raw: RawGame, overrides: { id: string; tournamen
 }
 
 export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: ImportReport } {
-  const wb = XLSX.read(data, { type: 'array', cellDates: false })
+  const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
   const warnings: string[] = []
   if (names.includes('打席紀錄') || names.includes('投球紀錄')) {
