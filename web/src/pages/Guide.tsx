@@ -34,7 +34,7 @@ export function GuidePage() {
               <a className="underline" href={TEMPLATE_URL} download>BAFIN_棒球數據總表.xlsx</a>。整隊只維護這一個檔案，建議放在共用雲端硬碟。
             </Step>
             <Step n={2} title="在「比賽清單」新增一列">比賽ID 用 <code>G+日期+場次</code>，例如 <code>G20251010-01</code>；填日期、杯賽、對手、主客、場地。杯賽與對手名稱要先在「設定」工作表的清單裡。</Step>
-            <Step n={3} title="複製三張單場模板">右鍵工作表 → 移動或複製 → 建立副本：<strong>單場-摘要</strong>、<strong>單場-打擊</strong>、<strong>單場-投球</strong>。在單場-摘要的 C2 填同一個比賽ID，填先發打序與守位。</Step>
+            <Step n={3} title="複製三張單場模板">右鍵工作表 → 移動或複製 → 建立副本：<strong>單場-摘要</strong>、<strong>單場-打擊</strong>、<strong>單場-投球</strong>。在單場-摘要的 C2 填同一個比賽ID，填先發打序與守位；賽後在同一區塊填勝投／敗投／救援（網站的 W／L／SV 由這裡來）。</Step>
           </ol>
         </Card>
 
@@ -56,7 +56,7 @@ export function GuidePage() {
           <ol className="flex flex-col gap-3">
             <Step n={1} title="檢查單場-摘要">它會自動算出當場的逐局比分、每個人的打擊與投球成績。核對 R/H/E 跟記分板一致，順便在守備區塊填每個人的 PO / A / E（至少填失誤）。</Step>
             <Step n={2} title="貼回三張紀錄表">把「單場-打擊」有資料的列（A 欄到「備註」欄）複製，到「打席紀錄」最後一列下方 <strong>貼上值</strong>；「單場-投球」貼到「投球紀錄」；守備區塊貼到「守備紀錄」。「總表」立刻更新。</Step>
-            <Step n={3} title="上傳到網站">資料匯入 → 紀錄員登入 → 拖入整個總表 → 「合併（略過重複的比賽ID）」。全隊打開網站就看到最新資料，手機也可以。</Step>
+            <Step n={3} title="上傳到網站">資料匯入 → 紀錄員登入 → 拖入檔案 → 「合併（略過重複的比賽ID）」。整份總表、只含三張「單場-」工作表的檔案、或舊格式的單場紀錄表都可以，網站會自動辨識並算出一樣的數據（空白的「局」「出局(前)」會由出局碼補算，沒有守備紀錄時會由打席守位與失誤落點推定）。</Step>
           </ol>
         </Card>
       </div>

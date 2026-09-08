@@ -159,7 +159,7 @@ lines = [
     ("", False),
     ("紀錄一場新比賽（三步驟）", True),
     ("1. 在『比賽清單』新增一列，填入比賽ID（格式 G+日期+場次，例如 G20251010-01）、日期、杯賽、對手、主客等。", False),
-    ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄。", False),
+    ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄；賽後在同一區塊填勝投／敗投／救援。", False),
     ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『備註』欄）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
     ("   也可以把整個檔案上傳到網站版儀表板（資料匯入頁），網站會自動讀取這三張紀錄表。", False),
     ("", False),
@@ -462,12 +462,15 @@ def fielding_seed(g):
             else: unknown += 1
     innings = g["innings_played"]
     rows = []
-    starters = {l["name"] for l in g["lineup"] if l["starter"]}
-    for l in g["lineup"]:
-        if not l["starter"] or l["pos"] in ("DH", "PH", "PR", ""):
+    # everyone who took a fielding position in the batting log (subs included); pitchers come from the pitching log
+    seen = set()
+    for r in g["batting"]:
+        pos = r.get("pos") or ""
+        if not r["name"] or r["name"] in seen or pos in ("DH", "PH", "PR", "", "P"):
             continue
-        e = err_by_pos.get(l["pos"], 0)
-        rows.append({"比賽ID": g["game_id"], "球員": l["name"], "守位": l["pos"], "局數": innings, "失誤E": e or None, "備註": "失誤依原表落點推定" if e else None})
+        seen.add(r["name"])
+        e = err_by_pos.get(pos, 0)
+        rows.append({"比賽ID": g["game_id"], "球員": r["name"], "守位": pos, "局數": innings, "失誤E": e or None, "備註": "失誤依原表落點推定" if e else "由打席紀錄推定"})
     # pitchers: innings from their outs
     outs = {}
     for r in g["pitching"]:
@@ -783,8 +786,11 @@ title(ws, "單場紀錄模板：比賽摘要", 20, "複製三張『單場-』工
 for col, w in zip("ABCDEFGHIJKLMNOPQRSTUV", [3, 10, 14, 10, 12, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8]):
     ws.column_dimensions[col].width = w
 meta = [("比賽ID", "G20251010-01"), ("日期", dt.datetime(2025, 10, 10)), ("時間", dt.time(11, 40)), ("杯賽", "友誼賽"), ("對手", "群風"), ("主客", "主"),
-        ("場地", "台大棒球場"), ("天氣", "大晴天"), ("紀錄者", "王廷宇"), ("局數", 5), ("人數", 13)]
+        ("場地", "台大棒球場"), ("天氣", "大晴天"), ("紀錄者", "王廷宇"), ("局數", 5), ("人數", 13), ("",""),
+        ("勝投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "W"), None)),
+        ("敗投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "L"), None)), ("救援", None)]
 for i, (k, v) in enumerate(meta):
+    if not k: continue
     rr = 2 + (i % 6); cc = 2 + (i // 6) * 3
     put(ws, rr, cc, k, f_bold, fill_band); c = put(ws, rr, cc + 1, v, f_input, fill_input, "yyyy-mm-dd" if k == "日期" else ("hh:mm" if k == "時間" else None), center)
 GID = "$C$2"
