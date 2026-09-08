@@ -27,6 +27,7 @@ export function ImportPage() {
   const [done, setDone] = useState<string | null>(null)
   const [legacyId, setLegacyId] = useState('')
   const [legacyTournament, setLegacyTournament] = useState('')
+  const [legacyDate, setLegacyDate] = useState('')
   const opts = useFilterOptions()
   const inputRef = useRef<HTMLInputElement>(null)
   const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo, cloud } = useDataStore()
@@ -37,9 +38,9 @@ export function ImportPage() {
     setError(null); setDone(null); setPending(null)
     try {
       const buf = await file.arrayBuffer()
-      const parsed = parseWorkbook(buf)
+      const parsed = parseWorkbook(buf, file.name)
       setPending({ ...parsed, file: file.name })
-      if (parsed.report.legacy) { setLegacyId(parsed.report.legacy.game_id); setLegacyTournament(opts.tournaments[0] ?? '友誼賽') }
+      if (parsed.report.legacy) { setLegacyId(parsed.report.legacy.game_id); setLegacyDate(parsed.report.legacy.date); setLegacyTournament(opts.tournaments[0] ?? '友誼賽') }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -50,7 +51,7 @@ export function ImportPage() {
     if (!pending) return
     setError(null)
     try {
-      const ds = pending.report.legacy ? legacyToDataset(pending.report.legacy, { id: legacyId, tournament: legacyTournament }) : pending.dataset
+      const ds = pending.report.legacy ? legacyToDataset(pending.report.legacy, { id: legacyId, tournament: legacyTournament, date: legacyDate }) : pending.dataset
       const r = mode === 'replace' ? await replaceDataset(ds) : await appendDataset(ds)
       const where = cloud.configured && cloud.user ? '已寫入雲端' : mode === 'replace' ? '已取代本地資料' : '已合併到本地資料'
       const skipped = r?.skipped ? `（略過 ${r.skipped} 場已存在的比賽）` : ''
@@ -83,10 +84,11 @@ export function ImportPage() {
             <div className="mt-4 rounded-[var(--radius-sm)] border border-border p-4 flex flex-col gap-3">
               <div className="flex items-center gap-2 flex-wrap"><Badge variant="accent">{pending.report.mode === 'master' ? '總表' : pending.report.mode === 'single' ? '單場模板' : '舊格式單場紀錄表'}</Badge><span className="text-sm font-medium text-ink">{pending.file}</span></div>
               {pending.report.legacy && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+                  <label className="flex flex-col gap-1"><span className="text-xs text-muted">日期</span><input type="date" value={legacyDate} onChange={(e) => { const d = e.target.value; setLegacyDate(d); if (d && (!legacyId.trim() || /^G\d{8}-\d{2}$/.test(legacyId))) setLegacyId(`G${d.replace(/-/g, '')}-01`) }} className={`h-9 px-2 bg-surface border rounded-[var(--radius-sm)] tnum ${legacyDate ? 'border-border' : 'border-warning'}`} /></label>
                   <label className="flex flex-col gap-1"><span className="text-xs text-muted">比賽ID</span><input value={legacyId} onChange={(e) => setLegacyId(e.target.value)} className="h-9 px-2 bg-surface border border-border rounded-[var(--radius-sm)] tnum" /></label>
                   <label className="flex flex-col gap-1"><span className="text-xs text-muted">杯賽</span><input list="tournaments" value={legacyTournament} onChange={(e) => setLegacyTournament(e.target.value)} className="h-9 px-2 bg-surface border border-border rounded-[var(--radius-sm)]" /><datalist id="tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist></label>
-                  <div className="text-xs text-ink-2 self-end pb-2">{pending.report.legacy.date}・{pending.report.legacy.home_away === '主' ? '主場' : '客場'} vs {pending.report.legacy.opponent}・{pending.report.legacy.innings_played} 局</div>
+                  <div className="text-xs text-ink-2 self-end pb-2">{pending.report.legacy.home_away === '主' ? '主場' : '客場'} vs {pending.report.legacy.opponent}・{pending.report.legacy.innings_played} 局</div>
                 </div>
               )}
               <dl className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm tnum">
@@ -100,7 +102,7 @@ export function ImportPage() {
               {cloudReadOnly && <div className="text-xs text-warning">雲端模式：請先在右側登入，才能把資料寫入全隊共用的資料庫。</div>}
               <div className="flex gap-2 flex-wrap">
                 {pending.report.mode === 'master' && <Button variant="primary" disabled={cloudReadOnly || cloud.pushing} onClick={() => void confirm('replace')}>{canWriteCloud ? '以此檔取代雲端全部資料' : '以此檔取代全部資料'}</Button>}
-                <Button variant={pending.report.mode === 'master' ? 'outline' : 'primary'} disabled={cloudReadOnly || cloud.pushing || (!!pending.report.legacy && !legacyId.trim())} onClick={() => void confirm('append')}>{cloud.pushing ? '寫入中…' : pending.report.legacy ? '加入這場比賽' : '合併（略過重複的比賽ID）'}</Button>
+                <Button variant={pending.report.mode === 'master' ? 'outline' : 'primary'} disabled={cloudReadOnly || cloud.pushing || (!!pending.report.legacy && (!legacyId.trim() || !legacyDate))} onClick={() => void confirm('append')}>{cloud.pushing ? '寫入中…' : pending.report.legacy ? '加入這場比賽' : '合併（略過重複的比賽ID）'}</Button>
                 <Button variant="ghost" onClick={() => setPending(null)}>取消</Button>
               </div>
             </div>

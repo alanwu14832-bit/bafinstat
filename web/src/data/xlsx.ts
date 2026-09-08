@@ -42,6 +42,25 @@ function toISODate(v: unknown): string {
   const m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s)
   return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : s
 }
+/** Best-effort date from anything a scorer might type: Excel serial, 2025/12/22, 2025.12.22, 20251222, 114/12/22 (民國),
+ *  2025年12月22日, 12月22日 or 12/22 (year from `yearHint`), with trailing text such as (一) or 08:30 ignored. */
+export function parseAnyDate(v: unknown, yearHint?: number): string | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  if (v instanceof Date || typeof v === 'number') { const d = toISODate(v); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined }
+  const s = String(v).trim().replace(/[（(][^）)]*[）)]/g, ' ')
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const ok = (y: number, m: number, d: number) => (m >= 1 && m <= 12 && d >= 1 && d <= 31 && y >= 1990 && y <= 2100 ? `${y}-${pad(m)}-${pad(d)}` : undefined)
+  let m = /(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/.exec(s)
+  if (m) return ok(+m[1], +m[2], +m[3])
+  m = /(?:^|\D)(\d{4})(\d{2})(\d{2})(?!\d)/.exec(s)
+  if (m) return ok(+m[1], +m[2], +m[3])
+  m = /(?:^|\D)(\d{2,3})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/.exec(s)
+  if (m) return ok(+m[1] + 1911, +m[2], +m[3]) // 民國年
+  m = /(?:^|\D)(\d{1,2})\s*[/.月]\s*(\d{1,2})(?:\s*日)?(?!\d)/.exec(s)
+  if (m && yearHint) return ok(yearHint, +m[1], +m[2])
+  return undefined
+}
+
 function toTime(v: unknown): string | undefined {
   if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); if (d) return `${String(d.H).padStart(2, '0')}:${String(d.M).padStart(2, '0')}` }
   const s = str(v); return s || undefined
@@ -186,12 +205,35 @@ function assignInnings(rows: RawPA[]): RawPA[] {
   return rows
 }
 
-export function parseLegacyGame(wb: XLSX.WorkBook): RawGame {
+/** Date of a legacy sheet: S2 first, then any cell in the header rows, then the file name (e.g. 2025-12-22_vs_群風.xlsx). */
+function legacyDate(sm: XLSX.WorkSheet, filename?: string): { date: string; from: string } | null {
+  const fileYear = filename ? Number((/(20\d{2})/.exec(filename) ?? [])[1]) || undefined : undefined
+  const yearHint = fileYear ?? new Date().getFullYear()
+  const s2 = parseAnyDate(cellv(sm, 'S2'), yearHint)
+  if (s2) return { date: s2, from: 'S2' }
+  const range = sm['!ref'] ? XLSX.utils.decode_range(sm['!ref']) : null
+  if (range) {
+    for (let r = 0; r < Math.min(6, range.e.r + 1); r++) for (let c = 0; c <= range.e.c; c++) {
+      const ref = XLSX.utils.encode_cell({ r, c }); const v = cellv(sm, ref)
+      if (typeof v === 'number' && (v < 30000 || v > 60000)) continue // not an Excel date serial (1982–2064)
+      const d = parseAnyDate(v, yearHint)
+      if (d) return { date: d, from: ref }
+    }
+  }
+  const fromName = filename ? parseAnyDate(filename.replace(/\.[^.]+$/, ''), yearHint) : undefined
+  if (fromName) return { date: fromName, from: '檔名' }
+  return null
+}
+
+export function parseLegacyGame(wb: XLSX.WorkBook, filename?: string): RawGame {
   const sm = wb.Sheets[LEGACY_SUMMARY]
   const bat = findSheet(wb, LEGACY_BAT); const pit = findSheet(wb, LEGACY_PIT)
   if (!sm || !bat || !pit) throw new Error('舊格式需要「當日比賽統計」「打　擊」「投球守備」三張工作表')
-  const date = toISODate(cellv(sm, 'S2'))
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('「當日比賽統計」S2 的日期無法辨識')
+  const found = legacyDate(sm, filename)
+  const date = found?.date ?? ''
+  const warnings: string[] = []
+  if (!found) warnings.push('「當日比賽統計」S2 的日期無法辨識，請在下方填入日期（比賽ID 會自動帶入）')
+  else if (found.from !== 'S2') warnings.push(`S2 沒有可辨識的日期，改用${found.from === '檔名' ? '檔名' : `儲存格 ${found.from}`}的日期 ${date}，請確認`)
   const teams = [3, 4].map((r) => ({ name: str(cellv(sm, `D${r}`)), ha: str(cellv(sm, `C${r}`)), line: 'EFGHIJKL'.split('').map((c) => cellv(sm, `${c}${r}`)) })).filter((t) => t.name)
   let us = teams.find((t) => t.name === TEAM_NAME); let opp = teams.find((t) => t.name !== TEAM_NAME)
   if (!us) { us = teams[teams.length - 1]; opp = teams[0] }
@@ -216,24 +258,25 @@ export function parseLegacyGame(wb: XLSX.WorkBook): RawGame {
   const pitching = assignInnings(legacyPAs(pit))
   const runsBy = (rows: RawPA[], f: (p: RawPA) => number) => rows.reduce<Record<number, number>>((a, p) => { a[p.inning] = (a[p.inning] ?? 0) + f(p); return a }, {})
   const rb = runsBy(batting, (p) => p.run), rp = runsBy(pitching, (p) => (p.code === 'R' || p.code === 'ER' ? 1 : 0))
-  const warnings: string[] = []
   const check = (label: string, line: unknown[], derived: Record<number, number>) => line.forEach((v, i) => { if (v === undefined || v === null || v === '' || String(v).toUpperCase() === 'X') return; if (num(v) !== (derived[i + 1] ?? 0)) warnings.push(`${label}第 ${i + 1} 局：紀錄表 ${num(v)} 分，逐打席推算 ${derived[i + 1] ?? 0} 分`) })
   check('我隊', us.line, rb); if (opp) check('對手', opp.line, rp)
   const inningsPlayed = Math.max(1, ...batting.map((p) => p.inning), ...pitching.map((p) => p.inning))
   return {
-    game_id: `G${date.replace(/-/g, '')}-01`, date, time: toTime(cellv(sm, 'S3')) ?? null, tournament: '未分類', opponent: opp?.name || '未知', home_away: homeAway,
+    game_id: date ? `G${date.replace(/-/g, '')}-01` : '', date, time: toTime(cellv(sm, 'S3')) ?? null, tournament: '未分類', opponent: opp?.name || '未知', home_away: homeAway,
     venue: str(cellv(sm, 'V2')) || null, weather: str(cellv(sm, 'V3')) || null, recorder: str(cellv(sm, 'V4')) || null, innings_played: inningsPlayed, lineup, pitchers, batting, pitching, warnings,
   }
 }
 
 /** Re-key a legacy game after the user edits 比賽ID / 杯賽 on the import page. */
-export function legacyToDataset(raw: RawGame, overrides: { id: string; tournament: string; opponent?: string }): Dataset {
-  const g: RawGame = { ...raw, game_id: overrides.id.trim() || raw.game_id, tournament: overrides.tournament.trim() || raw.tournament, opponent: overrides.opponent?.trim() || raw.opponent }
+export function legacyToDataset(raw: RawGame, overrides: { id: string; tournament: string; opponent?: string; date?: string }): Dataset {
+  const date = parseAnyDate(overrides.date) ?? raw.date
+  if (!date) throw new Error('請先填入比賽日期')
+  const g: RawGame = { ...raw, game_id: overrides.id.trim() || raw.game_id || `G${date.replace(/-/g, '')}-01`, date, tournament: overrides.tournament.trim() || raw.tournament, opponent: overrides.opponent?.trim() || raw.opponent }
   g.batting = raw.batting.map((p) => ({ ...p })); g.pitching = raw.pitching.map((p) => ({ ...p }))
   return normalizeDataset(rawGameToDataset(g)).dataset
 }
 
-export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: ImportReport } {
+export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: Dataset; report: ImportReport } {
   const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
   const warnings: string[] = []
@@ -271,8 +314,8 @@ export function parseWorkbook(data: ArrayBuffer): { dataset: Dataset; report: Im
     return { dataset: norm.dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings } }
   }
   if (names.includes(LEGACY_SUMMARY)) {
-    const raw = parseLegacyGame(wb)
-    const norm = normalizeDataset(rawGameToDataset(raw))
+    const raw = parseLegacyGame(wb, filename)
+    const norm = normalizeDataset(rawGameToDataset({ ...raw, date: raw.date || '1900-01-01' }))
     return { dataset: norm.dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings: [...(raw.warnings ?? []), ...norm.warnings.map((w) => w.message)], legacy: raw } }
   }
   throw new Error(`找不到可辨識的工作表（需要『打席紀錄』、『單場-打擊』或舊格式的『當日比賽統計』）。目前工作表：${names.join('、')}`)

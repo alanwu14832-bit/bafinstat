@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { legacyToDataset, parseWorkbook } from './xlsx'
+import * as XLSX from 'xlsx'
+import { legacyToDataset, parseAnyDate, parseLegacyGame, parseWorkbook } from './xlsx'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
 
@@ -24,4 +25,27 @@ describe('legacy single-game sheet import (in browser)', () => {
       expect(ds.roster.length).toBeGreaterThan(9)
     })
   }
+})
+
+describe('parseAnyDate accepts whatever a scorer types', () => {
+  it('parses common Taiwanese date spellings', () => {
+    for (const [v, want] of [['2025-12-22', '2025-12-22'], ['2025/12/22', '2025-12-22'], ['2025.12.22', '2025-12-22'], ['20251222', '2025-12-22'], ['114/12/22', '2025-12-22'], ['114年12月22日', '2025-12-22'],
+      ['2025年12月22日（一）', '2025-12-22'], ['2025/12/22 (一) 08:30', '2025-12-22'], [45940, '2025-10-10'], ['12/22', '2025-12-22'], ['12月22日', '2025-12-22'], ['2025-13-40', undefined], ['abc', undefined], ['', undefined]] as const) {
+      expect(parseAnyDate(v, 2025), String(v)).toBe(want)
+    }
+  })
+  it('a legacy sheet without a readable date still parses; the date can be supplied on import', () => {
+    const wb = XLSX.read(new Uint8Array(load('2025-12-22_vs_工海物治.xlsx')), { type: 'array' })
+    const sm = wb.Sheets['當日比賽統計']
+    delete sm['S2']
+    const raw = parseLegacyGame(wb)
+    expect(raw.date).toBe(''); expect(raw.game_id).toBe('')
+    expect(raw.warnings?.some((w) => w.includes('日期無法辨識'))).toBe(true)
+    expect(() => legacyToDataset(raw, { id: '', tournament: '友誼賽' })).toThrow()
+    const ds = legacyToDataset(raw, { id: '', tournament: '友誼賽', date: '2025-12-22' })
+    expect(ds.games[0]).toMatchObject({ id: 'G20251222-01', date: '2025-12-22' })
+    // and with the file name as a hint the date comes from the name
+    const raw2 = parseLegacyGame(wb, '2025-12-22_vs_工海物治.xlsx')
+    expect(raw2.date).toBe('2025-12-22'); expect(raw2.warnings?.some((w) => w.includes('檔名'))).toBe(true)
+  })
 })
