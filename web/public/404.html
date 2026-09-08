@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>BAFIN Stats</title>
+  <script>
+    // GitHub Pages serves only index.html, so deep links (/bafinstat/import) 404.
+    // Redirect to the app root and hand the original path over as a query string;
+    // index.html restores it before the router boots. (spa-github-pages pattern)
+    var segmentsToKeep = 1; // the repository sub-path: /bafinstat/
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + segmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(segmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  </script>
+</head>
+<body>正在載入…</body>
+</html>
