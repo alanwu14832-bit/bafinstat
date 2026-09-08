@@ -3,4 +3,6 @@
 interface ImportMetaEnv {
   readonly VITE_TEMPLATE_URL?: string
   readonly VITE_ROUTER?: 'hash' | 'browser'
+  readonly VITE_SUPABASE_URL?: string
+  readonly VITE_SUPABASE_ANON_KEY?: string
 }

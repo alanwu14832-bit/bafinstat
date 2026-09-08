@@ -5,6 +5,8 @@ import { Button } from '../ui/Button'
 import { ThemeToggle } from './ThemeToggle'
 import { findNavItem } from './nav'
 import { useUiStore } from '../../store/ui'
+import { useDataStore } from '../../store/data'
+import { Cloud } from 'lucide-react'
 
 export interface TopBarProps {
   /** Global filter bar slot. */
@@ -15,6 +17,7 @@ export function TopBar({ children }: TopBarProps) {
   const { pathname } = useLocation()
   const item = findNavItem(pathname)
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
+  const cloud = useDataStore((s) => s.cloud)
 
   return (
     <header
@@ -38,6 +41,12 @@ export function TopBar({ children }: TopBarProps) {
         </div>
 
         <div className="flex items-center gap-2 ml-auto order-2">
+          {cloud.configured && (
+            <span title={cloud.status === 'ready' ? (cloud.user ? `雲端已連線・${cloud.user.email}` : '雲端已連線（唯讀）') : cloud.status === 'error' ? `雲端連線失敗：${cloud.error ?? ''}` : '雲端載入中'}
+              className={`hidden md:inline-flex items-center gap-1 h-7 px-2 rounded-full border text-[11px] ${cloud.status === 'ready' ? 'border-transparent bg-[color-mix(in_srgb,var(--good)_14%,transparent)] text-ink-2' : cloud.status === 'error' ? 'border-transparent bg-[color-mix(in_srgb,var(--critical)_14%,transparent)] text-ink-2' : 'border-border text-muted'}`}>
+              <Cloud className="size-3.5" /> {cloud.status === 'ready' ? (cloud.user ? '雲端・已登入' : '雲端') : cloud.status === 'error' ? '雲端失敗' : '雲端…'}
+            </span>
+          )}
           <ThemeToggle />
           <span className="hidden sm:inline-flex">
             <Button variant="primary" size="sm" icon={<Upload />} to="/import">

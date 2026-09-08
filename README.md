@@ -8,6 +8,7 @@
 | **網站儀表板** | `web/` | React 儀表板：總覽、打擊、投球、守備、球員、比賽、資料匯入、數據字典；可上傳總表 |
 | **數據研究** | `docs/ANALYTICS_RESEARCH.md` | MLB Statcast 2024–2026、CPBL 官方紀錄與 Trackman、差距分析、建議新增欄位、公式附錄 |
 | **設計藍圖** | `docs/BLUEPRINT.md` | 資訊架構、色彩／字體、版面、圖表規格、建置順序 |
+| **雲端資料庫** | `supabase/schema.sql`、`docs/SUPABASE_SETUP.md` | 選用：Supabase 讓全隊共用同一份資料、紀錄員登入寫入、即時同步 |
 | **數據字典** | `data/stat_dictionary.json` | 103 項指標的單一定義來源（Excel 與網站共用） |
 
 ## 快速開始
@@ -36,6 +37,9 @@ python3 tools/build_workbook.py            # 需要 openpyxl
 ```
 產出檔會同時更新 `data/stat_dictionary.json` 與 `data/schema.json`。
 
+## 雲端模式（選用）
+依 `docs/SUPABASE_SETUP.md` 建立 Supabase 專案、執行 `supabase/schema.sql`，再把 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 設成 GitHub Actions Variables（本機用 `web/.env.local`）。未設定時網站為本地模式。
+
 ## 部署
 `main` 分支 push 後由 `.github/workflows/deploy.yml` 建置並發佈到 GitHub Pages（Settings → Pages → Source 選 GitHub Actions）。
 
@@ -45,4 +49,5 @@ data/    總表、種子資料（原紀錄表轉入）、字典、欄位 schema
 docs/    研究報告、設計藍圖
 tools/   總表產生器、數據字典來源
 web/     Vite + React + TypeScript 儀表板
+supabase/ 雲端資料庫 schema（選用）
 ```

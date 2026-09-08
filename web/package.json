@@ -12,6 +12,7 @@
     "build:single": "vite build --config vite.single.config.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "framer-motion": "^12.0.0",
     "lucide-react": "latest",
     "react": "^19.0.0",

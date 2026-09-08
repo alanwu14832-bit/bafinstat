@@ -9,12 +9,13 @@ import { cx } from '../lib/format'
 import { datasetToWorkbook, parseWorkbook, type ImportReport } from '../data/xlsx'
 import type { Dataset } from '../data/types'
 import { useDataStore } from '../store/data'
+import { CloudPanel } from '../components/ui/CloudPanel'
 
 const STEPS = [
   { title: '下載總表', desc: '總表內含「單場-摘要 / 單場-打擊 / 單場-投球」模板，照原本習慣逐球紀錄。' },
   { title: '貼回紀錄表', desc: '比賽後把單場工作表的列貼到「打席紀錄」「投球紀錄」「守備紀錄」（貼上值）。' },
   { title: '上傳', desc: '把整個總表拖進來；也可以只上傳一份填好的單場模板檔，系統會合併進現有資料。' },
-  { title: '完成', desc: '所有頁面即時更新。資料只存在你的瀏覽器（localStorage），不會上傳到任何伺服器。' },
+  { title: '完成', desc: '所有頁面即時更新。本地模式資料只存在你的瀏覽器；雲端模式（Supabase）則全隊共用、即時同步。' },
 ]
 const TEMPLATE_URL = (import.meta.env.VITE_TEMPLATE_URL as string | undefined) ?? `${import.meta.env.BASE_URL}BAFIN_棒球數據總表.xlsx`
 
@@ -24,7 +25,9 @@ export function ImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo } = useDataStore()
+  const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo, cloud } = useDataStore()
+  const canWriteCloud = cloud.configured && !!cloud.user
+  const cloudReadOnly = cloud.configured && !cloud.user
 
   const handleFile = async (file: File) => {
     setError(null); setDone(null); setPending(null)
@@ -38,12 +41,19 @@ export function ImportPage() {
   }
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) void handleFile(f) }
   const onPick = (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) void handleFile(f); e.target.value = '' }
-  const confirm = (mode: 'replace' | 'append') => {
+  const confirm = async (mode: 'replace' | 'append') => {
     if (!pending) return
-    if (mode === 'replace') replaceDataset(pending.dataset); else appendDataset(pending.dataset)
-    setDone(`${mode === 'replace' ? '已取代' : '已合併'}：${pending.report.games} 場比賽、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席。`)
-    setPending(null)
-    if (demo) setDemo(false)
+    setError(null)
+    try {
+      const r = mode === 'replace' ? await replaceDataset(pending.dataset) : await appendDataset(pending.dataset)
+      const where = cloud.configured && cloud.user ? '已寫入雲端' : mode === 'replace' ? '已取代本地資料' : '已合併到本地資料'
+      const skipped = r?.skipped ? `（略過 ${r.skipped} 場已存在的比賽）` : ''
+      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席。`)
+      setPending(null)
+      if (demo) setDemo(false)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
   const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base), `BAFIN_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
 
@@ -74,16 +84,18 @@ export function ImportPage() {
               {pending.report.warnings.length > 0 && (
                 <ul className="text-xs text-ink-2 flex flex-col gap-1">{pending.report.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />{w}</li>)}</ul>
               )}
+              {cloudReadOnly && <div className="text-xs text-warning">雲端模式：請先在右側登入，才能把資料寫入全隊共用的資料庫。</div>}
               <div className="flex gap-2 flex-wrap">
-                {pending.report.mode === 'master' && <Button variant="primary" onClick={() => confirm('replace')}>以此檔取代全部資料</Button>}
-                <Button variant={pending.report.mode === 'master' ? 'outline' : 'primary'} onClick={() => confirm('append')}>合併到現有資料（略過重複的比賽ID）</Button>
+                {pending.report.mode === 'master' && <Button variant="primary" disabled={cloudReadOnly || cloud.pushing} onClick={() => void confirm('replace')}>{canWriteCloud ? '以此檔取代雲端全部資料' : '以此檔取代全部資料'}</Button>}
+                <Button variant={pending.report.mode === 'master' ? 'outline' : 'primary'} disabled={cloudReadOnly || cloud.pushing} onClick={() => void confirm('append')}>{cloud.pushing ? '寫入中…' : '合併（略過重複的比賽ID）'}</Button>
                 <Button variant="ghost" onClick={() => setPending(null)}>取消</Button>
               </div>
             </div>
           )}
         </Card>
         <div className="xl:col-span-2 flex flex-col gap-6">
-          <Card title="目前資料" subtitle={source === 'seed' ? '內建：2025-10-10 vs 群風（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`}>
+          <CloudPanel />
+          <Card title="目前資料" subtitle={source === 'cloud' ? `雲端資料庫${importedAt ? `・同步於 ${new Date(importedAt).toLocaleString('zh-TW')}` : ''}` : source === 'seed' ? '內建：2025-10-10 vs 群風（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`}>
             <dl className="grid grid-cols-3 gap-3 text-sm tnum">
               {[['比賽', base.games.length], ['打席', base.batting.length], ['球員', base.roster.length]].map(([k, v]) => (
                 <div key={String(k)}><dt className="text-xs text-muted">{k}</dt><dd className="font-display font-bold text-[22px] text-ink leading-none mt-0.5">{v}</dd></div>
