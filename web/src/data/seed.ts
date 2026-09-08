@@ -4,11 +4,11 @@
  */
 import { POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
 
-interface RawPA {
+export interface RawPA {
   code: string | null; order: number; name: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null
   sb: number; adv_err: number; out_on_base: number; run: number; rbi: number; note: string | null; inning: number; outs_before: number; pos?: string
 }
-interface RawGame {
+export interface RawGame {
   game_id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: '主' | '客'; venue: string | null; weather: string | null; recorder: string | null
   innings_played: number; lineup: Array<{ order: number | null; pos_raw: string | null; name: string; pos: string; starter: boolean }>
   pitchers: Array<{ name: string; role: string; decision: string }>; batting: RawPA[]; pitching: RawPA[]; warnings?: string[]
@@ -72,6 +72,11 @@ function buildRoster(games: RawGame[]): Player[] {
     }
   }
   return [...seen.values()]
+}
+
+/** Convert one raw game (from the converter or the in-browser legacy parser) into a dataset fragment. */
+export function rawGameToDataset(g: RawGame): Dataset {
+  return { roster: buildRoster([g]), games: [toGame(g)], batting: toBatting(g), pitching: toPitching(g), fielding: toFielding(g) }
 }
 
 export const SEED_GAMES: Game[] = RAW_GAMES.map(toGame)
