@@ -15,7 +15,9 @@ Project Settings → **API**：
 anon key 可以放在前端，因為資料表已開啟 RLS：未登入只能讀，登入才能寫。
 
 ## 3. 登入方式（紀錄員）
-Authentication → Providers → **Email** 保持開啟；建議：
+建議用**密碼登入**（不寄信、沒有每小時 2 封的限制）：Authentication → Users → **Add user → Create new user**，填 email 與密碼，勾 Auto Confirm User。網站的「密碼登入」就能用。
+
+Email 連結登入為備用；Authentication → Providers → **Email** 保持開啟；建議：
 - Authentication → Settings → 關閉 **Allow new users to sign up**（避免陌生人註冊後取得寫入權）。
 - Authentication → Users → **Add user** 手動建立紀錄員帳號（填 email 即可，不用密碼）。
 - Authentication → URL Configuration → Site URL 填網站網址（例如 `https://alanwu14832-bit.github.io/bafinstat/`），Redirect URLs 也加同一個網址。
