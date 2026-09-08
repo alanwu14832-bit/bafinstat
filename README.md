@@ -49,7 +49,8 @@ python3 tools/build_workbook.py            # 需要 openpyxl
 依 `docs/SUPABASE_SETUP.md` 建立 Supabase 專案、執行 `supabase/schema.sql`，再把 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 設成 GitHub Actions Variables（本機用 `web/.env.local`）。未設定時網站為本地模式。
 
 ## 部署
-`main` 分支 push 後由 `.github/workflows/deploy.yml` 建置並發佈到 GitHub Pages（Settings → Pages → Source 選 GitHub Actions）。
+- **Vercel**（建議）：依 `docs/VERCEL_SETUP.md`，Root Directory 設 `web`，加兩個 Supabase 環境變數即可。
+- **GitHub Pages**：`main` push 後由 `.github/workflows/deploy.yml` 建置發佈（Settings → Pages → Source 選 GitHub Actions）。
 
 ## 目錄
 ```
