@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
-    "build:single": "vite build --config vite.single.config.ts"
+    "build:single": "vite build --config vite.single.config.ts",
+    "prebuild": "node scripts/prebuild.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

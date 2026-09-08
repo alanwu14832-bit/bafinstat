@@ -24,7 +24,8 @@ const CODES: Array<[string, string]> = [
 export function GuidePage() {
   return (
     <>
-      <PageHeader eyebrow="How to" title="使用指南" description="比賽當天怎麼記、賽後怎麼把資料變成全隊看得到的數據。整個流程只需要一份 Excel 總表和這個網站。" />
+      <PageHeader eyebrow="How to" title="使用指南" description="比賽當天怎麼記、賽後怎麼把資料變成全隊看得到的數據。整個流程只需要一份 Excel 總表和這個網站。"
+        actions={<img src={`${import.meta.env.BASE_URL}logo.png`} alt="NTU BaFiN" className="h-20 w-auto rounded-[var(--radius-sm)] bg-white p-1" onError={(e) => { e.currentTarget.style.display = 'none' }} />} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card title="1. 比賽前" subtitle="5 分鐘" action={<ClipboardList className="size-4 text-muted" />}>
