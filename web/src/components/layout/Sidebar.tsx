@@ -97,7 +97,7 @@ function Brand({ collapsed, reduced }: { collapsed: boolean; reduced: boolean })
         aria-hidden={collapsed}
       >
         <div className="font-display font-bold text-[22px] tracking-wide text-ink leading-none">NTU <span className="text-accent">BaFiN</span></div>
-        <div className="text-[11px] text-muted mt-1">台大財金系棒球隊・數據平台</div>
+        <div className="text-[11px] text-muted mt-1">台大工管財金系棒・數據平台</div>
       </motion.div>
     </div>
   )
