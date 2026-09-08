@@ -87,6 +87,7 @@ export function generateDemo(roster: Player[], opts: { games?: number; seed?: nu
         const bip = pitches[pitches.length - 1] === 'IP'
         const reached = ['一安', '二安', '三安', '全壘打', '保送', '觸身', '失誤', '野選'].includes(result)
         const out = !reached && result !== '妨礙'
+        const outsBefore = outs
         if (out) outs += result === '雙殺' ? 2 : 1
         const scored = result === '全壘打' ? 1 : reached && rng() < 0.28 ? 1 : 0
         const rbi = result === '全壘打' ? 1 + Math.min(onBase, Math.floor(rng() * 2)) : reached && onBase > 0 && rng() < 0.3 ? 1 : ['犧飛', '內滾'].includes(result) && onBase > 0 && rng() < 0.25 ? 1 : 0
@@ -94,7 +95,7 @@ export function generateDemo(roster: Player[], opts: { games?: number; seed?: nu
         onBase = Math.max(0, Math.min(3, onBase + (reached ? 1 : 0) - (rbi > 0 ? rbi : 0) - (scored && result !== '全壘打' ? 1 : 0)))
         const traj = bip ? (rng() < 0.45 ? 'G' : rng() < 0.7 ? 'F' : 'L') : undefined
         batting.push({
-          gameId: id, inning: inn, outsBefore: Math.min(outs, 2), basesBefore: pick(rng, bases), order: ((order - 1) % 9) + 1, pos: posOf.get(batter), batter, pitches, result,
+          gameId: id, inning: inn, outsBefore, basesBefore: pick(rng, bases), order: ((order - 1) % 9) + 1, pos: posOf.get(batter), batter, pitches, result,
           loc: bip ? 1 + Math.floor(rng() * 9) : undefined, traj, quality: bip ? (rng() < 0.35 ? '強' : rng() < 0.75 ? '中' : '弱') : undefined,
           sb: reached && rng() < 0.12 ? 1 : 0, cs: reached && rng() < 0.04 ? 1 : 0, advOnError: 0, outOnBase: 0, run: scored, rbi,
           code: out ? (['I', 'II', 'III'][Math.min(outs, 3) - 1]) : scored ? 'R' : 'L',
@@ -118,13 +119,14 @@ export function generateDemo(roster: Player[], opts: { games?: number; seed?: nu
         const bip = pitches[pitches.length - 1] === 'IP'
         const reached = ['一安', '二安', '三安', '全壘打', '保送', '觸身', '失誤', '野選'].includes(result)
         const out = !reached
+        const outsBefore = outs
         if (out) outs += result === '雙殺' ? 2 : 1
         const scored = result === '全壘打' ? 1 : reached && rng() < 0.22 ? 1 : 0
         runs += scored
         const earned = scored && result !== '失誤' && rng() < 0.8
         const traj = bip ? (rng() < 0.45 ? 'G' : rng() < 0.7 ? 'F' : 'L') : undefined
         pitching.push({
-          gameId: id, inning: inn, outsBefore: Math.min(outs, 2), basesBefore: pick(rng, bases), oppOrder: ((oppOrder - 1) % 9) + 1, pitcher, pitches, result,
+          gameId: id, inning: inn, outsBefore, basesBefore: pick(rng, bases), oppOrder: ((oppOrder - 1) % 9) + 1, pitcher, pitches, result,
           loc: bip ? 1 + Math.floor(rng() * 9) : undefined, traj, quality: bip ? (rng() < 0.3 ? '強' : rng() < 0.75 ? '中' : '弱') : undefined,
           sba: reached && rng() < 0.1 ? 1 : 0, cs: 0, wp: rng() < 0.03 ? 1 : 0, pb: 0, pk: 0,
           code: out ? (['I', 'II', 'III'][Math.min(outs, 3) - 1]) : scored ? (earned ? 'ER' : 'R') : 'L',

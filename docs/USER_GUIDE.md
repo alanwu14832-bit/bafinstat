@@ -53,3 +53,10 @@
 - **名字打錯**：總表尋找取代後，用取代模式重傳。
 - **ERA 局數**：預設 7 局制；`設定` 工作表或網站資料匯入頁可改 9。
 - **寄信登入被限制**：用密碼登入（Supabase → Authentication → Users 設定密碼）。
+
+## 七、把以前的單場紀錄表匯進來
+舊格式（當日比賽統計／打　擊／投球守備）的檔案可以直接轉換：
+```bash
+python3 tools/convert_single_game.py 舊檔.xlsx --id G20251222-01 --tournament 友誼賽
+```
+會產生 `data/games/G20251222-01.json`；再執行 `python3 tools/build_workbook.py` 重建總表，網站重新建置後也會內建這場。轉換器會把逐打席推算的逐局得分和記分板比對，不一致時列出警告，請回頭核對原表。

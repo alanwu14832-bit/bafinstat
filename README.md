@@ -32,6 +32,13 @@ npm run build:single   # 單檔版 dist-single/index.html
 ```
 到「資料匯入」上傳整個總表（或一份填好的單場模板檔）即可；資料只存在瀏覽器 localStorage。
 
+### 匯入過去的單場紀錄表（舊格式）
+```bash
+python3 tools/convert_single_game.py 舊的單場紀錄.xlsx --id G20251222-01 --tournament 友誼賽
+python3 tools/build_workbook.py     # 重新產生總表，data/games/*.json 全部會被轉入
+```
+轉換器會從 I/II/III 出局碼還原局數，並和記分板逐局比對、列出不一致的地方。
+
 ### 重新產生總表
 ```bash
 python3 tools/build_workbook.py            # 需要 openpyxl
