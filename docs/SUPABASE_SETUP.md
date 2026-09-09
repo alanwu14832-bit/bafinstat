@@ -58,7 +58,15 @@ npm run dev
 刪除 `games` 的一列會連帶刪掉該場所有打席（on delete cascade）。統計全部由網站計算，資料庫只存原始紀錄。
 
 ## 已建好的專案要補的表
-`record_drafts`（換裝置接續逐球紀錄、即時比分頁）是後來加的。舊專案到 SQL Editor 執行 `supabase/migrations/2026-09-10_record_drafts.sql` 一次即可；沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
+後來加的兩個，舊專案到 SQL Editor 各執行一次（重複執行安全）：
+- `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
+- `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
+
+## 誰能登入、誰能寫
+- 帳號：Authentication → Users → Add user（設 email 與密碼）。請關閉 Providers → Email 的 **Enable email signups**，避免任何人自行註冊。
+- 寫入權限：Table Editor → `editors` 新增那個 email；移除那一列即刻失效。
+- 網站側欄底部有「紀錄員登入」；登入且在名單內的人才看得到「紀錄比賽」「資料匯入」與比賽頁的「修改資料」。
+- 更完整的制度見 `docs/SECURITY.md`。
 
 ## 常見問題
 - **登入信沒收到**：檢查垃圾郵件；Supabase 免費方案每小時寄信有上限，或到 Authentication → Users 確認帳號存在。

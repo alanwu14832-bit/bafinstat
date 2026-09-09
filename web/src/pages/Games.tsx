@@ -69,7 +69,7 @@ export function GamesPage() {
   const deleteGame = useDataStore((st) => st.deleteGame)
   const cloud = useDataStore((st) => st.cloud)
   // Editing is for signed-in recorders. Without Supabase there is no account system and the data only lives in this browser.
-  const canEdit = !cloud.configured || !!cloud.user
+  const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
   useEffect(() => { const g = params.get('game'); if (g) setOpen(g) }, [params])
   useEffect(() => { setEditing(false); setNotice(null) }, [open])
   useEffect(() => {

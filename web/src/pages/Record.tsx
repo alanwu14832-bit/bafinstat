@@ -369,7 +369,7 @@ export function RecordPage() {
   // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
   const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}` : ''
   useEffect(() => {
-    if (!state || !cloud.configured || !cloud.user || !(state.batting.length || state.pitching.length)) return
+    if (!state || !cloud.configured || !cloud.user || !cloud.isEditor || !(state.batting.length || state.pitching.length)) return
     const t = window.setTimeout(() => {
       void saveGame(toGameEdit(state))
         .then(() => saveCloudDraft(state.game.id, state, cloud.user?.email))
@@ -392,7 +392,7 @@ export function RecordPage() {
   const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
   const resume = (d: CloudDraft<RecordState>) => { setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
-  const canEdit = !cloud.configured || !!cloud.user
+  const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
 
   if (!canEdit) {
     return (

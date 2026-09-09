@@ -114,7 +114,12 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
     if (gone.length) { const { error: e2 } = await sb.from('games').delete().in('id', gone); fail('刪除舊比賽', e2) }
   }
   if (games.length) {
-    const { error } = await sb.from('games').upsert(games.map(toGameRow), { onConflict: 'id' }); fail('比賽清單', error)
+    const { data: auth } = await sb.auth.getUser()
+    const by = auth.user?.email ?? null
+    let { error } = await sb.from('games').upsert(games.map((g) => ({ ...toGameRow(g), updated_by: by })), { onConflict: 'id' })
+    // older schema without the audit column: retry without it
+    if (error && /updated_by/.test(error.message)) ({ error } = await sb.from('games').upsert(games.map(toGameRow), { onConflict: 'id' }))
+    fail('比賽清單', error)
     // child rows: clear then insert, per game batch
     const idList = [...ids]
     for (const table of ['batting_pa', 'pitching_pa', 'fielding_lines']) {
@@ -126,6 +131,18 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
     await chunked(seqBy(ds.fielding).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }
   return { games: games.length, skipped }
+}
+
+// ---------------------------------------------------------------- editors allowlist
+/**
+ * Is this signed-in email allowed to write? Reads the `editors` table (see supabase/migrations/2026-09-11_editors.sql).
+ * Returns true when the table does not exist yet (older projects where every signed-in user may write).
+ */
+export async function fetchIsEditor(email: string | undefined | null): Promise<boolean> {
+  if (!email) return false
+  const { data, error } = await supabase().from('editors').select('email').eq('email', email.toLowerCase()).limit(1)
+  if (error) { if (error.code === '42P01' || /editors/.test(error.message)) return true; throw new Error(error.message) }
+  return (data ?? []).length > 0
 }
 
 // ---------------------------------------------------------------- live-scoring drafts (cross-device continuation)
