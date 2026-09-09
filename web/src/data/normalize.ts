@@ -114,7 +114,8 @@ function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited:
   for (const p of pitching) {
     const r = p.result
     const first = byPos.get('1B')
-    if (r === '三振') po(byPos.get('C'))
+    // 三振：捕手刺殺，但不死三振而打者上壘（代碼不是 I/II/III）時沒有出局，不記刺殺
+    if (r === '三振') { if (!p.code || p.code in OUT_CODES) po(byPos.get('C')) }
     else if (GROUND.has(r)) {
       const f = at(p.loc, p.pitcher)
       if (p.loc === 3) po(first)                       // unassisted at first
