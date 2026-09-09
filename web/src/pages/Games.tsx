@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { LineScoreBoard } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Tabs } from '../components/ui/Tabs'
@@ -29,21 +30,8 @@ function LineScore({ s }: { s: GameSummary }) {
   const n = Math.max(s.lineUs.length, s.lineOpp.length)
   const top = s.game.homeAway === '主' ? { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs } : { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp }
   const bottom = s.game.homeAway === '主' ? { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp } : { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs }
-  const cell = 'px-2 py-1.5 text-center min-w-8'
-  const row = (t: typeof top, us: boolean) => (
-    <tr className={cx('border-t border-border', us ? 'text-ink font-medium' : 'text-ink-2')}>
-      <th scope="row" className="text-left pl-4 pr-3 py-1.5 font-medium whitespace-nowrap">{t.name}</th>
-      {Array.from({ length: n }, (_, i) => <td key={i} className={cell}>{t.line[i] ?? (i >= t.line.length ? '' : 0)}</td>)}
-      <td className={cx(cell, 'font-semibold text-ink border-l border-border')}>{t.r}</td><td className={cell}>{t.h}</td><td className={cx(cell, 'pr-4')}>{t.e}</td>
-    </tr>
-  )
   return (
-    <div className="overflow-x-auto scroll-x border border-border rounded-[var(--radius-sm)]">
-      <table className="text-[13px] tnum border-collapse min-w-full">
-        <thead><tr className="text-[11px] text-muted bg-surface-2/60"><th className="pl-4 pr-3 py-1.5 text-left font-medium">隊伍</th>{Array.from({ length: n }, (_, i) => <th key={i} className={cx(cell, 'py-1.5 font-medium')}>{i + 1}</th>)}<th className={cx(cell, 'py-1.5 font-medium border-l border-border')}>R</th><th className={cx(cell, 'py-1.5 font-medium')}>H</th><th className={cx(cell, 'py-1.5 font-medium pr-4')}>E</th></tr></thead>
-        <tbody>{row(top, top.name === TEAM_NAME)}{row(bottom, bottom.name === TEAM_NAME)}</tbody>
-      </table>
-    </div>
+    <LineScoreBoard innings={n} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.name === TEAM_NAME }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.name === TEAM_NAME }} />
   )
 }
 

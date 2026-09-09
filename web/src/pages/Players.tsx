@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { PlateBadge } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -148,7 +149,7 @@ export function PlayersPage() {
         <div className="flex items-center gap-3 px-4 md:px-5 py-3">
           <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="roster-panel"
             className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-[var(--radius-sm)] -ml-1 pl-1 pr-2 py-1 hover:bg-surface-2 cursor-pointer transition-colors motion-reduce:transition-none">
-            <span className="size-9 rounded-[8px] bg-ink text-bg grid place-items-center text-[13px] font-semibold tnum shrink-0">{player?.number ?? player?.name.slice(0, 1) ?? '–'}</span>
+            <PlateBadge size={36}>{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge>
             <span className="min-w-0">
               <span className="block text-[16px] font-semibold text-ink leading-5 truncate">{player?.name ?? '請選擇球員'}</span>
               <span className="block text-[12px] text-ink-2 truncate">{player ? `${posLabel(player.primaryPos)}${player.secondaryPos ? ` / ${player.secondaryPos}` : ''}${player.bats ? `・${hand(player.bats)}` : ''}` : ''}</span>
@@ -186,7 +187,7 @@ export function PlayersPage() {
                       <button type="button" role="option" aria-selected={active} onClick={() => choose(p.name)}
                         className={cx('w-full text-left flex items-center gap-3 px-3 py-2 rounded-[var(--radius-sm)] border cursor-pointer transition-colors motion-reduce:transition-none',
                           active ? 'border-ink bg-surface-2' : 'border-border hover:bg-surface-2/70')}>
-                        <span className={cx('size-8 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum shrink-0', active ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{p.number ?? p.name.slice(0, 1)}</span>
+                        <PlateBadge size={30} active={active}>{p.number ?? p.name.slice(0, 1)}</PlateBadge>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[13px] font-medium text-ink truncate">{p.name}</span>
                           <span className="block text-[11px] text-muted truncate">{posLabel(p.primaryPos)}{p.bats ? `・${hand(p.bats)}` : ''}{p.status && p.status !== '現役' ? `・${p.status}` : ''}</span>

@@ -10,6 +10,7 @@ import { useUiStore } from '../../store/ui'
 import { useDataStore } from '../../store/data'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
+import { IconBaseball } from '../icons/baseball'
 
 export interface TopBarProps {
   /** Desktop filter row (defaults to the global FilterBar). */
@@ -25,7 +26,7 @@ function CloudStatus() {
   const title = ok ? (cloud.user ? `雲端已連線・${cloud.user.email}` : '雲端已連線（唯讀）') : err ? `雲端連線失敗：${cloud.error ?? ''}` : '雲端載入中'
   return (
     <span title={title} className="hidden md:inline-flex items-center gap-1.5 h-8 px-2 text-xs text-ink-2 whitespace-nowrap">
-      <span className={cx('size-1.5 rounded-full', ok ? 'bg-good' : err ? 'bg-critical' : 'bg-muted')} />
+      {ok || err ? <span className={cx('size-1.5 rounded-full', ok ? 'bg-good' : 'bg-critical')} /> : <IconBaseball className="size-3.5 text-muted animate-spin [animation-duration:1.6s]" />}
       {ok ? (cloud.user ? '雲端・已登入' : '雲端') : err ? '雲端失敗' : '連線中'}
     </span>
   )
