@@ -8,6 +8,7 @@
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
@@ -37,7 +38,9 @@
   html {
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01", "calt";
   }
   body {
     margin: 0;
@@ -51,13 +54,17 @@
     background: var(--accent-soft);
   }
   :focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
-  button, input, select {
+  button, input, select, textarea {
     font: inherit;
     color: inherit;
+  }
+  h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -70,14 +77,24 @@
 }
 
 @layer components {
+  /* Type scale. Weight and color carry hierarchy; sizes stay close together. */
   .font-display {
     font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+  .text-display {
+    font-size: 24px;
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  @media (min-width: 768px) {
+    .text-display { font-size: 28px; }
   }
   .eyebrow {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.08em;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
   }
@@ -87,11 +104,22 @@
   .hairline {
     border: 1px solid var(--border);
   }
+  .prose-max {
+    max-width: 64ch;
+  }
+  /* Thin, theme-aware scrollbars for horizontal tool rows. */
+  .scroll-x {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .scroll-x::-webkit-scrollbar { height: 6px; }
+  .scroll-x::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
   /* Recharts overrides: keep tick text in the muted token, no dashed lines. */
   .recharts-cartesian-axis-tick-value,
   .recharts-polar-angle-axis-tick-value {
     fill: var(--muted);
-    font-size: 12px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
   .recharts-surface:focus,

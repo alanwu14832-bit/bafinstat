@@ -4,7 +4,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
-import { StatTile } from '../components/ui/StatTile'
+import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
@@ -54,20 +54,20 @@ export function PitchingPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Pitching" title="投球" description={`ERA 以每場 ${params.inningsPerGame} 局換算；K/9、BB/9 以 9 局為基準。圖表門檻：IP ≥ ${minIP}。`}
+      <PageHeader title="投球" description={`ERA 以每場 ${params.inningsPerGame} 局換算；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatTile label="團隊 ERA" value={s.teamPitch.era ?? 0} format="era" />
+      <StatGroup>
+        <StatTile label="團隊 ERA" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
         <StatTile label="團隊 FIP" value={s.teamPitch.fip ?? 0} format="era" />
         <StatTile label="CSW%" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
         <StatTile label="首球好球率" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
-      </div>
-      <Card title="投手成績" subtitle="點選投手開啟個人檔案" flush>
+      </StatGroup>
+      <Card title="投手成績" subtitle="點投手開啟個人檔案" flush>
         <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} defaultSort={{ key: 'outs', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={480} />
       </Card>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BarChartCard title="ERA vs FIP" subtitle="差距大代表守備／運氣影響明顯" data={eraFip} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+        <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯" data={eraFip} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
         <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
         <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
         <LineChartCard title="ERA / WHIP 走勢" subtitle="近 5 場滾動" data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />

@@ -54,14 +54,14 @@ export function useChartAnimation() {
   const reduced = usePrefersReducedMotion()
   return {
     isAnimationActive: !reduced,
-    animationDuration: 900,
+    animationDuration: 600,
     animationEasing: 'ease-out' as const,
     animationBegin: 0,
   }
 }
 
 /** Shared axis props: tick text in --muted 12px, no axis line, no tick line. */
-export const axisTick = { fontSize: 12, fill: 'var(--muted)' }
+export const axisTick = { fontSize: 11, fill: 'var(--muted)' }
 export const axisCommon = { tickLine: false, axisLine: false, tick: axisTick }
 
 /** Subset of recharts' TooltipContentProps we render, plus our own formatters. */
@@ -77,9 +77,9 @@ export interface ChartTooltipProps {
 export function ChartTooltip({ active, payload, label, formatValue, formatLabel }: ChartTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
   return (
-    <div className="rounded-[var(--radius-sm)] bg-surface border border-border shadow-[var(--shadow-hover)] px-3 py-2 text-xs min-w-[120px]">
+    <div className="rounded-[var(--radius-sm)] bg-surface border border-border shadow-[var(--shadow-hover)] px-3 py-2 text-xs min-w-[132px]">
       {label !== undefined && label !== '' && (
-        <div className="text-muted mb-1">{formatLabel ? formatLabel(label) : label}</div>
+        <div className="text-muted mb-1.5 font-medium">{formatLabel ? formatLabel(label) : label}</div>
       )}
       <ul className="flex flex-col gap-1">
         {payload.map((entry, i) => {
@@ -117,7 +117,7 @@ export function ChartLegend({ series, className, align = 'left' }: ChartLegendPr
   return (
     <ul
       className={cx(
-        'flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2',
+        'flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-2',
         align === 'center' && 'justify-center',
         align === 'right' && 'justify-end',
         className,
@@ -149,12 +149,12 @@ export function ChartFrame({ height = 260, legend, footer, children, ...card }: 
   const reduced = usePrefersReducedMotion()
   return (
     <motion.div
-      initial={reduced ? false : { opacity: 0.01, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className="min-w-0"
+      initial={reduced ? false : { opacity: 0.01 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      className={cx('min-w-0 h-full', card.className)}
     >
-      <Card {...card}>
+      <Card {...card} className="h-full">
         {legend && <div className="mb-3">{legend}</div>}
         <div style={{ height, width: '100%' }} className="min-w-0">
           {children}

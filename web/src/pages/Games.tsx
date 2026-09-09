@@ -25,18 +25,19 @@ function LineScore({ s }: { s: GameSummary }) {
   const n = Math.max(s.lineUs.length, s.lineOpp.length)
   const top = s.game.homeAway === '主' ? { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs } : { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp }
   const bottom = s.game.homeAway === '主' ? { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp } : { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs }
+  const cell = 'px-2 py-1.5 text-center min-w-8'
   const row = (t: typeof top, us: boolean) => (
-    <tr className={cx(us && 'font-medium text-ink')}>
-      <th scope="row" className="text-left px-3 py-1.5 font-medium whitespace-nowrap">{t.name}</th>
-      {Array.from({ length: n }, (_, i) => <td key={i} className="px-2 py-1.5 text-center">{t.line[i] ?? (i >= t.line.length ? '' : 0)}</td>)}
-      <td className="px-3 py-1.5 text-center font-semibold border-l border-border">{t.r}</td><td className="px-3 py-1.5 text-center">{t.h}</td><td className="px-3 py-1.5 text-center">{t.e}</td>
+    <tr className={cx('border-t border-border', us ? 'text-ink font-medium' : 'text-ink-2')}>
+      <th scope="row" className="text-left pl-4 pr-3 py-1.5 font-medium whitespace-nowrap">{t.name}</th>
+      {Array.from({ length: n }, (_, i) => <td key={i} className={cell}>{t.line[i] ?? (i >= t.line.length ? '' : 0)}</td>)}
+      <td className={cx(cell, 'font-semibold text-ink border-l border-border')}>{t.r}</td><td className={cell}>{t.h}</td><td className={cx(cell, 'pr-4')}>{t.e}</td>
     </tr>
   )
   return (
-    <div className="overflow-x-auto">
-      <table className="text-sm tnum border-collapse">
-        <thead><tr className="text-xs text-muted"><th className="px-3 py-1 text-left font-medium">隊伍</th>{Array.from({ length: n }, (_, i) => <th key={i} className="px-2 py-1 font-medium">{i + 1}</th>)}<th className="px-3 py-1 font-medium border-l border-border">R</th><th className="px-3 py-1 font-medium">H</th><th className="px-3 py-1 font-medium">E</th></tr></thead>
-        <tbody className="[&>tr]:border-t [&>tr]:border-border">{row(top, top.name === TEAM_NAME)}{row(bottom, bottom.name === TEAM_NAME)}</tbody>
+    <div className="overflow-x-auto scroll-x border border-border rounded-[var(--radius-sm)]">
+      <table className="text-[13px] tnum border-collapse min-w-full">
+        <thead><tr className="text-[11px] text-muted bg-surface-2/60"><th className="pl-4 pr-3 py-1.5 text-left font-medium">隊伍</th>{Array.from({ length: n }, (_, i) => <th key={i} className={cx(cell, 'py-1.5 font-medium')}>{i + 1}</th>)}<th className={cx(cell, 'py-1.5 font-medium border-l border-border')}>R</th><th className={cx(cell, 'py-1.5 font-medium')}>H</th><th className={cx(cell, 'py-1.5 font-medium pr-4')}>E</th></tr></thead>
+        <tbody>{row(top, top.name === TEAM_NAME)}{row(bottom, bottom.name === TEAM_NAME)}</tbody>
       </table>
     </div>
   )
@@ -58,6 +59,12 @@ export function GamesPage() {
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
   useEffect(() => { const g = params.get('game'); if (g) setOpen(g) }, [params])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
   const close = () => { setOpen(null); if (params.get('game')) setParams({}, { replace: true }) }
 
   const rows: GameRow[] = useMemo(() => [...s.summaries].reverse().map((g) => ({
@@ -66,11 +73,11 @@ export function GamesPage() {
   })), [s.summaries])
   const columns: Column<GameRow>[] = [
     { key: 'date', header: '日期', sortable: true },
-    { key: 'tournament', header: '杯賽', sortable: true },
-    { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="accent">示範</Badge>}</span> },
-    { key: 'homeAway', header: '主客', align: 'center' }, { key: 'venue', header: '場地' },
+    { key: 'tournament', header: '杯賽', sortable: true, className: 'text-ink-2' },
+    { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
+    { key: 'homeAway', header: '主客', align: 'center', className: 'text-ink-2' }, { key: 'venue', header: '場地', className: 'text-ink-2' },
     { key: 'result', header: '結果', align: 'center', format: (v) => resultBadge(v as GameRow['result']) },
-    { key: 'score', header: '比分', align: 'right' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
+    { key: 'score', header: '比分', align: 'right', className: 'font-medium' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
   ]
   const current = s.summaries.find((g) => g.game.id === open) ?? null
   const boxB = useMemo(() => (current ? battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === current.game.id)).sort((a, b) => (s.dataset.batting.find((p) => p.batter === a.name && p.gameId === current.game.id)?.order ?? 99) - (s.dataset.batting.find((p) => p.batter === b.name && p.gameId === current.game.id)?.order ?? 99)) : []), [current, s.dataset])
@@ -80,41 +87,48 @@ export function GamesPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Schedule" title="比賽" description={`${s.summaries.length} 場比賽符合篩選。點選任一場查看逐局比分、Box Score 與逐打席的逐球紀錄。`} />
+      <PageHeader title="比賽" description={`${s.summaries.length} 場比賽符合篩選。點任一場查看逐局比分、Box Score 與逐打席的逐球紀錄。`} />
       <DemoBanner />
       <Card flush>
         <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
       </Card>
       <AnimatePresence>
         {current && (
-          <motion.div key="box" role="dialog" aria-modal="true" aria-label="逐場成績" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute inset-0 bg-[rgba(0,0,0,0.45)] backdrop-blur-sm" onClick={close} />
-            <motion.div initial={reduced ? false : { y: 24, opacity: 0.01 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 24, opacity: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-t-[var(--radius)] sm:rounded-[var(--radius)] shadow-[var(--shadow-hover)] p-5 md:p-6 flex flex-col gap-5 [&>*]:shrink-0">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="eyebrow">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}</div>
-                  <h2 className="font-display font-bold text-[28px] leading-none text-ink mt-1 flex items-center gap-3">
-                    {TEAM_NAME} <span className="tnum">{current.runsUs}</span> : <span className="tnum">{current.runsOpp}</span> {current.game.opponent}
-                    {resultBadge(current.result)}{current.game.isDemo && <Badge variant="accent">示範</Badge>}
+          <motion.div key="box" role="dialog" aria-modal="true" aria-label="逐場成績" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
+            <div className="absolute inset-0 bg-black/45" onClick={close} />
+            <motion.div initial={reduced ? false : { y: 16, opacity: 0.01 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 16, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] flex flex-col [&>*]:shrink-0">
+              <div className="sticky top-0 z-[3] bg-surface border-b border-border px-5 md:px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}</div>
+                  <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
+                    <span>{TEAM_NAME} <span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
+                    <span className="inline-flex gap-1.5">{resultBadge(current.result)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
                   </h2>
-                  {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher) && (
-                    <p className="text-xs text-muted mt-2">{current.game.winningPitcher && `勝投 ${current.game.winningPitcher}`}{current.game.losingPitcher && `　敗投 ${current.game.losingPitcher}`}{current.game.savePitcher && `　救援 ${current.game.savePitcher}`}{current.game.recorder && `　紀錄 ${current.game.recorder}`}</p>
+                  {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.recorder) && (
+                    <p className="text-[12px] text-ink-2 mt-1.5 flex flex-wrap gap-x-3">
+                      {current.game.winningPitcher && <span><span className="text-muted">勝投</span> {current.game.winningPitcher}</span>}
+                      {current.game.losingPitcher && <span><span className="text-muted">敗投</span> {current.game.losingPitcher}</span>}
+                      {current.game.savePitcher && <span><span className="text-muted">救援</span> {current.game.savePitcher}</span>}
+                      {current.game.recorder && <span><span className="text-muted">紀錄</span> {current.game.recorder}</span>}
+                    </p>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" className="w-9 px-0"><X /></Button>
+                <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" icon={<X />} />
               </div>
-              <LineScore s={current} />
-              <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
-              {tab === 'box' && (
-                <>
-                  <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
-                  <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
-                </>
-              )}
-              {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席；依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} /></Card>}
-              {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以琥珀色分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} /></Card>}
-              {current.game.note && <p className="text-xs text-muted">{current.game.note}</p>}
+              <div className="px-5 md:px-6 py-5 flex flex-col gap-5 [&>*]:shrink-0">
+                <LineScore s={current} />
+                <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} className="self-start" items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
+                {tab === 'box' && (
+                  <>
+                    <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
+                    <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
+                  </>
+                )}
+                {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} /></Card>}
+                {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} /></Card>}
+                {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
+              </div>
             </motion.div>
           </motion.div>
         )}

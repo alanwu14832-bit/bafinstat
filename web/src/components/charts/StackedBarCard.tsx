@@ -61,7 +61,7 @@ export function StackedBarCard({ data, series, layout = 'vertical', formatValue,
               stroke="var(--surface)"
               strokeWidth={2}
               maxBarSize={28}
-              radius={i === resolved.length - 1 ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : 0}
+              radius={i === resolved.length - 1 ? (horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]) : 0}
               {...anim}
             />
           ))}
