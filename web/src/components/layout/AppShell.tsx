@@ -1,7 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { MobileDrawer, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
-import { FilterBar } from './FilterBar'
 import { useUiStore } from '../../store/ui'
 
 export interface AppShellProps {
@@ -10,7 +9,7 @@ export interface AppShellProps {
   filters?: ReactNode
 }
 
-export function AppShell({ children, filters = <FilterBar /> }: AppShellProps) {
+export function AppShell({ children, filters }: AppShellProps) {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
 
@@ -33,7 +32,7 @@ export function AppShell({ children, filters = <FilterBar /> }: AppShellProps) {
       <Sidebar />
       <MobileDrawer />
       <div className="min-w-0 flex flex-col">
-        <TopBar>{filters}</TopBar>
+        {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
         <main className="flex-1 min-w-0">
           <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6 md:gap-8">{children}</div>
         </main>

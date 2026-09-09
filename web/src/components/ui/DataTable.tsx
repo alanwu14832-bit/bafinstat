@@ -11,6 +11,7 @@ export interface Column<Row> {
   align?: Align
   /** Format the cell value. Receives the raw value and the row. */
   format?: (value: Row[keyof Row], row: Row) => ReactNode
+  /** Every column sorts by default; pass false to opt out. */
   sortable?: boolean
   width?: number | string
   /** Extra class on cells (e.g. font-medium for a name column). */
@@ -36,11 +37,14 @@ const alignCls: Record<Align, string> = { left: 'text-left', center: 'text-cente
 
 function compare(a: unknown, b: unknown): number {
   if (typeof a === 'number' && typeof b === 'number') return a - b
+  if (a === null || a === undefined) return b === null || b === undefined ? 0 : -1
+  if (b === null || b === undefined) return 1
+  if (typeof a === 'number' || typeof b === 'number') return Number(a) - Number(b)
   return String(a ?? '').localeCompare(String(b ?? ''), 'zh-Hant')
 }
 
 /**
- * Sortable table. Hairline rows, no zebra, sticky header; numbers are tabular so columns line up.
+ * Sortable table: click any header to sort (desc → asc → off). Hairline rows, no zebra, sticky header; numbers are tabular so columns line up.
  * The first column is pinned so names stay visible while wide stat tables scroll sideways.
  */
 export function DataTable<Row extends object>({
@@ -67,6 +71,7 @@ export function DataTable<Row extends object>({
           <tr className="border-b border-border">
             {columns.map((col, i) => {
               const active = sort?.key === col.key
+              const sortable = col.sortable !== false
               const align = col.align ?? 'left'
               return (
                 <th
@@ -75,12 +80,13 @@ export function DataTable<Row extends object>({
                   style={{ width: col.width }}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], pin(i), i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
-                    col.sortable && 'cursor-pointer select-none hover:text-ink')}
-                  onClick={col.sortable ? () => toggleSort(col.key) : undefined}
+                    sortable && 'cursor-pointer select-none hover:text-ink')}
+                  onClick={sortable ? () => toggleSort(col.key) : undefined}
+                  title={sortable ? '點擊排序' : undefined}
                 >
                   <span className={cx('inline-flex items-center gap-1', align === 'right' && 'flex-row-reverse')}>
                     {col.header}
-                    {col.sortable && active && (sort.dir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
+                    {sortable && active && (sort.dir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
                   </span>
                 </th>
               )
