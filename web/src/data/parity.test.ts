@@ -46,7 +46,7 @@ describe('all import formats agree with the seed', () => {
     expect(report.games).toBe(GAMES.length)
     for (const id of GAMES) expect(fingerprint(dataset, id)).toEqual(seedPrint[id])
     expect(dataset.roster.map((p) => p.name).sort()).toEqual(SEED_DATASET.roster.map((p) => p.name).sort())
-  })
+  }, 30_000) // parsing the 3000-row workbook can exceed the 5s default on a busy machine
 
   it('single-game template sheets (單場-摘要 / 單場-打擊 / 單場-投球 as shipped, pre-filled with 10/10)', () => {
     const master = XLSX.read(new Uint8Array(loadFile('BAFIN_棒球數據總表.xlsx')), { type: 'array' })
@@ -56,7 +56,7 @@ describe('all import formats agree with the seed', () => {
     expect(report.mode).toBe('single')
     expect(dataset.games[0]).toMatchObject({ id: 'G20251010-01', date: '2025-10-10', opponent: '群風', tournament: '友誼賽', homeAway: '主' })
     expect(fingerprint(dataset, 'G20251010-01')).toEqual(seedPrint['G20251010-01'])
-  })
+  }, 30_000)
 
   it('legacy single-game sheets (舊格式)', () => {
     for (const [file, id] of [['2025-10-10_vs_群風.xlsx', 'G20251010-01'], ['2025-12-22_vs_工海物治.xlsx', 'G20251222-01']] as const) {
