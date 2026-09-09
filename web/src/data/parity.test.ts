@@ -74,6 +74,20 @@ describe('all import formats agree with the seed', () => {
     expect(dataset.roster.length).toBe(SEED_DATASET.roster.length)
   })
 
+  it('credits putouts and assists from the pitching log when none were recorded', () => {
+    const fld = SEED_DATASET.fielding.filter((f) => f.gameId === 'G20251010-01')
+    const pit = SEED_DATASET.pitching.filter((p) => p.gameId === 'G20251010-01')
+    const outs = pit.filter((p) => ['I', 'II', 'III'].includes(p.code ?? '')).reduce((n, p) => n + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1), 0)
+    const po = fld.reduce((n, f) => n + f.po, 0)
+    const so = pit.filter((p) => p.result === '三振').length
+    expect(po).toBeGreaterThan(0)
+    expect(po).toBeLessThanOrEqual(outs)
+    expect(fld.find((f) => f.pos === 'C')!.po).toBeGreaterThanOrEqual(so)
+    // running normalize again does not double-credit
+    const again = normalizeDataset(SEED_DATASET).dataset.fielding.filter((f) => f.gameId === 'G20251010-01').reduce((n, f) => n + f.po, 0)
+    expect(again).toBe(po)
+  })
+
   it('normalizeDataset is idempotent and tolerant of messy input', () => {
     const once = normalizeDataset(SEED_DATASET)
     const twice = normalizeDataset(once.dataset)

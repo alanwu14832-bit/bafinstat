@@ -8,6 +8,8 @@
  *  - runs always come from the 得分 column; a mismatch with the R code only produces a warning
  *  - derives fielding lines for a game that has none (everyone who took a fielding position in the batting log,
  *    errors from the opponent's 失誤 rows by batted-ball location, pitchers' innings from their outs)
+ *  - credits putouts / assists / double plays from the pitching log when a game has none recorded
+ *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
  *  - fills game.innings when blank, and returns human-readable warnings per game
  */
 import { POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
@@ -88,6 +90,58 @@ function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]
   return { lines, unknownErrors }
 }
 
+const GROUND = new Set(['內滾', '犧觸'])
+const FLY = new Set(['內飛', '外飛', '犧飛'])
+
+/**
+ * Credit PO / A / DP to fielding lines from the opponent's plate appearances. Fielders are looked up by the
+ * position they played (first line at that position); pitchers by name. Returns how many outs could not be placed.
+ */
+function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited: number; unplaced: number } {
+  const byPos = new Map<string, FieldingLine>()
+  for (const l of lines) if (l.pos && l.pos !== 'P' && !byPos.has(l.pos)) byPos.set(l.pos, l)
+  const byPitcher = new Map<string, FieldingLine>()
+  for (const l of lines) if (l.pos === 'P' && !byPitcher.has(l.player)) byPitcher.set(l.player, l)
+  let credited = 0, unplaced = 0
+  const at = (n: number | undefined, pitcher: string): FieldingLine | undefined => {
+    if (!n) return undefined
+    if (n === 1) return byPitcher.get(pitcher)
+    return byPos.get(POSITION_BY_NUMBER[n])
+  }
+  const po = (l?: FieldingLine) => { if (l) { l.po++; credited++ } else unplaced++ }
+  const a = (l?: FieldingLine) => { if (l) l.a++ }
+  const dp = (...ls: Array<FieldingLine | undefined>) => { for (const l of ls) if (l) l.dp++ }
+  for (const p of pitching) {
+    const r = p.result
+    const first = byPos.get('1B')
+    // 三振：捕手刺殺，但不死三振而打者上壘（代碼不是 I/II/III）時沒有出局，不記刺殺
+    if (r === '三振') { if (!p.code || p.code in OUT_CODES) po(byPos.get('C')) }
+    else if (GROUND.has(r)) {
+      const f = at(p.loc, p.pitcher)
+      if (p.loc === 3) po(first)                       // unassisted at first
+      else if (p.loc) { a(f); po(first) }
+      else unplaced++
+    } else if (FLY.has(r)) po(at(p.loc, p.pitcher))
+    else if (r === '雙殺') {
+      const two = (p.outsBefore ?? 0) <= 1
+      const f = at(p.loc, p.pitcher)
+      const pivot = byPos.get(p.loc === 4 ? 'SS' : '2B')
+      if (!p.loc) { unplaced += two ? 2 : 1; continue }
+      if (two) {
+        if (p.loc === 3) { a(first); po(pivot); a(pivot); po(first); dp(first, pivot) }
+        else { a(f); po(pivot); a(pivot); po(first); dp(f, pivot, first) }
+      } else if (p.loc === 3) po(first)
+      else { a(f); po(first) }
+    } else if (r === '野選') {
+      const f = at(p.loc, p.pitcher)
+      if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++
+    }
+    if (p.cs) { a(byPos.get('C')); for (let i = 0; i < p.cs; i++) po(byPos.get('SS')) }
+    if (p.pk) { a(byPitcher.get(p.pitcher)); for (let i = 0; i < p.pk; i++) po(first) }
+  }
+  return { credited, unplaced }
+}
+
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
@@ -125,12 +179,19 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     const maxInn = Math.max(0, ...bat.map((p) => p.inning), ...pit.map((p) => p.inning))
     if (!g.innings && maxInn) g.innings = maxInn
 
-    // fielding: derive when the game has none at all
-    if (!fielding.some((f) => f.gameId === g.id) && (bat.length || pit.length)) {
+    // fielding: derive lines when the game has none at all
+    let gameLines = fielding.filter((f) => f.gameId === g.id)
+    if (!gameLines.length && (bat.length || pit.length)) {
       const d = deriveFielding(g, bat, pit)
       fielding.push(...d.lines)
-      warn('沒有守備紀錄，已依打席守位與對方失誤落點推定（只含失誤；PO/A 請自行補填）')
+      gameLines = d.lines
+      warn('沒有守備紀錄，已依打席守位與對方失誤落點推定失誤')
       if (d.unknownErrors) warn(`${d.unknownErrors} 次對方打者靠失誤上壘但沒記落點，無法歸屬到個人`)
+    }
+    // putouts / assists: when nobody recorded any, credit them from the opponent's plate appearances
+    if (gameLines.length && pit.length && gameLines.every((f) => !f.po && !f.a)) {
+      const c = creditPlays(gameLines, pit)
+      if (c.credited) warn(`刺殺／助殺由投球紀錄推定（三振→捕手、滾地→守位助殺＋一壘刺殺、飛球→守位刺殺、雙殺→樞紐）${c.unplaced ? `；${c.unplaced} 個出局沒有落點，未歸屬` : ''}`)
     }
 
     // consistency checks

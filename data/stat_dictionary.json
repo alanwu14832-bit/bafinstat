@@ -270,6 +270,16 @@
   "note": ""
  },
  {
+  "key": "OPS+",
+  "zh": "調整後攻擊指數",
+  "en": "OPS Plus",
+  "group": "打擊",
+  "formula": "100 × (OBP ÷ 隊OBP + SLG ÷ 隊SLG − 1)",
+  "status": "新增",
+  "priority": "P1",
+  "note": "以同一篩選範圍的全隊為基準（100 = 隊平均，120 = 高出 20%）；沒有聯盟資料與球場因子，隊內比較用"
+ },
+ {
   "key": "ISO",
   "zh": "純長打率",
   "en": "Isolated Power",

@@ -71,10 +71,12 @@ export interface ChartTooltipProps {
   label?: ReactNode
   formatValue?: (value: number, entry: TooltipPayloadEntry) => string
   formatLabel?: (label: ReactNode) => ReactNode
+  /** Per-entry series name (e.g. the opponent of that game instead of a generic 對手). */
+  formatName?: (entry: TooltipPayloadEntry) => ReactNode
 }
 
 /** Card-styled tooltip using text tokens; the swatch carries series identity. */
-export function ChartTooltip({ active, payload, label, formatValue, formatLabel }: ChartTooltipProps) {
+export function ChartTooltip({ active, payload, label, formatValue, formatLabel, formatName }: ChartTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
   return (
     <div className="rounded-[var(--radius-sm)] bg-surface border border-border shadow-[var(--shadow-hover)] px-3 py-2 text-xs min-w-[132px]">
@@ -93,7 +95,7 @@ export function ChartTooltip({ active, payload, label, formatValue, formatLabel 
                   className="inline-block size-2.5 rounded-[2px] shrink-0"
                   style={{ background: entry.color ?? entry.fill ?? 'var(--ink-2)' }}
                 />
-                {entry.name}
+                {formatName ? formatName(entry) : entry.name}
               </span>
               <span className="text-ink font-medium tnum">{text}</span>
             </li>

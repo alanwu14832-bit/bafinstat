@@ -38,6 +38,7 @@ STAT_DICTIONARY = [
     dict(key="OBP", zh="上壘率", en="On-Base Percentage", group="打擊", formula="(H + BB + HBP) ÷ (AB + BB + HBP + SF)", status="新增", priority="P0", note=""),
     dict(key="SLG", zh="長打率", en="Slugging Percentage", group="打擊", formula="TB ÷ AB", status="新增", priority="P0", note=""),
     dict(key="OPS", zh="整體攻擊指數", en="On-base Plus Slugging", group="打擊", formula="OBP + SLG", status="新增", priority="P0", note=""),
+    dict(key="OPS+", zh="調整後攻擊指數", en="OPS Plus", group="打擊", formula="100 × (OBP ÷ 隊OBP + SLG ÷ 隊SLG − 1)", status="新增", priority="P1", note="以同一篩選範圍的全隊為基準（100 = 隊平均，120 = 高出 20%）；沒有聯盟資料與球場因子，隊內比較用"),
     dict(key="ISO", zh="純長打率", en="Isolated Power", group="打擊", formula="SLG − AVG", status="新增", priority="P1", note=""),
     dict(key="BABIP", zh="場內球安打率", en="Batting Avg on Balls In Play", group="打擊", formula="(H − HR) ÷ (AB − SO − HR + SF)", status="新增", priority="P1", note="判斷運氣成分"),
     dict(key="wOBA", zh="加權上壘率", en="Weighted On-Base Average", group="打擊", formula="(wBB×(BB−IBB) + wHBP×HBP + w1B×1B + w2B×2B + w3B×3B + wHR×HR) ÷ (AB + BB − IBB + SF + HBP)", status="新增", priority="P1", note="權重見『設定』工作表（FanGraphs 線性權重，可更新）"),

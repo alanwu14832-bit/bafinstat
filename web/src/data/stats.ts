@@ -49,7 +49,7 @@ export interface BattingLine {
   rispAB: number; rispH: number; bip: number; gb: number; fb: number; ld: number; hard: number
   pitches: number; whiffs: number; swings: number; called: number; firstPitchSwing: number; qab: number
   pull: number; center: number; oppo: number
-  avg: number | null; obp: number | null; slg: number | null; ops: number | null; iso: number | null; babip: number | null; woba: number | null
+  avg: number | null; obp: number | null; slg: number | null; ops: number | null; opsPlus: number | null; iso: number | null; babip: number | null; woba: number | null
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
@@ -59,7 +59,7 @@ function emptyBatting(name: string): BattingLine {
   return {
     name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0,
     rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, pull: 0, center: 0, oppo: 0,
-    avg: null, obp: null, slg: null, ops: null, iso: null, babip: null, woba: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
+    avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
     pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
   }
 }
@@ -121,7 +121,16 @@ export function battingLines(ds: Dataset, pas: BattingPA[], params = DEFAULT_PAR
     games.get(pa.batter)!.add(pa.gameId)
   }
   const out = [...map.values()].map((l) => { l.g = games.get(l.name)!.size; return finalizeBatting(l, params) })
+  // OPS+ relative to the same slice of the team (100 = team average; no park factor)
+  const team = teamBatting(ds, pas, params)
+  for (const l of out) l.opsPlus = opsPlus(l, team)
   return out.sort((a, b) => b.pa - a.pa)
+}
+
+/** 100 × (OBP ÷ 基準OBP + SLG ÷ 基準SLG − 1), rounded; null when either side is undefined. */
+export function opsPlus(l: { obp: number | null; slg: number | null }, base: { obp: number | null; slg: number | null }): number | null {
+  if (l.obp === null || l.slg === null || !base.obp || !base.slg) return null
+  return Math.round(100 * (l.obp / base.obp + l.slg / base.slg - 1))
 }
 
 export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARAMS): BattingLine {
@@ -129,7 +138,9 @@ export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARA
   const games = new Set<string>()
   for (const pa of pas) { if (!pa.batter) continue; accumulateBatting(l, pa, batterHand(ds.roster, pa.batter)); games.add(pa.gameId) }
   l.g = games.size
-  return finalizeBatting(l, params)
+  finalizeBatting(l, params)
+  l.opsPlus = l.ops === null ? null : 100
+  return l
 }
 
 // ------------------------------------------------------------------ pitching

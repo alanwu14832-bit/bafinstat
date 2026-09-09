@@ -15,6 +15,7 @@ import { useStats } from '../hooks/useStats'
 import { sprayCounts, teamBatting } from '../data/stats'
 import { f2, f3, shortDate, signedInt } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
+import { useDataStore } from '../store/data'
 
 interface RecentRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; result: 'W' | 'L' | 'T'; score: string; hits: number; errors: number; isDemo: boolean }
 
@@ -24,8 +25,11 @@ export function OverviewPage() {
   const s = useStats()
   const navigate = useNavigate()
   const { summary, team, teamPitch, summaries } = s
+  const opponentFilter = useDataStore((st) => st.filters.opponent)
+  // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
+  const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
 
-  const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, us: g.runsUs, opp: g.runsOpp })), [summaries])
+  const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, us: g.runsUs, opp: g.runsOpp, opponent: g.game.opponent })), [summaries])
   const cumulative = useMemo(() => {
     let acc = 0
     return summaries.map((g) => ({ name: shortDate(g.game.date), diff: (acc += g.runsUs - g.runsOpp) }))
@@ -79,10 +83,11 @@ export function OverviewPage() {
         <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
       </StatGroup>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分" data={perGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: '對手' }]} />
+        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；橫軸標示對手" data={perGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
+          xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
         <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分" data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
         <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均" data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
-        <BarChartCard title="逐局得失分" subtitle="所有比賽各局合計" data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: '對手' }]} />
+        <BarChartCard title="逐局得失分" subtitle={opponentFilter !== 'all' ? `對 ${opponentFilter} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />
