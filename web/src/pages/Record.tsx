@@ -361,7 +361,19 @@ export function RecordPage() {
   const [history, setHistory] = useState<RecordState[]>([])
   const [finish, setFinish] = useState<{ w: string; l: string; sv: string } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [autoSaved, setAutoSaved] = useState<string | null>(null)
+  // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying)
   useEffect(() => { writeDraft(state) }, [state])
+  // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
+  const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}` : ''
+  useEffect(() => {
+    if (!state || !cloud.configured || !cloud.user || !(state.batting.length || state.pitching.length)) return
+    const t = window.setTimeout(() => {
+      void saveGame(toGameEdit(state)).then(() => setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }))).catch((e) => setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`))
+    }, 1500)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playsKey, cloud.user])
 
   const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return fn(s) })
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
@@ -398,7 +410,10 @@ export function RecordPage() {
         actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的部分不受影響）')) { writeDraft(null); setState(null); setHistory([]) } }}>放棄這場</Button> : undefined} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
-        <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} />
+        <>
+          <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>
+          <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} />
+        </>
       )}
       {finish && state && (
         <div role="dialog" aria-modal="true" aria-label="結束比賽" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
