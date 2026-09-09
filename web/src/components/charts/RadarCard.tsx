@@ -23,7 +23,7 @@ export function RadarCard({ data, series, max = 100, formatValue, height = 280, 
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} outerRadius="72%" margin={{ top: 8, right: 24, bottom: 8, left: 24 }}>
           <PolarGrid stroke="var(--grid)" />
-          <PolarAngleAxis dataKey="axis" tick={{ fill: 'var(--ink-2)', fontSize: 12 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fill: 'var(--ink-2)', fontSize: 11 }} />
           <PolarRadiusAxis domain={[0, max]} tick={false} axisLine={false} />
           <Tooltip content={({ active, payload, label }) => <ChartTooltip active={active} payload={payload} label={label} formatValue={(v) => fmt(v)} />} />
           {resolved.map((s) => (
@@ -34,7 +34,7 @@ export function RadarCard({ data, series, max = 100, formatValue, height = 280, 
               stroke={s.color}
               strokeWidth={2}
               fill={s.color}
-              fillOpacity={0.15}
+              fillOpacity={0.12}
               dot={false}
               {...anim}
             />

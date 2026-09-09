@@ -6,7 +6,7 @@ import { useUiStore } from '../../store/ui'
 
 export interface AppShellProps {
   children: ReactNode
-  /** Override the TopBar filter slot (defaults to the placeholder FilterBar). */
+  /** Override the TopBar filter slot (defaults to the global FilterBar). */
   filters?: ReactNode
 }
 
@@ -35,7 +35,7 @@ export function AppShell({ children, filters = <FilterBar /> }: AppShellProps) {
       <div className="min-w-0 flex flex-col">
         <TopBar>{filters}</TopBar>
         <main className="flex-1 min-w-0">
-          <div className="max-w-[1440px] mx-auto p-4 md:p-6 flex flex-col gap-6">{children}</div>
+          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6 md:gap-8">{children}</div>
         </main>
       </div>
     </div>

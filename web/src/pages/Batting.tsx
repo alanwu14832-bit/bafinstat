@@ -4,6 +4,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
+import { Checkbox } from '../components/ui/Input'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { DonutCard } from '../components/charts/DonutCard'
@@ -52,17 +53,16 @@ export function BattingPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Batting" title="打擊" description={`${s.batters.length} 位打者。排行門檻：PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
+      <PageHeader title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
-      <Card title="打擊成績" subtitle="點選欄位標題排序；點選球員開啟個人檔案" flush
-        action={<label className="inline-flex items-center gap-2 text-xs text-ink-2 cursor-pointer"><input type="checkbox" checked={qualifiedOnly} onChange={(e) => setQualifiedOnly(e.target.checked)} className="accent-[var(--accent)]" /> 只看達門檻</label>}>
+      <Card title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
         <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} defaultSort={{ key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={520} />
       </Card>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BarChartCard title="OPS 排行" subtitle={`達門檻打者，前 12 名`} data={opsRank} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
-        <DonutCard title="擊球型態" subtitle="全隊場內球的滾地 / 飛球 / 平飛比例" segments={bbType} centerCaption="場內球" />
-        <StackedBarCard title="擊球強度" subtitle="強勁擊球（強）vs 其他，場內球 ≥ 3 的打者" data={quality} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+        <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名" data={opsRank} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
+        <DonutCard title="擊球型態" subtitle="全隊場內球的滾地／飛球／平飛比例" segments={bbType} centerCaption="場內球" />
+        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，場內球 ≥ 3 的打者" data={quality} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
         <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
     </>

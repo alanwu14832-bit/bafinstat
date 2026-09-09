@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Card, type CardProps } from '../ui/Card'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { POSITION_LABEL } from '../../lib/fmt'
+import { cx } from '../../lib/format'
 
 /** Zone centres on a 200×190 field viewBox (home plate at 100,178). */
 const ZONES: Record<number, { x: number; y: number; pos: string }> = {
@@ -31,9 +32,9 @@ export function SprayChart({ counts, secondary, unit = '球', emptyText = '尚�
   }
   const inkFor = (n: number) => (max > 0 && n / max > 0.55 ? '#ffffff' : 'var(--ink)')
   return (
-    <Card {...card}>
-      <motion.div initial={reduced ? false : { opacity: 0.01, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} className="min-w-0">
-        <svg viewBox="0 0 200 190" role="img" aria-label="落點分佈" className="w-full max-w-[420px] mx-auto block">
+    <Card {...card} className={cx('h-full', card.className)}>
+      <motion.div initial={reduced ? false : { opacity: 0.01 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="min-w-0">
+        <svg viewBox="0 0 200 190" role="img" aria-label="落點分佈" className="w-full max-w-[380px] mx-auto block">
           {/* outfield arc + foul lines */}
           <path d="M100 178 L8 86 A130 130 0 0 1 192 86 Z" fill="var(--surface-2)" stroke="var(--axis)" strokeWidth="1" />
           <path d="M100 178 L58 136 L100 94 L142 136 Z" fill="var(--surface-3)" stroke="var(--axis)" strokeWidth="1" />
@@ -57,7 +58,7 @@ export function SprayChart({ counts, secondary, unit = '球', emptyText = '尚�
             )
           })}
         </svg>
-        <div className="flex items-center justify-between text-xs text-muted mt-2">
+        <div className="flex items-center justify-between text-[12px] text-muted mt-3">
           <span>{total === 0 ? emptyText : `${total} ${unit}${secondary ? '，顯示 安打/場內球' : ''}`}</span>
           <span className="flex items-center gap-1" aria-hidden>
             少 {SEQ.map((s) => <span key={s} className="inline-block size-2.5 rounded-[2px]" style={{ background: `var(${s})` }} />)} 多

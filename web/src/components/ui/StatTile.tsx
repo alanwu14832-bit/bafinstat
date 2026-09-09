@@ -1,8 +1,5 @@
-import { animate, useMotionValue } from 'framer-motion'
-import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
-import { Sparkline } from '../charts/Sparkline'
-import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
+import type { ReactNode } from 'react'
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { formatNumber, signed, type NumberFormat } from '../../lib/format'
 import { cx } from '../../lib/format'
 
@@ -10,7 +7,7 @@ export interface StatTileProps {
   label: string
   value: number
   format?: NumberFormat
-  /** Pre-formatted display string (e.g. "12-6"); skips count-up. */
+  /** Pre-formatted display string (e.g. "12-6"). */
   display?: string
   /** Delta versus a baseline; sign decides color. */
   delta?: number
@@ -18,6 +15,7 @@ export interface StatTileProps {
   deltaLabel?: string
   /** For ERA-like stats where lower is better. */
   invertDelta?: boolean
+  /** Kept for API compatibility; sparklines are no longer drawn inside tiles. */
   sparkline?: number[]
   icon?: ReactNode
   /** Muted caption under the value (e.g. "101 K / 50 BB"). */
@@ -27,76 +25,45 @@ export interface StatTileProps {
   className?: string
 }
 
-/** Count-up from 0 using a framer-motion motion value; respects reduced motion. */
-function useCountUp(target: number, enabled: boolean): number {
-  const mv = useMotionValue(enabled ? 0 : target)
-  const [display, setDisplay] = useState(enabled ? 0 : target)
-  useEffect(() => {
-    if (!enabled) {
-      setDisplay(target)
-      return
-    }
-    const unsub = mv.on('change', (v) => setDisplay(v))
-    const controls = animate(mv, target, { duration: 1.1, ease: [0.22, 1, 0.36, 1] })
-    return () => {
-      unsub()
-      controls.stop()
-    }
-  }, [target, enabled, mv])
-  return display
-}
-
-export function StatTile({
-  label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, sparkline, icon, note, compact, className,
-}: StatTileProps) {
-  const reduced = usePrefersReducedMotion()
-  const current = useCountUp(value, !reduced && display === undefined)
-  const text = display ?? formatNumber(current, format)
-
+/**
+ * One metric. Designed to sit inside <StatGroup>, which draws the hairlines between cells;
+ * on its own it renders as a bordered card.
+ */
+export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, className }: StatTileProps) {
+  const text = display ?? formatNumber(value, format)
   const good = delta !== undefined && (invertDelta ? delta < 0 : delta > 0)
   const bad = delta !== undefined && (invertDelta ? delta > 0 : delta < 0)
   const deltaText =
-    delta === undefined
-      ? ''
-      : deltaFormat === 'decimal3'
-        ? (delta > 0 ? '+' : '') + formatNumber(delta, 'decimal3')
-        : deltaFormat === 'pct'
-          ? signed(delta, 1) + '%'
-          : signed(delta, deltaFormat === 'ratio' || deltaFormat === 'era' ? 2 : 0)
+    delta === undefined ? '' : deltaFormat === 'decimal3' ? (delta > 0 ? '+' : '') + formatNumber(delta, 'decimal3') : deltaFormat === 'pct' ? signed(delta, 1) + '%' : signed(delta, deltaFormat === 'ratio' || deltaFormat === 'era' ? 2 : 0)
 
   return (
-    <div className={cx('bg-surface border border-border rounded-[var(--radius)] p-4 flex flex-col gap-2 min-w-0', className)}>
+    <div className={cx('stat-cell bg-surface p-4 flex flex-col gap-1.5 min-w-0', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted font-medium truncate">{label}</span>
-        {icon && <span className="text-muted [&>svg]:size-4">{icon}</span>}
+        {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
       </div>
-      <div className={cx('font-display font-bold leading-none text-ink tracking-tight', compact ? 'text-[24px]' : 'text-[34px]')}>{text}</div>
-      {note && <div className="text-xs text-muted tnum -mt-1">{note}</div>}
-      {(delta !== undefined || sparkline) && (
-        <div className="flex items-end justify-between gap-3 mt-auto">
-          {delta !== undefined ? (
-            <span
-              className={cx(
-                'inline-flex items-center gap-0.5 text-xs font-medium tnum whitespace-nowrap',
-                good && 'text-good',
-                bad && 'text-critical',
-                !good && !bad && 'text-muted',
-              )}
-            >
-              {good ? <ArrowUpRight className="size-3.5" /> : bad ? <ArrowDownRight className="size-3.5" /> : <Minus className="size-3.5" />}
+      <div className={cx('font-semibold leading-none text-ink tracking-[-0.01em] tnum', compact ? 'text-[18px]' : 'text-[24px]')}>{text}</div>
+      {(note || delta !== undefined) && (
+        <div className="flex items-center gap-2 text-xs tnum min-w-0">
+          {delta !== undefined && (
+            <span className={cx('inline-flex items-center gap-0.5 font-medium whitespace-nowrap', good && 'text-good', bad && 'text-critical', !good && !bad && 'text-muted')}>
+              {good ? <ArrowUpRight className="size-3" /> : bad ? <ArrowDownRight className="size-3" /> : null}
               {deltaText}
-              {deltaLabel && <span className="text-muted font-normal ml-1">{deltaLabel}</span>}
+              {deltaLabel && <span className="text-muted font-normal ml-0.5">{deltaLabel}</span>}
             </span>
-          ) : (
-            <span />
           )}
-          {sparkline && (
-            <div className="w-20 shrink-0 min-w-0">
-              <Sparkline data={sparkline} height={28} />
-            </div>
-          )}
+          {note && <span className="text-muted truncate">{note}</span>}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Strip of StatTiles with 1px hairlines between cells at any column count (incomplete rows stay clean). */
+export function StatGroup({ children, className, columns, flush }: { children: ReactNode; className?: string; columns?: string; flush?: boolean }) {
+  return (
+    <div className={cx('grid overflow-hidden bg-surface', !flush && 'border border-border rounded-[var(--radius)]', '[&>*]:border-l [&>*]:border-t [&>*]:border-border [&>*]:-ml-px [&>*]:-mt-px', columns ?? 'grid-cols-2 md:grid-cols-4', className)}>
+      {children}
     </div>
   )
 }

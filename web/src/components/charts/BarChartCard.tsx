@@ -63,7 +63,7 @@ export function BarChartCard({
               name={s.label}
               fill={s.color}
               maxBarSize={24}
-              radius={horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]}
+              radius={horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
               {...anim}
             >
               {highlightKey !== undefined &&
