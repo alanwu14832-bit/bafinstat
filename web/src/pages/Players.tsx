@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { RosterEditor } from '../components/ui/RosterEditor'
+import { useDataStore } from '../store/data'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -74,13 +76,18 @@ export function PlayersPage() {
   const s = useStats()
   const reduced = usePrefersReducedMotion()
   const [params, setParams] = useSearchParams()
-  const roster = s.dataset.roster
+  const roster = useMemo(() => [...s.dataset.roster].sort((a, b) => Number(!!b.status && b.status !== '現役' ? 0 : 1) - Number(!!a.status && a.status !== '現役' ? 0 : 1)), [s.dataset.roster])
   const names = useMemo(() => roster.map((p) => p.name), [roster])
   const requested = params.get('player')
   const [selected, setSelected] = useState<string>(requested && names.includes(requested) ? requested : names[0] ?? '')
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const [compare, setCompare] = useState<string>('')
+  const [editingRoster, setEditingRoster] = useState(false)
+  const base = useDataStore((st) => st.base)
+  const cloud = useDataStore((st) => st.cloud)
+  const saveRoster = useDataStore((st) => st.saveRoster)
+  const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
   useEffect(() => { if (requested && names.includes(requested)) setSelected(requested) }, [requested, names])
 
   const byName = useMemo(() => new Map(s.batters.map((b) => [b.name, b])), [s.batters])
@@ -168,6 +175,7 @@ export function PlayersPage() {
               <div className="px-4 md:px-5 py-3 flex items-center gap-3">
                 <Input icon={<Search />} size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋姓名或背號" aria-label="搜尋球員" className="w-full sm:w-[240px]" autoFocus />
                 <span className="text-xs text-muted tnum whitespace-nowrap">{filtered.length} / {roster.length} 人</span>
+                {canEdit && <Button size="sm" variant="outline" icon={<Pencil />} className="ml-auto" onClick={() => { setEditingRoster(true); setOpen(false) }}>編輯名單</Button>}
               </div>
               <ul className="px-4 md:px-5 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 max-h-[52vh] overflow-y-auto" role="listbox" aria-label="球員名單">
                 {filtered.map((p) => {
@@ -181,7 +189,7 @@ export function PlayersPage() {
                         <span className={cx('size-8 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum shrink-0', active ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{p.number ?? p.name.slice(0, 1)}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[13px] font-medium text-ink truncate">{p.name}</span>
-                          <span className="block text-[11px] text-muted truncate">{posLabel(p.primaryPos)}{p.bats ? `・${hand(p.bats)}` : ''}</span>
+                          <span className="block text-[11px] text-muted truncate">{posLabel(p.primaryPos)}{p.bats ? `・${hand(p.bats)}` : ''}{p.status && p.status !== '現役' ? `・${p.status}` : ''}</span>
                         </span>
                         <span className="text-right tnum text-[11px] text-ink-2 shrink-0 leading-4">
                           {b ? <span className="block">AVG {f3(b.avg)}</span> : <span className="block text-muted">無打席</span>}
@@ -198,6 +206,11 @@ export function PlayersPage() {
         </AnimatePresence>
       </Card>
 
+      {editingRoster && (
+        <Card title="編輯球員名單" subtitle="背號、姓名、守位、慣用手、狀態；儲存後全站更新">
+          <RosterEditor base={base} busy={cloud.pushing} onCancel={() => setEditingRoster(false)} onSave={async (c) => { await saveRoster(c); setEditingRoster(false) }} />
+        </Card>
+      )}
       {!player ? (
         <Card><EmptyState title="請選擇球員" /></Card>
       ) : (
