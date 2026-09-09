@@ -5,6 +5,8 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { NAV_GROUPS } from './nav'
 import { TeamLogo } from '../ui/TeamLogo'
 import { useUiStore } from '../../store/ui'
+import { useDataStore } from '../../store/data'
+import { SidebarAccount } from './SidebarAccount'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 
@@ -21,9 +23,12 @@ interface NavListProps {
 
 /** Grouped nav list. Icons keep a fixed x-position; labels fade and are clipped by the link. */
 function NavList({ collapsed, reduced }: NavListProps) {
+  const cloud = useDataStore((s) => s.cloud)
+  const showEditorItems = !cloud.configured || (!!cloud.user && cloud.isEditor)
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.editorOnly || showEditorItems) })).filter((g) => g.items.length)
   return (
     <div className="flex flex-col gap-5 px-3">
-      {NAV_GROUPS.map((group, gi) => (
+      {groups.map((group, gi) => (
         <div key={gi}>
           {group.label && (
             <div className={cx('h-5 px-2.5 mb-1 text-[11px] font-medium text-muted whitespace-nowrap overflow-hidden transition-opacity', collapsed ? 'opacity-0' : 'opacity-100')} aria-hidden={collapsed}>
@@ -128,6 +133,7 @@ export function Sidebar() {
       <nav aria-label="主選單" className="flex-1 overflow-visible pt-2 pb-4">
         <NavList collapsed={collapsed} reduced={reduced} />
       </nav>
+      <SidebarAccount collapsed={collapsed} reduced={reduced} />
       <div className="px-3 py-3 border-t border-border">
         <button
           type="button"
@@ -199,6 +205,7 @@ export function MobileDrawer() {
             <nav aria-label="主選單" className="flex-1 overflow-y-auto pt-2 pb-4">
               <NavList collapsed={false} reduced={reduced} />
             </nav>
+            <div className="pb-3"><SidebarAccount collapsed={false} reduced={reduced} /></div>
           </motion.div>
         </div>
       )}

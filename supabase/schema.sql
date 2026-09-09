@@ -1,7 +1,7 @@
 -- BAFIN Stats — Supabase schema
 -- Run this once in the Supabase SQL Editor (Dashboard → SQL Editor → New query → paste → Run).
 -- Tables mirror the workbook logs one-to-one; every statistic is computed by the website.
--- Access model: anyone (even without login) can READ; only signed-in users can WRITE.
+-- Access model: anyone (even without login) can READ; only signed-in users listed in `editors` can WRITE.
 
 create table if not exists players (
   name          text primary key,
@@ -31,6 +31,7 @@ create table if not exists games (
   save_pitcher    text,
   holds           text[],
   note            text,
+  updated_by      text,
   updated_at      timestamptz not null default now()
 );
 
@@ -112,12 +113,7 @@ create table if not exists record_drafts (
   updated_by text,
   updated_at timestamptz not null default now()
 );
-alter table record_drafts enable row level security;
-drop policy if exists "editors only" on record_drafts;
-drop policy if exists "public read" on record_drafts;
-create policy "public read" on record_drafts for select using (true);
-drop policy if exists "authenticated write" on record_drafts;
-create policy "authenticated write" on record_drafts for all to authenticated using (true) with check (true);
+alter table record_drafts enable row level security;  -- policies: see the loop below
 
 alter table players        enable row level security;
 alter table games          enable row level security;
@@ -125,14 +121,30 @@ alter table batting_pa     enable row level security;
 alter table pitching_pa    enable row level security;
 alter table fielding_lines enable row level security;
 
+-- Editors allowlist: only these emails may write. Manage rows from the dashboard (Table Editor → editors).
+create table if not exists editors (
+  email      text primary key,
+  note       text,
+  created_at timestamptz not null default now()
+);
+insert into editors (email, note) values ('baseball.ntuba@gmail.com', '管理員') on conflict (email) do nothing;
+alter table editors enable row level security;
+drop policy if exists "self read" on editors;
+create policy "self read" on editors for select to authenticated using (lower(email) = lower(auth.jwt() ->> 'email'));
+create or replace function is_editor() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from editors where lower(email) = lower(auth.jwt() ->> 'email'))
+$$;
+
 do $$
 declare t text;
 begin
-  foreach t in array array['players','games','batting_pa','pitching_pa','fielding_lines'] loop
+  foreach t in array array['players','games','batting_pa','pitching_pa','fielding_lines','record_drafts'] loop
     execute format('drop policy if exists "public read" on %I', t);
     execute format('create policy "public read" on %I for select using (true)', t);
     execute format('drop policy if exists "authenticated write" on %I', t);
-    execute format('create policy "authenticated write" on %I for all to authenticated using (true) with check (true)', t);
+    execute format('drop policy if exists "editors write" on %I', t);
+    execute format('create policy "editors write" on %I for all to authenticated using (is_editor()) with check (is_editor())', t);
   end loop;
 end $$;
 

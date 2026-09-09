@@ -11,7 +11,7 @@ import { create } from 'zustand'
 import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, onAuthChange, pushCloudDataset, subscribeCloudChanges } from '../data/supabase'
+import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, subscribeCloudChanges } from '../data/supabase'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, type Dataset, type Filters, type StatParams } from '../data/types'
@@ -37,7 +37,7 @@ interface DataState {
   demo: boolean
   filters: Filters
   params: StatParams
-  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean }
+  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean }
   setFilters: (patch: Partial<Filters>) => void
   resetFilters: () => void
   setDemo: (on: boolean) => void
@@ -70,7 +70,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   demo: initialDemo,
   filters: DEFAULT_FILTERS,
   params: { ...DEFAULT_PARAMS, ...(readJSON<Partial<StatParams>>(PARAMS_KEY) ?? {}) },
-  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false },
+  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false, isEditor: false },
   setFilters: (patch) => set({ filters: { ...get().filters, ...patch } }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   setDemo: (on) => { writeJSON(DEMO_KEY, on); set({ demo: on }) },
@@ -103,12 +103,12 @@ export const useDataStore = create<DataState>((set, get) => ({
     return null
   },
   resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: SEED_DATASET, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
-  canEdit: () => { const { cloud } = get(); return !cloud.configured || !!cloud.user },
+  canEdit: () => { const { cloud } = get(); return !cloud.configured || (!!cloud.user && cloud.isEditor) },
   saveGame: async (edit) => {
     const { cloud, base } = get()
     const { fragment, warnings } = normalizeGameEdit(base.roster, edit)
     if (cloud.configured) {
-      if (!cloud.user) throw new Error('請先登入才能修改雲端資料')
+      if (!cloud.user || !cloud.isEditor) throw new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try { await pushCloudDataset(fragment, 'upsert'); await get().loadCloud() }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
@@ -124,7 +124,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   deleteGame: async (id) => {
     const { cloud, base } = get()
     if (cloud.configured) {
-      if (!cloud.user) throw new Error('請先登入才能修改雲端資料')
+      if (!cloud.user || !cloud.isEditor) throw new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try { await deleteCloudGame(id); await get().loadCloud() }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
@@ -149,7 +149,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ cloud: { ...get().cloud, status: 'error', error: e instanceof Error ? e.message : String(e) } })
     }
   },
-  setCloudUser: (user) => set({ cloud: { ...get().cloud, user } }),
+  setCloudUser: (user) => {
+    set({ cloud: { ...get().cloud, user, isEditor: false } })
+    if (user) void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
+  },
 }))
 
 // Boot the cloud connection: load once, follow auth, refetch on remote changes.

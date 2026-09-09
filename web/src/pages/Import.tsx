@@ -37,8 +37,8 @@ export function ImportPage() {
   const opts = useFilterOptions()
   const inputRef = useRef<HTMLInputElement>(null)
   const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo, cloud } = useDataStore()
-  const canWriteCloud = cloud.configured && !!cloud.user
-  const cloudReadOnly = cloud.configured && !cloud.user
+  const canWriteCloud = cloud.configured && !!cloud.user && cloud.isEditor
+  const cloudReadOnly = cloud.configured && !canWriteCloud
 
   const handleFile = async (file: File) => {
     setError(null); setDone(null); setPending(null)
@@ -71,6 +71,14 @@ export function ImportPage() {
   const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base), `BAFIN_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
   const sourceLabel = source === 'cloud' ? `雲端資料庫${importedAt ? `・同步於 ${new Date(importedAt).toLocaleString('zh-TW')}` : ''}` : source === 'seed' ? '內建範例（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`
 
+  if (cloud.configured && !canWriteCloud) {
+    return (
+      <>
+        <PageHeader title="資料匯入" description="只有登入的紀錄員能上傳。瀏覽數據不需要登入。" />
+        <div className="max-w-md"><CloudPanel /></div>
+      </>
+    )
+  }
   return (
     <>
       <PageHeader title="資料匯入" description="上傳 Excel 檔以更新所有統計。解析在瀏覽器內完成，只讀取輸入欄位，所有數據由網站重新計算。"

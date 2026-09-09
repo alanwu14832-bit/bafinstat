@@ -8,6 +8,8 @@ export interface NavItem {
   /** Shown as the page context on small screens. */
   subtitle?: string
   icon: LucideIcon
+  /** Only shown to signed-in editors when the cloud is configured. */
+  editorOnly?: boolean
 }
 
 export interface NavGroup {
@@ -31,8 +33,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: '資料',
     items: [
-      { to: '/record', label: '紀錄比賽', subtitle: '比賽當天逐球紀錄', icon: PenLine },
-      { to: '/import', label: '資料匯入', subtitle: '上傳比賽紀錄', icon: Upload },
+      { to: '/record', label: '紀錄比賽', subtitle: '比賽當天逐球紀錄', icon: PenLine, editorOnly: true },
+      { to: '/import', label: '資料匯入', subtitle: '上傳比賽紀錄', icon: Upload, editorOnly: true },
       { to: '/dictionary', label: '數據字典', subtitle: '指標定義與計算方式', icon: BookOpen },
       { to: '/guide', label: '使用指南', subtitle: '比賽日紀錄與賽後流程', icon: CircleHelp },
     ],
