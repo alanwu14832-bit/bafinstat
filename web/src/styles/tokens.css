@@ -51,8 +51,22 @@
   --shadow-hover: 0 8px 24px rgba(16, 16, 12, 0.10), 0 1px 3px rgba(16, 16, 12, 0.06);
   --shadow-modal: 0 24px 64px rgba(16, 16, 12, 0.18), 0 2px 6px rgba(16, 16, 12, 0.08);
 
-  --font-display: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-body: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  /* Type: an editorial serif pairing (Source Serif 4 for Latin and figures, 思源宋體 for CJK).
+     data-font="sans" on <html> switches the whole site back to Inter + 思源黑體. */
+  --font-serif: "Source Serif 4", "Noto Serif TC", "Songti TC", "PMingLiU", "Noto Serif CJK TC", Georgia, serif;
+  --font-sans: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-display: var(--font-serif);
+  --font-body: var(--font-serif);
+  --tracking-display: 0;
+  --tracking-heading: 0;
+  --font-features: "calt", "liga";
+
+  /* Motion: one easing family for the whole site. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 260ms;
+  --dur-slow: 480ms;
 
   --sidebar-w: 248px;
   --sidebar-w-collapsed: 72px;
@@ -60,6 +74,14 @@
   --content-max: 1280px;
 
   color-scheme: light;
+}
+
+:root[data-font="sans"] {
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
+  --tracking-display: -0.02em;
+  --tracking-heading: -0.01em;
+  --font-features: "cv11", "ss01", "calt";
 }
 
 @media (prefers-color-scheme: dark) {

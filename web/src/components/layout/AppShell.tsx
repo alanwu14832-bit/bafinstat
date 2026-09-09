@@ -2,6 +2,8 @@ import { useEffect, type ReactNode } from 'react'
 import { MobileDrawer, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
 import { useUiStore } from '../../store/ui'
+import { useLocation } from 'react-router-dom'
+import { PageTransition } from '../motion/Reveal'
 
 export interface AppShellProps {
   children: ReactNode
@@ -12,6 +14,7 @@ export interface AppShellProps {
 export function AppShell({ children, filters }: AppShellProps) {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
+  const { pathname } = useLocation()
 
   // Ctrl/Cmd+B toggles the sidebar (drawer on mobile).
   useEffect(() => {
@@ -34,7 +37,7 @@ export function AppShell({ children, filters }: AppShellProps) {
       <div className="min-w-0 flex flex-col">
         {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
         <main className="flex-1 min-w-0">
-          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-8 md:py-8 flex flex-col gap-6 md:gap-8">{children}</div>
+          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-8 md:py-8"><PageTransition id={pathname}>{children}</PageTransition></div>
         </main>
       </div>
     </div>

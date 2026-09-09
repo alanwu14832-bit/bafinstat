@@ -40,15 +40,22 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "cv11", "ss01", "calt";
+    font-feature-settings: var(--font-features);
   }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--ink);
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
     overflow-x: hidden;
+  }
+  /* Theme switches cross-fade instead of snapping. */
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition: background-color var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), fill var(--dur-base) var(--ease-out) !important;
   }
   ::selection {
     background: var(--accent-soft);
@@ -63,8 +70,9 @@
     color: inherit;
   }
   h1, h2, h3, h4 {
+    font-family: var(--font-display);
     font-weight: 600;
-    letter-spacing: -0.01em;
+    letter-spacing: var(--tracking-heading);
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -80,16 +88,26 @@
   /* Type scale. Weight and color carry hierarchy; sizes stay close together. */
   .font-display {
     font-family: var(--font-display);
-    letter-spacing: -0.015em;
+    letter-spacing: var(--tracking-heading);
   }
   .text-display {
-    font-size: 24px;
+    font-family: var(--font-display);
+    font-size: 26px;
     line-height: 1.2;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--tracking-display);
+    font-variation-settings: "opsz" 40;
   }
   @media (min-width: 768px) {
-    .text-display { font-size: 28px; }
+    .text-display { font-size: 32px; }
+  }
+  /* Large figures (stat tiles, scoreboards) use the display optical size. */
+  .figure {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum", "lnum";
+    font-variation-settings: "opsz" 48;
+    letter-spacing: var(--tracking-display);
   }
   .eyebrow {
     font-size: 11px;
@@ -99,7 +117,25 @@
     color: var(--muted);
   }
   .tnum {
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum", "lnum";
+  }
+  /* Rows rise in as a list mounts or re-sorts; --i staggers them (capped by the caller). */
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .rise-in {
+    animation: rise-in var(--dur-slow) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 22ms);
+  }
+  @keyframes draw-x {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .draw-x {
+    transform-origin: left;
+    animation: draw-x 700ms var(--ease-out) both;
   }
   .hairline {
     border: 1px solid var(--border);

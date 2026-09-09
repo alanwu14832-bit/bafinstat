@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, SlidersHorizontal, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
-import { ThemeToggle } from './ThemeToggle'
+import { FontToggle, ThemeToggle } from './ThemeToggle'
 import { findNavItem } from './nav'
 import { activeFilterCount, FilterBar } from './FilterBar'
 import { useUiStore } from '../../store/ui'
@@ -100,6 +100,7 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <MobileFilters />
           <CloudStatus />
+          <FontToggle className="hidden sm:inline-flex" />
           <ThemeToggle />
         </div>
       </div>

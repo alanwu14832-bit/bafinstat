@@ -40,7 +40,7 @@ export function Field({ label, children, className, hint }: { label: string; chi
 /** Native checkbox with the site's accent and a 13px label. */
 export function Checkbox({ label, checked, onChange, className }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; className?: string }) {
   return (
-    <label className={cx('inline-flex items-center gap-2 text-[13px] text-ink-2 cursor-pointer select-none', className)}>
+    <label className={cx('inline-flex items-center gap-2 text-[13px] text-ink-2 cursor-pointer', className)}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--ink)] cursor-pointer" />
       {label}
     </label>

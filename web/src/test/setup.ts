@@ -20,3 +20,18 @@ if (!window.ResizeObserver) {
     disconnect() {}
   }
 }
+
+// jsdom has no IntersectionObserver; whileInView reveals treat everything as visible.
+if (!window.IntersectionObserver) {
+  window.IntersectionObserver = class {
+    cb: IntersectionObserverCallback
+    constructor(cb: IntersectionObserverCallback) { this.cb = cb }
+    observe(el: Element) { this.cb([{ isIntersecting: true, target: el, intersectionRatio: 1 } as IntersectionObserverEntry], this as unknown as IntersectionObserver) }
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return [] }
+    root = null
+    rootMargin = ''
+    thresholds = []
+  } as unknown as typeof IntersectionObserver
+}

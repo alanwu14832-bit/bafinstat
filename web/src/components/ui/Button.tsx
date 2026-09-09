@@ -28,7 +28,7 @@ const sizeCls: Record<ButtonSize, string> = {
 }
 const base =
   'inline-flex items-center justify-center rounded-[var(--radius-sm)] font-medium whitespace-nowrap select-none ' +
-  'transition-colors duration-150 motion-reduce:transition-none disabled:opacity-50 disabled:pointer-events-none cursor-pointer [&>svg]:shrink-0'
+  'transition-[background-color,color,border-color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:opacity-50 disabled:pointer-events-none cursor-pointer [&>svg]:shrink-0'
 
 /** The one button. Primary is the ink-colored action; the brand accent is reserved for highlights. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
