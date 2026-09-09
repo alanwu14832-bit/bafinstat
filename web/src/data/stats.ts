@@ -2,7 +2,7 @@
  * Stats engine. Definitions mirror the helper columns of the workbook so the
  * website and the spreadsheet always agree. See data/stat_dictionary.json.
  */
-import { DEFAULT_PARAMS, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
+import { DEFAULT_PARAMS, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(['一安', '二安', '三安', '全壘打'])
@@ -35,8 +35,8 @@ export function batterHand(roster: Player[], name: string): Hand {
 /** Pull / center / opposite from location 1–9 and handedness (switch hitters treated as R). */
 export function sprayDirection(loc: number | undefined, hand: Hand): 'pull' | 'center' | 'oppo' | null {
   if (!loc) return null
-  if ([1, 2, 8].includes(loc)) return 'center'
-  const pullR = [5, 6, 7].includes(loc)
+  if ([1, 2, 8, 46].includes(loc)) return 'center'
+  const pullR = [5, 6, 7, 56, 78].includes(loc)
   if (hand === 'L') return pullR ? 'oppo' : 'pull'
   return pullR ? 'pull' : 'oppo'
 }
@@ -321,12 +321,12 @@ export function teamSummary(summaries: GameSummary[], params = DEFAULT_PARAMS): 
   }
 }
 
-/** Spray-chart counts by location 1–9 (balls in play only). */
+/** Spray-chart counts by 落點 code (1–9 and the gap codes; balls in play only). Arrays are sparse, indexed by code. */
 export function sprayCounts(pas: Array<{ loc?: number; traj?: string; result?: string }>): { all: number[]; hits: number[] } {
-  const all = Array.from({ length: 10 }, () => 0)
-  const hits = Array.from({ length: 10 }, () => 0)
+  const all = Array.from({ length: 90 }, () => 0)
+  const hits = Array.from({ length: 90 }, () => 0)
   for (const p of pas) {
-    if (!p.loc || p.loc < 1 || p.loc > 9 || !isBIP(p.traj)) continue
+    if (!p.loc || !LOC_CODES.includes(p.loc) || !isBIP(p.traj)) continue
     all[p.loc]++
     if (p.result && HIT_RESULTS.has(p.result)) hits[p.loc]++
   }

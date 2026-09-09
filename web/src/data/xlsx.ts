@@ -7,7 +7,7 @@
 import * as XLSX from 'xlsx'
 import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
-import { normalizeDataset } from './normalize'
+import { cleanLoc, normalizeDataset } from './normalize'
 
 type Row = Record<string, unknown>
 
@@ -67,10 +67,7 @@ function toTime(v: unknown): string | undefined {
 }
 
 /** Parse batted-ball location: accepts 6 / "6" / "6游擊". */
-function toLoc(v: unknown): number | undefined {
-  const m = /([1-9])/.exec(str(v))
-  return m ? Number(m[1]) : undefined
-}
+const toLoc = (v: unknown): number | undefined => cleanLoc(v)
 
 /** Rows of a log sheet as objects keyed by header. The header row is located by `key` (a column that must exist),
  *  so the master workbook (title rows above the header) and a backup exported from the site (header on row 1) parse alike. */

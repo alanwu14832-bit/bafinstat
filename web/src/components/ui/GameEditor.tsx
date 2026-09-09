@@ -6,11 +6,12 @@ import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import type { GameEdit } from '../../data/edit'
-import { PA_RESULTS, POSITIONS, type BattingPA, type FieldingLine, type Game, type PitchingPA } from '../../data/types'
+import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type FieldingLine, type Game, type PitchingPA } from '../../data/types'
+import { PlayerSelect } from './PlayerSelect'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
-interface Col<T> { key: keyof T & string; label: string; kind: Kind; options?: readonly string[]; w?: number; list?: string }
+interface Col<T> { key: keyof T & string; label: string; kind: Kind; options?: readonly string[]; optionLabel?: (v: string) => string; w?: number; list?: string }
 
 const cell = cx(inputCls('sm'), 'h-7 px-1.5 text-[12px] rounded-[6px] w-full')
 
@@ -25,7 +26,6 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
   const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= rows.length) return; const next = rows.slice(); [next[i], next[j]] = [next[j], next[i]]; onChange(next) }
   return (
     <div className="overflow-x-auto scroll-x border border-border rounded-[var(--radius-sm)]">
-      <datalist id={listId}>{names.map((n) => <option key={n} value={n} />)}</datalist>
       <table className="border-collapse text-[12px] min-w-full">
         <thead className="bg-surface-2/60">
           <tr>
@@ -46,14 +46,25 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
                     <td key={c.key} className="px-1 py-1">
                       <select value={str} onChange={(e) => update(i, c.key, e.target.value, c.kind)} className={cx(cell, 'appearance-none pr-1 cursor-pointer')}>
                         <option value=""></option>
-                        {c.options?.map((o) => <option key={o} value={o}>{o}</option>)}
+                        {c.options?.map((o) => <option key={o} value={o}>{c.optionLabel ? c.optionLabel(o) : o}</option>)}
+                      </select>
+                    </td>
+                  )
+                }
+                if (c.kind === 'name') {
+                  // names come from the roster dropdown; a name that is not on the roster stays selectable so nothing is lost
+                  return (
+                    <td key={c.key} className="px-1 py-1">
+                      <select value={str} onChange={(e) => update(i, c.key, e.target.value, c.kind)} className={cx(cell, 'appearance-none pr-1 cursor-pointer')} style={{ width: c.w ?? 96 }} aria-label={c.label} data-list={listId}>
+                        <option value=""></option>
+                        {(str && !names.includes(str) ? [str, ...names] : names).map((o) => <option key={o} value={o}>{o}</option>)}
                       </select>
                     </td>
                   )
                 }
                 return (
                   <td key={c.key} className="px-1 py-1">
-                    <input value={str} list={c.kind === 'name' ? listId : undefined} inputMode={c.kind === 'int' ? 'numeric' : undefined}
+                    <input value={str} inputMode={c.kind === 'int' ? 'numeric' : undefined}
                       onChange={(e) => update(i, c.key, e.target.value, c.kind)} className={cx(cell, c.kind === 'int' && 'tnum text-right')} style={{ width: c.w ?? 64 }} />
                   </td>
                 )
@@ -88,13 +99,14 @@ const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
 const TRAJ = ['G', 'F', 'L'] as const
 const QUAL = ['強', '中', '弱'] as const
-const LOCS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const
+const LOCS = LOC_CODES.map(String)
+const locOption = (v: string) => (Number(v) > 9 ? `${v} ${locLabel(Number(v))}` : v)
 
 const batCols: Col<BatDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
   { key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'batter', label: '打者', kind: 'name', w: 96 },
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
-  { key: 'loc', label: '落點', kind: 'select', options: LOCS, w: 52 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
+  { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘死', kind: 'int', w: 44 },
   { key: 'run', label: '得分', kind: 'int', w: 44 }, { key: 'rbi', label: '打點', kind: 'int', w: 44 }, { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
@@ -102,7 +114,7 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
   { key: 'oppOrder', label: '對方棒次', kind: 'int', w: 56 }, { key: 'pitcher', label: '投手', kind: 'name', w: 96 }, { key: 'oppBatter', label: '對方打者', kind: 'text', w: 88 },
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
-  { key: 'loc', label: '落點', kind: 'select', options: LOCS, w: 52 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
+  { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
@@ -130,6 +142,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [tab, setTab] = useState<'bat' | 'pit' | 'fld'>('bat')
   const [error, setError] = useState<string | null>(null)
   const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher)])].filter(Boolean), [roster, bat, pit])
+  const pitcherNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher).filter(Boolean))]; return [...used, ...names.filter((n) => !used.includes(n))] }, [pit, names])
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const text = (k: keyof Game) => (e: React.ChangeEvent<HTMLInputElement>) => g(k, (e.target.value || undefined) as never)
 
@@ -158,9 +171,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           <Field label="場地"><Input value={game.venue ?? ''} onChange={text('venue')} /></Field>
           <Field label="天氣"><Input value={game.weather ?? ''} onChange={text('weather')} /></Field>
           <Field label="局數"><Input type="number" min={1} max={12} value={game.innings ?? ''} onChange={(e) => g('innings', e.target.value ? Number(e.target.value) : undefined)} className="tnum" /></Field>
-          <Field label="勝投"><Input list="game-editor-names" value={game.winningPitcher ?? ''} onChange={text('winningPitcher')} /></Field>
-          <Field label="敗投"><Input list="game-editor-names" value={game.losingPitcher ?? ''} onChange={text('losingPitcher')} /></Field>
-          <Field label="救援"><Input list="game-editor-names" value={game.savePitcher ?? ''} onChange={text('savePitcher')} /></Field>
+          <Field label="勝投"><PlayerSelect value={game.winningPitcher ?? ''} onChange={(v) => g('winningPitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
+          <Field label="敗投"><PlayerSelect value={game.losingPitcher ?? ''} onChange={(v) => g('losingPitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
+          <Field label="救援"><PlayerSelect value={game.savePitcher ?? ''} onChange={(v) => g('savePitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>
         </div>

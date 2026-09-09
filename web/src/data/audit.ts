@@ -2,12 +2,12 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import type { BattingPA, PitchingPA } from './types'
+import { isHoleLoc, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
 import { pitchTotals } from './stats'
 
 export interface Issue { side: 'bat' | 'pit'; index: number; message: string }
 
-const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '犧觸', '犧飛', '雙殺'])
+const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
 const HIT_RESULTS = new Set(['一安', '二安', '三安', '全壘打'])
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const BALL_RESULTS = new Set(['保送', '故四'])
@@ -41,9 +41,11 @@ function checkSequence<T extends { inning: number; code?: string; result: string
     if (p.result === '三振' && p.pitches.length && strikes < 3) out.push({ side, index: i, message: `${where}：三振但逐球只有 ${strikes} 個好球` })
     if (BALL_RESULTS.has(p.result) && p.result === '保送' && p.pitches.length && t.balls < 4) out.push({ side, index: i, message: `${where}：保送但逐球只有 ${t.balls} 個壞球` })
     // batted ball detail
-    const inPlay = p.pitches.includes('IP') || HIT_RESULTS.has(p.result) || ['內滾', '內飛', '外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'].includes(p.result)
+    const inPlay = p.pitches.includes('IP') || HIT_RESULTS.has(p.result) || ['內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'].includes(p.result)
     if (inPlay && p.result && !p.loc && p.result !== '三振') out.push({ side, index: i, message: `${where}：擊進場內（${p.result}）但沒記落點` })
     if ((p.result === '三振' || BALL_RESULTS.has(p.result) || p.result === '觸身') && p.loc) out.push({ side, index: i, message: `${where}：「${p.result}」不應有落點 ${p.loc}` })
+    if (isHoleLoc(p.loc) && (OUT_RESULTS.has(p.result) || p.result === '野選')) out.push({ side, index: i, message: `${where}：出局／野選的落點記為「${LOC_HOLES[p.loc]}」，請改填處理球的守備員（1–9）` })
+    if (p.result === '界外飛' && p.traj === 'G') out.push({ side, index: i, message: `${where}：界外飛球軌跡記為滾地` })
     if (p.result === '全壘打' && p.traj === 'G') out.push({ side, index: i, message: `${where}：全壘打軌跡記為滾地` })
   })
 }

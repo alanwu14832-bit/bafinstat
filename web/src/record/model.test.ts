@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPitch, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, toGameEdit } from './model'
+import { addPitch, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, toGameEdit, withInPlay } from './model'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
 import { summarizeGame, battingLines, pitchingLines } from '../data/stats'
@@ -71,5 +71,38 @@ describe('live scorekeeping model', () => {
     const lines = pitchingLines(fragment.pitching, fragment.games)
     expect(lines.find((l) => l.name === '壬')!.er).toBe(1); expect(lines.find((l) => l.name === '壬')!.outs).toBe(1)
     expect(lines.find((l) => l.name === '辛')!.outs).toBe(2); expect(lines.find((l) => l.name === '辛')!.k).toBe(1)
+  })
+})
+
+describe('foul flies, pickoff throws and the in-play pitch', () => {
+  it('a ball in play always ends with IP; a caught foul recorded as F becomes IP', () => {
+    expect(withInPlay(['B', 'F'], '界外飛')).toEqual(['B', 'IP'])
+    expect(withInPlay(['B', 'CS'], '一安')).toEqual(['B', 'IP'])
+    expect(withInPlay(['B', 'IP'], '一安')).toEqual(['B', 'IP'])
+    expect(withInPlay(['B'], '內滾')).toEqual(['B', 'IP'])
+    expect(withInPlay(['B', 'B', 'B', 'B'], '保送')).toEqual(['B', 'B', 'B', 'B'])
+  })
+
+  it('界外飛 is an out that credits the fielder at the location', () => {
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'F'), { ...defaultPlan(s, '界外飛'), loc: 2, traj: 'F' })
+    expect(s.outs).toBe(1)
+    expect(s.pitching[0].code).toBe('I')
+    expect(s.pitching[0].pitches).toEqual(['IP'])
+    expect(s.pitching[0].result).toBe('界外飛')
+  })
+
+  it('a pickoff throw that misses is noted on the plate appearance, the runner stays', () => {
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 56, traj: 'G' })
+    expect(s.pitching[0].loc).toBe(56)
+    s = runnerEvent(s, 0, 'opp', 'pkSafe')
+    s = runnerEvent(s, 0, 'opp', 'pkSafe')
+    expect(s.runners).toHaveLength(1)
+    expect(s.extras.pka).toBe(2)
+    s = commitPA(addPitch(addPitch(addPitch(s, 'CS'), 'SS'), 'SS'), defaultPlan(s, '三振'))
+    expect(s.pitching[1].note).toBe('牽制 2 次')
+    expect((s.pitching[1] as unknown as Record<string, unknown>).pka).toBeUndefined()
+    expect(s.extras.pka).toBe(0)
   })
 })

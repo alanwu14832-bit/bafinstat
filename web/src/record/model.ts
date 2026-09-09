@@ -7,6 +7,9 @@
  *     on that batter's own row when it happens, exactly like the paper sheet
  *   - runner events (盜壘 / 盜壘失敗 / 失誤進壘 / 壘死) land on the runner's own row (our offense) or as
  *     被盜壘 / 阻殺 / 暴投 / 捕逸 / 牽制 on the current opponent PA (their offense)
+ *   - a pickoff throw that does not get the runner (牽制・安全) has no column in the template, so it is written
+ *     into the row's 備註 as「牽制 N 次」
+ *   - a ball in play always ends with an IP pitch: 界外飛 recorded as F becomes IP, a missing IP is appended
  */
 import type { BattingPA, Game, PitchingPA } from '../data/types'
 import type { GameEdit } from '../data/edit'
@@ -17,7 +20,8 @@ export type Base = 1 | 2 | 3
 export type Dest = 'out' | 1 | 2 | 3 | 'home'
 export interface LineupSlot { name: string; pos: string }
 export interface Runner { base: Base; side: Side; row: number; name: string }
-export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: number }
+/** pka = pickoff throws where the runner was safe (noted, not a template column) */
+export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: number; pka: number }
 
 export interface RecordState {
   game: Game
@@ -43,11 +47,13 @@ export interface RecordState {
   updatedAt?: string
 }
 
-export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '犧觸', '犧飛', '雙殺'])
+export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+/** Results where the ball was put in play (the PA's last pitch is IP). */
+export const BIP_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
 export const REACH_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 const HIT_BASES: Record<string, Dest> = { 一安: 1, 二安: 2, 三安: 3, 全壘打: 'home' }
 const ROMAN = ['I', 'II', 'III'] as const
-const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 
 export const weBatTop = (s: RecordState) => s.game.homeAway === '客'
 export const offense = (s: RecordState): Side => (s.half === 'top') === weBatTop(s) ? 'us' : 'opp'
@@ -69,6 +75,15 @@ export function impliedResult(pitches: string[]): '保送' | '三振' | null {
   if (c.balls >= 4) return '保送'
   if (c.strikes >= 3) return '三振'
   return null
+}
+
+/** Pitch list with the ball-in-play pitch guaranteed for a BIP result (a caught foul is IP, not F). */
+export function withInPlay(pitches: string[], result: string): string[] {
+  if (!BIP_RESULTS.has(result)) return pitches
+  const last = pitches[pitches.length - 1]
+  if (last === 'IP') return pitches
+  if (last === 'F' || last === 'S' || last === 'CS') return [...pitches.slice(0, -1), 'IP']
+  return [...pitches, 'IP']
 }
 
 export function newGame(game: Game, lineup: LineupSlot[], pitcher: string): RecordState {
@@ -144,14 +159,16 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   let outs = s.outs
-  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: [...s.pitches], result: plan.result, loc: plan.loc, traj: plan.traj, quality: plan.quality }
+  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: withInPlay(s.pitches, plan.result), result: plan.result, loc: plan.loc, traj: plan.traj, quality: plan.quality }
+  const note = s.extras.pka ? `牽制 ${s.extras.pka} 次` : undefined
+  const extras = { sba: s.extras.sba, cs: s.extras.cs, wp: s.extras.wp, pb: s.extras.pb, pk: s.extras.pk }
   let rowIndex: number
   if (side === 'us') {
     const slot = s.lineup[s.slot]
-    batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi })
+    batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note })
     rowIndex = batting.length - 1
   } else {
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...s.extras })
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, note })
     rowIndex = pitching.length - 1
   }
   const next: RecordState = { ...s, batting, pitching }
@@ -186,7 +203,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   return outs >= 3 ? endHalf(next) : next
 }
 
-export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'pk' | 'advance' | 'score' | 'out'
+export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
 
 /** Something happened to a runner between pitches. */
 export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent): RecordState {
@@ -206,6 +223,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
     case 'pb': dest = advance(1); if (side === 'opp') extras.pb += 1; break
     case 'err': dest = advance(1); if (side === 'us') (r as BattingPA).advOnError += 1; break
     case 'pk': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; else extras.pk += 1; break
+    case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
     case 'advance': dest = advance(1); break
     case 'score': dest = 'home'; break
     case 'out': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; break

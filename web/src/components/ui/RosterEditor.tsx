@@ -5,7 +5,8 @@ import { Button } from './Button'
 import { inputCls } from './Input'
 import { cx } from '../../lib/format'
 import { playersWithRecords, type RosterChange } from '../../data/roster'
-import { POSITIONS, type Dataset, type Player } from '../../data/types'
+import { ROSTER_POSITIONS, type Dataset, type Player } from '../../data/types'
+import { POSITION_LABEL } from '../../lib/fmt'
 
 interface Row { original: string; player: Player; removed: boolean }
 const STATUSES = ['現役', '離隊', '畢業', '休賽']
@@ -77,8 +78,8 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
               <tr key={i} className={cx('border-t border-border', r.removed && 'opacity-40', touched.has(r.player.name) && 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]')}>
                 <td className="pl-3 pr-1 py-1 w-[64px]"><input value={r.player.number ?? ''} onChange={(e) => set(i, { number: e.target.value })} className={cx(cell, 'tnum')} disabled={r.removed} /></td>
                 <td className="px-1 py-1 min-w-[120px]"><input value={r.player.name} onChange={(e) => set(i, { name: e.target.value })} className={cx(cell, r.original && r.original !== r.player.name.trim() && 'border-warning')} disabled={r.removed} title={r.original && r.original !== r.player.name ? `儲存後所有「${r.original}」的紀錄會改為「${r.player.name}」` : undefined} /></td>
-                <td className="px-1 py-1 w-[84px]"><select value={r.player.primaryPos ?? ''} onChange={(e) => set(i, { primaryPos: e.target.value })} className={sel} disabled={r.removed}><option value="">—</option>{POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}</select></td>
-                <td className="px-1 py-1 w-[84px]"><select value={r.player.secondaryPos ?? ''} onChange={(e) => set(i, { secondaryPos: e.target.value })} className={sel} disabled={r.removed}><option value="">—</option>{POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}</select></td>
+                <td className="px-1 py-1 w-[108px]"><select value={r.player.primaryPos ?? ''} onChange={(e) => set(i, { primaryPos: e.target.value })} className={sel} disabled={r.removed}><option value="">—</option>{ROSTER_POSITIONS.map((p) => <option key={p} value={p}>{p} {POSITION_LABEL[p]}</option>)}</select></td>
+                <td className="px-1 py-1 w-[108px]"><select value={r.player.secondaryPos ?? ''} onChange={(e) => set(i, { secondaryPos: e.target.value })} className={sel} disabled={r.removed}><option value="">—</option>{ROSTER_POSITIONS.map((p) => <option key={p} value={p}>{p} {POSITION_LABEL[p]}</option>)}</select></td>
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.bats ?? ''} onChange={(e) => set(i, { bats: (e.target.value || undefined) as Player['bats'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.throws ?? ''} onChange={(e) => set(i, { throws: (e.target.value || undefined) as Player['throws'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[88px]"><select value={r.player.status ?? '現役'} onChange={(e) => set(i, { status: e.target.value })} className={sel} disabled={r.removed}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
