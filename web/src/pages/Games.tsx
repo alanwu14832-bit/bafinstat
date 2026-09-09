@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Pencil, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -10,6 +10,9 @@ import { BattingPlayByPlay, PitchLegend, PitchingPlayByPlay } from '../component
 import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { GameEditor } from '../components/ui/GameEditor'
+import { useDataStore } from '../store/data'
+import { extractGame } from '../data/edit'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
@@ -58,14 +61,22 @@ export function GamesPage() {
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
+  const [editing, setEditing] = useState(false)
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'warn'; lines: string[] } | null>(null)
+  const base = useDataStore((st) => st.base)
+  const saveGame = useDataStore((st) => st.saveGame)
+  const deleteGame = useDataStore((st) => st.deleteGame)
+  const cloud = useDataStore((st) => st.cloud)
+  const canEdit = !cloud.configured || !!cloud.user
   useEffect(() => { const g = params.get('game'); if (g) setOpen(g) }, [params])
+  useEffect(() => { setEditing(false); setNotice(null) }, [open])
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !editing) close() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
-  const close = () => { setOpen(null); if (params.get('game')) setParams({}, { replace: true }) }
+  const close = () => { setOpen(null); setEditing(false); if (params.get('game')) setParams({}, { replace: true }) }
 
   const rows: GameRow[] = useMemo(() => [...s.summaries].reverse().map((g) => ({
     id: g.game.id, date: g.game.date, tournament: g.game.tournament, opponent: g.game.opponent, homeAway: g.game.homeAway, venue: g.game.venue ?? '', result: g.result, score: `${g.runsUs}–${g.runsOpp}`,
@@ -80,6 +91,7 @@ export function GamesPage() {
     { key: 'score', header: '比分', align: 'right', className: 'font-medium' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
   ]
   const current = s.summaries.find((g) => g.game.id === open) ?? null
+  const editable = current && !current.game.isDemo ? extractGame(base, current.game.id) : null
   const boxB = useMemo(() => (current ? battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === current.game.id)).sort((a, b) => (s.dataset.batting.find((p) => p.batter === a.name && p.gameId === current.game.id)?.order ?? 99) - (s.dataset.batting.find((p) => p.batter === b.name && p.gameId === current.game.id)?.order ?? 99)) : []), [current, s.dataset])
   const boxP = useMemo(() => (current ? pitchingLines(s.dataset.pitching.filter((p) => p.gameId === current.game.id), [current.game]) : []), [current, s.dataset])
   const pbpBat = useMemo(() => (current ? s.dataset.batting.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
@@ -114,9 +126,31 @@ export function GamesPage() {
                     </p>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" icon={<X />} />
+                <div className="flex items-center gap-1 shrink-0">
+                  {editable && !editing && (
+                    <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} disabled={!canEdit} title={canEdit ? '修改這場比賽的輸入資料' : '雲端模式需先在「資料匯入」登入'}>修改資料</Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" icon={<X />} />
+                </div>
               </div>
               <div className="px-5 md:px-6 py-5 flex flex-col gap-5 [&>*]:shrink-0">
+                {notice && (
+                  <div role="status" className={cx('flex items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2.5 text-[13px] text-ink', notice.kind === 'ok' ? 'border-[color-mix(in_srgb,var(--good)_35%,transparent)] bg-[color-mix(in_srgb,var(--good)_8%,transparent)]' : 'border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)]')}>
+                    {notice.kind === 'ok' ? <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good" /> : <AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning" />}
+                    <ul className="flex flex-col gap-0.5">{notice.lines.map((l) => <li key={l}>{l}</li>)}</ul>
+                  </div>
+                )}
+                {editing && editable ? (
+                  <GameEditor initial={editable} roster={base.roster.map((p) => p.name)} busy={cloud.pushing}
+                    onCancel={() => setEditing(false)}
+                    onSave={async (edit) => {
+                      const warnings = await saveGame(edit)
+                      setEditing(false)
+                      setNotice(warnings.length ? { kind: 'warn', lines: ['已儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: ['已儲存，所有統計已重新計算。'] })
+                    }}
+                    onDelete={async () => { await deleteGame(current.game.id); close() }} />
+                ) : (
+                  <>
                 <LineScore s={current} />
                 <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} className="self-start" items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
                 {tab === 'box' && (
@@ -128,6 +162,8 @@ export function GamesPage() {
                 {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} /></Card>}
                 {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} /></Card>}
                 {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
+                  </>
+                )}
               </div>
             </motion.div>
           </motion.div>

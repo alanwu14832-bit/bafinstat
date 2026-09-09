@@ -11,7 +11,9 @@ import { create } from 'zustand'
 import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
-import { cloudConfigured, currentUser, fetchCloudDataset, onAuthChange, pushCloudDataset, subscribeCloudChanges } from '../data/supabase'
+import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, onAuthChange, pushCloudDataset, subscribeCloudChanges } from '../data/supabase'
+import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
+import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, type Dataset, type Filters, type StatParams } from '../data/types'
 
 const DATA_KEY = 'bafin.dataset.v1'
@@ -43,6 +45,11 @@ interface DataState {
   replaceDataset: (ds: Dataset) => Promise<{ games: number; skipped: number } | null>
   appendDataset: (ds: Dataset) => Promise<{ games: number; skipped: number } | null>
   resetToSeed: () => void
+  /** Save an in-app correction of one game (local, or cloud when signed in). Returns review warnings. */
+  saveGame: (edit: GameEdit) => Promise<GameWarning[]>
+  deleteGame: (id: string) => Promise<void>
+  /** True when edits can be written: local mode, or cloud mode with a signed-in user. */
+  canEdit: () => boolean
   setParams: (patch: Partial<StatParams>) => void
   loadCloud: () => Promise<void>
   setCloudUser: (user: User | null) => void
@@ -96,6 +103,39 @@ export const useDataStore = create<DataState>((set, get) => ({
     return null
   },
   resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: SEED_DATASET, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
+  canEdit: () => { const { cloud } = get(); return !cloud.configured || !!cloud.user },
+  saveGame: async (edit) => {
+    const { cloud, base } = get()
+    const { fragment, warnings } = normalizeGameEdit(base.roster, edit)
+    if (cloud.configured) {
+      if (!cloud.user) throw new Error('請先登入才能修改雲端資料')
+      set({ cloud: { ...cloud, pushing: true, error: null } })
+      try { await pushCloudDataset(fragment, 'upsert'); await get().loadCloud() }
+      catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
+      set({ cloud: { ...get().cloud, pushing: false } })
+      return warnings
+    }
+    const next = applyGameEdit(base, fragment)
+    const importedAt = new Date().toISOString()
+    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    set({ base: next, source: 'imported', importedAt })
+    return warnings
+  },
+  deleteGame: async (id) => {
+    const { cloud, base } = get()
+    if (cloud.configured) {
+      if (!cloud.user) throw new Error('請先登入才能修改雲端資料')
+      set({ cloud: { ...cloud, pushing: true, error: null } })
+      try { await deleteCloudGame(id); await get().loadCloud() }
+      catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
+      set({ cloud: { ...get().cloud, pushing: false } })
+      return
+    }
+    const next = removeGame(base, id)
+    const importedAt = new Date().toISOString()
+    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    set({ base: next, source: 'imported', importedAt })
+  },
   setParams: (patch) => { const params = { ...get().params, ...patch }; writeJSON(PARAMS_KEY, params); set({ params }) },
   loadCloud: async () => {
     if (!cloudConfigured) return
@@ -121,11 +161,10 @@ if (cloudConfigured && typeof window !== 'undefined') {
   subscribeCloudChanges(() => void useDataStore.getState().loadCloud())
 }
 
-let demoCache: { key: string; ds: Dataset } | null = null
-/** Base dataset merged with the deterministic demo overlay when enabled. */
+let demoCache: { base: Dataset; ds: Dataset } | null = null
+/** Base dataset merged with the deterministic demo overlay when enabled. Cached per base object, so any edit invalidates it. */
 export function effectiveDataset(base: Dataset, demo: boolean): Dataset {
   if (!demo) return base
-  const key = base.roster.map((p) => p.name).join('|') + '#' + base.games.map((g) => g.id).join('|')
-  if (!demoCache || demoCache.key !== key) demoCache = { key, ds: mergeDatasets(base, generateDemo(base.roster)) }
+  if (!demoCache || demoCache.base !== base) demoCache = { base, ds: mergeDatasets(base, generateDemo(base.roster)) }
   return demoCache.ds
 }
