@@ -86,10 +86,11 @@ async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 5
 
 /**
  * Write a dataset to the cloud. mode 'replace' wipes games not present in the
- * upload; 'append' only writes games whose id is new (existing games untouched).
+ * upload; 'append' only writes games whose id is new (existing games untouched);
+ * 'upsert' overwrites exactly the games in the upload and leaves the rest alone (in-app edits).
  * Returns the number of games written.
  */
-export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append'): Promise<{ games: number; skipped: number }> {
+export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number }> {
   const sb = supabase()
   const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
   let games = ds.games
