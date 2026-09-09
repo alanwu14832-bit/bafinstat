@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDown, ArrowUp, Copy, Eraser, PenLine, Wand2 } from 'lucide-react'
+import { Reorder, useDragControls } from 'framer-motion'
+import { ArrowDown, ArrowUp, Copy, Eraser, GripVertical, PenLine, Wand2 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -42,12 +43,38 @@ function FieldDiagram({ lineup, names, onPick }: { lineup: Lineup; names: string
   )
 }
 
+interface OrderItem { key: number; name: string }
+
+/** One batting slot: drag by the grip (so the dropdown stays tappable), or use the arrows. */
+function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { item: OrderItem; index: number; last: boolean; pos: string; names: string[]; taken: Set<string>; onPick: (name: string) => void; onMove: (d: number) => void }) {
+  const controls = useDragControls()
+  return (
+    <Reorder.Item value={item} dragListener={false} dragControls={controls} as="li"
+      className="relative flex items-center gap-2 px-2 sm:px-3 py-2 bg-surface border-b border-border last:border-b-0"
+      whileDrag={{ scale: 1.015, boxShadow: 'var(--shadow-hover)', zIndex: 5, backgroundColor: 'var(--surface)' }}>
+      <button type="button" aria-label="拖曳調整棒次" title="拖曳調整棒次" onPointerDown={(e) => { e.preventDefault(); controls.start(e) }}
+        className="size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
+        <GripVertical className="size-4" />
+      </button>
+      <span className={cx('size-7 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum shrink-0', item.name ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{index + 1}</span>
+      <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
+      <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? pos || '無守位' : ''}</span>
+      <div className="hidden sm:flex shrink-0">
+        <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
+        <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
+      </div>
+    </Reorder.Item>
+  )
+}
+
 export function LineupPage() {
   const navigate = useNavigate()
   const cloud = useDataStore((s) => s.cloud)
   const base = useDataStore((s) => s.base)
   const names = useMemo(() => rosterNames(base.roster), [base.roster])
   const [lineup, setLineup] = useState<Lineup>(() => readLineup() ?? emptyLineup())
+  // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
+  const [keys, setKeys] = useState<number[]>(() => Array.from({ length: 9 }, (_, i) => i))
   const [msg, setMsg] = useState<string | null>(null)
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
   // every change stays on this device, so the lineup survives a refresh and is waiting on the 紀錄比賽 page
@@ -67,7 +94,14 @@ export function LineupPage() {
     return { ...l, field, dh: name }
   })
   const setOrder = (i: number, name: string) => update((l) => ({ ...l, order: l.order.map((n, k) => (k === i ? name : n === name && name ? '' : n)) }))
-  const move = (i: number, d: number) => update((l) => { const j = i + d; if (j < 0 || j >= l.order.length) return l; const order = l.order.slice(); [order[i], order[j]] = [order[j], order[i]]; return { ...l, order } })
+  const move = (i: number, d: number) => {
+    const j = i + d
+    if (j < 0 || j >= lineup.order.length) return
+    setKeys((k) => { const n = k.slice(); [n[i], n[j]] = [n[j], n[i]]; return n })
+    update((l) => { const order = l.order.slice(); [order[i], order[j]] = [order[j], order[i]]; return { ...l, order } })
+  }
+  const items: OrderItem[] = useMemo(() => keys.map((key, i) => ({ key, name: lineup.order[i] ?? '' })), [keys, lineup.order])
+  const reorder = (next: OrderItem[]) => { setKeys(next.map((x) => x.key)); update((l) => ({ ...l, order: next.map((x) => x.name) })) }
   const issues = useMemo(() => lineupIssues(lineup, base.roster), [lineup, base.roster])
   const inOrder = useMemo(() => new Set(lineup.order.filter(Boolean)), [lineup.order])
   const copy = async () => {
@@ -98,24 +132,14 @@ export function LineupPage() {
             <Button variant="ghost" size="sm" icon={<Eraser />} className="ml-auto" onClick={() => { if (window.confirm('清空整個陣容？')) update(() => emptyLineup()) }}>全部清空</Button>
           </div>
         </Card>
-        <Card className="xl:col-span-5" title="打序" subtitle="先排好守位，再按「依守位填入」或逐棒選人" flush
+        <Card className="xl:col-span-5" title="打序" subtitle="按住左邊的把手拖曳就能換棒次；先排好守位再按「依守位填入」" flush
           action={<div className="flex items-center gap-1.5"><Button variant="ghost" size="sm" icon={<Wand2 />} onClick={() => update(autoOrder)}>依守位填入</Button><Button variant="ghost" size="sm" onClick={() => update((l) => ({ ...l, order: l.order.map(() => '') }))}>清空打序</Button></div>}>
-          <ol className="divide-y divide-[var(--border)]">
-            {lineup.order.map((n, i) => {
-              const pos = positionOf(lineup, n)
-              return (
-                <li key={i} className="flex items-center gap-2 px-3 sm:px-4 py-2">
-                  <span className={cx('size-7 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum shrink-0', n ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{i + 1}</span>
-                  <PlayerSelect size="sm" aria-label={`第 ${i + 1} 棒`} value={n} onChange={(v) => setOrder(i, v)} names={names} taken={inOrder} placeholder="—" className="flex-1 min-w-0" />
-                  <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{n ? pos || '無守位' : ''}</span>
-                  <div className="flex shrink-0">
-                    <button type="button" aria-label="上移" onClick={() => move(i, -1)} disabled={i === 0} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
-                    <button type="button" aria-label="下移" onClick={() => move(i, 1)} disabled={i === lineup.order.length - 1} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
+          <Reorder.Group as="ol" axis="y" values={items} onReorder={reorder} className="flex flex-col">
+            {items.map((item, i) => (
+              <OrderRow key={item.key} item={item} index={i} last={i === items.length - 1} pos={positionOf(lineup, item.name)} names={names} taken={inOrder}
+                onPick={(v) => setOrder(i, v)} onMove={(d) => move(i, d)} />
+            ))}
+          </Reorder.Group>
           <div className="px-4 py-3 border-t border-border flex flex-col gap-2">
             {issues.length ? issues.map((t) => <div key={t} className="text-[12px] text-warning flex items-start gap-1.5"><span className="mt-[5px] size-1.5 rounded-full bg-warning shrink-0" />{t}</div>) : <Badge variant="good">陣容完整</Badge>}
             <div className="text-[12px] text-muted">{lineup.updatedAt ? `已存在這台裝置・${new Date(lineup.updatedAt).toLocaleString('zh-TW')}` : '還沒開始排'}</div>
