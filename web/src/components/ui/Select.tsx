@@ -31,7 +31,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       <select
         ref={ref}
         id={selectId}
-        className={cx('appearance-none bg-transparent h-full pr-7 font-medium text-ink cursor-pointer focus:outline-none min-w-0', label ? 'pl-1.5' : 'pl-2.5')}
+        className={cx('appearance-none bg-transparent h-full pr-7 font-medium text-ink cursor-pointer focus:outline-none min-w-0 flex-1 w-full', label ? 'pl-1.5' : 'pl-2.5')}
         {...rest}
       >
         {options.map((o) => (
