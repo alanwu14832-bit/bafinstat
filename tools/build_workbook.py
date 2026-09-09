@@ -603,7 +603,8 @@ def bat_stat_cols():
         ("SH", "=" + b("犧觸"), "0"), ("SF", "=" + b("犧飛"), "0"), ("GIDP", "=" + b("雙殺"), "0"), ("ROE", "=" + b("失誤上壘"), "0"),
         ("SB", "=" + b("盜壘"), "0"), ("CS", "=" + b("盜壘失敗"), "0"), ("SB%", '=IFERROR({SB}/({SB}+{CS}),"")', "0.0%"),
         ("AVG", '=IFERROR({H}/{AB},"")', "0.000"), ("OBP", '=IFERROR(({H}+{BB}+{HBP})/({AB}+{BB}+{HBP}+{SF}),"")', "0.000"),
-        ("SLG", '=IFERROR({TB}/{AB},"")', "0.000"), ("OPS", '=IFERROR({OBP}+{SLG},"")', "0.000"), ("ISO", '=IFERROR({SLG}-{AVG},"")', "0.000"),
+        ("SLG", '=IFERROR({TB}/{AB},"")', "0.000"), ("OPS", '=IFERROR({OBP}+{SLG},"")', "0.000"),
+        ("OPS+", '=IFERROR(ROUND(100*({OBP}/{TEAMOBP}+{SLG}/{TEAMSLG}-1),0),"")', "0"), ("ISO", '=IFERROR({SLG}-{AVG},"")', "0.000"),
         ("BABIP", '=IFERROR(({H}-{HR})/({AB}-{SO}-{HR}+{SF}),"")', "0.000"),
         ("wOBA", '=IFERROR((' + PARAM["wBB"] + '*({BB}-{IBB})+' + PARAM["wHBP"] + '*{HBP}+' + PARAM["w1B"] + '*{1B}+' + PARAM["w2B"] + '*{2B}+' + PARAM["w3B"] + '*{3B}+' + PARAM["wHR"] + '*{HR})/({AB}+{BB}-{IBB}+{SF}+{HBP}),"")', "0.000"),
         ("K%", '=IFERROR({SO}/{PA},"")', "0.0%"), ("BB%", '=IFERROR({BB}/{PA},"")', "0.0%"),
@@ -636,6 +637,7 @@ for k in range(ROSTER_ROWS):
         if fml is None: continue
         refs = {n: f"{BAT_LET[n]}{r}" for n in BAT_LET}
         refs["r"] = r; refs["MINPA"] = MINPA; refs["OPSRANGE"] = f"${BAT_LET['OPS']}${first}:${BAT_LET['OPS']}${last}"
+        refs["TEAMOBP"] = f"${BAT_LET['OBP']}${last + 1}"; refs["TEAMSLG"] = f"${BAT_LET['SLG']}${last + 1}"
         f = fml.replace("{", "\x00").replace("}", "\x01")
         for key, val in refs.items():
             f = f.replace(f"\x00{key}\x01", str(val))
@@ -649,6 +651,7 @@ put(ws, tr, 2, "球隊合計", f_bold, fill_total)
 for i, (name, fml, fmt) in enumerate(BATC):
     col = 2 + i; let = L(col)
     if name in ("姓名", "主守位", "OPS排名"): put(ws, tr, col, None, f_bold, fill_total); continue
+    if name == "OPS+": put(ws, tr, col, 100, f_bold, fill_total, "0", center); continue
     if fmt == "0":
         put(ws, tr, col, f"=SUM({let}{first}:{let}{last})", f_bold, fill_total, fmt, center)
     else:

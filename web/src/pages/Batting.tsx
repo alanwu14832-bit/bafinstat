@@ -22,8 +22,9 @@ function columnsFor(view: View): Column<BattingLine>[] {
   const n = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true })
   const r3 = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v) => f3(v as number | null) })
   const p = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v) => pct(v as number | null) })
-  if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), r3('avg', 'AVG'), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS')]
-  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), p('kPct', 'K%'), p('bbPct', 'BB%'), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), p('sbPct', 'SB%')]
+  const plus: Column<BattingLine> = { key: 'opsPlus', header: 'OPS+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
+  if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), r3('avg', 'AVG'), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS'), plus]
+  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), p('kPct', 'K%'), p('bbPct', 'BB%'), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), p('sbPct', 'SB%')]
   return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), p('gbPct', 'GB%'), p('fbPct', 'FB%'), p('ldPct', 'LD%'), p('hardPct', 'Hard%'), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
 }
 
@@ -56,7 +57,7 @@ export function BattingPage() {
       <PageHeader title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
-      <Card title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
+      <Card title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
         <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} defaultSort={{ key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={520} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">

@@ -17,18 +17,34 @@ export interface BarChartCardProps extends Omit<ChartFrameProps, 'children' | 'l
   formatValue?: (v: number) => string
   /** Width reserved for category labels in horizontal layout. */
   categoryWidth?: number
+  /** Series name shown in the tooltip for a given datum (e.g. that game's opponent). */
+  nameFor?: (seriesKey: string, datum: BarDatum) => string
+  /** Datum field rendered as a second, muted line under each x-axis label (vertical layout only). */
+  xSubKey?: string
+}
+
+interface TickProps { x?: number; y?: number; payload?: { value: string; index: number } }
+function TwoLineTick({ x = 0, y = 0, payload, sub }: TickProps & { sub: (i: number) => string }) {
+  const i = payload?.index ?? 0
+  return (
+    <text x={x} y={y + 4} textAnchor="middle" fill="var(--muted)" fontSize={11} style={{ fontVariantNumeric: 'tabular-nums' }}>
+      <tspan x={x} dy={6}>{payload?.value ?? ''}</tspan>
+      <tspan x={x} dy={12} fontSize={10} fill="var(--ink-2)">{sub(i)}</tspan>
+    </text>
+  )
 }
 
 const MUTED = 'var(--surface-3)'
 
 export function BarChartCard({
-  data, series, layout = 'vertical', highlightKey, showLabels, formatValue, categoryWidth = 56, height, ...frame
+  data, series, layout = 'vertical', highlightKey, showLabels, formatValue, categoryWidth = 56, height, nameFor, xSubKey, ...frame
 }: BarChartCardProps) {
   const resolved = resolveSeries(series)
   const anim = useChartAnimation()
   const horizontal = layout === 'horizontal'
   const fmt = formatValue ?? ((v: number) => String(v))
-  const h = height ?? (horizontal ? Math.max(180, data.length * 32 + 24) : 260)
+  const h = height ?? (horizontal ? Math.max(180, data.length * 32 + 24) : xSubKey ? 280 : 260)
+  const sub = (i: number) => String(data[i]?.[xSubKey ?? ''] ?? '')
 
   return (
     <ChartFrame height={h} legend={<ChartLegend series={resolved} />} {...frame}>
@@ -48,13 +64,18 @@ export function BarChartCard({
             </>
           ) : (
             <>
-              <XAxis dataKey="name" {...axisCommon} axisLine={{ stroke: 'var(--axis)' }} interval="preserveStartEnd" minTickGap={6} />
+              {xSubKey ? (
+                <XAxis dataKey="name" {...axisCommon} axisLine={{ stroke: 'var(--axis)' }} interval={data.length <= 12 ? 0 : 'preserveStartEnd'} minTickGap={4} height={34} tick={<TwoLineTick sub={sub} />} />
+              ) : (
+                <XAxis dataKey="name" {...axisCommon} axisLine={{ stroke: 'var(--axis)' }} interval="preserveStartEnd" minTickGap={6} />
+              )}
               <YAxis {...axisCommon} tickCount={5} />
             </>
           )}
           <Tooltip
             cursor={{ fill: 'var(--surface-2)', opacity: 0.6 }}
-            content={({ active, payload, label }) => <ChartTooltip active={active} payload={payload} label={label} formatValue={(v) => fmt(v)} />}
+            content={({ active, payload, label }) => <ChartTooltip active={active} payload={payload} label={label} formatValue={(v) => fmt(v)}
+              formatName={nameFor ? (e) => nameFor(String(e.dataKey), (e.payload ?? {}) as BarDatum) : undefined} />}
           />
           {resolved.map((s) => (
             <Bar

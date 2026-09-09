@@ -153,7 +153,7 @@ export function PlayersPage() {
               <StatTile label="打擊率 AVG" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
               <StatTile label="上壘率 OBP" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
               <StatTile label="長打率 SLG" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
-              <StatTile label="OPS" value={bat.ops ?? 0} format="decimal3" note={`${bat.pa} PA・${bat.rbi} RBI`} />
+              <StatTile label="OPS" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
               <StatTile label="wOBA" value={bat.woba ?? 0} format="decimal3" />
               <StatTile label="K% / BB%" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct(bat.kPct)} / ${pct(bat.bbPct)}`} compact note={`${bat.so} K / ${bat.bb} BB`} />
               <StatTile label="Whiff% / Hard%" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct(bat.whiffPct)} / ${pct(bat.hardPct)}`} compact note="揮空率 / 強勁擊球率" />

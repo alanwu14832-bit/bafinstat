@@ -67,6 +67,7 @@ export function GamesPage() {
   const saveGame = useDataStore((st) => st.saveGame)
   const deleteGame = useDataStore((st) => st.deleteGame)
   const cloud = useDataStore((st) => st.cloud)
+  // Editing is for signed-in recorders. Without Supabase there is no account system and the data only lives in this browser.
   const canEdit = !cloud.configured || !!cloud.user
   useEffect(() => { const g = params.get('game'); if (g) setOpen(g) }, [params])
   useEffect(() => { setEditing(false); setNotice(null) }, [open])
@@ -127,8 +128,8 @@ export function GamesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {editable && !editing && (
-                    <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} disabled={!canEdit} title={canEdit ? '修改這場比賽的輸入資料' : '雲端模式需先在「資料匯入」登入'}>修改資料</Button>
+                  {editable && !editing && canEdit && (
+                    <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
                   )}
                   <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" icon={<X />} />
                 </div>

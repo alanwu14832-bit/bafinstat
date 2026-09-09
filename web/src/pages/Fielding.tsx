@@ -37,7 +37,7 @@ export function FieldingPage() {
 
   return (
     <>
-      <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。" />
+      <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）。" />
       <DemoBanner />
       <StatGroup>
         <StatTile label="團隊守備率" value={tc ? (totals.po + totals.as) / tc : 0} format="decimal3" note={`${tc} 次守備機會`} />
@@ -45,7 +45,7 @@ export function FieldingPage() {
         <StatTile label="雙殺" value={totals.dp} />
         <StatTile label="捕手阻殺率" value={totals.sb + totals.cs ? (totals.cs / (totals.sb + totals.cs)) * 100 : 0} format="pct" note={`${totals.cs} 阻殺 / ${totals.sb} 被盜`} />
       </StatGroup>
-      <Card title="守備成績" subtitle="點球員開啟個人檔案" flush>
+      <Card title="守備成績" subtitle="點球員開啟個人檔案；PO／A 未記錄時為推定值" flush>
         <DataTable columns={columns} rows={s.fielders} rowKey={(r) => r.name} defaultSort={{ key: 'tc', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
       </Card>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
