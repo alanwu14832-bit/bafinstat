@@ -133,6 +133,22 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
   return { games: games.length, skipped }
 }
 
+// ---------------------------------------------------------------- roster
+/** Upsert players, rename records for renamed players, delete removed players. */
+export async function pushRoster(players: Player[], renames: Record<string, string>, removed: string[]) {
+  const sb = supabase()
+  const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
+  for (const [from, to] of Object.entries(renames)) {
+    fail('打席紀錄', (await sb.from('batting_pa').update({ batter: to }).eq('batter', from)).error)
+    fail('投球紀錄', (await sb.from('pitching_pa').update({ pitcher: to }).eq('pitcher', from)).error)
+    fail('守備紀錄', (await sb.from('fielding_lines').update({ player: to }).eq('player', from)).error)
+    for (const col of ['winning_pitcher', 'losing_pitcher', 'save_pitcher']) fail('比賽清單', (await sb.from('games').update({ [col]: to }).eq(col, from)).error)
+    fail('球員名單', (await sb.from('players').delete().eq('name', from)).error)
+  }
+  if (players.length) fail('球員名單', (await sb.from('players').upsert(players.map(toPlayerRow), { onConflict: 'name' })).error)
+  if (removed.length) fail('球員名單', (await sb.from('players').delete().in('name', removed)).error)
+}
+
 // ---------------------------------------------------------------- editors allowlist
 /**
  * Is this signed-in email allowed to write? Reads the `editors` table (see supabase/migrations/2026-09-11_editors.sql).

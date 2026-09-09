@@ -11,7 +11,8 @@ import { create } from 'zustand'
 import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, subscribeCloudChanges } from '../data/supabase'
+import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges } from '../data/supabase'
+import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, type Dataset, type Filters, type StatParams } from '../data/types'
@@ -48,6 +49,8 @@ interface DataState {
   /** Save an in-app correction of one game (local, or cloud when signed in). Returns review warnings. */
   saveGame: (edit: GameEdit) => Promise<GameWarning[]>
   deleteGame: (id: string) => Promise<void>
+  /** Add / edit / rename / remove players (renames follow through to every record). */
+  saveRoster: (change: RosterChange) => Promise<void>
   /** True when edits can be written: local mode, or cloud mode with a signed-in user. */
   canEdit: () => boolean
   setParams: (patch: Partial<StatParams>) => void
@@ -120,6 +123,23 @@ export const useDataStore = create<DataState>((set, get) => ({
     writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
     set({ base: next, source: 'imported', importedAt })
     return warnings
+  },
+  saveRoster: async (change) => {
+    const { cloud, base } = get()
+    const err = validateRosterChange(base, change)
+    if (err) throw new Error(err)
+    const next = applyRosterChange(base, change)
+    if (cloud.configured) {
+      if (!cloud.user || !cloud.isEditor) throw new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
+      set({ cloud: { ...cloud, pushing: true, error: null } })
+      try { await pushRoster(next.roster, renamesOf(change), change.removed); await get().loadCloud() }
+      catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
+      set({ cloud: { ...get().cloud, pushing: false } })
+      return
+    }
+    const importedAt = new Date().toISOString()
+    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    set({ base: next, source: 'imported', importedAt })
   },
   deleteGame: async (id) => {
     const { cloud, base } = get()
