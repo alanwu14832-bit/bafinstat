@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRightLeft, ChevronDown, Flag, RefreshCw, Save, Undo2, X } from 'lucide-react'
+import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, RefreshCw, Save, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -10,6 +10,7 @@ import { Tabs } from '../components/ui/Tabs'
 import { CloudPanel } from '../components/ui/CloudPanel'
 import { BattingPlayByPlay, PitchChips, PitchingPlayByPlay } from '../components/ui/PlayByPlay'
 import { useDataStore } from '../store/data'
+import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { POSITIONS, type Game } from '../data/types'
@@ -369,13 +370,26 @@ export function RecordPage() {
   useEffect(() => {
     if (!state || !cloud.configured || !cloud.user || !(state.batting.length || state.pitching.length)) return
     const t = window.setTimeout(() => {
-      void saveGame(toGameEdit(state)).then(() => setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }))).catch((e) => setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`))
+      void saveGame(toGameEdit(state))
+        .then(() => saveCloudDraft(state.game.id, state, cloud.user?.email))
+        .then((ok) => { if (ok === false) setDraftsSupported(false); setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })) })
+        .catch((e) => setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`))
     }, 1500)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playsKey, cloud.user])
 
-  const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return fn(s) })
+  const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return { ...fn(s), updatedAt: new Date().toISOString() } })
+  // cloud drafts: what other devices left in progress
+  const [cloudDrafts, setCloudDrafts] = useState<CloudDraft<RecordState>[] | null>(null)
+  const [draftsSupported, setDraftsSupported] = useState(true)
+  const refreshDrafts = async () => {
+    if (!cloud.configured || !cloud.user) return
+    try { const d = await listCloudDrafts<RecordState>(); if (d === null) setDraftsSupported(false); else setCloudDrafts(d) } catch { /* offline: ignore */ }
+  }
+  useEffect(() => { void refreshDrafts() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [cloud.user])
+  const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
+  const resume = (d: CloudDraft<RecordState>) => { setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
   const canEdit = !cloud.configured || !!cloud.user
 
@@ -398,6 +412,7 @@ export function RecordPage() {
     try {
       const w = await saveGame(toGameEdit({ ...state, finished: true }, { winningPitcher: finish.w || undefined, losingPitcher: finish.l || undefined, savePitcher: finish.sv || undefined }))
       const id = state.game.id
+      if (cloud.configured) void deleteCloudDraft(id).catch(() => undefined)
       writeDraft(null); setState(null); setHistory([]); setFinish(null)
       navigate(`/games?game=${encodeURIComponent(id)}`)
       if (w.length) window.alert(`已儲存。請核對：\n${w.map((x) => `・${x.message}`).join('\n')}`)
@@ -407,8 +422,32 @@ export function RecordPage() {
   return (
     <>
       <PageHeader title="紀錄比賽" description={state ? `${state.game.date}・${state.game.tournament}・vs ${state.game.opponent}・${state.game.id}` : '填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。'}
-        actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的部分不受影響）')) { writeDraft(null); setState(null); setHistory([]) } }}>放棄這場</Button> : undefined} />
+        actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) { if (cloud.configured) void deleteCloudDraft(state.game.id).catch(() => undefined); writeDraft(null); setState(null); setHistory([]); void refreshDrafts() } }}>放棄這場</Button> : undefined} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
+      {!state && cloudDrafts && cloudDrafts.length > 0 && (
+        <Card title="雲端有進行中的比賽" subtitle="在另一台裝置開始的紀錄，可以在這裡接續" flush>
+          <ul className="divide-y divide-[var(--border)]">
+            {cloudDrafts.map((d) => (
+              <li key={d.game_id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium text-ink truncate">{d.state.game.date}・vs {d.state.game.opponent}<span className="text-muted font-normal ml-2 tnum">{d.game_id}</span></div>
+                  <div className="text-[12px] text-muted tnum">第 {d.state.inning} {d.state.half === 'top' ? '上' : '下'}・{score(d.state).us} : {score(d.state).opp}・最後更新 {new Date(d.updated_at).toLocaleString('zh-TW')}{d.updated_by ? `・${d.updated_by}` : ''}</div>
+                </div>
+                <Button size="sm" variant="primary" icon={<CloudDownload />} onClick={() => resume(d)}>接續</Button>
+                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`刪除 ${d.game_id} 的進度？（已儲存的打席不受影響）`)) void deleteCloudDraft(d.game_id).then(refreshDrafts) }}>刪除進度</Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {state && newerCloud && (
+        <div role="status" className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">
+          <CloudDownload className="size-4 text-muted shrink-0" />
+          <span className="min-w-0 flex-1">雲端有這場比賽較新的進度（{new Date(newerCloud.updated_at).toLocaleString('zh-TW')}{newerCloud.updated_by ? `・${newerCloud.updated_by}` : ''}），可能是另一台裝置繼續記的。</span>
+          <Button size="sm" onClick={() => resume(newerCloud)}>載入較新進度</Button>
+        </div>
+      )}
+      {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
       {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
         <>
           <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>

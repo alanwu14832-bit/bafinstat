@@ -105,6 +105,17 @@ create index if not exists pitching_pa_pitcher_idx on pitching_pa (pitcher);
 create index if not exists games_date_idx on games (date);
 
 -- ---------------------------------------------------------------- Row Level Security
+-- In-progress live-scoring sessions (紀錄比賽), so a game can be continued from another device.
+create table if not exists record_drafts (
+  game_id    text primary key,
+  state      jsonb not null,
+  updated_by text,
+  updated_at timestamptz not null default now()
+);
+alter table record_drafts enable row level security;
+drop policy if exists "editors only" on record_drafts;
+create policy "editors only" on record_drafts for all to authenticated using (true) with check (true);
+
 alter table players        enable row level security;
 alter table games          enable row level security;
 alter table batting_pa     enable row level security;

@@ -39,6 +39,8 @@ export interface RecordState {
   extras: Extras
   finished: boolean
   startedAt: string
+  /** last local change (ISO); used to pick the newer of a local vs cloud draft */
+  updatedAt?: string
 }
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '犧觸', '犧飛', '雙殺'])

@@ -128,6 +128,27 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
   return { games: games.length, skipped }
 }
 
+// ---------------------------------------------------------------- live-scoring drafts (cross-device continuation)
+export interface CloudDraft<T = unknown> { game_id: string; state: T; updated_by: string | null; updated_at: string }
+const draftsMissing = (e: { message: string; code?: string } | null) => !!e && (e.code === '42P01' || /record_drafts/.test(e.message))
+/** Upsert the in-progress state. Silently a no-op when the table has not been created yet. */
+export async function saveCloudDraft(gameId: string, state: unknown, email?: string | null): Promise<boolean> {
+  const { error } = await supabase().from('record_drafts').upsert({ game_id: gameId, state, updated_by: email ?? null, updated_at: new Date().toISOString() }, { onConflict: 'game_id' })
+  if (draftsMissing(error)) return false
+  if (error) throw new Error(error.message)
+  return true
+}
+export async function listCloudDrafts<T = unknown>(): Promise<CloudDraft<T>[] | null> {
+  const { data, error } = await supabase().from('record_drafts').select('*').order('updated_at', { ascending: false })
+  if (draftsMissing(error)) return null
+  if (error) throw new Error(error.message)
+  return (data ?? []) as CloudDraft<T>[]
+}
+export async function deleteCloudDraft(gameId: string) {
+  const { error } = await supabase().from('record_drafts').delete().eq('game_id', gameId)
+  if (error && !draftsMissing(error)) throw new Error(error.message)
+}
+
 export async function deleteCloudGame(id: string) {
   const { error } = await supabase().from('games').delete().eq('id', id)
   if (error) throw new Error(error.message)
