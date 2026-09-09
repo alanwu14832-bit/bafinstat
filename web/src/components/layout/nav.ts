@@ -1,5 +1,5 @@
 import {
-  BookOpen, CalendarDays, CircleHelp, Flame, LayoutDashboard, Shield, Target, Upload, Users, type LucideIcon,
+  BookOpen, CalendarDays, CircleHelp, Flame, LayoutDashboard, PenLine, Shield, Target, Upload, Users, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: '資料',
     items: [
+      { to: '/record', label: '紀錄比賽', subtitle: '比賽當天逐球紀錄', icon: PenLine },
       { to: '/import', label: '資料匯入', subtitle: '上傳比賽紀錄', icon: Upload },
       { to: '/dictionary', label: '數據字典', subtitle: '指標定義與計算方式', icon: BookOpen },
       { to: '/guide', label: '使用指南', subtitle: '比賽日紀錄與賽後流程', icon: CircleHelp },
