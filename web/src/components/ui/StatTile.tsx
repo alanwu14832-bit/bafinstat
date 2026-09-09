@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import { formatNumber, signed, type NumberFormat } from '../../lib/format'
 import { cx } from '../../lib/format'
+import { CountUp } from '../motion/CountUp'
+import { Reveal } from '../motion/Reveal'
 
 export interface StatTileProps {
   label: string
@@ -31,18 +33,20 @@ export interface StatTileProps {
  */
 export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, className }: StatTileProps) {
   const text = display ?? formatNumber(value, format)
+  // count up only when the tile shows a plain number (composite displays like "12-6" just appear)
+  const animated = display === undefined && Number.isFinite(value)
   const good = delta !== undefined && (invertDelta ? delta < 0 : delta > 0)
   const bad = delta !== undefined && (invertDelta ? delta > 0 : delta < 0)
   const deltaText =
     delta === undefined ? '' : deltaFormat === 'decimal3' ? (delta > 0 ? '+' : '') + formatNumber(delta, 'decimal3') : deltaFormat === 'pct' ? signed(delta, 1) + '%' : signed(delta, deltaFormat === 'ratio' || deltaFormat === 'era' ? 2 : 0)
 
   return (
-    <div className={cx('stat-cell bg-surface p-4 flex flex-col gap-1.5 min-w-0', className)}>
+    <div className={cx('stat-cell bg-surface p-4 flex flex-col gap-1.5 min-w-0 transition-colors duration-[var(--dur-base)] hover:bg-surface-2/60', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted font-medium truncate">{label}</span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
       </div>
-      <div className={cx('font-semibold leading-none text-ink tracking-[-0.01em] tnum', compact ? 'text-[18px]' : 'text-[24px]')}>{text}</div>
+      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[19px]' : 'text-[26px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>
       {(note || delta !== undefined) && (
         <div className="flex items-center gap-2 text-xs tnum min-w-0">
           {delta !== undefined && (
@@ -60,10 +64,8 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
 }
 
 /** Strip of StatTiles with 1px hairlines between cells at any column count (incomplete rows stay clean). */
-export function StatGroup({ children, className, columns, flush }: { children: ReactNode; className?: string; columns?: string; flush?: boolean }) {
-  return (
-    <div className={cx('grid overflow-hidden bg-surface', !flush && 'border border-border rounded-[var(--radius)]', '[&>*]:border-l [&>*]:border-t [&>*]:border-border [&>*]:-ml-px [&>*]:-mt-px', columns ?? 'grid-cols-2 md:grid-cols-4', className)}>
-      {children}
-    </div>
-  )
+export function StatGroup({ children, className, columns, flush, still }: { children: ReactNode; className?: string; columns?: string; flush?: boolean; still?: boolean }) {
+  const cls = cx('grid overflow-hidden bg-surface', !flush && 'border border-border rounded-[var(--radius)]', '[&>*]:border-l [&>*]:border-t [&>*]:border-border [&>*]:-ml-px [&>*]:-mt-px', columns ?? 'grid-cols-2 md:grid-cols-4', className)
+  if (still) return <div className={cls}>{children}</div>
+  return <Reveal className={cls} y={8}>{children}</Reveal>
 }

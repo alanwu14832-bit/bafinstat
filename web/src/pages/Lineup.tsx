@@ -23,7 +23,7 @@ const SPOTS: Record<FieldPos, { x: number; y: number }> = {
 function FieldDiagram({ lineup, names, onPick }: { lineup: Lineup; names: string[]; onPick: (pos: FieldPos, name: string) => void }) {
   const taken = useMemo(() => new Set([...Object.values(lineup.field), lineup.dh].filter(Boolean) as string[]), [lineup])
   return (
-    <div className="relative w-full max-w-[640px] mx-auto aspect-[200/175] select-none">
+    <div className="relative w-full max-w-[640px] mx-auto aspect-[200/175]">
       <svg viewBox="0 0 200 175" className="absolute inset-0 w-full h-full" aria-hidden>
         <path d="M100 165 L8 73 A130 130 0 0 1 192 73 Z" fill="var(--surface-2)" stroke="var(--axis)" strokeWidth="1" />
         <path d="M100 165 L56 121 L100 77 L144 121 Z" fill="var(--surface-3)" stroke="var(--axis)" strokeWidth="1" />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, Flame, Maximize2, Minimize2, RefreshCw, Save, Target, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -148,12 +149,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-5 items-start">
       <div className="xl:col-span-8 flex flex-col gap-4 md:gap-5 min-w-0">
         {/* scoreboard */}
-        <Card bodyClassName="p-4 md:p-5">
+        <Card still bodyClassName="p-4 md:p-5">
           <div className="flex items-center gap-4 md:gap-6 flex-wrap">
             <div className="flex items-center gap-3 tnum">
-              <div className="text-right"><div className="text-[12px] text-muted truncate max-w-[120px]">{TEAM_NAME}</div><div className="text-[28px] font-semibold leading-none tracking-[-0.02em]">{sc.us}</div></div>
+              <div className="text-right"><div className="text-[12px] text-muted truncate max-w-[120px]">{TEAM_NAME}</div><ScoreFigure value={sc.us} /></div>
               <span className="text-muted text-[20px]">:</span>
-              <div><div className="text-[12px] text-muted truncate max-w-[120px]">{oppName}</div><div className="text-[28px] font-semibold leading-none tracking-[-0.02em]">{sc.opp}</div></div>
+              <div><div className="text-[12px] text-muted truncate max-w-[120px]">{oppName}</div><ScoreFigure value={sc.opp} /></div>
             </div>
             <div className="h-10 w-px bg-border hidden sm:block" />
             <div className="flex items-center gap-3">
@@ -202,7 +203,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
           </div>
           <span className={cx('ml-auto text-[12px] font-medium tnum shrink-0', side === 'us' ? 'text-bg/80' : 'text-ink-2')}>{halfLabel}・{state.outs} 出局</span>
         </div>
-        <Card bodyClassName="p-4 md:p-5">
+        <Card still bodyClassName="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             {side === 'us' ? (
               <div className="flex items-center gap-3 min-w-0">
@@ -334,7 +335,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
       </div>
 
       <div className="xl:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
-        <Card title="打線" subtitle="點棒次可跳到該打者" flush>
+        <Card still title="打線" subtitle="點棒次可跳到該打者" flush>
           <ul className="divide-y divide-[var(--border)]">
             {state.lineup.map((l, i) => (
               <li key={i}>
@@ -351,7 +352,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             {side === 'opp' && <button type="button" onClick={() => apply((s) => setOppOrder(s, s.oppOrder + 1))} className="underline underline-offset-2 hover:text-ink cursor-pointer">跳過對方這棒</button>}
           </div>
         </Card>
-        <Card title="逐打席" action={<div className="flex items-center gap-2"><Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} /><Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) apply(endHalf) }}>結束半局</Button></div>} flush>
+        <Card still title="逐打席" action={<div className="flex items-center gap-2"><Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} /><Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) apply(endHalf) }}>結束半局</Button></div>} flush>
           <div className="max-h-[420px] overflow-y-auto">
             {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} /> : <PitchingPlayByPlay pas={state.pitching} />}
           </div>
@@ -364,6 +365,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
         </Card>
       </div>
     </div>
+  )
+}
+
+/** The score pops slightly whenever it changes. */
+function ScoreFigure({ value }: { value: number }) {
+  return (
+    <AnimatePresence mode="popLayout" initial={false}>
+      <motion.div key={value} initial={{ scale: 1.25, opacity: 0.4 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0, position: 'absolute' }} transition={{ type: 'spring', stiffness: 420, damping: 26 }} className="figure text-[30px] font-semibold leading-none">
+        {value}
+      </motion.div>
+    </AnimatePresence>
   )
 }
 
