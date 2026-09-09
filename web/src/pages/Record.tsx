@@ -17,12 +17,11 @@ import { POSITIONS, type Game } from '../data/types'
 import { cx } from '../lib/format'
 import {
   addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppBatter, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
-  type Dest, type LineupSlot, type PAPlan, type RecordState, type Runner, type RunnerEvent,
+  type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
-const DRAFT_KEY = 'bafin.record.draft.v1'
-const readDraft = (): RecordState | null => { try { const v = localStorage.getItem(DRAFT_KEY); return v ? (JSON.parse(v) as RecordState) : null } catch { return null } }
-const writeDraft = (s: RecordState | null) => { try { if (s) localStorage.setItem(DRAFT_KEY, JSON.stringify(s)); else localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
+import { readDraft, writeDraft } from '../record/draft'
+import { Diamond } from '../record/Diamond'
 
 const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
   { code: 'B', label: '壞球', hint: 'B' }, { code: 'CS', label: '好球・未揮', hint: 'CS' }, { code: 'SS', label: '揮空', hint: 'SS' }, { code: 'F', label: '界外', hint: 'F' }, { code: 'IP', label: '擊進場內', hint: 'IP' },
@@ -104,12 +103,6 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
 }
 
 /* ------------------------------------------------------------------ live */
-function Diamond({ runners }: { runners: Runner[] }) {
-  const on = (b: number) => runners.some((r) => r.base === b)
-  const sq = (cx_: number, cy: number, b: number) => <rect key={b} x={cx_ - 9} y={cy - 9} width={18} height={18} transform={`rotate(45 ${cx_} ${cy})`} fill={on(b) ? 'var(--ink)' : 'var(--surface-3)'} stroke="var(--border-strong)" strokeWidth={1} />
-  return <svg viewBox="0 0 100 80" className="w-[84px] h-[68px] shrink-0" aria-hidden>{sq(78, 46, 1)}{sq(50, 18, 2)}{sq(22, 46, 3)}<rect x={44} y={64} width={12} height={12} transform="rotate(45 50 70)" fill="var(--surface-3)" stroke="var(--border-strong)" /></svg>
-}
-
 function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean }) {
   const base = useDataStore((s) => s.base)
   const roster = base.roster.map((p) => p.name)
@@ -125,6 +118,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
   const implied = impliedResult(state.pitches)
   useEffect(() => { if (implied && !plan) choose(implied) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [implied])
 
+  const params = useDataStore((st) => st.params)
+  const pitchCount = useMemo(() => { const m = new Map<string, number>(); for (const p of state.pitching) m.set(p.pitcher, (m.get(p.pitcher) ?? 0) + p.pitches.length); return m }, [state.pitching])
+  const currentCount = (pitchCount.get(state.pitcher) ?? 0) + (side === 'opp' ? state.pitches.length : 0)
+  const countTone = currentCount >= params.pitchMax ? 'critical' : currentCount >= params.pitchWarn ? 'warning' : 'ok'
   const batterSlot = state.lineup[state.slot]
   const choose = (result: string) => { setPlan(defaultPlan(state, result)); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
@@ -196,7 +193,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
             ) : (
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span className="size-10 rounded-[8px] bg-surface-2 text-ink grid place-items-center text-[14px] font-semibold tnum shrink-0">{state.oppOrder}</span>
-                <div className="min-w-0 flex-1"><Input value={state.oppBatter} onChange={(e) => apply((s) => setOppBatter(s, e.target.value))} placeholder={`對方第 ${state.oppOrder} 棒（姓名可留空）`} size="sm" className="max-w-[260px]" /><div className="text-[12px] text-ink-2 mt-1">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span></div></div>
+                <div className="min-w-0 flex-1"><Input value={state.oppBatter} onChange={(e) => apply((s) => setOppBatter(s, e.target.value))} placeholder={`對方第 ${state.oppOrder} 棒（姓名可留空）`} size="sm" className="max-w-[260px]" /><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
+                  <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-semibold tnum', countTone === 'critical' ? 'bg-[color-mix(in_srgb,var(--critical)_16%,transparent)] text-critical' : countTone === 'warning' ? 'bg-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]' : 'bg-surface-2 text-ink-2')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>
+                    用球 {currentCount}{countTone === 'critical' ? '・已達上限' : countTone === 'warning' ? '・注意' : ''}
+                  </span></div></div>
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -206,6 +206,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
           </div>
           {tool === 'pitcher' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
+              {pitchCount.size > 0 && <div className="basis-full text-[12px] text-ink-2 flex flex-wrap gap-x-3">{[...pitchCount.entries()].map(([n, c]) => <span key={n} className="tnum">{n} <span className={cx('font-medium', c >= params.pitchMax ? 'text-critical' : c >= params.pitchWarn ? 'text-warning' : 'text-ink')}>{c}</span> 球</span>)}</div>}
               <Field label="換上投手" className="flex-1 min-w-[200px]"><Input list="rec-roster" defaultValue="" placeholder="輸入球員名" onKeyDown={(e) => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } } }} id="rec-newpitcher" /></Field>
               <Button onClick={() => { const v = (document.getElementById('rec-newpitcher') as HTMLInputElement | null)?.value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } }}>確定換投</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />

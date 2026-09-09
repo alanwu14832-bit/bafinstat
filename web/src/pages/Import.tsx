@@ -130,6 +130,8 @@ export function ImportPage() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="每場局數（ERA 換算）"><Input type="number" min={1} max={9} value={params.inningsPerGame} onChange={(e) => setParams({ inningsPerGame: Number(e.target.value) || 7 })} className="tnum" /></Field>
               <Field label="FIP 常數"><Input type="number" step={0.001} value={params.fipConstant} onChange={(e) => setParams({ fipConstant: Number(e.target.value) || 3.135 })} className="tnum" /></Field>
+              <Field label="用球數提醒（黃）"><Input type="number" min={1} value={params.pitchWarn} onChange={(e) => setParams({ pitchWarn: Number(e.target.value) || 80 })} className="tnum" /></Field>
+              <Field label="用球數上限（紅）"><Input type="number" min={1} value={params.pitchMax} onChange={(e) => setParams({ pitchMax: Number(e.target.value) || 100 })} className="tnum" /></Field>
             </div>
             <p className="text-xs text-muted mt-3 leading-relaxed">wOBA 權重採 FanGraphs 2025 線性權重（wBB {params.wBB}、w1B {params.w1B}、wHR {params.wHR}）。</p>
           </Card>

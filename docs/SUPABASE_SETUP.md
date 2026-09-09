@@ -53,12 +53,12 @@ npm run dev
 | `batting_pa` | 打席紀錄 | `(game_id, seq)` |
 | `pitching_pa` | 投球紀錄 | `(game_id, seq)` |
 | `fielding_lines` | 守備紀錄 | `(game_id, seq)` |
-| `record_drafts` | 網站「紀錄比賽」進行中的狀態（換裝置接續用，只有登入者能讀寫） | `game_id` |
+| `record_drafts` | 網站「紀錄比賽」進行中的狀態：換裝置接續、公開的「即時比分」頁讀取（任何人可讀，登入者可寫） | `game_id` |
 
 刪除 `games` 的一列會連帶刪掉該場所有打席（on delete cascade）。統計全部由網站計算，資料庫只存原始紀錄。
 
 ## 已建好的專案要補的表
-`record_drafts`（換裝置接續逐球紀錄）是後來加的。舊專案到 SQL Editor 執行 `supabase/migrations/2026-09-10_record_drafts.sql` 一次即可；沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
+`record_drafts`（換裝置接續逐球紀錄、即時比分頁）是後來加的。舊專案到 SQL Editor 執行 `supabase/migrations/2026-09-10_record_drafts.sql` 一次即可；沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 
 ## 常見問題
 - **登入信沒收到**：檢查垃圾郵件；Supabase 免費方案每小時寄信有上限，或到 Authentication → Users 確認帳號存在。

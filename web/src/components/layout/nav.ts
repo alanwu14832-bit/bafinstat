@@ -1,5 +1,5 @@
 import {
-  BookOpen, CalendarDays, CircleHelp, Flame, LayoutDashboard, PenLine, Shield, Target, Upload, Users, type LucideIcon,
+  BookOpen, CalendarCheck, CalendarDays, CircleHelp, Flame, LayoutDashboard, PenLine, Radio, Shield, Target, Upload, Users, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -25,6 +25,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/fielding', label: '守備', subtitle: '守備位置與失誤', icon: Shield },
       { to: '/players', label: '球員', subtitle: '球員名單與個人檔案', icon: Users },
       { to: '/games', label: '比賽', subtitle: '賽程與比賽結果', icon: CalendarDays },
+      { to: '/attendance', label: '出賽', subtitle: '出賽場次與紀錄員', icon: CalendarCheck },
+      { to: '/live', label: '即時比分', subtitle: '進行中的比賽', icon: Radio },
     ],
   },
   {

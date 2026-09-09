@@ -13,6 +13,7 @@
  *  - fills game.innings when blank, and returns human-readable warnings per game
  */
 import { POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
+import { auditGame } from './audit'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
@@ -199,6 +200,8 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     for (const p of pit) if ((p.code ?? '') in OUT_CODES) byInning.set(p.inning, (byInning.get(p.inning) ?? 0) + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1))
     for (const [inn, outs] of byInning) if (outs !== 3 && inn < maxInn) warn(`投球紀錄第 ${inn} 局出局數為 ${outs}（應為 3），請檢查結果代碼`)
     for (const p of [...bat, ...pit]) if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) warn(`第 ${p.inning} 局有 2 出局後的「雙殺」，只計 1 個出局`)
+    const issues = auditGame(bat, pit).filter((i) => !i.message.includes('落點'))
+    if (issues.length) { for (const i of issues.slice(0, 6)) warn(`可疑打席：${i.message}`); if (issues.length > 6) warn(`另有 ${issues.length - 6} 個可疑打席，開啟比賽頁可逐一查看`) }
     const noResult = bat.filter((p) => p.batter && !p.result).length + pit.filter((p) => p.pitcher && !p.result).length
     if (noResult) warn(`${noResult} 個打席沒有「打擊結果」，不計入統計`)
     const unknown = [...new Set(bat.map((p) => p.batter).filter((n) => n && !names.has(n)))]

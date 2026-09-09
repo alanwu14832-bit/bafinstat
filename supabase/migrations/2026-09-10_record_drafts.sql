@@ -7,4 +7,7 @@ create table if not exists record_drafts (
 );
 alter table record_drafts enable row level security;
 drop policy if exists "editors only" on record_drafts;
-create policy "editors only" on record_drafts for all to authenticated using (true) with check (true);
+drop policy if exists "public read" on record_drafts;
+create policy "public read" on record_drafts for select using (true);
+drop policy if exists "authenticated write" on record_drafts;
+create policy "authenticated write" on record_drafts for all to authenticated using (true) with check (true);
