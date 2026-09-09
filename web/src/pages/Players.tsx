@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { Select } from '../components/ui/Select'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -16,13 +17,58 @@ import { SprayChart } from '../components/charts/SprayChart'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
-import { battingLines, sprayCounts, type BattingLine } from '../data/stats'
+import { battingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
 
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
 
 const hand = (b?: string) => (b ? (b === 'L' ? '左打' : b === 'S' ? '左右開弓' : '右打') : '')
+
+type Metric<T> = { label: string; get: (l: T) => number | null | undefined; fmt: (v: number) => string; lowerBetter?: boolean; min?: (l: T) => boolean }
+const BAT_METRICS: Metric<BattingLine>[] = [
+  { label: 'G', get: (l) => l.g, fmt: String }, { label: 'PA', get: (l) => l.pa, fmt: String }, { label: 'H', get: (l) => l.h, fmt: String }, { label: 'HR', get: (l) => l.hr, fmt: String }, { label: 'RBI', get: (l) => l.rbi, fmt: String }, { label: 'SB', get: (l) => l.sb, fmt: String },
+  { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
+  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
+]
+const PIT_METRICS: Metric<PitchingLine>[] = [
+  { label: 'IP', get: (l) => l.ip, fmt: (v) => v.toFixed(1) }, { label: 'ERA', get: (l) => l.era, fmt: f2, lowerBetter: true }, { label: 'FIP', get: (l) => l.fip, fmt: f2, lowerBetter: true }, { label: 'WHIP', get: (l) => l.whip, fmt: f2, lowerBetter: true },
+  { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
+]
+
+function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] }) {
+  return (
+    <>
+      {metrics.map((m) => {
+        const va = a ? m.get(a) : null, vb = b ? m.get(b) : null
+        const na = va ?? null, nb = vb ?? null
+        const better = na !== null && nb !== null && na !== nb ? (m.lowerBetter ? (na < nb ? 'a' : 'b') : (na > nb ? 'a' : 'b')) : null
+        return (
+          <tr key={m.label} className="border-t border-border">
+            <td className={cx('px-4 py-1.5 text-right tnum', better === 'a' ? 'font-semibold text-ink' : 'text-ink-2')}>{na === null ? '—' : m.fmt(na)}</td>
+            <td className="px-3 py-1.5 text-center text-[12px] text-muted whitespace-nowrap">{m.label}</td>
+            <td className={cx('px-4 py-1.5 text-left tnum', better === 'b' ? 'font-semibold text-ink' : 'text-ink-2')}>{nb === null ? '—' : m.fmt(nb)}</td>
+          </tr>
+        )
+      })}
+    </>
+  )
+}
+
+function CompareTable({ a, b, pa, pb, names }: { a?: BattingLine; b?: BattingLine; pa?: PitchingLine; pb?: PitchingLine; names: [string, string] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[13px] border-collapse">
+        <thead><tr className="text-[12px] text-muted"><th className="px-4 h-9 text-right font-medium">{names[0]}</th><th className="px-3 h-9 font-medium" /><th className="px-4 h-9 text-left font-medium">{names[1]}</th></tr></thead>
+        <tbody>
+          <tr className="bg-surface-2/60"><td colSpan={3} className="px-4 py-1.5 text-[11px] font-medium text-ink-2">打擊</td></tr>
+          <CompareRows a={a} b={b} metrics={BAT_METRICS} />
+          {(pa || pb) && (<><tr className="bg-surface-2/60"><td colSpan={3} className="px-4 py-1.5 text-[11px] font-medium text-ink-2">投球</td></tr><CompareRows a={pa} b={pb} metrics={PIT_METRICS} /></>)}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 export function PlayersPage() {
   const s = useStats()
@@ -34,6 +80,7 @@ export function PlayersPage() {
   const [selected, setSelected] = useState<string>(requested && names.includes(requested) ? requested : names[0] ?? '')
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [compare, setCompare] = useState<string>('')
   useEffect(() => { if (requested && names.includes(requested)) setSelected(requested) }, [requested, names])
 
   const byName = useMemo(() => new Map(s.batters.map((b) => [b.name, b])), [s.batters])
@@ -44,14 +91,18 @@ export function PlayersPage() {
   const pit = pitchByName.get(selected)
   const fld = fieldByName.get(selected)
   const index = names.indexOf(selected)
+  const cmpBat = compare ? byName.get(compare) : undefined
+  const cmpPit = compare ? pitchByName.get(compare) : undefined
+  const cmpPlayer = compare ? roster.find((p) => p.name === compare) : undefined
 
   const AXES: Array<{ key: keyof BattingLine; label: string; invert?: boolean }> = [
     { key: 'avg', label: '打擊率' }, { key: 'obp', label: '上壘率' }, { key: 'slg', label: '長打率' }, { key: 'kPct', label: '避免三振', invert: true }, { key: 'bbPct', label: '選球' }, { key: 'hardPct', label: '強擊' },
   ]
   const radar = useMemo(() => {
     const pool = s.batters.filter((b) => b.pa >= 3)
-    return AXES.map((a) => ({ axis: a.label, player: bat ? percentile(bat[a.key] as number | null, pool.map((b) => b[a.key] as number | null), a.invert) : 0, team: 50 }))
-  }, [bat, s.batters])
+    const pct = (b: BattingLine | undefined, a: (typeof AXES)[number]) => (b ? percentile(b[a.key] as number | null, pool.map((x) => x[a.key] as number | null), a.invert) : 0)
+    return AXES.map((a) => ({ axis: a.label, player: pct(bat, a), team: 50, other: pct(cmpBat, a) }))
+  }, [bat, cmpBat, s.batters])
 
   const gameLog: GameLogRow[] = useMemo(() => s.summaries.map((g) => {
     const pas = s.batting.filter((p) => p.gameId === g.game.id && p.batter === selected)
@@ -103,10 +154,13 @@ export function PlayersPage() {
             {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <Select size="sm" label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="hidden md:inline-flex max-w-[200px]"
+              options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} />
             <Button variant="ghost" size="sm" aria-label="上一位" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
             <Button variant="ghost" size="sm" aria-label="下一位" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
           </div>
         </div>
+        <div className="md:hidden px-4 pb-3 -mt-1"><Select size="sm" label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="w-full" options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} /></div>
         <AnimatePresence initial={false}>
           {open && (
             <motion.div id="roster-panel" key="roster" initial={reduced ? false : { height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={reduced ? undefined : { height: 0, opacity: 0 }}
@@ -170,8 +224,13 @@ export function PlayersPage() {
               <StatTile label="K / BB" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`CSW% ${pct(pit.cswPct)}`} />
             </StatGroup>
           )}
+          {compare && cmpPlayer && (
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="同一篩選範圍；較佳的一方以深色標示（率的門檻 PA ≥ 3）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+              <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} />
+            </Card>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            <RadarCard title="隊內百分位" subtitle="與同隊打者比較（50 = 隊內中位）" data={radar} series={[{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />
+            <RadarCard title="隊內百分位" subtitle={compare ? `${player.name} 與 ${compare} 的隊內百分位` : '與同隊打者比較（50 = 隊內中位）'} data={radar} series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : [{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今" data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}

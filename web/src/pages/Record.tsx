@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRightLeft, ChevronDown, Flag, RefreshCw, Save, Undo2, X } from 'lucide-react'
+import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, RefreshCw, Save, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -10,18 +10,18 @@ import { Tabs } from '../components/ui/Tabs'
 import { CloudPanel } from '../components/ui/CloudPanel'
 import { BattingPlayByPlay, PitchChips, PitchingPlayByPlay } from '../components/ui/PlayByPlay'
 import { useDataStore } from '../store/data'
+import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { POSITIONS, type Game } from '../data/types'
 import { cx } from '../lib/format'
 import {
   addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppBatter, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
-  type Dest, type LineupSlot, type PAPlan, type RecordState, type Runner, type RunnerEvent,
+  type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
-const DRAFT_KEY = 'bafin.record.draft.v1'
-const readDraft = (): RecordState | null => { try { const v = localStorage.getItem(DRAFT_KEY); return v ? (JSON.parse(v) as RecordState) : null } catch { return null } }
-const writeDraft = (s: RecordState | null) => { try { if (s) localStorage.setItem(DRAFT_KEY, JSON.stringify(s)); else localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
+import { readDraft, writeDraft } from '../record/draft'
+import { Diamond } from '../record/Diamond'
 
 const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
   { code: 'B', label: '壞球', hint: 'B' }, { code: 'CS', label: '好球・未揮', hint: 'CS' }, { code: 'SS', label: '揮空', hint: 'SS' }, { code: 'F', label: '界外', hint: 'F' }, { code: 'IP', label: '擊進場內', hint: 'IP' },
@@ -103,12 +103,6 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
 }
 
 /* ------------------------------------------------------------------ live */
-function Diamond({ runners }: { runners: Runner[] }) {
-  const on = (b: number) => runners.some((r) => r.base === b)
-  const sq = (cx_: number, cy: number, b: number) => <rect key={b} x={cx_ - 9} y={cy - 9} width={18} height={18} transform={`rotate(45 ${cx_} ${cy})`} fill={on(b) ? 'var(--ink)' : 'var(--surface-3)'} stroke="var(--border-strong)" strokeWidth={1} />
-  return <svg viewBox="0 0 100 80" className="w-[84px] h-[68px] shrink-0" aria-hidden>{sq(78, 46, 1)}{sq(50, 18, 2)}{sq(22, 46, 3)}<rect x={44} y={64} width={12} height={12} transform="rotate(45 50 70)" fill="var(--surface-3)" stroke="var(--border-strong)" /></svg>
-}
-
 function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean }) {
   const base = useDataStore((s) => s.base)
   const roster = base.roster.map((p) => p.name)
@@ -124,6 +118,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
   const implied = impliedResult(state.pitches)
   useEffect(() => { if (implied && !plan) choose(implied) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [implied])
 
+  const params = useDataStore((st) => st.params)
+  const pitchCount = useMemo(() => { const m = new Map<string, number>(); for (const p of state.pitching) m.set(p.pitcher, (m.get(p.pitcher) ?? 0) + p.pitches.length); return m }, [state.pitching])
+  const currentCount = (pitchCount.get(state.pitcher) ?? 0) + (side === 'opp' ? state.pitches.length : 0)
+  const countTone = currentCount >= params.pitchMax ? 'critical' : currentCount >= params.pitchWarn ? 'warning' : 'ok'
   const batterSlot = state.lineup[state.slot]
   const choose = (result: string) => { setPlan(defaultPlan(state, result)); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
@@ -195,7 +193,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
             ) : (
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span className="size-10 rounded-[8px] bg-surface-2 text-ink grid place-items-center text-[14px] font-semibold tnum shrink-0">{state.oppOrder}</span>
-                <div className="min-w-0 flex-1"><Input value={state.oppBatter} onChange={(e) => apply((s) => setOppBatter(s, e.target.value))} placeholder={`對方第 ${state.oppOrder} 棒（姓名可留空）`} size="sm" className="max-w-[260px]" /><div className="text-[12px] text-ink-2 mt-1">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span></div></div>
+                <div className="min-w-0 flex-1"><Input value={state.oppBatter} onChange={(e) => apply((s) => setOppBatter(s, e.target.value))} placeholder={`對方第 ${state.oppOrder} 棒（姓名可留空）`} size="sm" className="max-w-[260px]" /><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
+                  <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-semibold tnum', countTone === 'critical' ? 'bg-[color-mix(in_srgb,var(--critical)_16%,transparent)] text-critical' : countTone === 'warning' ? 'bg-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]' : 'bg-surface-2 text-ink-2')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>
+                    用球 {currentCount}{countTone === 'critical' ? '・已達上限' : countTone === 'warning' ? '・注意' : ''}
+                  </span></div></div>
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -205,6 +206,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
           </div>
           {tool === 'pitcher' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
+              {pitchCount.size > 0 && <div className="basis-full text-[12px] text-ink-2 flex flex-wrap gap-x-3">{[...pitchCount.entries()].map(([n, c]) => <span key={n} className="tnum">{n} <span className={cx('font-medium', c >= params.pitchMax ? 'text-critical' : c >= params.pitchWarn ? 'text-warning' : 'text-ink')}>{c}</span> 球</span>)}</div>}
               <Field label="換上投手" className="flex-1 min-w-[200px]"><Input list="rec-roster" defaultValue="" placeholder="輸入球員名" onKeyDown={(e) => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } } }} id="rec-newpitcher" /></Field>
               <Button onClick={() => { const v = (document.getElementById('rec-newpitcher') as HTMLInputElement | null)?.value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } }}>確定換投</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
@@ -361,9 +363,34 @@ export function RecordPage() {
   const [history, setHistory] = useState<RecordState[]>([])
   const [finish, setFinish] = useState<{ w: string; l: string; sv: string } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [autoSaved, setAutoSaved] = useState<string | null>(null)
+  // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying)
   useEffect(() => { writeDraft(state) }, [state])
+  // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
+  const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}` : ''
+  useEffect(() => {
+    if (!state || !cloud.configured || !cloud.user || !(state.batting.length || state.pitching.length)) return
+    const t = window.setTimeout(() => {
+      void saveGame(toGameEdit(state))
+        .then(() => saveCloudDraft(state.game.id, state, cloud.user?.email))
+        .then((ok) => { if (ok === false) setDraftsSupported(false); setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })) })
+        .catch((e) => setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`))
+    }, 1500)
+    return () => window.clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playsKey, cloud.user])
 
-  const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return fn(s) })
+  const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return { ...fn(s), updatedAt: new Date().toISOString() } })
+  // cloud drafts: what other devices left in progress
+  const [cloudDrafts, setCloudDrafts] = useState<CloudDraft<RecordState>[] | null>(null)
+  const [draftsSupported, setDraftsSupported] = useState(true)
+  const refreshDrafts = async () => {
+    if (!cloud.configured || !cloud.user) return
+    try { const d = await listCloudDrafts<RecordState>(); if (d === null) setDraftsSupported(false); else setCloudDrafts(d) } catch { /* offline: ignore */ }
+  }
+  useEffect(() => { void refreshDrafts() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [cloud.user])
+  const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
+  const resume = (d: CloudDraft<RecordState>) => { setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
   const canEdit = !cloud.configured || !!cloud.user
 
@@ -386,6 +413,7 @@ export function RecordPage() {
     try {
       const w = await saveGame(toGameEdit({ ...state, finished: true }, { winningPitcher: finish.w || undefined, losingPitcher: finish.l || undefined, savePitcher: finish.sv || undefined }))
       const id = state.game.id
+      if (cloud.configured) void deleteCloudDraft(id).catch(() => undefined)
       writeDraft(null); setState(null); setHistory([]); setFinish(null)
       navigate(`/games?game=${encodeURIComponent(id)}`)
       if (w.length) window.alert(`已儲存。請核對：\n${w.map((x) => `・${x.message}`).join('\n')}`)
@@ -395,10 +423,37 @@ export function RecordPage() {
   return (
     <>
       <PageHeader title="紀錄比賽" description={state ? `${state.game.date}・${state.game.tournament}・vs ${state.game.opponent}・${state.game.id}` : '填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。'}
-        actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的部分不受影響）')) { writeDraft(null); setState(null); setHistory([]) } }}>放棄這場</Button> : undefined} />
+        actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) { if (cloud.configured) void deleteCloudDraft(state.game.id).catch(() => undefined); writeDraft(null); setState(null); setHistory([]); void refreshDrafts() } }}>放棄這場</Button> : undefined} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
+      {!state && cloudDrafts && cloudDrafts.length > 0 && (
+        <Card title="雲端有進行中的比賽" subtitle="在另一台裝置開始的紀錄，可以在這裡接續" flush>
+          <ul className="divide-y divide-[var(--border)]">
+            {cloudDrafts.map((d) => (
+              <li key={d.game_id} className="flex items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium text-ink truncate">{d.state.game.date}・vs {d.state.game.opponent}<span className="text-muted font-normal ml-2 tnum">{d.game_id}</span></div>
+                  <div className="text-[12px] text-muted tnum">第 {d.state.inning} {d.state.half === 'top' ? '上' : '下'}・{score(d.state).us} : {score(d.state).opp}・最後更新 {new Date(d.updated_at).toLocaleString('zh-TW')}{d.updated_by ? `・${d.updated_by}` : ''}</div>
+                </div>
+                <Button size="sm" variant="primary" icon={<CloudDownload />} onClick={() => resume(d)}>接續</Button>
+                <Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`刪除 ${d.game_id} 的進度？（已儲存的打席不受影響）`)) void deleteCloudDraft(d.game_id).then(refreshDrafts) }}>刪除進度</Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {state && newerCloud && (
+        <div role="status" className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">
+          <CloudDownload className="size-4 text-muted shrink-0" />
+          <span className="min-w-0 flex-1">雲端有這場比賽較新的進度（{new Date(newerCloud.updated_at).toLocaleString('zh-TW')}{newerCloud.updated_by ? `・${newerCloud.updated_by}` : ''}），可能是另一台裝置繼續記的。</span>
+          <Button size="sm" onClick={() => resume(newerCloud)}>載入較新進度</Button>
+        </div>
+      )}
+      {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
       {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
-        <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} />
+        <>
+          <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>
+          <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} />
+        </>
       )}
       {finish && state && (
         <div role="dialog" aria-modal="true" aria-label="結束比賽" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">

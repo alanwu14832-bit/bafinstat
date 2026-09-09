@@ -4,6 +4,7 @@ import { pitchTotals, isHitResult } from '../../data/stats'
 import { POSITION_BY_NUMBER } from '../../data/types'
 import { cx } from '../../lib/format'
 import { Badge } from './Badge'
+import { AlertTriangle } from 'lucide-react'
 
 /** Pitch code → chip. 好球類：S/SS/CS/IP；界外 F；壞球 B */
 const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }> = {
@@ -50,7 +51,7 @@ const th = 'px-3 first:pl-4 last:pr-4 h-9 text-left text-[12px] font-medium text
 const td = 'px-3 first:pl-4 last:pr-4 py-2 align-top'
 
 /** Pitch-by-pitch log of our batters for one game. */
-export function BattingPlayByPlay({ pas }: { pas: BattingPA[] }) {
+export function BattingPlayByPlay({ pas, flags }: { pas: BattingPA[]; flags?: Map<number, string[]> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   let lastInning = 0
   return (
@@ -68,8 +69,8 @@ export function BattingPlayByPlay({ pas }: { pas: BattingPA[] }) {
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" />}
-                <tr className="border-t border-border hover:bg-surface-2/60">
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
+                <tr className={cx('border-t border-border hover:bg-surface-2/60', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}</td>
                   <td className={td}><PitchChips pitches={p.pitches} /></td>
@@ -89,7 +90,7 @@ export function BattingPlayByPlay({ pas }: { pas: BattingPA[] }) {
 }
 
 /** Pitch-by-pitch log of our pitchers vs the opponent for one game. */
-export function PitchingPlayByPlay({ pas }: { pas: PitchingPA[] }) {
+export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: Map<number, string[]> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   let lastInning = 0
   let lastPitcher = ''
@@ -109,8 +110,8 @@ export function PitchingPlayByPlay({ pas }: { pas: PitchingPA[] }) {
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" />}
-                <tr className={cx('border-t border-border hover:bg-surface-2/60', changed && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]')}>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
+                <tr className={cx('border-t border-border hover:bg-surface-2/60', changed && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchChips pitches={p.pitches} /></td>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Pencil, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -13,6 +13,7 @@ import { DemoBanner } from '../components/ui/DemoBanner'
 import { GameEditor } from '../components/ui/GameEditor'
 import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
+import { auditGame } from '../data/audit'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
@@ -97,6 +98,13 @@ export function GamesPage() {
   const boxP = useMemo(() => (current ? pitchingLines(s.dataset.pitching.filter((p) => p.gameId === current.game.id), [current.game]) : []), [current, s.dataset])
   const pbpBat = useMemo(() => (current ? s.dataset.batting.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
   const pbpPit = useMemo(() => (current ? s.dataset.pitching.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
+  const issues = useMemo(() => (current ? auditGame(pbpBat, pbpPit) : []), [current, pbpBat, pbpPit])
+  const flags = useMemo(() => {
+    const bat = new Map<number, string[]>(), pit = new Map<number, string[]>()
+    for (const i of issues) { const m = i.side === 'bat' ? bat : pit; m.set(i.index, [...(m.get(i.index) ?? []), i.message]) }
+    return { bat, pit }
+  }, [issues])
+  const [showIssues, setShowIssues] = useState(false)
 
   return (
     <>
@@ -129,7 +137,11 @@ export function GamesPage() {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {editable && !editing && canEdit && (
-                    <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
+                    <>
+                      <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
+                      <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical hover:text-critical" disabled={cloud.pushing}
+                        onClick={() => { if (window.confirm(`確定刪除 ${current.game.id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(current.game.id).then(close).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />
+                    </>
                   )}
                   <Button variant="ghost" size="sm" onClick={close} aria-label="關閉" icon={<X />} />
                 </div>
@@ -153,15 +165,25 @@ export function GamesPage() {
                 ) : (
                   <>
                 <LineScore s={current} />
-                <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} className="self-start" items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
+                  {issues.length > 0 ? (
+                    <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning" />{issues.length} 個可疑打席</button>
+                  ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good" />記錄檢查通過</span>}
+                </div>
+                {showIssues && issues.length > 0 && (
+                  <ul className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[12px]">
+                    {issues.map((i, k) => <li key={k} className="px-3 py-2 flex gap-2 items-start"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" /><button type="button" className="text-left text-ink hover:underline cursor-pointer" onClick={() => setTab(i.side)}>{i.message}</button></li>)}
+                  </ul>
+                )}
                 {tab === 'box' && (
                   <>
                     <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
                     <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
                   </>
                 )}
-                {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} /></Card>}
-                {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} /></Card>}
+                {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} /></Card>}
+                {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} flags={flags.pit} /></Card>}
                 {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
                   </>
                 )}
