@@ -23,3 +23,13 @@ describe('row-level audit', () => {
     expect(issues.some((i) => i.index === 3 && i.message.includes('不是 R'))).toBe(true)
   })
 })
+
+describe('落點 gap codes', () => {
+  it('a hit through the hole is fine, an out recorded in a gap is flagged', () => {
+    const row = { gameId: 'G', inning: 1, batter: '甲', pitches: ['IP'], sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, traj: 'G' }
+    const ok = auditGame([{ ...row, result: '一安', loc: 56 }], [])
+    expect(ok).toEqual([])
+    const bad = auditGame([{ ...row, result: '內滾', loc: 56, code: 'I' }], [])
+    expect(bad.map((i) => i.message).join()).toContain('三游')
+  })
+})

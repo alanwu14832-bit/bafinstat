@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, RefreshCw, Save, Undo2, X } from 'lucide-react'
+import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, Flame, Maximize2, Minimize2, RefreshCw, Save, Target, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -13,14 +14,16 @@ import { useDataStore } from '../store/data'
 import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
-import { POSITIONS, type Game } from '../data/types'
+import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
+import { LOC_HOLES, POSITIONS, type Game } from '../data/types'
 import { cx } from '../lib/format'
 import {
-  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppBatter, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
+  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, OUT_RESULTS, runnerEvent, score, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
 import { readDraft, writeDraft } from '../record/draft'
+import { readLineup, toLineupSlots } from '../record/lineup'
 import { Diamond } from '../record/Diamond'
 
 const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
@@ -29,13 +32,15 @@ const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
 const RESULT_GROUPS: Array<{ label: string; items: string[] }> = [
   { label: '安打', items: ['一安', '二安', '三安', '全壘打'] },
   { label: '上壘', items: ['保送', '故四', '觸身', '失誤', '野選', '妨礙'] },
-  { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '犧觸', '犧飛', '雙殺'] },
+  { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'] },
 ]
+/** Gap codes for a ball nobody touched (三游穿越安打 → 56), shown under the nine fielder buttons. */
+const LOC_HOLE_KEYS = [56, 46, 34, 78, 89]
 const LOC_GRID: Array<Array<number | null>> = [[7, 8, 9], [5, 6, 4], [null, 1, 3], [null, 2, null]]
 const LOC_LABEL: Record<number, string> = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF' }
 const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: 'us' | 'opp' }> = [
   { ev: 'sb', label: '盜壘' }, { ev: 'cs', label: '盜壘失敗' }, { ev: 'wp', label: '暴投進壘', side: 'opp' }, { ev: 'pb', label: '捕逸進壘', side: 'opp' }, { ev: 'err', label: '失誤進壘', side: 'us' },
-  { ev: 'advance', label: '進一個壘' }, { ev: 'pk', label: '牽制出局' }, { ev: 'score', label: '得分' }, { ev: 'out', label: '壘死' },
+  { ev: 'advance', label: '進一個壘' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'pk', label: '牽制出局' }, { ev: 'score', label: '得分' }, { ev: 'out', label: '壘死' },
 ]
 const big = 'h-12 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors motion-reduce:transition-none'
 const chip = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
@@ -44,16 +49,20 @@ const chip = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const base = useDataStore((s) => s.base)
   const opts = useFilterOptions()
-  const roster = base.roster.map((p) => p.name)
+  const names = useMemo(() => rosterNames(base.roster), [base.roster])
   const today = new Date().toISOString().slice(0, 10)
   const last = useMemo(() => [...base.games].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
+  // the lineup drawn up on the 先發陣容 page wins; otherwise last game's order is a good starting point
+  const saved = useMemo(() => { const l = readLineup(); return l && l.order.some(Boolean) ? l : null }, [])
   const [game, setGame] = useState<Game>({ id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' })
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
+    if (saved) return toLineupSlots(saved)
     const slots: LineupSlot[] = Array.from({ length: 9 }, () => ({ name: '', pos: '' }))
     if (last) for (const p of base.batting.filter((b) => b.gameId === last.id)) { const i = (p.order ?? 0) - 1; if (i >= 0 && i < 9 && !slots[i].name) slots[i] = { name: p.batter, pos: p.pos ?? '' } }
     return slots
   })
-  const [pitcher, setPitcher] = useState(() => (last ? base.pitching.find((p) => p.gameId === last.id)?.pitcher ?? '' : ''))
+  const [pitcher, setPitcher] = useState(() => saved?.field.P || (last ? base.pitching.find((p) => p.gameId === last.id)?.pitcher ?? '' : ''))
+  const inLineup = useMemo(() => new Set(lineup.map((l) => l.name).filter(Boolean)), [lineup])
   const [error, setError] = useState<string | null>(null)
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const start = () => {
@@ -66,7 +75,6 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
       <Card className="xl:col-span-2" title="比賽資訊" subtitle="比賽ID 會依日期自動編號">
-        <datalist id="rec-roster">{roster.map((n) => <option key={n} value={n} />)}</datalist>
         <datalist id="rec-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
         <div className="grid grid-cols-2 gap-3">
@@ -80,18 +88,18 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
       </Card>
-      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '輸入九位先發'}>
+      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={saved ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="size-7 rounded-[6px] bg-surface-2 text-[12px] font-semibold grid place-items-center tnum shrink-0">{i + 1}</span>
-              <Input list="rec-roster" value={l.name} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: e.target.value } : x)))} placeholder="球員" className="flex-1" />
+              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} placeholder="球員" className="flex-1 min-w-0" />
               <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <Field label="先發投手"><Input list="rec-roster" value={pitcher} onChange={(e) => setPitcher(e.target.value)} placeholder="必填" /></Field>
+          <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} placeholder="必填" className="w-full" /></Field>
           <div className="flex flex-col gap-2 sm:items-end">
             {error && <span className="text-[13px] text-critical">{error}</span>}
             <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">開始紀錄</Button>
@@ -103,9 +111,11 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
 }
 
 /* ------------------------------------------------------------------ live */
-function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean }) {
+function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean; focus: boolean; onToggleFocus: () => void }) {
   const base = useDataStore((s) => s.base)
-  const roster = base.roster.map((p) => p.name)
+  const names = useMemo(() => rosterNames(base.roster), [base.roster])
+  const [newPitcher, setNewPitcher] = useState('')
+  const [sub, setSub] = useState<{ name: string; pos: string }>({ name: '', pos: 'PH' })
   const side = offense(state)
   const sc = score(state)
   const c = count(state.pitches)
@@ -157,6 +167,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
             <div className="ml-auto flex items-center gap-1.5 flex-wrap">
               <Button variant="ghost" size="sm" icon={<Undo2 />} onClick={undo} disabled={!canUndo}>復原</Button>
               <Button variant="ghost" size="sm" icon={<Save />} onClick={onSaveDraft} disabled={saving}>{saving ? '儲存中…' : '儲存到雲端'}</Button>
+              <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
               <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish}>結束比賽</Button>
             </div>
           </div>
@@ -182,7 +193,15 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
           )}
         </Card>
 
-        {/* current plate appearance */}
+        {/* what is being recorded right now: our hitters, or our pitcher against theirs */}
+        <div role="status" aria-live="polite" className={cx('flex items-center gap-3 rounded-[var(--radius-md)] border px-4 py-2.5', side === 'us' ? 'border-ink bg-ink text-bg' : 'border-accent/50 bg-[color-mix(in_srgb,var(--accent)_12%,var(--surface))] text-ink')}>
+          {side === 'us' ? <Target className="size-5 shrink-0" /> : <Flame className="size-5 shrink-0 text-accent" />}
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold leading-5">{side === 'us' ? '現在紀錄：打擊' : '現在紀錄：投球'}</div>
+            <div className={cx('text-[12px]', side === 'us' ? 'text-bg/80' : 'text-ink-2')}>{side === 'us' ? `我隊進攻，記我隊打者的打席` : `對方進攻，記我隊投手 ${state.pitcher} 對每一棒的投球`}</div>
+          </div>
+          <span className={cx('ml-auto text-[12px] font-medium tnum shrink-0', side === 'us' ? 'text-bg/80' : 'text-ink-2')}>{halfLabel}・{state.outs} 出局</span>
+        </div>
         <Card bodyClassName="p-4 md:p-5">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             {side === 'us' ? (
@@ -193,7 +212,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
             ) : (
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <span className="size-10 rounded-[8px] bg-surface-2 text-ink grid place-items-center text-[14px] font-semibold tnum shrink-0">{state.oppOrder}</span>
-                <div className="min-w-0 flex-1"><Input value={state.oppBatter} onChange={(e) => apply((s) => setOppBatter(s, e.target.value))} placeholder={`對方第 ${state.oppOrder} 棒（姓名可留空）`} size="sm" className="max-w-[260px]" /><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
+                <div className="min-w-0 flex-1"><div className="text-[16px] font-semibold text-ink leading-5">對方第 {state.oppOrder} 棒</div><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
                   <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-semibold tnum', countTone === 'critical' ? 'bg-[color-mix(in_srgb,var(--critical)_16%,transparent)] text-critical' : countTone === 'warning' ? 'bg-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]' : 'bg-surface-2 text-ink-2')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>
                     用球 {currentCount}{countTone === 'critical' ? '・已達上限' : countTone === 'warning' ? '・注意' : ''}
                   </span></div></div>
@@ -207,20 +226,19 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
           {tool === 'pitcher' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
               {pitchCount.size > 0 && <div className="basis-full text-[12px] text-ink-2 flex flex-wrap gap-x-3">{[...pitchCount.entries()].map(([n, c]) => <span key={n} className="tnum">{n} <span className={cx('font-medium', c >= params.pitchMax ? 'text-critical' : c >= params.pitchWarn ? 'text-warning' : 'text-ink')}>{c}</span> 球</span>)}</div>}
-              <Field label="換上投手" className="flex-1 min-w-[200px]"><Input list="rec-roster" defaultValue="" placeholder="輸入球員名" onKeyDown={(e) => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } } }} id="rec-newpitcher" /></Field>
-              <Button onClick={() => { const v = (document.getElementById('rec-newpitcher') as HTMLInputElement | null)?.value.trim(); if (v) { apply((s) => changePitcher(s, v)); setTool('none') } }}>確定換投</Button>
+              <Field label="換上投手" className="flex-1 min-w-[200px]"><PlayerSelect value={newPitcher} onChange={setNewPitcher} names={names.filter((n) => n !== state.pitcher)} placeholder="選擇投手" className="w-full" /></Field>
+              <Button onClick={() => { if (newPitcher) { apply((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }} disabled={!newPitcher}>確定換投</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
             </div>
           )}
           {tool === 'lineup' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
-              <Field label={`第 ${state.slot + 1} 棒換成`} className="flex-1 min-w-[180px]"><Input list="rec-roster" placeholder="球員名" id="rec-sub-name" /></Field>
-              <Field label="守位／代打"><Select id="rec-sub-pos" defaultValue="PH" options={POSITIONS.map((p) => ({ value: p, label: p }))} /></Field>
-              <Button onClick={() => { const n = (document.getElementById('rec-sub-name') as HTMLInputElement | null)?.value.trim(); const p = (document.getElementById('rec-sub-pos') as HTMLSelectElement | null)?.value ?? ''; if (n) { apply((s) => substitute(s, s.slot, n, p)); setTool('none') } }}>確定</Button>
+              <Field label={`第 ${state.slot + 1} 棒換成`} className="flex-1 min-w-[180px]"><PlayerSelect value={sub.name} onChange={(n) => setSub({ ...sub, name: n })} names={names} taken={new Set(state.lineup.map((l) => l.name))} placeholder="選擇球員" className="w-full" /></Field>
+              <Field label="守位／代打"><Select value={sub.pos} onChange={(e) => setSub({ ...sub, pos: e.target.value })} options={POSITIONS.map((p) => ({ value: p, label: p }))} /></Field>
+              <Button onClick={() => { if (sub.name) { apply((s) => substitute(s, s.slot, sub.name, sub.pos)); setSub({ name: '', pos: 'PH' }); setTool('none') } }} disabled={!sub.name}>確定</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
             </div>
           )}
-          <datalist id="rec-roster">{roster.map((n) => <option key={n} value={n} />)}</datalist>
 
           <div className="mt-4 flex items-center gap-2 min-h-7">
             <span className="text-[12px] text-muted shrink-0">逐球</span>
@@ -242,7 +260,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
                   {state.extras[k] > 0 && <span className="tnum text-ink font-medium">×{state.extras[k]}</span>}
                 </span>
               ))}
-              <span className="text-[11px] text-muted self-center ml-1">跑者的盜壘、進壘請點上方壘上的跑者</span>
+              {state.extras.pka > 0 && <span className="inline-flex items-center text-[12px] text-ink-2 h-7 px-2 rounded-[6px] bg-surface-2">牽制 <span className="tnum text-ink font-medium ml-1">×{state.extras.pka}</span></span>}
+              <span className="text-[11px] text-muted self-center ml-1">盜壘、牽制、進壘請點上方壘上的跑者</span>
             </div>
           )}
 
@@ -258,7 +277,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
           ) : (
             <div className="mt-4 rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[14px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">確認細節後送出</span></div>
+                <div className="text-[14px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">{plan.result === '界外飛' ? '接殺的界外球記為 IP，落點填接球的守備員' : '確認細節後送出'}</span></div>
                 <button type="button" onClick={() => setPlan(null)} className="text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
               </div>
               {plan.result !== '三振' && plan.result !== '保送' && plan.result !== '故四' && plan.result !== '觸身' && plan.result !== '妨礙' && (
@@ -270,6 +289,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
                         <button key={i} type="button" onClick={() => setPlan({ ...plan, loc: plan.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', plan.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
                       ))}
                     </div>
+                    {!OUT_RESULTS.has(plan.result) && plan.result !== '野選' && (
+                      <div className="mt-2 w-[150px]">
+                        <div className="text-[11px] text-muted mb-1">穿越／落地的縫隙</div>
+                        <div className="flex flex-wrap gap-1">
+                          {LOC_HOLE_KEYS.map((n) => <button key={n} type="button" onClick={() => setPlan({ ...plan, loc: plan.loc === n ? undefined : n })} className={cx('h-7 px-2 rounded-[6px] border text-[11px] font-medium cursor-pointer', plan.loc === n ? 'border-ink bg-ink text-bg' : 'border-dashed border-border bg-surface hover:bg-surface-2')}>{LOC_HOLES[n]}</button>)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <div><div className="text-[12px] text-ink-2 mb-1">軌跡</div><div className="flex gap-1.5">{(['G', 'F', 'L'] as const).map((t) => <button key={t} type="button" onClick={() => setPlan({ ...plan, traj: plan.traj === t ? undefined : t })} className={chip(plan.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : '平飛 L'}</button>)}</div></div>
@@ -283,7 +310,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving }: { 
                   {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
                     <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} />
                   ))}
-                  <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : state.oppBatter || `第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter />
+                  <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter />
                 </div>
               </div>
               <div className="flex items-center gap-4 flex-wrap">
@@ -364,6 +391,19 @@ export function RecordPage() {
   const [finish, setFinish] = useState<{ w: string; l: string; sv: string } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [autoSaved, setAutoSaved] = useState<string | null>(null)
+  // focus mode: the live sheet fills the screen (real fullscreen where the browser allows it; iPhones just get the overlay)
+  const [focus, setFocus] = useState(false)
+  const toggleFocus = () => {
+    if (!focus) { setFocus(true); void document.documentElement.requestFullscreen?.().catch(() => undefined) }
+    else { setFocus(false); if (document.fullscreenElement) void document.exitFullscreen?.().catch(() => undefined) }
+  }
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setFocus(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && focus && !document.fullscreenElement) setFocus(false) }
+    document.addEventListener('fullscreenchange', onChange); window.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('fullscreenchange', onChange); window.removeEventListener('keydown', onKey) }
+  }, [focus])
+  useEffect(() => { if (!state && focus) setFocus(false) }, [state, focus])
   // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying)
   useEffect(() => { writeDraft(state) }, [state])
   // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
@@ -392,6 +432,7 @@ export function RecordPage() {
   const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
   const resume = (d: CloudDraft<RecordState>) => { setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
+  const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher)])].filter(Boolean) : []), [state])
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
 
   if (!canEdit) {
@@ -452,7 +493,14 @@ export function RecordPage() {
       {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
         <>
           <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>
-          <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} />
+          {focus ? createPortal(
+            <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
+              <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
+                <div className="flex items-center gap-3 text-[12px] text-muted"><span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className="truncate">{autoSaved ? `已自動儲存 ${autoSaved}` : '自動儲存中'}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
+                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus onToggleFocus={toggleFocus} />
+              </div>
+            </div>, document.body)
+            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} />}
         </>
       )}
       {finish && state && (
@@ -460,11 +508,10 @@ export function RecordPage() {
           <div className="absolute inset-0 bg-black/45" onClick={() => setFinish(null)} />
           <div className="relative w-full sm:max-w-md bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] p-5 flex flex-col gap-4">
             <div><div className="text-[16px] font-semibold text-ink">結束比賽</div><div className="text-[13px] text-ink-2 mt-1 tnum">{TEAM_NAME} {score(state).us} : {score(state).opp} {state.game.opponent}・{state.inning} 局{state.runners.length ? '・壘上跑者會記為殘壘' : ''}</div></div>
-            <datalist id="rec-roster-finish">{[...new Set(state.pitching.map((p) => p.pitcher))].map((n) => <option key={n} value={n} />)}</datalist>
             <div className="grid grid-cols-3 gap-2">
-              <Field label="勝投"><Input list="rec-roster-finish" value={finish.w} onChange={(e) => setFinish({ ...finish, w: e.target.value })} /></Field>
-              <Field label="敗投"><Input list="rec-roster-finish" value={finish.l} onChange={(e) => setFinish({ ...finish, l: e.target.value })} /></Field>
-              <Field label="救援"><Input list="rec-roster-finish" value={finish.sv} onChange={(e) => setFinish({ ...finish, sv: e.target.value })} /></Field>
+              <Field label="勝投"><PlayerSelect value={finish.w} onChange={(v) => setFinish({ ...finish, w: v })} names={usedPitchers} placeholder="—" className="w-full" /></Field>
+              <Field label="敗投"><PlayerSelect value={finish.l} onChange={(v) => setFinish({ ...finish, l: v })} names={usedPitchers} placeholder="—" className="w-full" /></Field>
+              <Field label="救援"><PlayerSelect value={finish.sv} onChange={(v) => setFinish({ ...finish, sv: v })} names={usedPitchers} placeholder="—" className="w-full" /></Field>
             </div>
             <p className="text-[12px] text-muted">儲存後會跳到這場比賽的頁面；之後仍可用「修改資料」調整。</p>
             <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFinish(null)}>再想想</Button><Button variant="primary" onClick={() => void complete()} disabled={cloud.pushing}>儲存並結束</Button></div>

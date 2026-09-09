@@ -21,7 +21,7 @@ const SYNONYMS: Record<Field, string[]> = {
 }
 const POS_ALIASES: Record<string, string> = {
   投手: 'P', 捕手: 'C', 一壘: '1B', 一壘手: '1B', 二壘: '2B', 二壘手: '2B', 三壘: '3B', 三壘手: '3B', 游擊: 'SS', 游擊手: 'SS', 遊擊: 'SS', 遊擊手: 'SS',
-  左外野: 'LF', 左外: 'LF', 中外野: 'CF', 中外: 'CF', 右外野: 'RF', 右外: 'RF', 指定打擊: 'DH', 外野: 'OF', 內野: 'IF',
+  左外野: 'LF', 左外: 'LF', 中外野: 'CF', 中外: 'CF', 右外野: 'RF', 右外: 'RF', 指定打擊: 'DH', 外野: 'OF', 外野手: 'OF', 內野: 'IF', 內野手: 'IF', 工具人: 'UT', 工具: 'UT', UTIL: 'UT', UTILITY: 'UT', INFIELD: 'IF', INFIELDER: 'IF', OUTFIELD: 'OF', OUTFIELDER: 'OF',
   '1': 'P', '2': 'C', '3': '1B', '4': '2B', '5': '3B', '6': 'SS', '7': 'LF', '8': 'CF', '9': 'RF',
 }
 const VALID_POS = new Set(['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'OF', 'IF', 'UT'])
@@ -33,6 +33,7 @@ export function normalizePos(v: unknown): string | undefined {
   if (POS_ALIASES[t]) return POS_ALIASES[t]
   const u = t.toUpperCase().replace(/\s+/g, '')
   if (VALID_POS.has(u)) return u
+  if (POS_ALIASES[u]) return POS_ALIASES[u]
   // "SS/2B" → first token
   const first = u.split(/[/、,，]/)[0]
   if (VALID_POS.has(first)) return first

@@ -13,7 +13,7 @@ export const shortDate = (iso: string): string => (iso.length >= 10 ? `${iso.sli
 export const yearOf = (iso: string): string => iso.slice(0, 4)
 
 export const POSITION_LABEL: Record<string, string> = {
-  P: '投手', C: '捕手', '1B': '一壘', '2B': '二壘', '3B': '三壘', SS: '游擊', LF: '左外野', CF: '中外野', RF: '右外野', DH: '指定打擊', PH: '代打', PR: '代跑',
+  P: '投手', C: '捕手', '1B': '一壘', '2B': '二壘', '3B': '三壘', SS: '游擊', LF: '左外野', CF: '中外野', RF: '右外野', DH: '指定打擊', PH: '代打', PR: '代跑', IF: '內野手', OF: '外野手', UT: '工具人',
 }
 export const posLabel = (pos?: string) => (pos ? `${pos} ${POSITION_LABEL[pos] ?? ''}`.trim() : DASH)
 

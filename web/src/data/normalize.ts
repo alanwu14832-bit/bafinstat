@@ -12,12 +12,12 @@
  *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
  *  - fills game.innings when blank, and returns human-readable warnings per game
  */
-import { POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
+import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
-const RESULT_ALIASES: Record<string, string> = { 犧牲: '犧觸', 犧打: '犧觸', 犧牲觸擊: '犧觸', 犧牲飛球: '犧飛', 全壘: '全壘打', 四壞: '保送', 故意四壞: '故四', 死球: '觸身', 觸身球: '觸身', 雙殺打: '雙殺', 不死三振: '三振' }
+const RESULT_ALIASES: Record<string, string> = { 界外飛球: '界外飛', 界外飛出局: '界外飛', 界外接殺: '界外飛', 犧牲: '犧觸', 犧打: '犧觸', 犧牲觸擊: '犧觸', 犧牲飛球: '犧飛', 全壘: '全壘打', 四壞: '保送', 故意四壞: '故四', 死球: '觸身', 觸身球: '觸身', 雙殺打: '雙殺', 不死三振: '三振' }
 const NON_FIELD = new Set(['DH', 'PH', 'PR', ''])
 
 export interface GameWarning { gameId: string; message: string }
@@ -25,7 +25,19 @@ export interface GameWarning { gameId: string; message: string }
 const cleanResult = (r: string) => { const t = (r ?? '').trim(); return RESULT_ALIASES[t] ?? t }
 const cleanCode = (c?: string) => { const t = (c ?? '').trim().toUpperCase(); return t || undefined }
 const cleanPitch = (p: string) => p.trim().toUpperCase()
-const cleanLoc = (v: unknown): number | undefined => { const m = /([1-9])/.exec(String(v ?? '')); return m ? Number(m[1]) : undefined }
+const HOLE_BY_NAME: Record<string, number> = Object.fromEntries(Object.entries(LOC_HOLES).map(([k, v]) => [v, Number(k)]))
+/** 落點: a fielder number 1–9, a gap code (56 / 46 / 34 / 78 / 89) or its name (三游 …); anything else is dropped. */
+export const cleanLoc = (v: unknown): number | undefined => {
+  const t = String(v ?? '').trim()
+  if (!t) return undefined
+  if (HOLE_BY_NAME[t]) return HOLE_BY_NAME[t]
+  const m = /([1-9]{1,2})/.exec(t)
+  if (!m) return undefined
+  const n = Number(m[1])
+  if (LOC_CODES.includes(n)) return n
+  const first = Number(m[1][0])
+  return first >= 1 && first <= 9 ? first : undefined
+}
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
 interface Seq { inning?: number; outsBefore?: number; code?: string; result: string; outOnBase?: number }
@@ -92,7 +104,7 @@ function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]
 }
 
 const GROUND = new Set(['內滾', '犧觸'])
-const FLY = new Set(['內飛', '外飛', '犧飛'])
+const FLY = new Set(['內飛', '外飛', '界外飛', '犧飛'])
 
 /**
  * Credit PO / A / DP to fielding lines from the opponent's plate appearances. Fielders are looked up by the

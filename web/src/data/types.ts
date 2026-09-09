@@ -15,7 +15,7 @@ export type PitchCode = 'S' | 'SS' | 'CS' | 'F' | 'IP' | 'B'
 export const PITCH_CODES: PitchCode[] = ['S', 'SS', 'CS', 'F', 'IP', 'B']
 
 export const PA_RESULTS = [
-  '一安', '二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
+  '一安', '二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
 ] as const
 export type PAResult = (typeof PA_RESULTS)[number] | '犧牲'
 
@@ -25,6 +25,20 @@ export type OutcomeCode = 'I' | 'II' | 'III' | 'L' | 'R' | 'ER'
 export const POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'PH', 'PR'] as const
 export type Position = (typeof POSITIONS)[number]
 export const POSITION_BY_NUMBER: Record<number, Position> = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF' }
+/** The nine fielding positions, in scorer's number order. */
+export const FIELD_POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'] as const
+/** What a roster entry can say a player plays: a specific spot, or a flexible group (內野手 / 外野手 / 工具人). */
+export const ROSTER_POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'IF', 'OF', 'UT'] as const
+
+/**
+ * 落點 codes. 1–9 is the fielder who handled (or was closest to) the ball; a two-digit code names the gap a
+ * ball went through, for hits and errors where no fielder touched it: 56 三游 · 46 二游（中間）· 34 一二 · 78 左中 · 89 右中.
+ */
+export const LOC_HOLES: Record<number, string> = { 56: '三游', 46: '二游', 34: '一二', 78: '左中', 89: '右中' }
+export const LOC_CODES: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 56, 46, 34, 78, 89]
+export const isHoleLoc = (loc?: number): loc is number => !!loc && loc in LOC_HOLES
+/** Short label for any 落點 code (守位 for 1–9, gap name for holes). */
+export const locLabel = (loc?: number): string => (loc ? (LOC_HOLES[loc] ?? POSITION_BY_NUMBER[loc] ?? String(loc)) : '')
 
 export interface Player {
   number?: string
@@ -71,7 +85,7 @@ export interface BattingPA {
   batter: string
   pitches: string[]
   result: string
-  /** Batted-ball location 1–9 */
+  /** Batted-ball location: 1–9 or a gap code (see LOC_HOLES) */
   loc?: number
   traj?: string
   quality?: string

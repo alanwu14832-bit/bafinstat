@@ -57,7 +57,7 @@ STAT_DICTIONARY = [
     dict(key="FB%", zh="飛球率", en="Fly Ball %", group="打擊過程", formula="飛球(F) ÷ 場內球", status="新增", priority="P1", note=""),
     dict(key="LD%", zh="平飛球率", en="Line Drive %", group="打擊過程", formula="平飛(L) ÷ 場內球", status="新增", priority="P1", note="平飛球是安打率最高的擊球型態"),
     dict(key="Hard%", zh="強勁擊球率", en="Hard-Hit % (proxy)", group="打擊過程", formula="強度=強 的場內球 ÷ 場內球", status="新增", priority="P1", note="Statcast Hard-Hit%(≥95 mph) 的人工近似"),
-    dict(key="Pull%", zh="拉打率", en="Pull %", group="打擊過程", formula="依落點 1–9 與打者慣用手計算（右打 5/6/7 為拉打）", status="新增", priority="P2", note="需要名單中的打擊慣用手"),
+    dict(key="Pull%", zh="拉打率", en="Pull %", group="打擊過程", formula="依落點與打者慣用手計算（右打 5/6/7 與縫隙 56/78 為拉打；1/2/8/46 為中間）", status="新增", priority="P2", note="需要名單中的打擊慣用手"),
     dict(key="Oppo%", zh="反方向率", en="Opposite Field %", group="打擊過程", formula="右打 3/4/9 為反方向", status="新增", priority="P2", note=""),
     # ---------------- 投球 ----------------
     dict(key="pG", zh="出賽", en="Games Pitched", group="投球", formula="出現在投球紀錄的比賽數", status="新增", priority="P0", note=""),
