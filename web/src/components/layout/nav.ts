@@ -1,13 +1,15 @@
-import {
-  BookOpen, CalendarDays, CircleHelp, ClipboardList, Flame, LayoutDashboard, PenLine, Radio, Shield, Target, Upload, Users, type LucideIcon,
-} from 'lucide-react'
+import type { ComponentType } from 'react'
+import { BookOpen, CircleHelp, PenLine, Radio, Upload } from 'lucide-react'
+import { IconBat, IconBaseball, IconField, IconGlove, IconHomePlate, IconJersey, IconScoreboard } from '../icons/baseball'
+
+export type NavIcon = ComponentType<{ className?: string; strokeWidth?: number | string }>
 
 export interface NavItem {
   to: string
   label: string
   /** Shown as the page context on small screens. */
   subtitle?: string
-  icon: LucideIcon
+  icon: NavIcon
   /** Only shown to signed-in editors when the cloud is configured. */
   editorOnly?: boolean
 }
@@ -21,19 +23,19 @@ export interface NavGroup {
 export const NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { to: '/', label: '總覽', subtitle: '球隊整體表現一覽', icon: LayoutDashboard },
-      { to: '/batting', label: '打擊', subtitle: '打者成績與排行', icon: Target },
-      { to: '/pitching', label: '投球', subtitle: '投手成績與走勢', icon: Flame },
-      { to: '/fielding', label: '守備', subtitle: '守備位置與失誤', icon: Shield },
-      { to: '/players', label: '球員', subtitle: '球員名單與個人檔案', icon: Users },
-      { to: '/games', label: '比賽', subtitle: '賽程與比賽結果', icon: CalendarDays },
+      { to: '/', label: '總覽', subtitle: '球隊整體表現一覽', icon: IconField },
+      { to: '/batting', label: '打擊', subtitle: '打者成績與排行', icon: IconBat },
+      { to: '/pitching', label: '投球', subtitle: '投手成績與走勢', icon: IconBaseball },
+      { to: '/fielding', label: '守備', subtitle: '守備位置與失誤', icon: IconGlove },
+      { to: '/players', label: '球員', subtitle: '球員名單與個人檔案', icon: IconJersey },
+      { to: '/games', label: '比賽', subtitle: '賽程與比賽結果', icon: IconScoreboard },
       { to: '/live', label: '即時比分', subtitle: '進行中的比賽', icon: Radio },
     ],
   },
   {
     label: '資料',
     items: [
-      { to: '/lineup', label: '先發陣容', subtitle: '排守位與打序', icon: ClipboardList, editorOnly: true },
+      { to: '/lineup', label: '先發陣容', subtitle: '排守位與打序', icon: IconHomePlate, editorOnly: true },
       { to: '/record', label: '紀錄比賽', subtitle: '比賽當天逐球紀錄', icon: PenLine, editorOnly: true },
       { to: '/import', label: '資料匯入', subtitle: '上傳比賽紀錄', icon: Upload, editorOnly: true },
       { to: '/dictionary', label: '數據字典', subtitle: '指標定義與計算方式', icon: BookOpen },

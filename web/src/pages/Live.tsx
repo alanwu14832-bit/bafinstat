@@ -6,6 +6,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { PitchChips } from '../components/ui/PlayByPlay'
 import { Badge } from '../components/ui/Badge'
 import { Diamond } from '../record/Diamond'
+import { BOARD, CountLights, LineScoreBoard } from '../components/ui/Scoreboard'
 import { readDraft } from '../record/draft'
 import { count, offense, score, type RecordState } from '../record/model'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
@@ -67,14 +68,6 @@ export function LivePage() {
   const recent = rows.slice(-6).reverse()
   const batter = side === 'us' ? `${s.slot + 1} 棒 ${s.lineup[s.slot]?.name ?? ''}` : `對方 ${s.oppOrder} 棒${s.oppBatter ? ` ${s.oppBatter}` : ''}`
   const n = Math.max(sc.lineUs.length, s.game.innings ?? 0)
-  const teamRow = (name: string, line: number[], total: number, us: boolean, hits: number) => (
-    <tr className={cx('border-t border-border', us ? 'text-ink font-medium' : 'text-ink-2')}>
-      <th scope="row" className="text-left pl-4 pr-3 py-2 font-medium whitespace-nowrap">{name}</th>
-      {Array.from({ length: n }, (_, i) => <td key={i} className="px-2 py-2 text-center min-w-8">{line[i] ?? ''}</td>)}
-      <td className="px-3 py-2 text-center font-semibold text-ink border-l border-border">{total}</td>
-      <td className="px-3 py-2 text-center pr-4">{hits}</td>
-    </tr>
-  )
   const hitsUs = s.batting.filter((p) => ['一安', '二安', '三安', '全壘打'].includes(p.result)).length
   const hitsOpp = s.pitching.filter((p) => ['一安', '二安', '三安', '全壘打'].includes(p.result)).length
 
@@ -82,36 +75,29 @@ export function LivePage() {
     <>
       <PageHeader title="即時比分" description={`${s.game.date}・${s.game.tournament}・${s.game.venue ?? ''}${live.by ? `・紀錄 ${live.by}` : ''}・每 5 秒更新，最後更新 ${new Date(live.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`}
         actions={<Badge variant="good"><span className="inline-block size-1.5 rounded-full bg-good mr-1 animate-pulse" />進行中</Badge>} />
-      <Card bodyClassName="p-5 md:p-8">
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-8 text-center">
-          <div><div className="text-[13px] md:text-[15px] text-ink-2 truncate">{weTop ? TEAM_NAME : s.game.opponent}</div><div className="text-[56px] md:text-[80px] font-semibold leading-none tracking-[-0.03em] tnum mt-1">{weTop ? sc.us : sc.opp}</div></div>
+      <div className="rounded-[var(--radius)] overflow-hidden" style={{ background: BOARD.bg, color: BOARD.ink, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-8 text-center p-5 md:p-8">
+          <div><div className="text-[13px] md:text-[15px] truncate" style={{ color: BOARD.muted }}>{weTop ? TEAM_NAME : s.game.opponent}</div><div className="figure text-[56px] md:text-[84px] font-semibold leading-none mt-1">{weTop ? sc.us : sc.opp}</div></div>
           <div className="flex flex-col items-center gap-2">
-            <div className="text-[18px] md:text-[22px] font-semibold text-ink">第 {s.inning} 局{s.half === 'top' ? '上' : '下'}</div>
-            <Diamond runners={s.runners} size={96} />
-            <div className="flex gap-1.5" aria-label={`${s.outs} 出局`}>{[0, 1, 2].map((i) => <span key={i} className={cx('size-3 rounded-full', i < s.outs ? 'bg-ink' : 'bg-surface-3')} />)}</div>
-            <div className="text-[12px] text-muted">{s.outs} 出局</div>
+            <div className="text-[18px] md:text-[22px] font-semibold">第 {s.inning} 局{s.half === 'top' ? '上' : '下'}</div>
+            <Diamond runners={s.runners} size={96} onBoard />
+            <CountLights balls={c.balls} strikes={c.strikes} outs={s.outs} size="lg" onBoard />
           </div>
-          <div><div className="text-[13px] md:text-[15px] text-ink-2 truncate">{weTop ? s.game.opponent : TEAM_NAME}</div><div className="text-[56px] md:text-[80px] font-semibold leading-none tracking-[-0.03em] tnum mt-1">{weTop ? sc.opp : sc.us}</div></div>
+          <div><div className="text-[13px] md:text-[15px] truncate" style={{ color: BOARD.muted }}>{weTop ? s.game.opponent : TEAM_NAME}</div><div className="figure text-[56px] md:text-[84px] font-semibold leading-none mt-1">{weTop ? sc.opp : sc.us}</div></div>
         </div>
-        <div className="mt-6 pt-5 border-t border-border grid grid-cols-1 md:grid-cols-3 gap-4 text-[13px]">
+        <LineScoreBoard className="rounded-none" innings={n} current={{ inning: s.inning, half: s.half }} showErrors={false}
+          top={weTop ? { name: TEAM_NAME, line: sc.lineUs, r: sc.us, h: hitsUs, us: true } : { name: s.game.opponent, line: sc.lineOpp, r: sc.opp, h: hitsOpp }}
+          bottom={weTop ? { name: s.game.opponent, line: sc.lineOpp, r: sc.opp, h: hitsOpp } : { name: TEAM_NAME, line: sc.lineUs, r: sc.us, h: hitsUs, us: true }} />
+      </div>
+      <Card bodyClassName="p-4 md:p-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[13px]">
           <div><div className="text-[12px] text-muted">現在{side === 'us' ? '打擊' : '對方打者'}</div><div className="text-[15px] font-semibold text-ink mt-0.5">{batter}</div></div>
           <div><div className="text-[12px] text-muted">{side === 'us' ? '壘上' : '我隊投手'}</div><div className="text-[15px] font-semibold text-ink mt-0.5">{side === 'us' ? (s.runners.length ? s.runners.map((r) => `${r.base}B ${r.name}`).join('・') : '無人') : s.pitcher}</div></div>
           <div><div className="text-[12px] text-muted">球數</div><div className="text-[15px] font-semibold text-ink mt-0.5 tnum">B {c.balls} – S {c.strikes} <span className="ml-2 font-normal"><PitchChips pitches={s.pitches} /></span></div></div>
         </div>
       </Card>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-5">
-        <Card className="lg:col-span-3" title="逐局比分" flush>
-          <div className="overflow-x-auto scroll-x">
-            <table className="text-[13px] tnum border-collapse min-w-full">
-              <thead><tr className="text-[11px] text-muted bg-surface-2/60"><th className="pl-4 pr-3 py-1.5 text-left font-medium">隊伍</th>{Array.from({ length: n }, (_, i) => <th key={i} className="px-2 py-1.5 font-medium">{i + 1}</th>)}<th className="px-3 py-1.5 font-medium border-l border-border">R</th><th className="px-3 py-1.5 font-medium pr-4">H</th></tr></thead>
-              <tbody>
-                {weTop ? teamRow(TEAM_NAME, sc.lineUs, sc.us, true, hitsUs) : teamRow(s.game.opponent, sc.lineOpp, sc.opp, false, hitsOpp)}
-                {weTop ? teamRow(s.game.opponent, sc.lineOpp, sc.opp, false, hitsOpp) : teamRow(TEAM_NAME, sc.lineUs, sc.us, true, hitsUs)}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-        <Card className="lg:col-span-2" title={side === 'us' ? '我隊最近打席' : '對方最近打席'} flush>
+      <div className="grid grid-cols-1 gap-4 md:gap-5">
+        <Card title={side === 'us' ? '我隊最近打席' : '對方最近打席'} flush>
           <ul className="divide-y divide-[var(--border)] text-[13px]">
             {recent.length === 0 && <li className="px-4 py-6 text-center text-muted">這個半局還沒有打席</li>}
             {recent.map((p, i) => (

@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { CloudPanel } from '../components/ui/CloudPanel'
 import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
+import { PlateBadge } from '../components/ui/Scoreboard'
 import { useDataStore } from '../store/data'
 import { FIELD_POSITIONS } from '../data/types'
 import { POSITION_LABEL } from '../lib/fmt'
@@ -56,7 +57,7 @@ function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { it
         className="size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
         <GripVertical className="size-4" />
       </button>
-      <span className={cx('size-7 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum shrink-0', item.name ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{index + 1}</span>
+      <PlateBadge size={28} active={!!item.name}>{index + 1}</PlateBadge>
       <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
       <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? pos || '無守位' : ''}</span>
       <div className="hidden sm:flex shrink-0">

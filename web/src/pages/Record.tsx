@@ -16,6 +16,7 @@ import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } fr
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
+import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
 import { LOC_HOLES, POSITIONS, type Game } from '../data/types'
 import { cx } from '../lib/format'
 import {
@@ -93,7 +94,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="size-7 rounded-[6px] bg-surface-2 text-[12px] font-semibold grid place-items-center tnum shrink-0">{i + 1}</span>
+              <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
               <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} placeholder="球員" className="flex-1 min-w-0" />
               <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} className="w-[92px]" />
             </div>
@@ -161,7 +162,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
               <div>
                 <div className="text-[15px] font-semibold text-ink">第 {halfLabel}</div>
                 <div className="text-[12px] text-ink-2">{side === 'us' ? '我隊進攻' : '對方進攻'}・{state.outs} 出局</div>
-                <div className="flex gap-1 mt-1" aria-label={`${state.outs} 出局`}>{[0, 1, 2].map((i) => <span key={i} className={cx('size-2.5 rounded-full', i < state.outs ? 'bg-ink' : 'bg-surface-3')} />)}</div>
+                <div className="flex gap-1 mt-1" aria-label={`${state.outs} 出局`}>{[0, 1, 2].map((i) => <span key={i} className="size-2.5 rounded-full transition-colors" style={{ background: i < state.outs ? BOARD.out : 'var(--surface-3)', boxShadow: i < state.outs ? `0 0 6px ${BOARD.out}66` : undefined }} />)}</div>
               </div>
               <Diamond runners={state.runners} />
             </div>
@@ -207,12 +208,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
           <div className="flex items-center justify-between gap-3 flex-wrap">
             {side === 'us' ? (
               <div className="flex items-center gap-3 min-w-0">
-                <span className="size-10 rounded-[8px] bg-ink text-bg grid place-items-center text-[14px] font-semibold tnum shrink-0">{state.slot + 1}</span>
+                <PlateBadge size={40}>{state.slot + 1}</PlateBadge>
                 <div className="min-w-0"><div className="text-[16px] font-semibold text-ink leading-5 truncate">{batterSlot?.name ?? '—'} <span className="text-muted font-normal text-[13px]">{batterSlot?.pos}</span></div><div className="text-[12px] text-ink-2">我隊打者・第 {state.slot + 1} 棒</div></div>
               </div>
             ) : (
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="size-10 rounded-[8px] bg-surface-2 text-ink grid place-items-center text-[14px] font-semibold tnum shrink-0">{state.oppOrder}</span>
+                <PlateBadge size={40} active={false}>{state.oppOrder}</PlateBadge>
                 <div className="min-w-0 flex-1"><div className="text-[16px] font-semibold text-ink leading-5">對方第 {state.oppOrder} 棒</div><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
                   <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-semibold tnum', countTone === 'critical' ? 'bg-[color-mix(in_srgb,var(--critical)_16%,transparent)] text-critical' : countTone === 'warning' ? 'bg-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]' : 'bg-surface-2 text-ink-2')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>
                     用球 {currentCount}{countTone === 'critical' ? '・已達上限' : countTone === 'warning' ? '・注意' : ''}
@@ -220,7 +221,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
               </div>
             )}
             <div className="flex items-center gap-2">
-              <div className="text-[13px] tnum text-ink-2">B <span className="text-ink font-semibold text-[18px]">{c.balls}</span> <span className="mx-1 text-muted">–</span> S <span className="text-ink font-semibold text-[18px]">{c.strikes}</span></div>
+              <CountLights balls={c.balls} strikes={c.strikes} outs={state.outs} />
               <Button variant="ghost" size="sm" onClick={() => setTool(tool === 'none' ? (side === 'us' ? 'lineup' : 'pitcher') : 'none')} icon={<ArrowRightLeft />}>{side === 'us' ? '代打／換人' : '換投'}</Button>
             </div>
           </div>
@@ -340,7 +341,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             {state.lineup.map((l, i) => (
               <li key={i}>
                 <button type="button" onClick={() => apply((s) => setSlot(s, i))} className={cx('w-full flex items-center gap-3 px-4 py-2 text-left cursor-pointer', i === state.slot && side === 'us' ? 'bg-surface-2' : 'hover:bg-surface-2/60')}>
-                  <span className={cx('size-7 rounded-[6px] grid place-items-center text-[12px] font-semibold tnum', i === state.slot ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{i + 1}</span>
+                  <PlateBadge size={28} active={i === state.slot}>{i + 1}</PlateBadge>
                   <span className="text-[13px] font-medium text-ink flex-1 truncate">{l.name}</span>
                   <span className="text-[12px] text-muted">{l.pos}</span>
                 </button>
