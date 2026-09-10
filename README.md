@@ -10,6 +10,7 @@
 | **設計藍圖** | `docs/BLUEPRINT.md` | 資訊架構、色彩／字體、版面、圖表規格、建置順序 |
 | **雲端資料庫** | `supabase/schema.sql`、`docs/SUPABASE_SETUP.md` | 選用：Supabase 讓全隊共用同一份資料、紀錄員登入寫入、即時同步 |
 | **資安與維運** | `docs/SECURITY.md` | 權限制度、管理員設定、備份、流量上限與自訂網域 |
+| **維運手冊** | `docs/MAINTENANCE.md` | 開放全隊使用後：角色、加紀錄員、賽季節奏、交接、故障排除、花費 |
 | **使用手冊** | `docs/USER_GUIDE.md`（網站「使用指南」頁同內容） | 比賽前／中／後怎麼記、代碼、賽後怎麼看數據 |
 | **數據字典** | `data/stat_dictionary.json` | 103 項指標的單一定義來源（Excel 與網站共用） |
 
