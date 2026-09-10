@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { LineScoreBoard } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
@@ -81,6 +81,8 @@ export function GamesPage() {
     { key: 'score', header: '比分', align: 'right', className: 'font-medium' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
   ]
   const current = s.summaries.find((g) => g.game.id === open) ?? null
+  const albums = useDataStore((st) => st.albums)
+  const gameAlbums = useMemo(() => (current ? albums.filter((a) => a.gameId === current.game.id) : []), [albums, current])
   const editable = current && !current.game.isDemo ? extractGame(base, current.game.id) : null
   const boxB = useMemo(() => (current ? battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === current.game.id)).sort((a, b) => (s.dataset.batting.find((p) => p.batter === a.name && p.gameId === current.game.id)?.order ?? 99) - (s.dataset.batting.find((p) => p.batter === b.name && p.gameId === current.game.id)?.order ?? 99)) : []), [current, s.dataset])
   const boxP = useMemo(() => (current ? pitchingLines(s.dataset.pitching.filter((p) => p.gameId === current.game.id), [current.game]) : []), [current, s.dataset])
@@ -126,6 +128,7 @@ export function GamesPage() {
                 <div className="flex items-center gap-1 shrink-0">
                   {editable && !editing && canEdit && (
                     <>
+                      {gameAlbums.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={gameAlbums[0].url} title="開啟這場的相簿">相簿</Button> : gameAlbums.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {gameAlbums.length}</Button> : null}
                       <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
                       <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical hover:text-critical" disabled={cloud.pushing}
                         onClick={() => { if (window.confirm(`確定刪除 ${current.game.id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(current.game.id).then(close).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />

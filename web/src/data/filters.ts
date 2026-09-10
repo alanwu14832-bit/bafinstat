@@ -11,11 +11,19 @@ export interface FilteredData {
   gameIds: Set<string>
 }
 
+/** Games that actually happened: not scheduled or cancelled, and with at least one plate appearance recorded. */
+export function playedGames(ds: Dataset): Game[] {
+  const withRows = new Set<string>()
+  for (const p of ds.batting) withRows.add(p.gameId)
+  for (const p of ds.pitching) withRows.add(p.gameId)
+  return ds.games.filter((g) => !g.status && withRows.has(g.id)).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
+}
+
 /** Game-level filters (tournament / date / opponent / home-away / result). */
 export function filterGames(ds: Dataset, f: Filters): { games: Game[]; summaries: GameSummary[] } {
   const summaries: GameSummary[] = []
   const games: Game[] = []
-  for (const g of [...ds.games].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))) {
+  for (const g of playedGames(ds)) {
     if (f.tournament !== 'all' && g.tournament !== f.tournament) continue
     if (f.from && g.date < f.from) continue
     if (f.to && g.date > f.to) continue

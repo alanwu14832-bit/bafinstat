@@ -18,6 +18,7 @@ import { TEAM_NAME } from '../data/seed'
 import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
 import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
 import { LOC_HOLES, POSITIONS, type Game } from '../data/types'
+import { playedGames } from '../data/filters'
 import { cx } from '../lib/format'
 import {
   addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, OUT_RESULTS, runnerEvent, score, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
@@ -53,10 +54,13 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const opts = useFilterOptions()
   const names = useMemo(() => rosterNames(base.roster), [base.roster])
   const today = new Date().toISOString().slice(0, 10)
-  const last = useMemo(() => [...base.games].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
+  const last = useMemo(() => playedGames(base).slice(-1)[0], [base])
+  const scheduled = useMemo(() => base.games.filter((g) => g.status === 'scheduled').sort((a, b) => a.date.localeCompare(b.date)), [base.games])
+  const [fromSchedule, setFromSchedule] = useState<string>(() => scheduled.find((g) => g.date >= today)?.id ?? '')
   // the lineup drawn up on the 先發陣容 page wins; otherwise last game's order is a good starting point
   const saved = useMemo(() => { const l = readLineup(); return l && l.order.some(Boolean) ? l : null }, [])
-  const [game, setGame] = useState<Game>({ id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' })
+  const [game, setGame] = useState<Game>(() => { const s = scheduled.find((g) => g.date >= today); return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' } })
+  const pickSchedule = (id: string) => { setFromSchedule(id); const s = scheduled.find((g) => g.id === id); if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined })) }
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)
     const slots: LineupSlot[] = Array.from({ length: 9 }, () => ({ name: '', pos: '' }))
@@ -71,14 +75,16 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
     if (!game.opponent.trim()) { setError('請填對手'); return }
     if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); return }
     if (!pitcher.trim()) { setError('請填先發投手'); return }
-    const id = nextGameId(game.date, base.games.map((x) => x.id))
-    onStart(newGame({ ...game, id, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher.trim()))
+    // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
+    const id = fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
+    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher.trim()))
   }
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
       <Card className="xl:col-span-2" title="比賽資訊" subtitle="比賽ID 會依日期自動編號">
         <datalist id="rec-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
+        {scheduled.length > 0 && <Field label="從賽程帶入" className="mb-3"><Select value={fromSchedule} onChange={(e) => pickSchedule(e.target.value)} className="w-full" options={[{ value: '', label: '不用，手動填' }, ...scheduled.map((g) => ({ value: g.id, label: `${g.date}${g.time ? ` ${g.time}` : ''} vs ${g.opponent}（${g.tournament}）` }))]} /></Field>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="時間"><Input type="time" value={game.time ?? ''} onChange={(e) => g('time', e.target.value || undefined)} className="tnum" /></Field>
