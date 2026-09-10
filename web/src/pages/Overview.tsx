@@ -19,6 +19,8 @@ import { useDataStore } from '../store/data'
 
 interface RecentRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; result: 'W' | 'L' | 'T'; score: string; hits: number; errors: number; isDemo: boolean }
 
+const pct0 = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
+
 export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 
 export function OverviewPage() {
@@ -93,7 +95,7 @@ export function OverviewPage() {
         <StatTile label="團隊 OPS" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
         <StatTile label="得點圈 AVG" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
         <StatTile label="每場殘壘" value={lobPerGame} format="ratio" display={f2(lobPerGame)} note="留在壘上沒回來的跑者" />
-        <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct(team.bbPct)} / ${pct(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} compact />
+        <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)} / ${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} compact />
         <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
         <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
         <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
