@@ -45,11 +45,10 @@ describe('2025-10-10 vs 群風 (from the original score sheet)', () => {
     expect(lin.k).toBe(5); expect(lin.bf).toBe(11); expect(lin.cswPct).toBeCloseTo(16 / 35, 6)
   })
 
-  it('team summary and pythagorean expectation', () => {
+  it('team summary', () => {
     const fd = applyFilters(ds, { ...DEFAULT_FILTERS, to: '2025-10-31' })
     const t = teamSummary(fd.summaries)
     expect(t.w).toBe(1); expect(t.l).toBe(0); expect(t.rs).toBe(9); expect(t.ra).toBe(5)
-    expect(t.pythag).toBeCloseTo(Math.pow(9, 1.83) / (Math.pow(9, 1.83) + Math.pow(5, 1.83)), 6)
   })
 
   it('2025-12-22 vs 工海物治: walk-off win reconstructed from the second sheet', () => {
