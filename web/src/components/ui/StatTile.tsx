@@ -4,6 +4,7 @@ import { formatNumber, signed, type NumberFormat } from '../../lib/format'
 import { cx } from '../../lib/format'
 import { CountUp } from '../motion/CountUp'
 import { Reveal } from '../motion/Reveal'
+import { StatHint } from './StatHint'
 
 export interface StatTileProps {
   label: string
@@ -43,7 +44,7 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
   return (
     <div className={cx('stat-cell bg-surface p-4 flex flex-col gap-1.5 min-w-0 transition-colors duration-[var(--dur-base)] hover:bg-surface-2/60', className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-muted font-medium truncate">{label}</span>
+        <span className="text-xs text-muted font-medium truncate"><StatHint label={label}>{label}</StatHint></span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
       </div>
       <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[19px]' : 'text-[26px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>

@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cx } from '../../lib/format'
 import { EmptyState } from './EmptyState'
+import { StatHint } from './StatHint'
 
 export type Align = 'left' | 'center' | 'right'
 
@@ -85,7 +86,7 @@ export function DataTable<Row extends object>({
                   title={sortable ? '點擊排序' : undefined}
                 >
                   <span className={cx('inline-flex items-center gap-1', align === 'right' && 'flex-row-reverse')}>
-                    {col.header}
+                    <StatHint label={col.header}>{col.header}</StatHint>
                     {sortable && active && (sort.dir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />)}
                   </span>
                 </th>

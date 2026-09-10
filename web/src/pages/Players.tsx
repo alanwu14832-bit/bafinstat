@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { PlateBadge } from '../components/ui/Scoreboard'
+import { StatHint } from '../components/ui/StatHint'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -49,7 +50,7 @@ function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] 
         return (
           <tr key={m.label} className="border-t border-border">
             <td className={cx('px-4 py-1.5 text-right tnum', better === 'a' ? 'font-semibold text-ink' : 'text-ink-2')}>{na === null ? '—' : m.fmt(na)}</td>
-            <td className="px-3 py-1.5 text-center text-[12px] text-muted whitespace-nowrap">{m.label}</td>
+            <td className="px-3 py-1.5 text-center text-[12px] text-muted whitespace-nowrap"><StatHint label={m.label}>{m.label}</StatHint></td>
             <td className={cx('px-4 py-1.5 text-left tnum', better === 'b' ? 'font-semibold text-ink' : 'text-ink-2')}>{nb === null ? '—' : m.fmt(nb)}</td>
           </tr>
         )
