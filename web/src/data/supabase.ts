@@ -22,7 +22,7 @@ export function supabase(): SupabaseClient {
 
 // ---------------------------------------------------------------- row ↔ model mapping
 interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
-interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null }
+interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null }
 interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null }
 interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; code: string | null; note: string | null }
 interface FieldingRow { game_id: string; seq: number; player: string; pos: string; innings: number | null; po: number; a: number; e: number; dp: number; pb: number; sb: number; cs: number; note: string | null }
@@ -34,7 +34,7 @@ export function toPlayerRow(p: Player): PlayerRow {
   return { name: p.name, number: n(p.number), primary_pos: n(p.primaryPos), secondary_pos: n(p.secondaryPos), bats: n(p.bats), throws: n(p.throws), status: n(p.status), note: n(p.note) }
 }
 export function toGameRow(g: Game): GameRow {
-  return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note) }
+  return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note), status: n(g.status) }
 }
 export function toBattingRow(p: BattingPA, seq: number): BattingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), batting_order: p.order ?? null, pos: n(p.pos), batter: p.batter, pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sb: p.sb, cs: p.cs, adv_on_error: p.advOnError, out_on_base: p.outOnBase, run: p.run, rbi: p.rbi, code: n(p.code), note: n(p.note) }
@@ -49,7 +49,7 @@ export function toFieldingRow(f: FieldingLine, seq: number): FieldingRow {
 export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; batting: BattingRow[]; pitching: PitchingRow[]; fielding: FieldingRow[] }): Dataset {
   return {
     roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note) })),
-    games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note) })),
+    games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined) })),
     batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note) })),
     pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, code: u(r.code), note: u(r.note) })),
     fielding: rows.fielding.map((r) => ({ gameId: r.game_id, player: r.player, pos: r.pos, innings: u(r.innings === null ? null : Number(r.innings)), po: r.po, a: r.a, e: r.e, dp: r.dp, pb: r.pb, sb: r.sb, cs: r.cs, note: u(r.note) })),
@@ -117,8 +117,8 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
     const { data: auth } = await sb.auth.getUser()
     const by = auth.user?.email ?? null
     let { error } = await sb.from('games').upsert(games.map((g) => ({ ...toGameRow(g), updated_by: by })), { onConflict: 'id' })
-    // older schema without the audit column: retry without it
-    if (error && /updated_by/.test(error.message)) ({ error } = await sb.from('games').upsert(games.map(toGameRow), { onConflict: 'id' }))
+    // older schema without the audit / status columns: retry without them
+    if (error && /updated_by|status/.test(error.message)) ({ error } = await sb.from('games').upsert(games.map((g) => { const { status: _s, ...row } = toGameRow(g); return row }), { onConflict: 'id' }))
     fail('比賽清單', error)
     // child rows: clear then insert, per game batch
     const idList = [...ids]
@@ -218,4 +218,22 @@ export function subscribeCloudChanges(onChange: () => void): () => void {
   for (const table of ['games', 'batting_pa', 'pitching_pa', 'fielding_lines', 'players']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, bump)
   ch.subscribe()
   return () => { if (timer) clearTimeout(timer); void supabase().removeChannel(ch) }
+}
+
+// ---------------------------------------------------------------- album links (Google Drive folders etc.)
+export interface AlbumRow { id: string; game_id: string | null; title: string | null; date: string | null; url: string; photographer: string | null; note: string | null; created_by: string | null; created_at: string; updated_at: string }
+/** Returns null when the albums table does not exist yet. */
+export async function fetchAlbums(): Promise<AlbumRow[] | null> {
+  const { data, error } = await supabase().from('albums').select('*').order('date', { ascending: false, nullsFirst: false }).limit(2000)
+  if (error) { if (error.code === '42P01' || /albums/.test(error.message)) return null; throw new Error(error.message) }
+  return (data ?? []) as AlbumRow[]
+}
+export async function upsertAlbum(row: Omit<AlbumRow, 'created_at' | 'updated_at'> & { id?: string }): Promise<AlbumRow> {
+  const { data, error } = await supabase().from('albums').upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'id' }).select('*').single()
+  if (error) throw new Error(/row-level security/.test(error.message) ? '你的帳號不在紀錄員名單，無法寫入' : error.message)
+  return data as AlbumRow
+}
+export async function deleteAlbumRow(id: string) {
+  const { error } = await supabase().from('albums').delete().eq('id', id)
+  if (error) throw new Error(error.message)
 }

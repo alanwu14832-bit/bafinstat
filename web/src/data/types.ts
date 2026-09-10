@@ -71,7 +71,10 @@ export interface Game {
   note?: string
   /** Synthetic game generated for demonstration; always labelled in the UI. */
   isDemo?: boolean
+  /** undefined = played (has records); scheduled games appear on 賽程 and are excluded from every statistic */
+  status?: GameStatus
 }
+export type GameStatus = 'scheduled' | 'cancelled'
 
 export interface BattingPA {
   gameId: string

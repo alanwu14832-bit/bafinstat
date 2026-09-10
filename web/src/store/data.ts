@@ -13,7 +13,7 @@ import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
-import { fetchIsPhotographer } from '../data/photos'
+import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, type Dataset, type Filters, type StatParams } from '../data/types'
@@ -39,7 +39,7 @@ interface DataState {
   demo: boolean
   filters: Filters
   params: StatParams
-  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean; /** signed in AND on the photographers list (editors also count as uploaders) */ isPhotographer: boolean }
+  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean }
   setFilters: (patch: Partial<Filters>) => void
   resetFilters: () => void
   setDemo: (on: boolean) => void
@@ -57,7 +57,12 @@ interface DataState {
   setParams: (patch: Partial<StatParams>) => void
   loadCloud: () => Promise<void>
   setCloudUser: (user: User | null) => void
-  canUpload: () => boolean
+  /** photo album links (see data/albums.ts) */
+  albums: AlbumLink[]
+  albumsSupported: boolean
+  loadAlbums: () => Promise<void>
+  saveAlbum: (a: AlbumLink) => Promise<void>
+  deleteAlbum: (id: string) => Promise<void>
 }
 
 interface Persisted { base: Dataset; importedAt: string | null }
@@ -75,7 +80,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   demo: initialDemo,
   filters: DEFAULT_FILTERS,
   params: { ...DEFAULT_PARAMS, ...(readJSON<Partial<StatParams>>(PARAMS_KEY) ?? {}) },
-  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false, isEditor: false, isPhotographer: false },
+  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false, isEditor: false },
   setFilters: (patch) => set({ filters: { ...get().filters, ...patch } }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   setDemo: (on) => { writeJSON(DEMO_KEY, on); set({ demo: on }) },
@@ -172,23 +177,44 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
   setCloudUser: (user) => {
-    set({ cloud: { ...get().cloud, user, isEditor: false, isPhotographer: false } })
-    if (user) {
-      void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
-      void fetchIsPhotographer(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isPhotographer: ok } }) }).catch(() => undefined)
-    }
+    set({ cloud: { ...get().cloud, user, isEditor: false } })
+    if (user) void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
   },
-  /** may upload photos: editors and photographers (local mode has nowhere to upload) */
-  canUpload: () => { const { cloud } = get(); return cloud.configured && !!cloud.user && (cloud.isEditor || cloud.isPhotographer) },
+  albums: cloudConfigured ? [] : readLocalAlbums(),
+  albumsSupported: true,
+  loadAlbums: async () => {
+    if (!cloudConfigured) { set({ albums: readLocalAlbums() }); return }
+    try { const list = await loadCloudAlbums(); if (list === null) set({ albumsSupported: false }); else set({ albums: list, albumsSupported: true }) } catch { /* offline: keep what we have */ }
+  },
+  saveAlbum: async (a) => {
+    const { cloud } = get()
+    if (cloud.configured) {
+      if (!cloud.user || !cloud.isEditor) throw new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
+      const saved = await saveCloudAlbum(a, cloud.user.email)
+      set({ albums: [saved, ...get().albums.filter((x) => x.id !== saved.id)] })
+      return
+    }
+    const next = [a, ...get().albums.filter((x) => x.id !== a.id)]
+    writeLocalAlbums(next); set({ albums: next })
+  },
+  deleteAlbum: async (id) => {
+    const { cloud } = get()
+    if (cloud.configured) {
+      if (!cloud.user || !cloud.isEditor) throw new Error('請先以紀錄員身分登入')
+      await deleteCloudAlbum(id)
+    } else writeLocalAlbums(get().albums.filter((x) => x.id !== id))
+    set({ albums: get().albums.filter((x) => x.id !== id) })
+  },
 }))
 
 // Boot the cloud connection: load once, follow auth, refetch on remote changes.
 if (cloudConfigured && typeof window !== 'undefined') {
   const st = useDataStore.getState()
   void st.loadCloud()
+  void st.loadAlbums()
   void currentUser().then((u) => st.setCloudUser(u))
   onAuthChange((u) => useDataStore.getState().setCloudUser(u))
-  subscribeCloudChanges(() => void useDataStore.getState().loadCloud())
+  subscribeCloudChanges(() => { void useDataStore.getState().loadCloud(); void useDataStore.getState().loadAlbums() })
 }
 
 let demoCache: { base: Dataset; ds: Dataset } | null = null
