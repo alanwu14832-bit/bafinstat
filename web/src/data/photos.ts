@@ -22,7 +22,7 @@ export interface Photo {
 
 export const BUCKET = 'photos'
 export const WEB_EDGE = 2048
-export const THUMB_EDGE = 480
+export const THUMB_EDGE = 360
 
 export function photoUrl(path: string): string { return supabase().storage.from(BUCKET).getPublicUrl(path).data.publicUrl }
 /** Public URL that the browser saves instead of opening (Supabase honours ?download=<name>). */
@@ -70,15 +70,16 @@ export interface UploadTarget { album: string; gameId: string | null }
 /** Resize, upload both copies, then register the row. Throws with a readable message. */
 export async function uploadPhoto(file: File, target: UploadTarget, email: string | null | undefined, onStage?: (stage: string) => void): Promise<Photo> {
   onStage?.('縮圖中')
-  const [web, thumb] = await Promise.all([resize(file, WEB_EDGE, 0.85), resize(file, THUMB_EDGE, 0.8)])
+  const [web, thumb] = await Promise.all([resize(file, WEB_EDGE, 0.85), resize(file, THUMB_EDGE, 0.75)])
   const key = albumKey(target.gameId ?? target.album)
   const id = crypto.randomUUID()
   const path = `${key}/${id}.jpg`, thumbPath = `${key}/thumb/${id}.jpg`
   const store = supabase().storage.from(BUCKET)
   onStage?.('上傳中')
-  const up1 = await store.upload(path, web.blob, { contentType: 'image/jpeg', upsert: false })
+  // files never change once uploaded, so browsers may cache them for a year (repeat views cost no egress)
+  const up1 = await store.upload(path, web.blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' })
   if (up1.error) throw new Error(up1.error.message.includes('row-level security') ? '你的帳號沒有上傳權限（不在攝影師或紀錄員名單）' : up1.error.message)
-  const up2 = await store.upload(thumbPath, thumb.blob, { contentType: 'image/jpeg', upsert: false })
+  const up2 = await store.upload(thumbPath, thumb.blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' })
   if (up2.error) { await store.remove([path]); throw new Error(up2.error.message) }
   const row = { album: target.album.trim(), album_key: key, game_id: target.gameId, path, thumb_path: thumbPath, width: web.width, height: web.height, size_bytes: web.blob.size, uploaded_by: email ?? null }
   const { data, error } = await supabase().from('photos').insert(row).select('*').single()

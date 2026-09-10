@@ -49,7 +49,7 @@
 **每學期**（管理員，10 分鐘）
 - 檢查 `editors` 名單：畢業的移除，新紀錄員加上。
 - 「球員 → 編輯名單」：離隊的改狀態、新人用「匯入 Excel」一次加。
-- Supabase → Settings → Usage 看一眼 Database size、Storage 與 Egress。相簿是唯一會吃空間的東西：照片上傳前會縮成 2048px（一張約 0.5 MB），免費方案 1 GB 約放 1,800 張、每月下載流量 2 GB 約 3,000 次下載。一季拍得多就升 Supabase Pro（100 GB 儲存、250 GB 流量），或每學期把舊相簿刪掉、原檔留在 Google Drive。
+- Supabase → Settings → Usage 看一眼 Database size、Storage 與 Egress。相簿是唯一會吃空間與流量的東西：照片上傳前會縮成 2048px（一張約 0.5 MB）、縮圖約 25 KB，檔案快取一年，同一個人重看不再計流量。免費方案 1 GB 約放 1,800 張；**每月 2 GB 流量在賽季中大概只夠一到兩場**（一場 100 張、60 人瀏覽、每人下載 10 張 ≈ 600 MB）。賽季開始前升 Supabase Pro（每月 25 美元：100 GB 儲存、250 GB 流量、每日備份），休賽期再降回免費；或請我把照片改放 Cloudflare R2（10 GB 免費、下載不計流量）。
 - GitHub 若有 Dependabot 的安全更新 PR，合併它，Vercel 會自動重新部署。
 
 ## 4. 每年交接（新任隊長／管理員）

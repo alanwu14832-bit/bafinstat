@@ -82,14 +82,16 @@ export function OverviewPage() {
     <>
       <PageHeader title="總覽" description={`${TEAM_NAME}・${summary.games} 場比賽，依上方篩選即時計算。`} />
       <DemoBanner />
-      <StatGroup columns="grid-cols-2 md:grid-cols-5">
-        <StatTile label="戰績（勝-敗-和）" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} note={`勝率 ${f3(summary.winPct)}`} />
+      <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <StatTile label="戰績（勝-敗-和）" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} />
+        <StatTile label="勝率" value={summary.winPct ?? 0} format="decimal3" />
         <StatTile label="近 5 場" value={recent5.w} display={`${recent5.w}-${recent5.l}${recent5.t ? `-${recent5.t}` : ''}`} note={`得失分 ${signedInt(recent5.diff)}`} />
         <StatTile label="每場得分" value={summary.runsPerGame ?? 0} format="ratio" display={f2(summary.runsPerGame)} />
         <StatTile label="每場失分" value={summary.runsAllowedPerGame ?? 0} format="ratio" display={f2(summary.runsAllowedPerGame)} />
         <StatTile label="得失分差" value={summary.diff} display={signedInt(summary.diff)} note={`${summary.rs} 得・${summary.ra} 失`} />
         <StatTile label="團隊打擊率" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
         <StatTile label="團隊 OPS" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
+        <StatTile label="得點圈 AVG" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
         <StatTile label="每場殘壘" value={lobPerGame} format="ratio" display={f2(lobPerGame)} note="留在壘上沒回來的跑者" />
         <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct(team.bbPct)} / ${pct(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} compact />
         <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
@@ -97,7 +99,8 @@ export function OverviewPage() {
         <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
         <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
         <StatTile label="BB/9" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="每場失誤" value={errors.perGame} format="ratio" display={f2(errors.perGame)} note={`${errors.total} E・守備率 ${f3(errors.fpct)}`} />
+        <StatTile label="每場失誤" value={errors.perGame} format="ratio" display={f2(errors.perGame)} note={`${errors.total} E`} />
+        <StatTile label="團隊守備率" value={errors.fpct ?? 0} format="decimal3" display={f3(errors.fpct)} note="（刺殺＋助殺）÷ 守備機會" />
       </StatGroup>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；橫軸標示對手" data={perGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
