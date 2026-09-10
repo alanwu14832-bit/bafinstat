@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { LineScoreBoard } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
@@ -126,6 +126,7 @@ export function GamesPage() {
                 <div className="flex items-center gap-1 shrink-0">
                   {editable && !editing && canEdit && (
                     <>
+                      <Button variant="ghost" size="sm" icon={<Camera />} to={`/photos?album=${encodeURIComponent(current.game.id)}`} title="這場比賽的照片">相簿</Button>
                       <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
                       <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical hover:text-critical" disabled={cloud.pushing}
                         onClick={() => { if (window.confirm(`確定刪除 ${current.game.id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(current.game.id).then(close).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />

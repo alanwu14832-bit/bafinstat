@@ -61,6 +61,7 @@ npm run dev
 後來加的兩個，舊專案到 SQL Editor 各執行一次（重複執行安全）：
 - `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
+- `supabase/migrations/2026-09-12_photos.sql`：**相簿**。建立 `photographers` 名單、`photos` 表與公開的 `photos` 儲存桶；攝影師的 email 加進 `photographers`（紀錄員本來就能上傳）。沒執行時相簿頁會提示尚未開通。
 
 ## 誰能登入、誰能寫
 - 帳號：Authentication → Users → Add user（設 email 與密碼）。請關閉 Providers → Email 的 **Enable email signups**，避免任何人自行註冊。

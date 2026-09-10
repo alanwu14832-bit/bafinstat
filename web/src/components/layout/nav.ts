@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { BookOpen, CircleHelp, PenLine, Radio, Upload } from 'lucide-react'
+import { BookOpen, Camera, CircleHelp, PenLine, Radio, Upload } from 'lucide-react'
 import { IconBat, IconBaseball, IconField, IconGlove, IconHomePlate, IconJersey, IconScoreboard } from '../icons/baseball'
 
 export type NavIcon = ComponentType<{ className?: string; strokeWidth?: number | string }>
@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/players', label: '球員', subtitle: '球員名單與個人檔案', icon: IconJersey },
       { to: '/games', label: '比賽', subtitle: '賽程與比賽結果', icon: IconScoreboard },
       { to: '/live', label: '即時比分', subtitle: '進行中的比賽', icon: Radio },
+      { to: '/photos', label: '相簿', subtitle: '比賽與活動照片', icon: Camera },
     ],
   },
   {

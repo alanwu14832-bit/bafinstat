@@ -46,6 +46,7 @@ export function OverviewPage() {
     const last = summaries.slice(-5)
     return { w: last.filter((g) => g.result === 'W').length, l: last.filter((g) => g.result === 'L').length, t: last.filter((g) => g.result === 'T').length, diff: last.reduce((a, g) => a + g.runsUs - g.runsOpp, 0) }
   }, [summaries])
+  const lobPerGame = useMemo(() => (summaries.length ? summaries.reduce((a, g) => a + g.lobUs, 0) / summaries.length : 0), [summaries])
   // defense: amateur games turn on errors more than anything else
   const errors = useMemo(() => {
     const total = summaries.reduce((a, g) => a + g.errorsUs, 0)
@@ -89,7 +90,7 @@ export function OverviewPage() {
         <StatTile label="得失分差" value={summary.diff} display={signedInt(summary.diff)} note={`${summary.rs} 得・${summary.ra} 失`} />
         <StatTile label="團隊打擊率" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
         <StatTile label="團隊 OPS" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
-        <StatTile label="得點圈 AVG" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={`${team.rispH} H / ${team.rispAB} AB`} />
+        <StatTile label="每場殘壘" value={lobPerGame} format="ratio" display={f2(lobPerGame)} note="留在壘上沒回來的跑者" />
         <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct(team.bbPct)} / ${pct(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} compact />
         <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
         <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
