@@ -37,7 +37,7 @@ export function AppShell({ children, filters }: AppShellProps) {
       <div className="min-w-0 flex flex-col">
         {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
         <main className="flex-1 min-w-0">
-          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-8 md:py-8"><PageTransition id={pathname}>{children}</PageTransition></div>
+          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-10 md:py-10"><PageTransition id={pathname}>{children}</PageTransition></div>
         </main>
       </div>
     </div>
