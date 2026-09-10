@@ -15,14 +15,14 @@ export interface CardProps {
   still?: boolean
 }
 
-/** The one container: 1px border, surface background, no shadow. Header and body share the same 20px inset. */
+/** The one container: white surface floating on the gray ground with a soft shadow, no border. Header and body share the same 20px inset. */
 export function Card({ title, subtitle, action, children, className, bodyClassName, flush, still }: CardProps) {
   const hasHeader = !!(title || subtitle || action)
-  const cls = cx('bg-surface border border-border rounded-[var(--radius)] flex flex-col min-w-0 transition-[border-color] duration-[var(--dur-base)] hover:border-border-strong', className)
+  const cls = cx('bg-surface rounded-[var(--radius)] shadow-[var(--shadow-card)] flex flex-col min-w-0', className)
   const body = (
     <>
       {hasHeader && (
-        <header className={cx('flex items-start justify-between gap-4 px-5 pt-4', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
+        <header className={cx('flex items-start justify-between gap-4 px-5 pt-5', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
           <div className="min-w-0">
             {title && <h3 className="text-[15px] font-semibold text-ink leading-5 truncate">{title}</h3>}
             {subtitle && <p className="text-xs text-muted leading-4 mt-0.5">{subtitle}</p>}

@@ -22,7 +22,7 @@ const styles: Record<BadgeVariant, string> = {
 /** Small status label. Never the only carrier of meaning: the text says what the tint means. */
 export function Badge({ variant = 'neutral', icon, children, className }: BadgeProps) {
   return (
-    <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-medium leading-none whitespace-nowrap', styles[variant], className)}>
+    <span className={cx('inline-flex items-center gap-1 h-5 px-2 rounded-full text-[11px] font-medium leading-none whitespace-nowrap', styles[variant], className)}>
       {icon && <span className="[&>svg]:size-3 inline-flex">{icon}</span>}
       {children}
     </span>

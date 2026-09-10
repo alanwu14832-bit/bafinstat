@@ -32,6 +32,7 @@
   --radius-card: var(--radius);
   --radius-card-sm: var(--radius-sm);
   --shadow-hover: var(--shadow-hover);
+  --shadow-card: var(--shadow-card);
 }
 
 @layer base {
@@ -47,7 +48,7 @@
     background: var(--bg);
     color: var(--ink);
     font-size: 14px;
-    line-height: 1.55;
+    line-height: 1.5;
     overflow-x: hidden;
   }
   /* Theme switches cross-fade instead of snapping. */
@@ -92,14 +93,14 @@
   }
   .text-display {
     font-family: var(--font-display);
-    font-size: 26px;
-    line-height: 1.2;
+    font-size: 28px;
+    line-height: 1.1;
     font-weight: 600;
     letter-spacing: var(--tracking-display);
     font-variation-settings: "opsz" 40;
   }
   @media (min-width: 768px) {
-    .text-display { font-size: 32px; }
+    .text-display { font-size: 36px; }
   }
   /* Large figures (stat tiles, scoreboards) use the display optical size. */
   .figure {
@@ -166,10 +167,10 @@
 
 /* 宋體 renders light on screens, so the serif mode runs one weight step heavier across the board.
    Unlayered on purpose: it has to win over Tailwind's utility layer. */
-html:not([data-font="sans"]) body { font-weight: 500; }
-html:not([data-font="sans"]) .font-normal { font-weight: 500; }
-html:not([data-font="sans"]) .font-medium { font-weight: 600; }
-html:not([data-font="sans"]) .font-semibold,
-html:not([data-font="sans"]) h1, html:not([data-font="sans"]) h2, html:not([data-font="sans"]) h3, html:not([data-font="sans"]) h4,
-html:not([data-font="sans"]) .text-display { font-weight: 700; }
-html:not([data-font="sans"]) .font-bold { font-weight: 700; }
+html[data-font="serif"] body { font-weight: 500; }
+html[data-font="serif"] .font-normal { font-weight: 500; }
+html[data-font="serif"] .font-medium { font-weight: 600; }
+html[data-font="serif"] .font-semibold,
+html[data-font="serif"] h1, html[data-font="serif"] h2, html[data-font="serif"] h3, html[data-font="serif"] h4,
+html[data-font="serif"] .text-display { font-weight: 700; }
+html[data-font="serif"] .font-bold { font-weight: 700; }

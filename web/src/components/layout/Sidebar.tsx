@@ -56,7 +56,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
                       {isActive && (
                         <motion.span
                           layoutId="nav-active"
-                          className="absolute inset-0 rounded-[var(--radius-sm)] bg-surface-3/70"
+                          className="absolute inset-0 rounded-[10px] bg-surface-3/80"
                           transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40 }}
                         />
                       )}
@@ -126,7 +126,7 @@ export function Sidebar() {
       initial={false}
       animate={{ width }}
       transition={reduced ? { duration: 0 } : WIDTH_TRANSITION}
-      className="hidden lg:flex flex-col sticky top-0 h-screen shrink-0 border-r border-border bg-bg z-40"
+      className="hidden lg:flex flex-col sticky top-0 h-screen shrink-0 bg-bg z-40"
       style={{ width }}
     >
       <Brand collapsed={collapsed} reduced={reduced} />

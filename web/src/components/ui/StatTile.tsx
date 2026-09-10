@@ -42,12 +42,12 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
     delta === undefined ? '' : deltaFormat === 'decimal3' ? (delta > 0 ? '+' : '') + formatNumber(delta, 'decimal3') : deltaFormat === 'pct' ? signed(delta, 1) + '%' : signed(delta, deltaFormat === 'ratio' || deltaFormat === 'era' ? 2 : 0)
 
   return (
-    <div className={cx('stat-cell bg-surface p-4 flex flex-col gap-1.5 min-w-0 transition-colors duration-[var(--dur-base)] hover:bg-surface-2/60', className)}>
+    <div className={cx('stat-cell bg-surface rounded-[var(--radius-sm)] shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-2 min-w-0', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted font-medium truncate"><StatHint label={label}>{label}</StatHint></span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
       </div>
-      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[19px]' : 'text-[26px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>
+      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[28px] md:text-[30px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>
       {(note || delta !== undefined) && (
         <div className="flex items-center gap-2 text-xs tnum min-w-0">
           {delta !== undefined && (
@@ -64,9 +64,9 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
   )
 }
 
-/** Strip of StatTiles with 1px hairlines between cells at any column count (incomplete rows stay clean). */
-export function StatGroup({ children, className, columns, flush, still }: { children: ReactNode; className?: string; columns?: string; flush?: boolean; still?: boolean }) {
-  const cls = cx('grid overflow-hidden bg-surface', !flush && 'border border-border rounded-[var(--radius)]', '[&>*]:border-l [&>*]:border-t [&>*]:border-border [&>*]:-ml-px [&>*]:-mt-px', columns ?? 'grid-cols-2 md:grid-cols-4', className)
+/** Grid of StatTiles, each its own floating tile. `flush` is kept for API compatibility. */
+export function StatGroup({ children, className, columns, still }: { children: ReactNode; className?: string; columns?: string; flush?: boolean; still?: boolean }) {
+  const cls = cx('grid gap-3', columns ?? 'grid-cols-2 md:grid-cols-4', className)
   if (still) return <div className={cls}>{children}</div>
   return <Reveal className={cls} y={8}>{children}</Reveal>
 }

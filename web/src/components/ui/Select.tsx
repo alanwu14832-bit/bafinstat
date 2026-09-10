@@ -21,8 +21,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     <label
       htmlFor={selectId}
       className={cx(
-        'relative inline-flex items-center bg-surface border border-border rounded-[var(--radius-sm)] text-ink min-w-0 cursor-pointer',
-        'hover:border-[color-mix(in_srgb,var(--ink)_22%,transparent)] focus-within:border-[color-mix(in_srgb,var(--ink)_40%,transparent)] transition-colors motion-reduce:transition-none',
+        'relative inline-flex items-center bg-surface-3/60 border border-transparent rounded-[10px] text-ink min-w-0 cursor-pointer',
+        'hover:bg-surface-3 focus-within:bg-surface focus-within:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] transition-colors motion-reduce:transition-none',
         size === 'sm' ? 'h-8 text-[13px]' : 'h-9 text-sm',
         className,
       )}

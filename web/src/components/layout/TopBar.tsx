@@ -90,7 +90,7 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-bg/90 backdrop-blur-sm" style={{ WebkitBackdropFilter: 'blur(8px)' }}>
+    <header className="sticky top-0 z-30 border-b border-border bg-[color-mix(in_srgb,var(--bg)_72%,transparent)] backdrop-blur-xl backdrop-saturate-150" style={{ WebkitBackdropFilter: 'blur(20px) saturate(150%)' }}>
       <div className="max-w-[var(--content-max)] mx-auto px-4 md:px-8 h-14 flex items-center gap-3">
         <button type="button" aria-label="開啟選單" onClick={() => setMobileNavOpen(true)}
           className="lg:hidden size-9 -ml-2 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer shrink-0">

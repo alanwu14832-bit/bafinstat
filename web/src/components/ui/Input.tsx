@@ -4,8 +4,8 @@ import { cx } from '../../lib/format'
 /** Shared text-input styling so every field on the site has the same height, radius and states. */
 export const inputCls = (size: 'sm' | 'md' = 'md') =>
   cx(
-    'bg-surface border border-border rounded-[var(--radius-sm)] text-ink placeholder:text-muted min-w-0',
-    'hover:border-[color-mix(in_srgb,var(--ink)_22%,transparent)] focus:border-[color-mix(in_srgb,var(--ink)_40%,transparent)] focus:outline-none',
+    'bg-surface-3/60 border border-transparent rounded-[10px] text-ink placeholder:text-muted min-w-0',
+    'hover:bg-surface-3 focus:bg-surface focus:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] focus:outline-none',
     'transition-colors motion-reduce:transition-none disabled:opacity-50',
     size === 'sm' ? 'h-8 px-2.5 text-[13px]' : 'h-9 px-3 text-sm',
   )

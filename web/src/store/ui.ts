@@ -44,7 +44,7 @@ export function applyTheme(mode: ThemeMode, animate = false) {
 export function applyFont(mode: FontMode) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  if (mode === 'serif') root.removeAttribute('data-font')
+  if (mode === 'sans') root.removeAttribute('data-font')
   else root.setAttribute('data-font', mode)
 }
 
@@ -52,7 +52,7 @@ interface UiState {
   sidebarCollapsed: boolean
   mobileNavOpen: boolean
   theme: ThemeMode
-  /** serif (宋體, default) or sans (黑體) */
+  /** sans (system face, default) or serif (宋體) */
   font: FontMode
   setFont: (mode: FontMode) => void
   setSidebarCollapsed: (collapsed: boolean) => void
@@ -65,9 +65,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   sidebarCollapsed: readStorage(SIDEBAR_KEY) === 'collapsed',
   mobileNavOpen: false,
   theme: initialTheme(),
-  font: readStorage(FONT_KEY) === 'sans' ? 'sans' : 'serif',
+  font: readStorage(FONT_KEY) === 'serif' ? 'serif' : 'sans',
   setFont: (mode) => {
-    writeStorage(FONT_KEY, mode === 'serif' ? null : mode)
+    writeStorage(FONT_KEY, mode === 'sans' ? null : mode)
     applyFont(mode)
     set({ font: mode })
   },

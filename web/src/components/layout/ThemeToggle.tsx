@@ -29,8 +29,8 @@ export function ThemeToggle({ className }: { className?: string }) {
 }
 
 const FONTS: Array<{ value: FontMode; label: string; glyph: string }> = [
-  { value: 'serif', label: '宋體', glyph: '宋' },
   { value: 'sans', label: '黑體', glyph: '黑' },
+  { value: 'serif', label: '宋體', glyph: '宋' },
 ]
 
 /** 宋體 / 黑體 switch for the whole site. */
