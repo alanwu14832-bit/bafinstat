@@ -173,7 +173,6 @@ export interface StatParams {
   w2B: number
   w3B: number
   wHR: number
-  pythagExponent: number
   /** live scoring: pitch count that turns the counter amber / red */
   pitchWarn: number
   pitchMax: number
@@ -181,6 +180,6 @@ export interface StatParams {
 
 /** FanGraphs Guts! 2025 linear weights (see docs/ANALYTICS_RESEARCH.md). */
 export const DEFAULT_PARAMS: StatParams = {
-  inningsPerGame: 7, fipConstant: 3.135, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037, pythagExponent: 1.83,
+  inningsPerGame: 7, fipConstant: 3.135, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037,
   pitchWarn: 80, pitchMax: 100,
 }

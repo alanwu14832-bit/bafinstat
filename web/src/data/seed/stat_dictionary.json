@@ -1020,16 +1020,6 @@
   "note": ""
  },
  {
-  "key": "Pythag",
-  "zh": "畢氏期望勝率",
-  "en": "Pythagorean Win %",
-  "group": "球隊",
-  "formula": "RS^1.83 ÷ (RS^1.83 + RA^1.83)",
-  "status": "新增",
-  "priority": "P1",
-  "note": "判斷戰績是否高/低於實力"
- },
- {
   "key": "LOB",
   "zh": "殘壘",
   "en": "Left On Base",

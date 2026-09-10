@@ -297,25 +297,23 @@ export function summarizeGame(ds: Dataset, game: Game): GameSummary {
 }
 
 export interface TeamSummary {
-  games: number; w: number; l: number; t: number; winPct: number | null; rs: number; ra: number; diff: number; pythag: number | null
+  games: number; w: number; l: number; t: number; winPct: number | null; rs: number; ra: number; diff: number
   runsPerGame: number | null; runsAllowedPerGame: number | null
   runsByInningUs: number[]; runsByInningOpp: number[]
 }
 
-export function teamSummary(summaries: GameSummary[], params = DEFAULT_PARAMS): TeamSummary {
+export function teamSummary(summaries: GameSummary[]): TeamSummary {
   const w = summaries.filter((s) => s.result === 'W').length
   const l = summaries.filter((s) => s.result === 'L').length
   const t = summaries.length - w - l
   const rs = summaries.reduce((a, s) => a + s.runsUs, 0)
   const ra = summaries.reduce((a, s) => a + s.runsOpp, 0)
-  const e = params.pythagExponent
   const maxInn = Math.max(9, ...summaries.map((s) => s.lineUs.length))
   const byUs = Array.from({ length: maxInn }, () => 0)
   const byOpp = Array.from({ length: maxInn }, () => 0)
   for (const s of summaries) { s.lineUs.forEach((v, i) => (byUs[i] += v)); s.lineOpp.forEach((v, i) => (byOpp[i] += v)) }
   return {
     games: summaries.length, w, l, t, winPct: div(w, w + l), rs, ra, diff: rs - ra,
-    pythag: rs + ra > 0 ? Math.pow(rs, e) / (Math.pow(rs, e) + Math.pow(ra, e)) : null,
     runsPerGame: div(rs, summaries.length), runsAllowedPerGame: div(ra, summaries.length),
     runsByInningUs: byUs.slice(0, 9), runsByInningOpp: byOpp.slice(0, 9),
   }

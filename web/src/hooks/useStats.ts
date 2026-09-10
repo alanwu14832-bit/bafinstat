@@ -33,7 +33,7 @@ export function useStats(): Computed {
       teamPitch: teamPitching(fd.pitching, params),
       fielders: fieldingLines(fd.fielding),
       errorsByPos: errorsByPosition(fd.fielding),
-      summary: teamSummary(fd.summaries, params),
+      summary: teamSummary(fd.summaries),
       hasDemo: dataset.games.some((g) => g.isDemo),
     }
   }, [base, demo, filters, params])

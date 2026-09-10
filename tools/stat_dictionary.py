@@ -117,7 +117,6 @@ STAT_DICTIONARY = [
     # ---------------- 球隊 ----------------
     dict(key="WinPct", zh="勝率", en="Winning %", group="球隊", formula="W ÷ (W + L)", status="新增", priority="P0", note=""),
     dict(key="RunDiff", zh="得失分差", en="Run Differential", group="球隊", formula="得分 − 失分", status="新增", priority="P0", note=""),
-    dict(key="Pythag", zh="畢氏期望勝率", en="Pythagorean Win %", group="球隊", formula="RS^1.83 ÷ (RS^1.83 + RA^1.83)", status="新增", priority="P1", note="判斷戰績是否高/低於實力"),
     dict(key="LOB", zh="殘壘", en="Left On Base", group="球隊", formula="結果代碼 L", status="現有", priority="P1", note=""),
 ]
 

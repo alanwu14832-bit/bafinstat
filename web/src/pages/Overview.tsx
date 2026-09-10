@@ -72,10 +72,9 @@ export function OverviewPage() {
       <DemoBanner />
       <StatGroup columns="grid-cols-2 md:grid-cols-5">
         <StatTile label="戰績（勝-敗-和）" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} />
-        <StatTile label="勝率" value={summary.winPct ?? 0} format="decimal3" delta={summary.pythag !== null && summary.winPct !== null ? Number((summary.winPct - summary.pythag).toFixed(3)) : undefined} deltaFormat="decimal3" deltaLabel="vs 畢氏期望" />
+        <StatTile label="勝率" value={summary.winPct ?? 0} format="decimal3" />
         <StatTile label="得失分差" value={summary.diff} display={signedInt(summary.diff)} note={`${summary.rs} 得・${summary.ra} 失`} />
         <StatTile label="每場得分" value={summary.runsPerGame ?? 0} format="ratio" display={f2(summary.runsPerGame)} />
-        <StatTile label="畢氏期望勝率" value={summary.pythag ?? 0} format="decimal3" />
         <StatTile label="團隊打擊率" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
         <StatTile label="團隊 OPS" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
         <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
