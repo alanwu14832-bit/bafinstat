@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -28,6 +29,7 @@ export function OverviewPage() {
   const navigate = useNavigate()
   const { summary, team, teamPitch, summaries } = s
   const opponentFilter = useDataStore((st) => st.filters.opponent)
+  const resetFilters = useDataStore((st) => st.resetFilters)
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
   const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
 
@@ -75,7 +77,7 @@ export function OverviewPage() {
     return (
       <>
         <PageHeader title="總覽" description={`${TEAM_NAME} 的全時期表現。`} />
-        <Card><EmptyState title="目前篩選條件下沒有比賽" description="調整上方篩選，或到「資料匯入」上傳總表。" /></Card>
+        <Card><EmptyState title="目前篩選條件下沒有比賽" description="調整上方篩選，或到「資料匯入」上傳總表。" action={<Button variant="outline" size="sm" onClick={resetFilters}>重設篩選</Button>} /></Card>
       </>
     )
   }
@@ -97,6 +99,9 @@ export function OverviewPage() {
         <StatTile label="每場殘壘" value={lobPerGame} format="ratio" display={f2(lobPerGame)} note="留在壘上沒回來的跑者" />
         <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)} / ${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} compact />
         <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+      </StatGroup>
+      <div className="hidden md:block">
+      <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
         <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
         <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
@@ -104,12 +109,23 @@ export function OverviewPage() {
         <StatTile label="每場失誤" value={errors.perGame} format="ratio" display={f2(errors.perGame)} note={`${errors.total} E`} />
         <StatTile label="團隊守備率" value={errors.fpct ?? 0} format="decimal3" display={f3(errors.fpct)} note="（刺殺＋助殺）÷ 守備機會" />
       </StatGroup>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；橫軸標示對手" data={perGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
         <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分" data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
         <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均" data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
         <BarChartCard title="逐局得失分" subtitle={opponentFilter !== 'all' ? `對 ${opponentFilter} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
+      </div>
+      <div className="md:hidden">
+      <StatGroup columns="grid-cols-2">
+        <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
+        <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
+        <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
+        <StatTile label="BB/9" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
+        <StatTile label="每場失誤" value={errors.perGame} format="ratio" display={f2(errors.perGame)} note={`${errors.total} E`} />
+        <StatTile label="團隊守備率" value={errors.fpct ?? 0} format="decimal3" display={f3(errors.fpct)} note="（刺殺＋助殺）÷ 守備機會" />
+      </StatGroup>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />

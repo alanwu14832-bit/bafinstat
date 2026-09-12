@@ -154,8 +154,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-5 items-start">
-      <div className="xl:col-span-8 flex flex-col gap-4 md:gap-5 min-w-0">
+    <div className="grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
+      <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 md:gap-5 min-w-0">
         {/* scoreboard */}
         <Card still bodyClassName="p-4 md:p-5">
           <div className="flex items-center gap-4 md:gap-6 flex-wrap">
@@ -342,7 +342,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
         </Card>
       </div>
 
-      <div className="xl:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
+      <div className="xl:col-span-4 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
         <Card still title="打線" subtitle="點棒次可跳到該打者" flush>
           <ul className="divide-y divide-[var(--border)]">
             {state.lineup.map((l, i) => (

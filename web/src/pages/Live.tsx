@@ -44,7 +44,9 @@ export function LivePage() {
   }, [])
 
   const live = useMemo(() => drafts.filter((d) => !d.state.finished).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0] ?? null, [drafts])
-  const lastFinal = useMemo(() => [...base.games].sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
+  const lastFinal = useMemo(() => [...base.games].filter((g) => !g.status).sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
+  const today = new Date().toISOString().slice(0, 10)
+  const nextGame = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0], [base.games, today])
   void tick
 
   if (!live) {
@@ -52,8 +54,8 @@ export function LivePage() {
       <>
         <PageHeader title="即時比分" description="紀錄員在「紀錄比賽」逐球輸入時，這一頁會每 5 秒自動更新，不需登入。" />
         <Card>
-          <EmptyState title="目前沒有進行中的比賽" description={error ?? (lastFinal ? `最近一場：${lastFinal.date} vs ${lastFinal.opponent}，到「比賽」頁查看完整成績。` : undefined)}
-            action={lastFinal ? <Link to={`/games?game=${encodeURIComponent(lastFinal.id)}`} className="text-[13px] underline underline-offset-2 text-ink">看最近一場</Link> : undefined} />
+          <EmptyState title="目前沒有進行中的比賽" description={error ?? (nextGame ? `下一場：${nextGame.date}${nextGame.time ? ` ${nextGame.time}` : ''} vs ${nextGame.opponent}${nextGame.venue ? `・${nextGame.venue}` : ''}` : lastFinal ? `最近一場：${lastFinal.date} vs ${lastFinal.opponent}，到「比賽」頁查看完整成績。` : undefined)}
+            action={<span className="inline-flex gap-4 text-[13px]">{nextGame && <Link to="/schedule" className="underline underline-offset-2 text-ink">看賽程</Link>}{lastFinal && <Link to={`/games?game=${encodeURIComponent(lastFinal.id)}`} className="underline underline-offset-2 text-ink">看最近一場</Link>}</span>} />
         </Card>
       </>
     )
@@ -73,7 +75,7 @@ export function LivePage() {
 
   return (
     <>
-      <PageHeader title="即時比分" description={`${s.game.date}・${s.game.tournament}・${s.game.venue ?? ''}${live.by ? `・紀錄 ${live.by}` : ''}・每 5 秒更新，最後更新 ${new Date(live.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`}
+      <PageHeader title="即時比分" description={`${s.game.date}・${s.game.tournament}・${s.game.venue ?? ''}${live.by ? `・紀錄 ${live.by}` : ''}・每 5 秒更新，最後更新 ${new Date(live.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}${error ? '・重新連線中' : ''}`}
         actions={<Badge variant="good"><span className="inline-block size-1.5 rounded-full bg-good mr-1 animate-pulse" />進行中</Badge>} />
       <div className="rounded-[var(--radius)] overflow-hidden" style={{ background: BOARD.bg, color: BOARD.ink, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 md:gap-8 text-center p-5 md:p-8">

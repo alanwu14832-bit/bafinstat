@@ -67,6 +67,7 @@ export function DataTable<Row extends object>({
 
   return (
     <div className={cx('overflow-x-auto overflow-y-auto scroll-x', className)} style={{ maxHeight }}>
+      <span role="status" aria-live="polite" className="sr-only">{sort ? `依 ${String(columns.find((c) => c.key === sort.key)?.header ?? sort.key)} ${sort.dir === 'asc' ? '升冪' : '降冪'}排序` : ''}</span>
       <table className="w-full border-collapse text-[13px] tnum whitespace-nowrap">
         <thead className="sticky top-0 z-[2] bg-surface">
           <tr className="border-b border-border">
