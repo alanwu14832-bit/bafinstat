@@ -14,13 +14,11 @@ import { LineChartCard } from '../components/charts/LineChartCard'
 import { SprayChart } from '../components/charts/SprayChart'
 import { useStats } from '../hooks/useStats'
 import { sprayCounts, teamBatting } from '../data/stats'
-import { f2, f3, pct, shortDate, signedInt } from '../lib/fmt'
+import { f2, f3, pct, pct0, shortDate, signedInt } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
 import { useDataStore } from '../store/data'
 
 interface RecentRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; result: 'W' | 'L' | 'T'; score: string; hits: number; errors: number; isDemo: boolean }
-
-const pct0 = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 
 export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 

@@ -40,7 +40,7 @@ function MobileFilters() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
-        className={cx('lg:hidden inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none',
+        className={cx('lg:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none',
           count ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')}>
         <SlidersHorizontal className="size-3.5" />
         篩選{count > 0 && <span className="tnum">・{count}</span>}
@@ -80,8 +80,7 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <MobileFilters />
           <CloudStatus />
-          <FontToggle className="hidden sm:inline-flex" />
-          <ThemeToggle />
+          <div className="hidden lg:flex items-center gap-2"><FontToggle /><ThemeToggle /></div>
         </div>
       </div>
     </header>

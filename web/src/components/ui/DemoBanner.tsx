@@ -13,7 +13,7 @@ export function DemoBanner() {
       <span className="min-w-0">
         目前混入程式產生的示範比賽（比賽頁以「示範」標示）。實際資料 {base.games.length} 場；匯入總表後建議關閉。
       </span>
-      <button type="button" onClick={() => setDemo(false)} className="ml-auto inline-flex items-center gap-1 h-7 px-2 rounded-[6px] text-ink-2 hover:bg-surface-3 hover:text-ink cursor-pointer whitespace-nowrap text-xs font-medium">
+      <button type="button" onClick={() => setDemo(false)} className="ml-auto inline-flex items-center gap-1 h-9 px-2.5 md:h-7 md:px-2 rounded-[6px] text-ink-2 hover:bg-surface-3 hover:text-ink cursor-pointer whitespace-nowrap text-xs font-medium">
         <X className="size-3.5" /> 關閉示範
       </button>
     </div>

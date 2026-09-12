@@ -5,6 +5,8 @@ export const f3 = (v: number | null | undefined): string => (v === null || v ===
 export const f2 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : v.toFixed(2))
 export const f1 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : v.toFixed(1))
 export const pct = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${(v * 100).toFixed(1)}%`)
+/** Whole-percent form for composite tiles where a decimal would not fit. */
+export const pct0 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${Math.round(v * 100)}%`)
 export const int = (v: number | null | undefined): string => (v === null || v === undefined ? DASH : String(Math.round(v)))
 export const signedInt = (v: number): string => (v > 0 ? `+${v}` : String(v))
 
