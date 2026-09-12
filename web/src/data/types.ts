@@ -49,8 +49,6 @@ export interface Player {
   throws?: Hand
   status?: string
   note?: string
-  /** login email; a signed-in player is matched to this row */
-  email?: string
 }
 
 export interface Game {

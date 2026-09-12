@@ -11,7 +11,7 @@ import { create } from 'zustand'
 import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges } from '../data/supabase'
+import { claimPendingName, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
@@ -178,7 +178,11 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
   setCloudUser: (user) => {
     set({ cloud: { ...get().cloud, user, isEditor: false } })
-    if (user) void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
+    if (user) {
+      void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
+      // a player who registered on another device (or confirmed by email) links their roster name on first sign-in
+      void claimPendingName(user)
+    }
   },
   albums: cloudConfigured ? [] : readLocalAlbums(),
   albumsSupported: true,

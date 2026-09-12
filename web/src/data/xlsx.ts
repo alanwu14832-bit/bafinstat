@@ -113,7 +113,7 @@ function parseRoster(rows: Row[]): Player[] {
   return rows.filter((r) => str(r['姓名'])).map((r) => ({
     number: str(r['背號']) || undefined, name: str(r['姓名']), primaryPos: str(r['主守位']).toUpperCase() || undefined, secondaryPos: str(r['副守位']).toUpperCase() || undefined,
     bats: (str(r['打擊慣用']).toUpperCase() || undefined) as Player['bats'], throws: (str(r['投球慣用']).toUpperCase() || undefined) as Player['throws'],
-    status: str(r['狀態']) || undefined, note: str(r['備註']) || undefined, email: str(r['Email'] ?? r['信箱'] ?? r['電子郵件']).toLowerCase() || undefined,
+    status: str(r['狀態']) || undefined, note: str(r['備註']) || undefined,
   }))
 }
 function parseGames(rows: Row[]): Game[] {
@@ -326,7 +326,7 @@ export function datasetToWorkbook(ds: Dataset): XLSX.WorkBook {
   const bat = ds.batting.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 棒次: p.order ?? '', 守位: p.pos ?? '', 打者: p.batter, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 盜壘: p.sb || '', 盜壘失敗: p.cs || '', 失誤進壘: p.advOnError || '', 壘死: p.outOnBase || '', 得分: p.run || '', 打點: p.rbi || '', 結果代碼: p.code ?? '', 備註: p.note ?? '' }))
   const pit = ds.pitching.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 對方棒次: p.oppOrder ?? '', 投手: p.pitcher, 對方打者: p.oppBatter ?? '', ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 被盜壘: p.sba || '', 阻殺: p.cs || '', 暴投: p.wp || '', 捕逸: p.pb || '', 牽制出局: p.pk || '', 結果代碼: p.code ?? '', 備註: p.note ?? '' }))
   const fld = ds.fielding.map((f) => ({ 比賽ID: f.gameId, 球員: f.player, 守位: f.pos, 局數: f.innings ?? '', 刺殺PO: f.po, 助殺A: f.a, 失誤E: f.e, 雙殺DP: f.dp, 捕逸PB: f.pb, 被盜壘SB: f.sb, 阻殺CS: f.cs, 備註: f.note ?? '' }))
-  const roster = ds.roster.map((p) => ({ 背號: p.number ?? '', 姓名: p.name, 主守位: p.primaryPos ?? '', 副守位: p.secondaryPos ?? '', 打擊慣用: p.bats ?? '', 投球慣用: p.throws ?? '', 狀態: p.status ?? '', 備註: p.note ?? '', Email: p.email ?? '' }))
+  const roster = ds.roster.map((p) => ({ 背號: p.number ?? '', 姓名: p.name, 主守位: p.primaryPos ?? '', 副守位: p.secondaryPos ?? '', 打擊慣用: p.bats ?? '', 投球慣用: p.throws ?? '', 狀態: p.status ?? '', 備註: p.note ?? '' }))
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(games), '比賽清單')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(roster), '球員名單')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bat), '打席紀錄')

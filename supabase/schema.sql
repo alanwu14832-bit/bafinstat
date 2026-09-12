@@ -175,12 +175,21 @@ create policy "editors write" on albums for all to authenticated using (is_edito
 
 -- ---------------------------------------------------------------- Practice attendance
 
--- 1) players get an email so a signed-in player is matched to a roster row (login alone grants nothing)
-alter table players add column if not exists email text;
-create unique index if not exists players_email_idx on players (lower(email)) where email is not null;
+-- 1) 球員帳號：登入的球員對應到名單上的哪一個名字（見 2026-09-14_player_accounts.sql）
+create table if not exists player_accounts (
+  player_name text primary key,
+  user_id     uuid unique references auth.users(id) on delete cascade,
+  email       text,
+  claimed_at  timestamptz not null default now()
+);
+create unique index if not exists player_accounts_email_idx on player_accounts (lower(email)) where email is not null;
 create or replace function my_player_name() returns text
 language sql stable security definer set search_path = public as $$
-  select name from players where email is not null and lower(email) = lower(auth.jwt() ->> 'email') limit 1
+  select player_name from player_accounts
+   where user_id = auth.uid()
+      or (user_id is null and email is not null and lower(email) = lower(auth.jwt() ->> 'email'))
+   order by (user_id = auth.uid()) desc
+   limit 1
 $$;
 
 -- 2) schedule
@@ -310,3 +319,33 @@ begin
   end if;
 end $$;
 alter publication supabase_realtime add table games, batting_pa, pitching_pa, fielding_lines, players;
+
+-- 球員註冊後認領名單上的名字（完整說明見 supabase/migrations/2026-09-14_player_accounts.sql）
+create or replace function claim_player_name(name text) returns text
+language plpgsql security definer set search_path = public as $$
+declare target text;
+begin
+  if auth.uid() is null then raise exception '請先登入'; end if;
+  select p.name into target from players p where p.name = btrim(claim_player_name.name) limit 1;
+  if target is null then raise exception '名單上沒有「%」，請先請管理員把你加進球員名單', btrim(claim_player_name.name); end if;
+  if exists (select 1 from player_accounts a where a.player_name = target and a.user_id = auth.uid()) then return target; end if;
+  if exists (select 1 from player_accounts a where a.user_id = auth.uid() and a.player_name <> target) then
+    raise exception '這個帳號已經是其他球員的帳號了，請找管理員處理';
+  end if;
+  insert into player_accounts as a (player_name, user_id, email)
+  values (target, auth.uid(), lower(auth.jwt() ->> 'email'))
+  on conflict (player_name) do update
+    set user_id = auth.uid(), email = lower(auth.jwt() ->> 'email'), claimed_at = now()
+    where a.user_id is null;
+  if not exists (select 1 from player_accounts a where a.player_name = target and a.user_id = auth.uid()) then
+    raise exception '「%」已經有人註冊過了，請找管理員確認', target;
+  end if;
+  return target;
+end $$;
+grant execute on function claim_player_name(text) to authenticated;
+
+alter table player_accounts enable row level security;
+drop policy if exists "own or editor read" on player_accounts;
+create policy "own or editor read" on player_accounts for select to authenticated using (is_editor() or user_id = auth.uid());
+drop policy if exists "editors manage" on player_accounts;
+create policy "editors manage" on player_accounts for all to authenticated using (is_editor()) with check (is_editor());

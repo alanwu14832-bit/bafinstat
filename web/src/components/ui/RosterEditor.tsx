@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
-import { AlertTriangle, FileSpreadsheet, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, FileSpreadsheet, Plus, Trash2, Unlink } from 'lucide-react'
 import { mergeRoster, parseRosterWorkbook, type RosterImportResult, type RosterMerge } from '../../data/rosterImport'
 import { Button } from './Button'
 import { inputCls } from './Input'
@@ -7,6 +7,7 @@ import { cx } from '../../lib/format'
 import { playersWithRecords, type RosterChange } from '../../data/roster'
 import { ROSTER_POSITIONS, type Dataset, type Player } from '../../data/types'
 import { POSITION_LABEL } from '../../lib/fmt'
+import { cloudConfigured, fetchPlayerAccounts, unlinkPlayerAccount, type PlayerAccount } from '../../data/supabase'
 
 interface Row { original: string; player: Player; removed: boolean }
 const STATUSES = ['現役', '離隊', '畢業', '休賽']
@@ -22,6 +23,13 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
   const [preview, setPreview] = useState<{ file: string; parsed: RosterImportResult; merge: RosterMerge } | null>(null)
   const [touched, setTouched] = useState<Set<string>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
+  // who has registered an account for practice votes (editors only; empty when the migration has not been run)
+  const [accounts, setAccounts] = useState<PlayerAccount[]>([])
+  useEffect(() => { if (cloudConfigured) void fetchPlayerAccounts().then((a) => setAccounts(a ?? [])).catch(() => setAccounts([])) }, [])
+  const unlink = async (name: string) => {
+    if (!window.confirm(`解除「${name}」的帳號綁定？他之後可以用別的信箱重新註冊，練球紀錄不受影響。`)) return
+    try { await unlinkPlayerAccount(name); setAccounts((a) => a.filter((x) => x.player_name !== name)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+  }
   const onFile = async (f: File) => {
     setError(null)
     try {
@@ -72,7 +80,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
       )}
       <div className="overflow-x-auto scroll-x border border-border rounded-[var(--radius-sm)]">
         <table className="min-w-full border-collapse text-[13px]">
-          <thead className="bg-surface-2/60"><tr className="text-[11px] text-muted">{['背號', '姓名', '主守位', '副守位', '打', '投', '狀態', 'Email（登入用）', '備註', ''].map((h) => <th key={h} className="px-2 h-8 text-left font-medium whitespace-nowrap first:pl-3">{h}</th>)}</tr></thead>
+          <thead className="bg-surface-2/60"><tr className="text-[11px] text-muted">{['背號', '姓名', '主守位', '副守位', '打', '投', '狀態', '練球帳號', '備註', ''].map((h) => <th key={h} className="px-2 h-8 text-left font-medium whitespace-nowrap first:pl-3">{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className={cx('border-t border-border', r.removed && 'opacity-40', touched.has(r.player.name) && 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]')}>
@@ -83,7 +91,16 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.bats ?? ''} onChange={(e) => set(i, { bats: (e.target.value || undefined) as Player['bats'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.throws ?? ''} onChange={(e) => set(i, { throws: (e.target.value || undefined) as Player['throws'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[88px]"><select value={r.player.status ?? '現役'} onChange={(e) => set(i, { status: e.target.value })} className={sel} disabled={r.removed}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
-                <td className="px-1 py-1 min-w-[170px]"><input type="email" value={r.player.email ?? ''} onChange={(e) => set(i, { email: e.target.value.trim().toLowerCase() || undefined })} className={cell} disabled={r.removed} placeholder="投票用" /></td>
+                <td className="px-1 py-1 min-w-[170px]">{(() => {
+                  const acc = accounts.find((a) => a.player_name === (r.original || r.player.name))
+                  if (!acc) return <span className="text-[12px] text-muted">未註冊</span>
+                  return (
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <span className="text-[12px] text-ink-2 truncate max-w-[150px]" title={acc.email ?? ''}>{acc.email ?? '已註冊'}</span>
+                      <button type="button" onClick={() => void unlink(acc.player_name)} title="解除綁定" aria-label={`解除 ${acc.player_name} 的帳號綁定`} className="size-6 shrink-0 inline-flex items-center justify-center rounded text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Unlink className="size-3" /></button>
+                    </span>
+                  )
+                })()}</td>
                 <td className="px-1 py-1 min-w-[140px]"><input value={r.player.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} className={cell} disabled={r.removed} /></td>
                 <td className="px-2 py-1 w-[40px]">
                   {r.original && withRecords.has(r.original) ? (
