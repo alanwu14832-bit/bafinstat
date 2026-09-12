@@ -65,18 +65,31 @@ npm run dev
 - `supabase/migrations/2026-09-13_practice.sql`：**練球點名**。在 `players` 加 `email` 欄（球員登入用），建立 `practice_series`（每週固定練球）、`practice_breaks`（停練期間）、`practices`（每一場）、`practice_votes`（會到／小遲／下次一定）、`practice_rollcall`（點名）、`push_subscriptions`（推播訂閱）與 `generate_practices()` 函式。球員只能讀寫自己的那一票（依登入信箱對到名單），紀錄員能改全部。沒執行時「練球」頁會提示尚未開通。
 
 ## 練球通知（推播，選做）
-投票與點名執行完上面的 SQL 就能用；要讓手機在練球前一天 18:00 跳通知，再做這四步（約 15 分鐘，只做一次）：
+投票與點名執行完上面的 SQL 就能用；要讓手機在練球前一天 18:00 跳通知，再做這五步（約 20 分鐘，只做一次）。VAPID 是瀏覽器推播的身分驗證：通知由 Google／Apple 的推播伺服器轉送，這對金鑰用來證明通知是本站發的。公鑰放前端，私鑰放 Supabase，不用申請、不會過期。
 
-1. **產生 VAPID 金鑰**：在任何有 Node 的電腦執行 `npx web-push generate-vapid-keys`，得到 Public Key 與 Private Key。
-2. **部署函式**：安裝 Supabase CLI 後在專案根目錄執行
+1. **產生 VAPID 金鑰**（在自己的電腦，金鑰不會外流）。有 Node 的話最快：
+   ```
+   npx web-push generate-vapid-keys
+   ```
+   沒有 Node 就用瀏覽器：在本站按 F12 開 Console，貼上這段後按 Enter，會印出 public／private 各一行。
+   ```js
+   const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+   const b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+   console.log('public :', b64(await crypto.subtle.exportKey('raw', kp.publicKey)))
+   console.log('private:', (await crypto.subtle.exportKey('jwk', kp.privateKey)).d)
+   ```
+   公鑰 87 字、私鑰 43 字。私鑰只貼進 Supabase，不要放進程式碼或聊天室。再用 `crypto.randomUUID()` 產生一組 `CRON_SECRET` 備用。
+2. **設定 Supabase Secrets**：Dashboard → Edge Functions → Secrets（或 Project Settings → Edge Functions），新增四筆：`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`（填 `mailto:系隊信箱`）、`CRON_SECRET`。
+3. **部署函式** `practice-notify`。後台若有 Edge Functions → Deploy a new function → Via Editor，直接把 `supabase/functions/practice-notify/index.ts` 的內容貼進去、函式名稱填 `practice-notify` 即可。沒有這個選項就用 CLI：
    ```
    supabase login
    supabase link --project-ref <你的 project ref>
-   supabase secrets set CRON_SECRET=<自訂一串長密碼> VAPID_PUBLIC_KEY=<公鑰> VAPID_PRIVATE_KEY=<私鑰> VAPID_SUBJECT=mailto:<系隊信箱>
    supabase functions deploy practice-notify
    ```
-3. **網站端**：Vercel → Settings → Environment Variables 加 `VITE_VAPID_PUBLIC_KEY`＝公鑰，重新部署。
-4. **排程**：GitHub → Settings → Secrets and variables → Actions → New repository secret，名稱 `PRACTICE_CRON_SECRET`，值同上面的 `CRON_SECRET`。`.github/workflows/practice-notify.yml` 每天 18:00（台北）會呼叫函式；也可到 Actions 頁手動 Run workflow 測試。
+4. **網站端**：Vercel → Settings → Environment Variables 加 `VITE_VAPID_PUBLIC_KEY`＝公鑰，然後 Deployments → Redeploy（環境變數只在建置時讀取，不重新部署不會生效）。
+5. **排程**：GitHub → Settings → Secrets and variables → Actions → New repository secret，名稱 `PRACTICE_CRON_SECRET`，值同步驟 2 的 `CRON_SECRET`；同一頁的 Variables 要有 `VITE_SUPABASE_URL` 與 `VITE_SUPABASE_ANON_KEY`。`.github/workflows/practice-notify.yml` 每天 18:00（台北）會呼叫函式，也可在 Actions 頁按 Run workflow 手動測試。
+
+驗收：用 Chrome 開網站 →「練球」頁按「開啟通知」→ 以紀錄員身分展開任一場練球按「現在就通知」，手機或電腦應立刻跳出通知。沒跳的話看 Supabase → Edge Functions → practice-notify → Logs。
 
 之後球員在「練球」頁按「開啟通知」即可。iPhone 必須先用 Safari「加入主畫面」再從主畫面開啟，才會出現「開啟通知」；Android／電腦 Chrome 直接可用。
 
