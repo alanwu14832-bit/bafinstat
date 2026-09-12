@@ -56,7 +56,7 @@ export function FieldingPage() {
         <Card title="捕手" subtitle="被盜壘、阻殺與捕逸" flush>
           <StatGroup flush columns="grid-cols-2 md:grid-cols-4">
             {catchers.map((c) => (
-              <StatTile key={c.name} label={c.name} value={(c.csPct ?? 0) * 100} format="pct" display={`${pct(c.csPct)} CS%`} compact note={`被盜 ${c.sb}・阻殺 ${c.cs}・捕逸 ${c.pb}`} />
+              <StatTile key={c.name} label={c.name} value={(c.csPct ?? 0) * 100} format="pct" display={pct(c.csPct)} note={`阻殺率・被盜 ${c.sb}・阻殺 ${c.cs}・捕逸 ${c.pb}`} />
             ))}
           </StatGroup>
         </Card>

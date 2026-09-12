@@ -10,6 +10,7 @@ import { SidebarAccount } from './SidebarAccount'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 import { Sheet } from '../ui/Sheet'
+import { FontToggle, ThemeToggle } from './ThemeToggle'
 
 export const SIDEBAR_WIDTH = 248
 export const SIDEBAR_WIDTH_COLLAPSED = 72
@@ -172,6 +173,11 @@ export function MobileDrawer() {
       <nav aria-label="主選單" className="pt-2 pb-4">
         <NavList collapsed={false} reduced={reduced} />
       </nav>
+      <div className="px-3 pt-3 border-t border-border flex flex-col gap-2">
+        <span className="text-[11px] font-medium text-muted">外觀</span>
+        <ThemeToggle size="md" />
+        <FontToggle size="md" />
+      </div>
       <div className="pb-3"><SidebarAccount collapsed={false} reduced={reduced} /></div>
     </Sheet>
   )

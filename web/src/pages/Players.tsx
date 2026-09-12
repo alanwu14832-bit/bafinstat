@@ -22,7 +22,7 @@ import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { battingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
-import { f2, f3, pct, percentile, posLabel, shortDate } from '../lib/fmt'
+import { f2, f3, pct, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
 
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
@@ -163,13 +163,19 @@ export function PlayersPage() {
             {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Select size="sm" label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="hidden md:inline-flex max-w-[200px]"
-              options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} />
-            <Button variant="ghost" size="sm" aria-label="上一位" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
-            <Button variant="ghost" size="sm" aria-label="下一位" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
+            <Button variant="ghost" aria-label="上一位" className="size-10 md:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
+            <Button variant="ghost" aria-label="下一位" className="size-10 md:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
           </div>
         </div>
-        <div className="md:hidden px-4 pb-3 -mt-1"><Select size="sm" label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="w-full" options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} /></div>
+        <div className="px-4 md:px-5 pb-3 -mt-1 flex items-center gap-2 flex-wrap">
+          <Select label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="w-full sm:w-auto sm:max-w-[240px]"
+            options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} />
+          <div className="flex gap-1.5 flex-wrap sm:hidden">
+            {bat && <Badge>打者 {bat.g} 場</Badge>}
+            {pit && <Badge>投手 {pit.ipDisplay} 局</Badge>}
+            {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
+          </div>
+        </div>
         <AnimatePresence initial={false}>
           {open && (
             <motion.div id="roster-panel" key="roster" initial={reduced ? false : { height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={reduced ? undefined : { height: 0, opacity: 0 }}
@@ -224,8 +230,8 @@ export function PlayersPage() {
               <StatTile label="長打率 SLG" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
               <StatTile label="OPS" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
               <StatTile label="wOBA" value={bat.woba ?? 0} format="decimal3" />
-              <StatTile label="K% / BB%" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct(bat.kPct)} / ${pct(bat.bbPct)}`} compact note={`${bat.so} K / ${bat.bb} BB`} />
-              <StatTile label="Whiff% / Hard%" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct(bat.whiffPct)} / ${pct(bat.hardPct)}`} compact note="揮空率 / 強勁擊球率" />
+              <StatTile label="K% / BB%" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
+              <StatTile label="Whiff% / Hard%" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
               <StatTile label="得點圈 AVG" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
             </StatGroup>
           ) : (

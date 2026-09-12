@@ -47,7 +47,7 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
         <span className="text-xs text-muted font-medium truncate"><StatHint label={label}>{label}</StatHint></span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
       </div>
-      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[26px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>
+      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[24px]')}>{animated ? <CountUp value={value} format={(v) => formatNumber(v, format)} /> : text}</div>
       {(note || delta !== undefined) && (
         <div className="flex items-center gap-2 text-xs tnum min-w-0">
           {delta !== undefined && (
