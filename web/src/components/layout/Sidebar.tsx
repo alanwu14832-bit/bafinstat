@@ -1,6 +1,6 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { NAV_GROUPS } from './nav'
 import { TeamLogo } from '../ui/TeamLogo'
@@ -9,6 +9,7 @@ import { useDataStore } from '../../store/data'
 import { SidebarAccount } from './SidebarAccount'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
+import { Sheet } from '../ui/Sheet'
 
 export const SIDEBAR_WIDTH = 248
 export const SIDEBAR_WIDTH_COLLAPSED = 72
@@ -47,7 +48,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
                     cx(
                       'relative flex items-center h-9 rounded-[var(--radius-sm)] pl-[13px] pr-3 overflow-hidden whitespace-nowrap',
                       'text-[13px] transition-colors motion-reduce:transition-none',
-                      isActive ? 'text-ink font-medium' : 'text-ink-2 hover:text-ink hover:bg-surface-2',
+                      isActive ? 'text-ink font-medium' : 'text-ink-2 hover:text-ink hover:bg-surface-2 active:bg-surface-3',
                     )
                   }
                 >
@@ -57,7 +58,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
                         <motion.span
                           layoutId="nav-active"
                           className="absolute inset-0 rounded-[10px] bg-surface-3/80"
-                          transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 480, damping: 40 }}
+                          transition={reduced ? { duration: 0 } : { type: 'spring', visualDuration: 0.25, bounce: 0.05 }}
                         />
                       )}
                       <Icon className="relative size-[18px] shrink-0" strokeWidth={isActive ? 2.1 : 1.8} />
@@ -153,62 +154,25 @@ export function Sidebar() {
   )
 }
 
-/** Mobile off-canvas drawer: closes on route change, Esc, backdrop; locks body scroll; traps focus. */
+/** Mobile off-canvas drawer: a left sheet that can be dragged shut; closes on route change, Esc, scrim. */
 export function MobileDrawer() {
   const open = useUiStore((s) => s.mobileNavOpen)
   const setOpen = useUiStore((s) => s.setMobileNavOpen)
   const reduced = usePrefersReducedMotion()
   const { pathname } = useLocation()
-  const panelRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => { setOpen(false) }, [pathname, setOpen])
-
-  useEffect(() => {
-    if (!open) return
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const focusables = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    requestAnimationFrame(() => focusables()[0]?.focus())
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setOpen(false); return }
-      if (e.key !== 'Tab') return
-      const els = focusables()
-      if (els.length === 0) return
-      const first = els[0]; const last = els[els.length - 1]
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.body.style.overflow = prevOverflow
-      document.removeEventListener('keydown', onKey)
-      previouslyFocused?.focus?.()
-    }
-  }, [open, setOpen])
-
   return (
-    <AnimatePresence>
-      {open && (
-        <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="主選單">
-          <motion.button type="button" aria-label="關閉選單" className="absolute inset-0 bg-black/40 cursor-default"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : 0.18 }} onClick={() => setOpen(false)} />
-          <motion.div ref={panelRef}
-            className="absolute inset-y-0 left-0 w-[280px] max-w-[85vw] bg-bg border-r border-border flex flex-col shadow-[var(--shadow-modal)]"
-            initial={{ x: reduced ? 0 : '-100%' }} animate={{ x: 0 }} exit={{ x: reduced ? 0 : '-100%' }} transition={reduced ? { duration: 0 } : WIDTH_TRANSITION}>
-            <div className="flex items-center justify-between pr-3">
-              <Brand collapsed={false} reduced={reduced} />
-              <button type="button" onClick={() => setOpen(false)} aria-label="關閉選單" className="size-9 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer">
-                <X className="size-5" />
-              </button>
-            </div>
-            <nav aria-label="主選單" className="flex-1 overflow-y-auto pt-2 pb-4">
-              <NavList collapsed={false} reduced={reduced} />
-            </nav>
-            <div className="pb-3"><SidebarAccount collapsed={false} reduced={reduced} /></div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="主選單" side="left" desktopFrom="never" className="lg:hidden">
+      <div className="flex items-center justify-between pr-3">
+        <Brand collapsed={false} reduced={reduced} />
+        <button type="button" onClick={() => setOpen(false)} aria-label="關閉選單" className="size-9 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer">
+          <X className="size-5" />
+        </button>
+      </div>
+      <nav aria-label="主選單" className="pt-2 pb-4">
+        <NavList collapsed={false} reduced={reduced} />
+      </nav>
+      <div className="pb-3"><SidebarAccount collapsed={false} reduced={reduced} /></div>
+    </Sheet>
   )
 }

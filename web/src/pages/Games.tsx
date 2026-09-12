@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Sheet } from '../components/ui/Sheet'
 import { LineScoreBoard } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -16,7 +16,6 @@ import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
 import { auditGame } from '../data/audit'
 import { useStats } from '../hooks/useStats'
-import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
 import { f2, f3, pct } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
@@ -46,7 +45,6 @@ const boxPit: Column<PitchingLine>[] = [
 
 export function GamesPage() {
   const s = useStats()
-  const reduced = usePrefersReducedMotion()
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
@@ -103,13 +101,10 @@ export function GamesPage() {
       <Card flush>
         <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
       </Card>
-      <AnimatePresence>
+      <Sheet open={!!current} onClose={close} ariaLabel="逐場成績" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl">
         {current && (
-          <motion.div key="box" role="dialog" aria-modal="true" aria-label="逐場成績" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-            <div className="absolute inset-0 bg-black/45" onClick={close} />
-            <motion.div initial={reduced ? false : { y: 16, opacity: 0.01 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 16, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full sm:max-w-5xl max-h-[92vh] overflow-y-auto bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] flex flex-col [&>*]:shrink-0">
-              <div className="sticky top-0 z-[3] bg-surface border-b border-border px-5 md:px-6 pt-5 pb-4 flex items-start justify-between gap-4">
+          <>
+              <div className="sticky top-0 z-[3] bg-surface border-b border-border px-5 md:px-6 pt-3 sm:pt-5 pb-4 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}</div>
                   <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
@@ -126,9 +121,9 @@ export function GamesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {gameAlbums.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={gameAlbums[0].url} title="開啟這場的相簿">相簿</Button> : gameAlbums.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {gameAlbums.length}</Button> : null}
                   {editable && !editing && canEdit && (
                     <>
-                      {gameAlbums.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={gameAlbums[0].url} title="開啟這場的相簿">相簿</Button> : gameAlbums.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {gameAlbums.length}</Button> : null}
                       <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
                       <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical hover:text-critical" disabled={cloud.pushing}
                         onClick={() => { if (window.confirm(`確定刪除 ${current.game.id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(current.game.id).then(close).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />
@@ -179,10 +174,9 @@ export function GamesPage() {
                   </>
                 )}
               </div>
-            </motion.div>
-          </motion.div>
+          </>
         )}
-      </AnimatePresence>
+      </Sheet>
     </>
   )
 }

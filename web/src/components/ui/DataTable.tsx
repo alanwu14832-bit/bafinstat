@@ -108,7 +108,7 @@ export function DataTable<Row extends object>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(row) } : undefined}
-                className={cx('rise-in bg-surface border-b border-border last:border-b-0 transition-colors motion-reduce:transition-none motion-reduce:animate-none hover:bg-surface-2', onRowClick && 'cursor-pointer')}
+                className={cx('rise-in bg-surface border-b border-border last:border-b-0 transition-colors motion-reduce:transition-none motion-reduce:animate-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70')}
               >
                 {columns.map((col, ci) => (
                   <td key={col.key} className={cx(cellPad, alignCls[col.align ?? 'left'], 'text-ink', pin(ci), ci === 0 && 'pl-4', ci === columns.length - 1 && 'pr-4', col.className)}>

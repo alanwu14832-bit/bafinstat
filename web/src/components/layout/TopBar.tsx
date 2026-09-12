@@ -1,6 +1,4 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, SlidersHorizontal, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { FontToggle, ThemeToggle } from './ThemeToggle'
@@ -8,8 +6,8 @@ import { findNavItem } from './nav'
 import { activeFilterCount, FilterBar } from './FilterBar'
 import { useUiStore } from '../../store/ui'
 import { useDataStore } from '../../store/data'
-import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
+import { Sheet } from '../ui/Sheet'
 import { IconBaseball } from '../icons/baseball'
 
 export interface TopBarProps {
@@ -37,17 +35,8 @@ function MobileFilters() {
   const [open, setOpen] = useState(false)
   const filters = useDataStore((s) => s.filters)
   const count = activeFilterCount(filters)
-  const reduced = usePrefersReducedMotion()
   const { pathname } = useLocation()
   useEffect(() => { setOpen(false) }, [pathname])
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey) }
-  }, [open])
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
@@ -56,26 +45,16 @@ function MobileFilters() {
         <SlidersHorizontal className="size-3.5" />
         篩選{count > 0 && <span className="tnum">・{count}</span>}
       </button>
-      {/* Portal: the header's backdrop-filter would otherwise become the containing block for this fixed sheet. */}
-      {createPortal(<AnimatePresence>
-        {open && (
-          <div className="lg:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="篩選">
-            <motion.button type="button" aria-label="關閉篩選" className="absolute inset-0 bg-black/40 cursor-default"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : 0.18 }} onClick={() => setOpen(false)} />
-            <motion.div className="absolute inset-x-0 bottom-0 max-h-[88vh] overflow-y-auto bg-surface border-t border-border rounded-t-[14px] shadow-[var(--shadow-modal)] pb-[max(16px,env(safe-area-inset-bottom))]"
-              initial={{ y: reduced ? 0 : '100%' }} animate={{ y: 0 }} exit={{ y: reduced ? 0 : '100%' }} transition={reduced ? { duration: 0 } : { type: 'tween', duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-              <div className="sticky top-0 bg-surface border-b border-border px-4 h-12 flex items-center justify-between">
-                <span className="text-sm font-semibold text-ink">篩選{count > 0 && <span className="text-muted font-normal ml-1.5 tnum">{count} 項生效</span>}</span>
-                <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="size-9 -mr-2 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer"><X className="size-5" /></button>
-              </div>
-              <div className="px-4 pt-4">
-                <FilterBar layout="stack" />
-                <button type="button" onClick={() => setOpen(false)} className="mt-3 w-full h-10 rounded-[var(--radius-sm)] bg-ink text-bg text-sm font-medium cursor-pointer">完成</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>, document.body)}
+      <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="篩選" side="bottom" desktopFrom="never" className="lg:hidden" panelClassName="max-h-[88vh]"
+        header={<div className="px-4 h-11 flex items-center justify-between">
+          <span className="text-sm font-semibold text-ink">篩選{count > 0 && <span className="text-muted font-normal ml-1.5 tnum">{count} 項生效</span>}</span>
+          <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="size-9 -mr-2 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer"><X className="size-5" /></button>
+        </div>}>
+        <div className="px-4 pt-2 pb-4">
+          <FilterBar layout="stack" />
+          <button type="button" onClick={() => setOpen(false)} className="mt-3 w-full h-11 rounded-full bg-ink text-bg text-sm font-medium cursor-pointer active:scale-[0.98]">完成</button>
+        </div>
+      </Sheet>
     </>
   )
 }

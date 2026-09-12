@@ -16,6 +16,7 @@ import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } fr
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
+import { Sheet } from '../components/ui/Sheet'
 import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
 import { LOC_HOLES, POSITIONS, type Game } from '../data/types'
 import { playedGames } from '../data/filters'
@@ -379,7 +380,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
 function ScoreFigure({ value }: { value: number }) {
   return (
     <AnimatePresence mode="popLayout" initial={false}>
-      <motion.div key={value} initial={{ scale: 1.25, opacity: 0.4 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0, position: 'absolute' }} transition={{ type: 'spring', stiffness: 420, damping: 26 }} className="figure text-[30px] font-semibold leading-none">
+      <motion.div key={value} initial={{ scale: 1.12, opacity: 0.4 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0, position: 'absolute' }} transition={{ type: 'spring', visualDuration: 0.3, bounce: 0 }} className="figure text-[30px] font-semibold leading-none">
         {value}
       </motion.div>
     </AnimatePresence>
@@ -522,10 +523,9 @@ export function RecordPage() {
             : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} />}
         </>
       )}
-      {finish && state && (
-        <div role="dialog" aria-modal="true" aria-label="結束比賽" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
-          <div className="absolute inset-0 bg-black/45" onClick={() => setFinish(null)} />
-          <div className="relative w-full sm:max-w-md bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] p-5 flex flex-col gap-4">
+      <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel="結束比賽" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md">
+        {finish && state && (
+          <div className="p-5 flex flex-col gap-4">
             <div><div className="text-[16px] font-semibold text-ink">結束比賽</div><div className="text-[13px] text-ink-2 mt-1 tnum">{TEAM_NAME} {score(state).us} : {score(state).opp} {state.game.opponent}・{state.inning} 局{state.runners.length ? '・壘上跑者會記為殘壘' : ''}</div></div>
             <div className="grid grid-cols-3 gap-2">
               <Field label="勝投"><PlayerSelect value={finish.w} onChange={(v) => setFinish({ ...finish, w: v })} names={usedPitchers} placeholder="—" className="w-full" /></Field>
@@ -535,8 +535,8 @@ export function RecordPage() {
             <p className="text-[12px] text-muted">儲存後會跳到這場比賽的頁面；之後仍可用「修改資料」調整。</p>
             <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFinish(null)}>再想想</Button><Button variant="primary" onClick={() => void complete()} disabled={cloud.pushing}>儲存並結束</Button></div>
           </div>
-        </div>
-      )}
+        )}
+      </Sheet>
     </>
   )
 }

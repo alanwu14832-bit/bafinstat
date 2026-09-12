@@ -148,7 +148,7 @@ export function SchedulePage() {
               return (
                 <li key={g.id} className="flex items-center gap-4 px-4 md:px-5 py-2.5">
                   <span className="w-14 shrink-0 text-[12px] text-muted tnum">{g.date.slice(5)}</span>
-                  <button type="button" onClick={() => navigate(`/games?game=${encodeURIComponent(g.id)}`)} className="min-w-0 flex-1 text-left cursor-pointer group">
+                  <button type="button" onClick={() => navigate(`/games?game=${encodeURIComponent(g.id)}`)} className="min-w-0 flex-1 text-left cursor-pointer group -mx-2 px-2 py-1 rounded-[8px] active:bg-surface-3/70">
                     <span className="text-[14px] font-medium text-ink group-hover:underline">vs {g.opponent}</span>
                     <span className="text-[12px] text-muted ml-2">{g.tournament}</span>
                   </button>
