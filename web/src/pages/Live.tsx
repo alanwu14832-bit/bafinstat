@@ -55,7 +55,7 @@ export function LivePage() {
         <PageHeader title="即時比分" description="紀錄員在「紀錄比賽」逐球輸入時，這一頁會每 5 秒自動更新，不需登入。" />
         <Card>
           <EmptyState title="目前沒有進行中的比賽" description={error ?? (nextGame ? `下一場：${nextGame.date}${nextGame.time ? ` ${nextGame.time}` : ''} vs ${nextGame.opponent}${nextGame.venue ? `・${nextGame.venue}` : ''}` : lastFinal ? `最近一場：${lastFinal.date} vs ${lastFinal.opponent}，到「比賽」頁查看完整成績。` : undefined)}
-            action={<span className="inline-flex gap-4 text-[13px]">{nextGame && <Link to="/schedule" className="underline underline-offset-2 text-ink">看賽程</Link>}{lastFinal && <Link to={`/games?game=${encodeURIComponent(lastFinal.id)}`} className="underline underline-offset-2 text-ink">看最近一場</Link>}</span>} />
+            action={<span className="inline-flex gap-4 text-[13px]">{nextGame && <Link to="/games?view=schedule" className="underline underline-offset-2 text-ink">看賽程</Link>}{lastFinal && <Link to={`/games?game=${encodeURIComponent(lastFinal.id)}`} className="underline underline-offset-2 text-ink">看最近一場</Link>}</span>} />
         </Card>
       </>
     )

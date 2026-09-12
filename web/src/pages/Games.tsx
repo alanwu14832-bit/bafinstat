@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { GameEditor } from '../components/ui/GameEditor'
+import { ScheduleSection, daysToNextGame } from './Schedule'
 import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
 import { auditGame } from '../data/audit'
@@ -48,9 +49,26 @@ export function GamesPage() {
   const [params, setParams] = useSearchParams()
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
+  const [view, setViewState] = useState<'schedule' | 'results'>('results')
   const [editing, setEditing] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn'; lines: string[] } | null>(null)
   const base = useDataStore((st) => st.base)
+  // Open on whichever half is live: the schedule when a game is within a week, the results table otherwise.
+  const [viewDecided, setViewDecided] = useState(false)
+  useEffect(() => {
+    if (viewDecided) return
+    const q = params.get('view')
+    if (q === 'schedule' || q === 'results') { setViewState(q); setViewDecided(true); return }
+    if (params.get('game')) { setViewState('results'); setViewDecided(true); return }
+    if (!base.games.length) return
+    const n = daysToNextGame(base.games)
+    setViewState(n !== null && n <= 7 ? 'schedule' : 'results')
+    setViewDecided(true)
+  }, [base.games, params, viewDecided])
+  const setView = (v: 'schedule' | 'results') => {
+    setViewState(v); setViewDecided(true); setOpen(null)
+    const next = new URLSearchParams(params); next.set('view', v); next.delete('game'); setParams(next, { replace: true })
+  }
   const saveGame = useDataStore((st) => st.saveGame)
   const deleteGame = useDataStore((st) => st.deleteGame)
   const cloud = useDataStore((st) => st.cloud)
@@ -96,11 +114,15 @@ export function GamesPage() {
 
   return (
     <>
-      <PageHeader title="比賽" description={`${s.summaries.length} 場比賽符合篩選。點任一場查看逐局比分、Box Score 與逐打席的逐球紀錄。`} />
-      <DemoBanner />
-      <Card flush>
-        <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
-      </Card>
+      <PageHeader title="比賽"
+        description={view === 'schedule' ? '接下來的比賽、還沒補記的場次與已取消的場次。' : `${s.summaries.length} 場比賽符合篩選。點任一場查看逐局比分、Box Score 與逐打席的逐球紀錄。`}
+        actions={<Tabs size="sm" aria-label="比賽頁分頁" value={view} onChange={setView} items={[{ value: 'schedule', label: '賽程' }, { value: 'results', label: '成績' }]} />} />
+      {view === 'schedule' ? <ScheduleSection /> : (<>
+        <DemoBanner />
+        <Card flush>
+          <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
+        </Card>
+      </>)}
       <Sheet open={!!current} onClose={close} ariaLabel="逐場成績" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl">
         {current && (
           <>
