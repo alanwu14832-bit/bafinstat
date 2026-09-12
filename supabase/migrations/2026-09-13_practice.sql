@@ -1,4 +1,4 @@
--- 練球點名：排程、停練期間、場次、投票（出席／小遲／請假）、點名、推播訂閱。Run once in the SQL Editor (safe to re-run).
+-- 練球點名：排程、停練期間、場次、投票（會到／小遲／下次一定）、點名、推播訂閱。Run once in the SQL Editor (safe to re-run).
 
 -- 1) players get an email so a signed-in player is matched to a roster row (login alone grants nothing)
 alter table players add column if not exists email text;

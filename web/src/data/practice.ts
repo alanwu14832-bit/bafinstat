@@ -5,7 +5,7 @@
 import { supabase } from './supabase'
 
 export type VoteStatus = 'yes' | 'late' | 'no'
-export const VOTE_LABEL: Record<VoteStatus, string> = { yes: '出席', late: '小遲', no: '請假' }
+export const VOTE_LABEL: Record<VoteStatus, string> = { yes: '會到', late: '小遲', no: '下次一定' }
 export const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 export interface PracticeSeries { id: string; weekday: number; time: string; place: string | null; start_date: string; end_date: string; note: string | null }
@@ -55,8 +55,8 @@ export function tally(practice: Practice, votes: Vote[], activeNames: string[]):
 }
 
 /**
- * 出席率: roll call wins when it exists, otherwise the vote (出席 and 小遲 count as attended). Only practices that
- * already happened and were not cancelled count; 請假 is excused (out of the denominator), no reply is an absence.
+ * 出席率: roll call wins when it exists, otherwise the vote (會到 and 小遲 count as attended). Only practices that
+ * already happened and were not cancelled count; 下次一定 (請假) is excused (out of the denominator), no reply is an absence.
  */
 export function attendanceRate(player: string, practices: Practice[], votes: Vote[], rolls: RollCall[], now = new Date()): { attended: number; excused: number; absent: number; rate: number | null } {
   let attended = 0, excused = 0, absent = 0

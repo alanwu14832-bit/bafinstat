@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const payload = kind === 'cancelled'
       ? { title: '練球取消', body: `${when}${place} 的練球取消了。`, tag: `practice-${p.id}`, url: '/practice' }
       : kind === 'reminder'
-        ? { title: '還沒回覆練球', body: `${when}${place}，點開回覆出席／小遲／請假。`, tag: `practice-${p.id}`, url: '/practice' }
+        ? { title: '還沒回覆練球', body: `${when}${place}，點開回覆會到／小遲／下次一定。`, tag: `practice-${p.id}`, url: '/practice' }
         : { title: '明天練球', body: `${when}${place}，你會來嗎？點開回覆。`, tag: `practice-${p.id}`, url: '/practice' }
     for (const s of subs ?? []) {
       try { await webpush.sendNotification(s.subscription, JSON.stringify(payload), { TTL: 60 * 60 * 15 }); sent++ }

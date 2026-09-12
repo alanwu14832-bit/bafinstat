@@ -59,7 +59,7 @@ function VoteButtons({ practice, mine, onVote, busy, size = 'md' }: { practice: 
       </div>
       {pick && (
         <div className="flex items-center gap-2">
-          <Input size="sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={pick === 'late' ? '大概幾點到？（選填）' : '原因（選填，只有管理員看得到）'} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') { void onVote(pick, reason); setPick(null) } }} />
+          <Input size="sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={pick === 'late' ? '大概幾點到？（選填）' : '請假原因（選填，只有管理員看得到）'} autoFocus onKeyDown={(e) => { if (e.key === 'Enter') { void onVote(pick, reason); setPick(null) } }} />
           <Button size="sm" variant="primary" disabled={busy} onClick={() => { void onVote(pick, reason); setPick(null) }}>送出</Button>
           <Button size="sm" variant="ghost" icon={<X />} aria-label="取消" onClick={() => setPick(null)} />
         </div>
@@ -161,9 +161,9 @@ function PracticeRow({ p, data, activeNames, isEditor, myName, editorEmail, onCh
           </div>
           <div className="text-[12.5px] text-ink-2 mt-1 flex items-center gap-x-3 gap-y-0.5 flex-wrap tnum">
             {!off && <>
-              <span className="text-[color-mix(in_srgb,var(--good)_70%,var(--ink))]">出席 {t.yes}</span>
+              <span className="text-[color-mix(in_srgb,var(--good)_70%,var(--ink))]">會到 {t.yes}</span>
               <span className="text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]">小遲 {t.late}</span>
-              <span>請假 {t.no}</span>
+              <span>下次一定 {t.no}</span>
               <span className="text-muted">未回覆 {t.none}</span>
               {rolls.length > 0 && <span className="text-ink font-medium">點名到 {presentCount}</span>}
             </>}
@@ -349,9 +349,9 @@ export function PracticePage() {
   }, [cloud.configured, isEditor, signedIn, today])
   useEffect(() => { void refresh() }, [refresh])
 
-  if (!cloud.configured) return <><PageHeader title="練球" description="練球時程、出席投票與點名。" /><Card><EmptyState title="練球點名需要雲端模式" description="這個功能的資料存在 Supabase；本機模式沒有練球資料。" /></Card></>
-  if (data === 'loading') return <><PageHeader title="練球" description="練球時程、出席投票與點名。" /><Card><EmptyState compact title="讀取中…" /></Card></>
-  if (data === 'missing' || data === null) return <><PageHeader title="練球" description="練球時程、出席投票與點名。" /><Card><EmptyState title="練球功能還沒開通" description={error ?? '管理員請在 Supabase SQL Editor 執行 supabase/migrations/2026-09-13_practice.sql。'} /></Card></>
+  if (!cloud.configured) return <><PageHeader title="練球" description="練球時程、回覆與點名。" /><Card><EmptyState title="練球點名需要雲端模式" description="這個功能的資料存在 Supabase；本機模式沒有練球資料。" /></Card></>
+  if (data === 'loading') return <><PageHeader title="練球" description="練球時程、回覆與點名。" /><Card><EmptyState compact title="讀取中…" /></Card></>
+  if (data === 'missing' || data === null) return <><PageHeader title="練球" description="練球時程、回覆與點名。" /><Card><EmptyState title="練球功能還沒開通" description={error ?? '管理員請在 Supabase SQL Editor 執行 supabase/migrations/2026-09-13_practice.sql。'} /></Card></>
 
   const d = data
   const myName = d.myName
@@ -363,16 +363,15 @@ export function PracticePage() {
     setBusy(true); setError(null)
     try { await castVote({ practice_id: p.id, player_name: myName, status: s, reason, late_reply: isLateReply(p) }); await refresh() } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
-  const mine = myName ? attendanceRate(myName, d.practices, d.votes, d.rolls) : null
   const teamRates = isEditor ? activeNames.map((n) => ({ name: n, ...attendanceRate(n, d.practices, d.votes, d.rolls) })).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || a.name.localeCompare(b.name, 'zh-Hant')) : []
   const heldCount = d.practices.filter((p) => p.status === 'scheduled' && practiceStart(p).getTime() <= Date.now()).length
-  const tabs: Array<{ value: Tab; label: string }> = [{ value: 'next', label: '練球' }, { value: 'rate', label: '出席率' }, ...(isEditor ? [{ value: 'manage' as Tab, label: '管理' }] : [])]
+  const tabs: Array<{ value: Tab; label: string }> = [{ value: 'next', label: '練球' }, ...(isEditor ? [{ value: 'rate' as Tab, label: '出席率' }, { value: 'manage' as Tab, label: '管理' }] : [])]
   const rowProps = { data: d, activeNames, isEditor, myName, editorEmail: cloud.user?.email ?? null, onChanged: refresh, onError: setError }
 
   return (
     <>
       <PageHeader title="練球" description={next ? `下一次練球 ${next.date.slice(5).replace('-', '/')}（${weekdayOf(next.date)}）${next.time}${next.place ? `・${next.place}` : ''}，${whenLabel(next.date)}。回覆截止練球當天 09:00。` : '目前沒有排定的練球。'}
-        actions={<Tabs size="sm" aria-label="練球頁分頁" value={tab} onChange={setTab} items={tabs} />} />
+        actions={tabs.length > 1 ? <Tabs size="sm" aria-label="練球頁分頁" value={tab} onChange={setTab} items={tabs} /> : undefined} />
       {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
 
       {tab === 'next' && (<>
@@ -394,7 +393,7 @@ export function PracticePage() {
           </Card>
         )}
         {myName && upcoming.filter((p) => p.id !== next?.id && canVote(p)).length > 0 && (
-          <Card title="之後的練球先回覆" subtitle="已經知道要請假的，可以先填" flush>
+          <Card title="之後的練球先回覆" subtitle="已經知道那天不行的，可以先填" flush>
             <ul className="divide-y divide-[var(--border)]">
               {upcoming.filter((p) => p.id !== next?.id && canVote(p)).map((p) => (
                 <li key={p.id} className="flex items-center gap-3 px-4 md:px-5 py-2.5 flex-wrap">
@@ -405,7 +404,7 @@ export function PracticePage() {
             </ul>
           </Card>
         )}
-        <Card title="接下來 8 週" subtitle="點一場看誰來、誰請假；管理員可在這裡改時間、停練、點名" flush>
+        <Card title="接下來 8 週" subtitle="點一場看誰會到、誰不行；管理員可在這裡改時間、停練、點名" flush>
           {upcoming.length ? <ul className="divide-y divide-[var(--border)]">{upcoming.map((p) => <PracticeRow key={p.id} p={p} {...rowProps} />)}</ul>
             : <EmptyState compact title="沒有排定的練球" description={isEditor ? '到「管理」分頁設定每週固定練球。' : '等管理員排上練球。'} />}
         </Card>
@@ -417,39 +416,26 @@ export function PracticePage() {
         )}
       </>)}
 
-      {tab === 'rate' && (<>
-        <Card title={myName ? `${myName} 的出席` : '我的出席'} subtitle={`最近 120 天、已進行 ${heldCount} 次練球。出席與小遲都算到；請假不計入分母；沒回覆又沒到算缺席。`}>
-          {!signedIn ? <div className="flex items-center gap-3 flex-wrap"><p className="text-[13px] text-ink-2">登入後看自己的出席率。</p><Button size="sm" onClick={() => setLogin(true)}>登入</Button></div>
-            : !myName ? <p className="text-[13px] text-ink-2">你的信箱不在球員名單上，請管理員加上。</p>
-            : mine && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[['出席率', mine.rate === null ? '—' : `${Math.round(mine.rate * 100)}%`], ['到', String(mine.attended)], ['請假', String(mine.excused)], ['缺席', String(mine.absent)]].map(([k, v]) => (
-                  <div key={k} className="rounded-[12px] bg-surface-2 px-4 py-3"><div className="text-[12px] text-muted">{k}</div><div className="text-[22px] font-semibold text-ink tnum">{v}</div></div>
-                ))}
-              </div>
-            )}
+      {tab === 'rate' && isEditor && (
+        <Card title="全隊出席率" subtitle={`最近 120 天、已進行 ${heldCount} 次練球。會到與小遲都算到；下次一定（請假）不計入分母；沒回覆又沒到算缺席。只有管理員看得到這一頁。`} flush>
+          {heldCount ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead><tr className="text-left text-[12px] text-muted"><th className="px-4 md:px-5 py-2 font-medium">球員</th><th className="px-3 py-2 font-medium text-right">出席率</th><th className="px-3 py-2 font-medium text-right">到</th><th className="px-3 py-2 font-medium text-right">請假</th><th className="px-3 py-2 font-medium text-right pr-4 md:pr-5">缺席</th></tr></thead>
+                <tbody className="divide-y divide-[var(--border)]">
+                  {teamRates.map((r) => (
+                    <tr key={r.name}>
+                      <td className="px-4 md:px-5 py-2 font-medium text-ink">{r.name}</td>
+                      <td className={cx('px-3 py-2 text-right tnum', r.rate !== null && r.rate < 0.6 && 'text-critical')}>{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</td>
+                      <td className="px-3 py-2 text-right tnum">{r.attended}</td><td className="px-3 py-2 text-right tnum text-muted">{r.excused}</td><td className="px-3 py-2 text-right tnum pr-4 md:pr-5">{r.absent}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <EmptyState compact title="還沒有進行過的練球" />}
         </Card>
-        {isEditor && (
-          <Card title="全隊出席率" subtitle="依出席率排序；只有管理員看得到這張表" flush>
-            {heldCount ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-[13px]">
-                  <thead><tr className="text-left text-[12px] text-muted"><th className="px-4 md:px-5 py-2 font-medium">球員</th><th className="px-3 py-2 font-medium text-right">出席率</th><th className="px-3 py-2 font-medium text-right">到</th><th className="px-3 py-2 font-medium text-right">請假</th><th className="px-3 py-2 font-medium text-right pr-4 md:pr-5">缺席</th></tr></thead>
-                  <tbody className="divide-y divide-[var(--border)]">
-                    {teamRates.map((r) => (
-                      <tr key={r.name}>
-                        <td className="px-4 md:px-5 py-2 font-medium text-ink">{r.name}</td>
-                        <td className={cx('px-3 py-2 text-right tnum', r.rate !== null && r.rate < 0.6 && 'text-critical')}>{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</td>
-                        <td className="px-3 py-2 text-right tnum">{r.attended}</td><td className="px-3 py-2 text-right tnum text-muted">{r.excused}</td><td className="px-3 py-2 text-right tnum pr-4 md:pr-5">{r.absent}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <EmptyState compact title="還沒有進行過的練球" />}
-          </Card>
-        )}
-      </>)}
+      )}
 
       {tab === 'manage' && isEditor && <ManagePanel data={d} onChanged={refresh} onError={setError} />}
 

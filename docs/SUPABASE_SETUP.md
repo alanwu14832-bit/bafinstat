@@ -62,7 +62,7 @@ npm run dev
 - `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
-- `supabase/migrations/2026-09-13_practice.sql`：**練球點名**。在 `players` 加 `email` 欄（球員登入用），建立 `practice_series`（每週固定練球）、`practice_breaks`（停練期間）、`practices`（每一場）、`practice_votes`（出席／小遲／請假）、`practice_rollcall`（點名）、`push_subscriptions`（推播訂閱）與 `generate_practices()` 函式。球員只能讀寫自己的那一票（依登入信箱對到名單），紀錄員能改全部。沒執行時「練球」頁會提示尚未開通。
+- `supabase/migrations/2026-09-13_practice.sql`：**練球點名**。在 `players` 加 `email` 欄（球員登入用），建立 `practice_series`（每週固定練球）、`practice_breaks`（停練期間）、`practices`（每一場）、`practice_votes`（會到／小遲／下次一定）、`practice_rollcall`（點名）、`push_subscriptions`（推播訂閱）與 `generate_practices()` 函式。球員只能讀寫自己的那一票（依登入信箱對到名單），紀錄員能改全部。沒執行時「練球」頁會提示尚未開通。
 
 ## 練球通知（推播，選做）
 投票與點名執行完上面的 SQL 就能用；要讓手機在練球前一天 18:00 跳通知，再做這四步（約 15 分鐘，只做一次）：
