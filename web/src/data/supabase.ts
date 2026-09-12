@@ -21,7 +21,7 @@ export function supabase(): SupabaseClient {
 }
 
 // ---------------------------------------------------------------- row ↔ model mapping
-interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
+interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null; email?: string | null }
 interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null }
 interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null }
 interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; code: string | null; note: string | null }
@@ -31,7 +31,7 @@ const u = <T,>(v: T | null | undefined): T | undefined => (v === null || v === u
 const n = (v: string | undefined): string | null => (v === undefined || v === '' ? null : v)
 
 export function toPlayerRow(p: Player): PlayerRow {
-  return { name: p.name, number: n(p.number), primary_pos: n(p.primaryPos), secondary_pos: n(p.secondaryPos), bats: n(p.bats), throws: n(p.throws), status: n(p.status), note: n(p.note) }
+  return { name: p.name, number: n(p.number), primary_pos: n(p.primaryPos), secondary_pos: n(p.secondaryPos), bats: n(p.bats), throws: n(p.throws), status: n(p.status), note: n(p.note), email: n(p.email?.toLowerCase()) }
 }
 export function toGameRow(g: Game): GameRow {
   return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note), status: n(g.status) }
@@ -48,7 +48,7 @@ export function toFieldingRow(f: FieldingLine, seq: number): FieldingRow {
 
 export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; batting: BattingRow[]; pitching: PitchingRow[]; fielding: FieldingRow[] }): Dataset {
   return {
-    roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note) })),
+    roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note), email: u(r.email ?? null) })),
     games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined) })),
     batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note) })),
     pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, code: u(r.code), note: u(r.note) })),
@@ -104,7 +104,8 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
   }
   const ids = new Set(games.map((g) => g.id))
   if (ds.roster.length) {
-    const { error } = await sb.from('players').upsert(ds.roster.map(toPlayerRow), { onConflict: 'name' })
+    let { error } = await sb.from('players').upsert(ds.roster.map(toPlayerRow), { onConflict: 'name' })
+    if (error && /email/.test(error.message)) ({ error } = await sb.from('players').upsert(ds.roster.map((p) => { const { email: _e, ...row } = toPlayerRow(p); return row }), { onConflict: 'name' }))
     fail('球員名單', error)
   }
   if (mode === 'replace') {
@@ -145,7 +146,7 @@ export async function pushRoster(players: Player[], renames: Record<string, stri
     for (const col of ['winning_pitcher', 'losing_pitcher', 'save_pitcher']) fail('比賽清單', (await sb.from('games').update({ [col]: to }).eq(col, from)).error)
     fail('球員名單', (await sb.from('players').delete().eq('name', from)).error)
   }
-  if (players.length) fail('球員名單', (await sb.from('players').upsert(players.map(toPlayerRow), { onConflict: 'name' })).error)
+  if (players.length) { let { error } = await sb.from('players').upsert(players.map(toPlayerRow), { onConflict: 'name' }); if (error && /email/.test(error.message)) ({ error } = await sb.from('players').upsert(players.map((p) => { const { email: _e, ...row } = toPlayerRow(p); return row }), { onConflict: 'name' })); fail('球員名單', error) }
   if (removed.length) fail('球員名單', (await sb.from('players').delete().in('name', removed)).error)
 }
 

@@ -62,9 +62,27 @@ npm run dev
 - `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
+- `supabase/migrations/2026-09-13_practice.sql`：**練球點名**。在 `players` 加 `email` 欄（球員登入用），建立 `practice_series`（每週固定練球）、`practice_breaks`（停練期間）、`practices`（每一場）、`practice_votes`（出席／小遲／請假）、`practice_rollcall`（點名）、`push_subscriptions`（推播訂閱）與 `generate_practices()` 函式。球員只能讀寫自己的那一票（依登入信箱對到名單），紀錄員能改全部。沒執行時「練球」頁會提示尚未開通。
+
+## 練球通知（推播，選做）
+投票與點名執行完上面的 SQL 就能用；要讓手機在練球前一天 18:00 跳通知，再做這四步（約 15 分鐘，只做一次）：
+
+1. **產生 VAPID 金鑰**：在任何有 Node 的電腦執行 `npx web-push generate-vapid-keys`，得到 Public Key 與 Private Key。
+2. **部署函式**：安裝 Supabase CLI 後在專案根目錄執行
+   ```
+   supabase login
+   supabase link --project-ref <你的 project ref>
+   supabase secrets set CRON_SECRET=<自訂一串長密碼> VAPID_PUBLIC_KEY=<公鑰> VAPID_PRIVATE_KEY=<私鑰> VAPID_SUBJECT=mailto:<系隊信箱>
+   supabase functions deploy practice-notify
+   ```
+3. **網站端**：Vercel → Settings → Environment Variables 加 `VITE_VAPID_PUBLIC_KEY`＝公鑰，重新部署。
+4. **排程**：GitHub → Settings → Secrets and variables → Actions → New repository secret，名稱 `PRACTICE_CRON_SECRET`，值同上面的 `CRON_SECRET`。`.github/workflows/practice-notify.yml` 每天 18:00（台北）會呼叫函式；也可到 Actions 頁手動 Run workflow 測試。
+
+之後球員在「練球」頁按「開啟通知」即可。iPhone 必須先用 Safari「加入主畫面」再從主畫面開啟，才會出現「開啟通知」；Android／電腦 Chrome 直接可用。
+
 
 ## 誰能登入、誰能寫
-- 帳號：Authentication → Users → Add user（設 email 與密碼）。請關閉 Providers → Email 的 **Enable email signups**，避免任何人自行註冊。
+- 帳號：Authentication → Users → Add user（設 email 與密碼）。若不用練球投票，關閉 Providers → Email 的 **Enable email signups** 避免任何人自行註冊；有用練球投票則可開著，因為登入本身拿不到任何寫入權限（只有 `editors` 名單能寫比賽資料，球員只能改自己的一票）。
 - 寫入權限：Table Editor → `editors` 新增那個 email；移除那一列即刻失效。
 - 網站側欄底部有「紀錄員登入」；登入且在名單內的人才看得到「紀錄比賽」「資料匯入」與比賽頁的「修改資料」。
 - 更完整的制度見 `docs/SECURITY.md`。

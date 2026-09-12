@@ -1,0 +1,11 @@
+{
+  "name": "台大工管財金系棒",
+  "short_name": "BaFiN",
+  "lang": "zh-TW",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
+  "icons": [{ "src": "/mark.png", "sizes": "any", "type": "image/png", "purpose": "any" }]
+}

@@ -8,7 +8,7 @@ import type { Player } from './types'
 export interface RosterImportResult { players: Player[]; sheet: string; mapping: Record<string, string>; warnings: string[] }
 export interface RosterMerge { players: Player[]; added: string[]; updated: Array<{ name: string; changes: string[] }>; unchanged: number }
 
-type Field = 'number' | 'name' | 'primaryPos' | 'secondaryPos' | 'bats' | 'throws' | 'status' | 'note'
+type Field = 'number' | 'name' | 'primaryPos' | 'secondaryPos' | 'bats' | 'throws' | 'status' | 'note' | 'email'
 const SYNONYMS: Record<Field, string[]> = {
   number: ['背號', '號碼', '球衣號碼', '背番号', 'no', 'no.', 'number', '#', '號'],
   name: ['姓名', '名字', '球員', '球員姓名', '選手', 'name', 'player'],
@@ -18,6 +18,7 @@ const SYNONYMS: Record<Field, string[]> = {
   throws: ['投球慣用', '投球', '投', '投球手', 'throws', 'throw', '左右投'],
   status: ['狀態', '身分', '身份', 'status', '在隊'],
   note: ['備註', '註', 'note', 'notes', 'remark', '備注'],
+  email: ['email', 'e-mail', 'mail', '信箱', '電子郵件', '電子信箱', 'gmail'],
 }
 const POS_ALIASES: Record<string, string> = {
   投手: 'P', 捕手: 'C', 一壘: '1B', 一壘手: '1B', 二壘: '2B', 二壘手: '2B', 三壘: '3B', 三壘手: '3B', 游擊: 'SS', 游擊手: 'SS', 遊擊: 'SS', 遊擊手: 'SS',
@@ -91,9 +92,10 @@ export function parseRosterWorkbook(data: ArrayBuffer): RosterImportResult {
       name, number, primaryPos: normalizePos(get('primaryPos')), secondaryPos: normalizePos(get('secondaryPos')),
       bats: normalizeHand(get('bats')), throws: normalizeHand(get('throws')),
       status: String(get('status') ?? '').trim() || undefined, note: String(get('note') ?? '').trim() || undefined,
+      email: String(get('email') ?? '').trim().toLowerCase() || undefined,
     })
   }
-  const labels: Record<Field, string> = { number: '背號', name: '姓名', primaryPos: '主守位', secondaryPos: '副守位', bats: '打擊慣用', throws: '投球慣用', status: '狀態', note: '備註' }
+  const labels: Record<Field, string> = { number: '背號', name: '姓名', primaryPos: '主守位', secondaryPos: '副守位', bats: '打擊慣用', throws: '投球慣用', status: '狀態', note: '備註', email: 'Email' }
   const mapping: Record<string, string> = {}
   for (const [f, c] of Object.entries(hdr.map) as Array<[Field, number]>) mapping[labels[f]] = String(grid[hdr.index][c] ?? XLSX.utils.encode_col(c))
   if (!players.length) warnings.push('工作表裡沒有任何球員列')
@@ -106,7 +108,7 @@ export function mergeRoster(existing: Player[], incoming: Player[]): RosterMerge
   const players = existing.map((p) => ({ ...p }))
   const added: string[] = []
   const updated: Array<{ name: string; changes: string[] }> = []
-  const fields: Array<[keyof Player, string]> = [['number', '背號'], ['primaryPos', '主守位'], ['secondaryPos', '副守位'], ['bats', '打擊'], ['throws', '投球'], ['status', '狀態'], ['note', '備註']]
+  const fields: Array<[keyof Player, string]> = [['number', '背號'], ['primaryPos', '主守位'], ['secondaryPos', '副守位'], ['bats', '打擊'], ['throws', '投球'], ['status', '狀態'], ['note', '備註'], ['email', 'Email']]
   for (const inc of incoming) {
     const cur = byName.get(inc.name)
     if (!cur) { players.push({ ...inc, status: inc.status ?? '現役' }); added.push(inc.name); continue }

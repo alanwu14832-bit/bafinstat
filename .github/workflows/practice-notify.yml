@@ -1,0 +1,22 @@
+name: Practice reminder (18:00 Taipei)
+
+# Every day at 18:00 Asia/Taipei (10:00 UTC) ask the edge function to push "明天練球" for tomorrow's practices.
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    steps:
+      - name: Call practice-notify
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          SECRET: ${{ secrets.PRACTICE_CRON_SECRET }}
+        run: |
+          out=$(curl -sS -w "\n%{http_code}" -X POST "$URL/functions/v1/practice-notify" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "x-cron-secret: $SECRET" -H "content-type: application/json" -d '{}')
+          echo "$out"
+          test "$(echo "$out" | tail -1)" = "200"

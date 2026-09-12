@@ -157,7 +157,7 @@ function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited:
 
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
-  const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
+  const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined, email: p.email?.trim().toLowerCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
   const batting: BattingPA[] = input.batting.map((p) => ({
     ...p, batter: p.batter.trim(), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),

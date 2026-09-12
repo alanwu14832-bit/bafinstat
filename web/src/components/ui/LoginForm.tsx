@@ -5,7 +5,7 @@ import { Tabs } from './Tabs'
 import { sendMagicLink, signInWithPassword, verifyEmailCode } from '../../data/supabase'
 
 /** Email + password (or email link) sign-in. Shared by the cloud panel and the sidebar dialog. */
-export function LoginForm({ onDone, autoFocus }: { onDone?: () => void; autoFocus?: boolean }) {
+export function LoginForm({ onDone, autoFocus, intro }: { onDone?: () => void; autoFocus?: boolean; intro?: string }) {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
@@ -23,9 +23,9 @@ export function LoginForm({ onDone, autoFocus }: { onDone?: () => void; autoFocu
       if (mode === 'password') void run(() => signInWithPassword(email.trim(), password), '登入成功', true)
       else void run(async () => { await sendMagicLink(email.trim()); setSent(true) }, '已寄出登入信，請開啟信中的連結（或輸入信中的 6 位數驗證碼）。')
     }}>
-      <p className="text-muted">紀錄員登入後才能紀錄與上傳；瀏覽不需登入。</p>
+      <p className="text-muted">{intro ?? '紀錄員登入後才能紀錄與上傳；瀏覽不需登入。'}</p>
       <Tabs size="sm" aria-label="登入方式" value={mode} onChange={setMode} items={[{ value: 'password', label: '密碼登入' }, { value: 'link', label: 'Email 連結' }]} className="self-start" />
-      <Input type="email" required autoComplete="username" placeholder="紀錄員 email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="email" autoFocus={autoFocus} />
+      <Input type="email" required autoComplete="username" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="email" autoFocus={autoFocus} />
       {mode === 'password' ? (
         <>
           <Input type="password" required autoComplete="current-password" placeholder="密碼" value={password} onChange={(e) => setPassword(e.target.value)} aria-label="密碼" />
