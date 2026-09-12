@@ -7,9 +7,11 @@ import { Badge } from '../components/ui/Badge'
 import { Tabs } from '../components/ui/Tabs'
 import { EmptyState } from '../components/ui/EmptyState'
 import { AuthDialog } from '../components/ui/AuthDialog'
+import type { AuthMode } from '../components/ui/LoginForm'
 import { Field, Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { PlayerSelect } from '../components/ui/PlayerSelect'
+import { claimPlayerName } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import {
   VOTE_LABEL, WEEKDAYS, addDays, attendanceRate, canVote, castVote, deleteBreak, deleteSeries, examBreak, generatePractices, isLateReply, loadPractice,
@@ -337,7 +339,8 @@ export function PracticePage() {
   const [data, setData] = useState<PracticeData | null | 'missing' | 'loading'>('loading')
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('next')
-  const [login, setLogin] = useState(false)
+  const [login, setLogin] = useState<AuthMode | null>(null)
+  const [claimName, setClaimName] = useState('')
   const [busy, setBusy] = useState(false)
   const today = taipeiToday()
   const activeNames = useMemo(() => roster.filter((p) => !p.status || p.status === '現役').map((p) => p.name), [roster])
@@ -379,11 +382,19 @@ export function PracticePage() {
           <Card title="你會來嗎？" subtitle={`${next.date}（${weekdayOf(next.date)}）${next.time}${next.place ? `・${next.place}` : ''}${next.note ? `・${next.note}` : ''}`}>
             {!signedIn ? (
               <div className="flex items-center gap-3 flex-wrap">
-                <p className="text-[13px] text-ink-2">用名單上的信箱登入就能回覆（登入不會取得紀錄員權限）。</p>
-                <Button variant="primary" size="sm" onClick={() => setLogin(true)}>登入回覆</Button>
+                <p className="text-[13px] text-ink-2">用自己的 email 註冊，註冊時選你的名字就能回覆（註冊不會取得紀錄員權限）。</p>
+                <Button variant="primary" size="sm" onClick={() => setLogin('signup')}>註冊</Button>
+                <Button size="sm" onClick={() => setLogin('signin')}>已經有帳號，登入</Button>
               </div>
             ) : !myName ? (
-              <p className="text-[13px] text-ink-2">你登入的信箱 <span className="font-medium text-ink">{cloud.user?.email}</span> 不在球員名單上。請管理員到「球員」頁「編輯名單」把你的 Email 填進去。</p>
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] text-ink-2">帳號 <span className="font-medium text-ink">{cloud.user?.email}</span> 還沒對到球員名單。選你的名字綁定：</p>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <PlayerSelect value={claimName} onChange={setClaimName} names={activeNames} className="w-48" />
+                  <Button variant="primary" size="sm" disabled={!claimName || busy} onClick={() => { setBusy(true); setError(null); void claimPlayerName(claimName).then(refresh).catch((e) => setError(err(e))).finally(() => setBusy(false)) }}>綁定</Button>
+                </div>
+                <p className="text-[12px] text-muted">名單上沒有你，或名字已被別人註冊時，請找管理員處理。</p>
+              </div>
             ) : (
               <div className="flex flex-col gap-2">
                 <div className="text-[13px] text-muted">以 <span className="font-medium text-ink">{myName}</span> 的身分回覆</div>
@@ -408,7 +419,7 @@ export function PracticePage() {
           {upcoming.length ? <ul className="divide-y divide-[var(--border)]">{upcoming.map((p) => <PracticeRow key={p.id} p={p} {...rowProps} />)}</ul>
             : <EmptyState compact title="沒有排定的練球" description={isEditor ? '到「管理」分頁設定每週固定練球。' : '等管理員排上練球。'} />}
         </Card>
-        <PushCard myName={myName} signedIn={signedIn} onLogin={() => setLogin(true)} />
+        <PushCard myName={myName} signedIn={signedIn} onLogin={() => setLogin('signup')} />
         {d.practices.some((p) => p.date < today) && (
           <Card title="最近的練球" subtitle="展開可看點名結果" flush>
             <ul className="divide-y divide-[var(--border)]">{d.practices.filter((p) => p.date < today).slice(-6).reverse().map((p) => <PracticeRow key={p.id} p={p} {...rowProps} />)}</ul>
@@ -439,7 +450,7 @@ export function PracticePage() {
 
       {tab === 'manage' && isEditor && <ManagePanel data={d} onChanged={refresh} onError={setError} />}
 
-      <AuthDialog open={login} onClose={() => setLogin(false)} title="球員登入" intro="用名單上的信箱登入來回覆練球；紀錄員也用同一個入口。" />
+      <AuthDialog open={!!login} onClose={() => setLogin(null)} initialMode={login ?? 'signup'} title="球員帳號" intro="球員用自己的 email 註冊，註冊時選名單上的名字；紀錄員也用同一個入口登入。" />
     </>
   )
 }

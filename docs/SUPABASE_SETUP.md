@@ -63,6 +63,7 @@ npm run dev
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
 - `supabase/migrations/2026-09-13_practice.sql`：**練球點名**。在 `players` 加 `email` 欄（球員登入用），建立 `practice_series`（每週固定練球）、`practice_breaks`（停練期間）、`practices`（每一場）、`practice_votes`（會到／小遲／下次一定）、`practice_rollcall`（點名）、`push_subscriptions`（推播訂閱）與 `generate_practices()` 函式。球員只能讀寫自己的那一票（依登入信箱對到名單），紀錄員能改全部。沒執行時「練球」頁會提示尚未開通。
+- `supabase/migrations/2026-09-14_player_accounts.sql`：**球員自己註冊**。把帳號與名單的對應搬到 `player_accounts`（只有本人和紀錄員讀得到），並把 `players` 的 `email` 欄移除——球員名單是公開資料，信箱不該跟著公開；先前填在名單上的信箱會自動搬過去。同時建立 `claim_player_name()`：球員註冊時選名單上的名字，資料庫會確認名字存在、還沒被別人註冊。**要開放註冊**：Authentication → Providers → Email 開啟 `Enable email signups`；若同時開著 `Confirm email`，球員註冊後要先點信裡的連結才會生效。
 
 ## 練球通知（推播，選做）
 投票與點名執行完上面的 SQL 就能用；要讓手機在練球前一天 18:00 跳通知，再做這五步（約 20 分鐘，只做一次）。VAPID 是瀏覽器推播的身分驗證：通知由 Google／Apple 的推播伺服器轉送，這對金鑰用來證明通知是本站發的。公鑰放前端，私鑰放 Supabase，不用申請、不會過期。
@@ -100,7 +101,7 @@ npm run dev
 
 
 ## 誰能登入、誰能寫
-- 帳號：Authentication → Users → Add user（設 email 與密碼）。若不用練球投票，關閉 Providers → Email 的 **Enable email signups** 避免任何人自行註冊；有用練球投票則可開著，因為登入本身拿不到任何寫入權限（只有 `editors` 名單能寫比賽資料，球員只能改自己的一票）。
+- 帳號：紀錄員由管理員在 Authentication → Users → Add user 建立；球員自己在網站「練球」頁按「註冊」開帳號，所以 Providers → Email 的 **Enable email signups** 要開著。這不會有安全問題：註冊只能綁一個名單上的名字並回覆自己的練球，寫入比賽資料仍然只看 `editors` 表。
 - 寫入權限：Table Editor → `editors` 新增那個 email；移除那一列即刻失效。
 - 網站側欄底部有「紀錄員登入」；登入且在名單內的人才看得到「紀錄比賽」「資料匯入」與比賽頁的「修改資料」。
 - 更完整的制度見 `docs/SECURITY.md`。

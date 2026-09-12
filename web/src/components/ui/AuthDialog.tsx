@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
-import { LoginForm } from './LoginForm'
+import { LoginForm, type AuthMode } from './LoginForm'
 import { Button } from './Button'
 
 /** Small centred sign-in dialog, opened from the sidebar. */
-export function AuthDialog({ open, onClose, title = '紀錄員登入', intro }: { open: boolean; onClose: () => void; title?: string; intro?: string }) {
+export function AuthDialog({ open, onClose, title = '紀錄員登入', intro, initialMode }: { open: boolean; onClose: () => void; title?: string; intro?: string; initialMode?: AuthMode }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -17,7 +17,7 @@ export function AuthDialog({ open, onClose, title = '紀錄員登入', intro }: 
       <div className="absolute inset-0 bg-black/45" onClick={onClose} />
       <div className="relative w-full sm:max-w-sm bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between"><div className="text-[16px] font-semibold text-ink">{title}</div><Button variant="ghost" size="sm" icon={<X />} aria-label="關閉" onClick={onClose} /></div>
-        <LoginForm onDone={onClose} autoFocus intro={intro} />
+        <LoginForm onDone={onClose} autoFocus intro={intro} initialMode={initialMode} />
       </div>
     </div>
   )
