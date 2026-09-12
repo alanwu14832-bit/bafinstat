@@ -72,7 +72,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
       )}
       <div className="overflow-x-auto scroll-x border border-border rounded-[var(--radius-sm)]">
         <table className="min-w-full border-collapse text-[13px]">
-          <thead className="bg-surface-2/60"><tr className="text-[11px] text-muted">{['背號', '姓名', '主守位', '副守位', '打', '投', '狀態', '備註', ''].map((h) => <th key={h} className="px-2 h-8 text-left font-medium whitespace-nowrap first:pl-3">{h}</th>)}</tr></thead>
+          <thead className="bg-surface-2/60"><tr className="text-[11px] text-muted">{['背號', '姓名', '主守位', '副守位', '打', '投', '狀態', 'Email（登入用）', '備註', ''].map((h) => <th key={h} className="px-2 h-8 text-left font-medium whitespace-nowrap first:pl-3">{h}</th>)}</tr></thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className={cx('border-t border-border', r.removed && 'opacity-40', touched.has(r.player.name) && 'bg-[color-mix(in_srgb,var(--accent)_8%,transparent)]')}>
@@ -83,6 +83,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.bats ?? ''} onChange={(e) => set(i, { bats: (e.target.value || undefined) as Player['bats'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[72px]"><select value={r.player.throws ?? ''} onChange={(e) => set(i, { throws: (e.target.value || undefined) as Player['throws'] })} className={sel} disabled={r.removed}>{HANDS.map((h) => <option key={h.v} value={h.v}>{h.l}</option>)}</select></td>
                 <td className="px-1 py-1 w-[88px]"><select value={r.player.status ?? '現役'} onChange={(e) => set(i, { status: e.target.value })} className={sel} disabled={r.removed}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
+                <td className="px-1 py-1 min-w-[170px]"><input type="email" value={r.player.email ?? ''} onChange={(e) => set(i, { email: e.target.value.trim().toLowerCase() || undefined })} className={cell} disabled={r.removed} placeholder="投票用" /></td>
                 <td className="px-1 py-1 min-w-[140px]"><input value={r.player.note ?? ''} onChange={(e) => set(i, { note: e.target.value })} className={cell} disabled={r.removed} /></td>
                 <td className="px-2 py-1 w-[40px]">
                   {r.original && withRecords.has(r.original) ? (

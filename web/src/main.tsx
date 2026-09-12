@@ -11,6 +11,11 @@ logo.onload = () => {
 }
 logo.src = `${import.meta.env.BASE_URL}mark.png`
 
+// Service worker only receives push notifications; it never caches the app.
+if ('serviceWorker' in navigator && !import.meta.env.DEV) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined) })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
