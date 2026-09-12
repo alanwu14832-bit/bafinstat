@@ -10,16 +10,17 @@ import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
 import { albumDate, albumProvider, albumTitle, isValidAlbumUrl, type AlbumLink } from '../data/albums'
 import { summarizeGame } from '../data/stats'
+import { playedGames } from '../data/filters'
 import { cx } from '../lib/format'
 
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
 const fmtDate = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return Number.isNaN(d.getTime()) ? iso : `${iso}（${WEEKDAY[d.getDay()]}）` }
 
 /* ------------------------------------------------------------------ editor */
-function AlbumForm({ initial, onSave, onCancel, onDelete }: { initial: AlbumLink | null; onSave: (a: AlbumLink) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void> }) {
+function AlbumForm({ initial, presetGameId, onSave, onCancel, onDelete }: { initial: AlbumLink | null; presetGameId?: string; onSave: (a: AlbumLink) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void> }) {
   const base = useDataStore((s) => s.base)
   const games = useMemo(() => [...base.games].sort((a, b) => (a.date < b.date ? 1 : -1)), [base.games])
-  const [target, setTarget] = useState<string>(initial?.gameId ?? (initial?.title ? 'custom' : games[0]?.id ?? 'custom'))
+  const [target, setTarget] = useState<string>(initial?.gameId ?? presetGameId ?? (initial?.title ? 'custom' : games[0]?.id ?? 'custom'))
   const [title, setTitle] = useState(initial?.title ?? '')
   const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10))
   const [url, setUrl] = useState(initial?.url ?? '')
@@ -44,7 +45,7 @@ function AlbumForm({ initial, onSave, onCancel, onDelete }: { initial: AlbumLink
           <Field label="相簿名稱"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如 2026 春訓" /></Field>
           <Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="tnum" /></Field>
         </>) : <div className="hidden sm:block" />}
-        <Field label="相簿連結" className="sm:col-span-2"><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" inputMode="url" /></Field>
+        <Field label="相簿連結" className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical">請貼完整的連結（以 https:// 開頭）</span> : undefined}><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} /></Field>
         <Field label="攝影師（選填）"><Input value={photographer} onChange={(e) => setPhotographer(e.target.value)} placeholder="誰拍的" /></Field>
         <Field label="備註（選填）"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如 只有上半場、原檔另外索取" /></Field>
       </div>
@@ -67,9 +68,12 @@ export function PhotosPage() {
   const deleteAlbum = useDataStore((s) => s.deleteAlbum)
   const canEdit = useDataStore((s) => s.canEdit)()
   const [editing, setEditing] = useState<AlbumLink | null | 'new'>(null)
+  const [preset, setPreset] = useState<string | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+  // played games that nobody has linked photos for yet, so the gap is visible instead of silent
+  const missing = useMemo(() => playedGames(base).filter((g) => !albums.some((a) => a.gameId === g.id)).reverse(), [base, albums])
   const sorted = useMemo(() => [...albums].sort((a, b) => albumDate(b, base.games).localeCompare(albumDate(a, base.games)) || b.updatedAt.localeCompare(a.updatedAt)), [albums, base.games])
-  const byYear = useMemo(() => { const m = new Map<string, AlbumLink[]>(); for (const a of sorted) { const y = albumDate(a, base.games).slice(0, 4); m.set(y, [...(m.get(y) ?? []), a]) } return [...m.entries()] }, [sorted, base.games])
+  const byYear = useMemo(() => { const m = new Map<string, AlbumLink[]>(); for (const a of sorted) { const y = albumDate(a, base.games).slice(0, 4); m.set(y, [...(m.get(y) ?? []), a]) } for (const g of missing) if (!m.has(g.date.slice(0, 4))) m.set(g.date.slice(0, 4), []); return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])) }, [sorted, base.games, missing])
   const scoreOf = (a: AlbumLink) => {
     const g = a.gameId ? base.games.find((x) => x.id === a.gameId) : undefined
     if (!g || g.status) return null
@@ -82,11 +86,11 @@ export function PhotosPage() {
   return (
     <>
       <PageHeader title="相簿" description="每場比賽與活動的照片連結。照片放在攝影師的 Google Drive，點進去就能看、單張或整個資料夾下載。"
-        actions={canEdit ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setEditing('new')}>新增相簿連結</Button> : undefined} />
+        actions={canEdit ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => { setPreset(undefined); setEditing('new') }}>新增相簿連結</Button> : undefined} />
       {!supported && <div role="status" className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2">相簿連結還沒開通：請管理員在 Supabase SQL Editor 執行一次 supabase/migrations/2026-09-12_albums_schedule.sql。</div>}
       {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
-      {editing === 'new' && <AlbumForm initial={null} onSave={save} onCancel={() => setEditing(null)} />}
-      {sorted.length === 0 && editing !== 'new' && (
+      {editing === 'new' && <AlbumForm initial={null} presetGameId={preset} onSave={save} onCancel={() => { setEditing(null); setPreset(undefined) }} />}
+      {sorted.length === 0 && missing.length === 0 && editing !== 'new' && (
         <Card><EmptyState icon={<Camera />} title="還沒有相簿" description={canEdit ? '請攝影師把照片放到 Google Drive 資料夾並開啟連結分享，再按右上角新增。' : '等紀錄員貼上相簿連結後就會出現在這裡。'} /></Card>
       )}
       {byYear.map(([year, list]) => (
@@ -117,6 +121,15 @@ export function PhotosPage() {
                 </li>
               )
             })}
+            {missing.filter((g) => g.date.startsWith(year)).map((g) => (
+              <li key={`missing-${g.id}`}>
+                <button type="button" disabled={!canEdit} onClick={() => { setPreset(g.id); setEditing('new'); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                  className={cx('w-full h-full min-h-[120px] rounded-[var(--radius)] border border-dashed border-border-strong text-muted text-[13px] flex flex-col items-center justify-center gap-1 px-4', canEdit ? 'cursor-pointer hover:bg-surface-2/60 active:bg-surface-2' : 'cursor-default')}>
+                  <span className="text-ink-2 font-medium">{g.date} vs {g.opponent}</span>
+                  <span>還沒有相簿{canEdit ? '，點這裡貼連結' : ''}</span>
+                </button>
+              </li>
+            ))}
           </ul>
         </section>
       ))}

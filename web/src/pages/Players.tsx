@@ -245,7 +245,7 @@ export function PlayersPage() {
             </Card>
           )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            <RadarCard title="隊內百分位" subtitle={compare ? `${player.name} 與 ${compare} 的隊內百分位` : '與同隊打者比較（50 = 隊內中位）'} data={radar} series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : [{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />
+            {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" subtitle={compare ? `${player.name} 與 ${compare} 的隊內百分位` : '與同隊打者比較（50 = 隊內中位）'} data={radar} series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : [{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今" data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
