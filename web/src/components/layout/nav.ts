@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { BookOpen, CalendarDays, Camera, CircleHelp, ClipboardCheck, PenLine, Radio, Upload } from 'lucide-react'
+import { BookOpen, Camera, CircleHelp, ClipboardCheck, PenLine, Radio, Upload } from 'lucide-react'
 import { IconBat, IconBaseball, IconField, IconGlove, IconHomePlate, IconJersey, IconScoreboard } from '../icons/baseball'
 
 export type NavIcon = ComponentType<{ className?: string; strokeWidth?: number | string }>
@@ -28,8 +28,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/pitching', label: '投球', subtitle: '投手成績與走勢', icon: IconBaseball },
       { to: '/fielding', label: '守備', subtitle: '守備位置與失誤', icon: IconGlove },
       { to: '/players', label: '球員', subtitle: '球員名單與個人檔案', icon: IconJersey },
-      { to: '/games', label: '比賽', subtitle: '比賽結果與逐球紀錄', icon: IconScoreboard },
-      { to: '/schedule', label: '賽程', subtitle: '接下來的比賽', icon: CalendarDays },
+      { to: '/games', label: '比賽', subtitle: '賽程、結果與逐球紀錄', icon: IconScoreboard },
       { to: '/practice', label: '練球', subtitle: '練球時程、投票與點名', icon: ClipboardCheck },
       { to: '/live', label: '即時比分', subtitle: '進行中的比賽', icon: Radio },
       { to: '/photos', label: '相簿', subtitle: '比賽與活動照片', icon: Camera },

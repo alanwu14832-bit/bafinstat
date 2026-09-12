@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CalendarPlus, Camera, ChevronRight, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { PageHeader } from '../components/layout/PageHeader'
+import { CalendarPlus, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -11,8 +9,6 @@ import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
 import { useFilterOptions } from '../hooks/useStats'
 import { nextGameId } from '../record/model'
-import { summarizeGame } from '../data/stats'
-import { playedGames } from '../data/filters'
 import { TEAM_NAME } from '../data/seed'
 import type { Game } from '../data/types'
 import { cx } from '../lib/format'
@@ -73,11 +69,10 @@ function GameForm({ initial, onSave, onCancel, onDelete }: { initial: Game | nul
   )
 }
 
-/* ------------------------------------------------------------------ page */
-export function SchedulePage() {
-  const navigate = useNavigate()
+/* ------------------------------------------------------------------ section */
+/** The schedule half of the 比賽 page: what is coming, what still needs recording, what was called off. */
+export function ScheduleSection() {
   const base = useDataStore((s) => s.base)
-  const albums = useDataStore((s) => s.albums)
   const saveGame = useDataStore((s) => s.saveGame)
   const deleteGame = useDataStore((s) => s.deleteGame)
   const canEdit = useDataStore((s) => s.canEdit)()
@@ -87,7 +82,6 @@ export function SchedulePage() {
   const upcoming = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= t).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')), [base.games, t])
   const missed = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date < t).sort((a, b) => b.date.localeCompare(a.date)), [base.games, t])
   const cancelled = useMemo(() => base.games.filter((g) => g.status === 'cancelled').sort((a, b) => b.date.localeCompare(a.date)), [base.games])
-  const played = useMemo(() => playedGames(base).reverse().slice(0, 12), [base])
   const save = async (g: Game) => { try { await saveGame({ game: g, batting: [], pitching: [], fielding: [] }); setEditing(null); setError(null) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } }
   const remove = async (id: string) => { try { await deleteGame(id); setEditing(null) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } }
 
@@ -126,11 +120,10 @@ export function SchedulePage() {
 
   return (
     <>
-      <PageHeader title="賽程" description={upcoming.length ? `接下來 ${upcoming.length} 場。點日曆圖示可加到 Google 日曆；比賽當天紀錄員在「紀錄比賽」選這場就能開始記。` : '還沒有排定的比賽。'}
-        actions={canEdit ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setEditing('new')}>新增賽程</Button> : undefined} />
       {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
       {editing === 'new' && <GameForm initial={null} onSave={save} onCancel={() => setEditing(null)} />}
-      <Card title="接下來" flush>
+      <Card title="接下來" subtitle={upcoming.length ? '點日曆圖示可加到 Google 日曆；比賽當天紀錄員在「紀錄比賽」選這場就能開始記' : undefined}
+        action={canEdit && editing !== 'new' ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setEditing('new')}>新增賽程</Button> : undefined} flush>
         {upcoming.length ? <ul className="divide-y divide-[var(--border)]">{upcoming.map((g) => <Row key={g.id} g={g} tone="up" />)}</ul>
           : <EmptyState compact title="沒有排定的比賽" description={canEdit ? '按右上角「新增賽程」。' : '等紀錄員排上賽程。'} />}
       </Card>
@@ -139,29 +132,14 @@ export function SchedulePage() {
           <ul className="divide-y divide-[var(--border)]">{missed.map((g) => <Row key={g.id} g={g} tone="past" />)}</ul>
         </Card>
       )}
-      <Card title="最近戰績" subtitle="點一場看完整數據" flush>
-        {played.length ? (
-          <ul className="divide-y divide-[var(--border)]">
-            {played.map((g) => {
-              const s = summarizeGame(base, g)
-              const hasAlbum = albums.some((a) => a.gameId === g.id)
-              return (
-                <li key={g.id} className="flex items-center gap-4 px-4 md:px-5 py-2.5">
-                  <span className="w-14 shrink-0 text-[12px] text-muted tnum">{g.date.slice(5)}</span>
-                  <button type="button" onClick={() => navigate(`/games?game=${encodeURIComponent(g.id)}`)} className="min-w-0 flex-1 text-left cursor-pointer group -mx-2 px-2 py-1 rounded-[8px] active:bg-surface-3/70">
-                    <span className="text-[14px] font-medium text-ink group-hover:underline">vs {g.opponent}</span>
-                    <span className="text-[12px] text-muted ml-2">{g.tournament}</span>
-                  </button>
-                  {hasAlbum && <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" aria-label="相簿" title="有相簿" />}
-                  <Badge variant={s.result === 'W' ? 'good' : s.result === 'L' ? 'critical' : 'neutral'} className="tnum">{s.result === 'W' ? '勝' : s.result === 'L' ? '敗' : '和'} {s.runsUs}–{s.runsOpp}</Badge>
-                  <ChevronRight className="size-4 text-muted" />
-                </li>
-              )
-            })}
-          </ul>
-        ) : <EmptyState compact title="還沒有比賽紀錄" />}
-      </Card>
       {cancelled.length > 0 && <Card title="已取消" flush><ul className="divide-y divide-[var(--border)]">{cancelled.map((g) => <Row key={g.id} g={g} tone="off" />)}</ul></Card>}
     </>
   )
+}
+
+/** How soon the next scheduled game is, so the 比賽 page can open on the right tab. */
+export function daysToNextGame(games: Game[]): number | null {
+  const t = today()
+  const next = games.filter((g) => g.status === 'scheduled' && g.date >= t).sort((a, b) => a.date.localeCompare(b.date))[0]
+  return next ? daysUntil(next.date) : null
 }
