@@ -41,7 +41,7 @@ export function Tabs<T extends string>({ items, value, onChange, size = 'md', cl
           >
             {active && (
               <motion.span layoutId={layoutId} className="absolute inset-0 rounded-[6px] bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_var(--border)]"
-                transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 520, damping: 42 }} />
+                transition={reduced ? { duration: 0 } : { type: 'spring', visualDuration: 0.25, bounce: 0.05 }} />
             )}
             <span className="relative">
               {item.label}

@@ -1,5 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 
 export type ButtonVariant = 'primary' | 'outline' | 'ghost'
@@ -28,7 +30,9 @@ const sizeCls: Record<ButtonSize, string> = {
 }
 const base =
   'inline-flex items-center justify-center rounded-full font-medium whitespace-nowrap select-none ' +
-  'transition-[background-color,color,border-color,transform] duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100 disabled:opacity-50 disabled:pointer-events-none cursor-pointer [&>svg]:shrink-0'
+  'transition-[background-color,color,border-color] duration-150 motion-reduce:transition-none disabled:opacity-50 disabled:pointer-events-none cursor-pointer [&>svg]:shrink-0'
+
+const MotionLink = motion.create(Link)
 
 /** The one button. Primary is the ink-colored action; the brand accent is reserved for highlights. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -36,12 +40,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   ref,
 ) {
   const cls = cx(base, variantCls[variant], sizeCls[size], !children && 'px-0 aspect-square', className)
-  if (to) return <Link to={to} className={cls} aria-label={rest['aria-label']} title={rest.title}>{icon}{children}</Link>
-  if (href) return <a href={href} download={download} className={cls} aria-label={rest['aria-label']} title={rest.title}>{icon}{children}</a>
+  const reduced = usePrefersReducedMotion()
+  // press feedback on pointer-down, release springs back (critically damped)
+  const press = reduced ? {} : { whileTap: { scale: 0.97 }, transition: { type: 'spring' as const, visualDuration: 0.12, bounce: 0 } }
+  if (to) return <MotionLink to={to} className={cls} aria-label={rest['aria-label']} title={rest.title} {...press}>{icon}{children}</MotionLink>
+  if (href) return <motion.a href={href} download={download} className={cls} aria-label={rest['aria-label']} title={rest.title} target={/^https?:/.test(href) ? '_blank' : undefined} rel={/^https?:/.test(href) ? 'noreferrer' : undefined} {...press}>{icon}{children}</motion.a>
   return (
-    <button ref={ref} type={type} className={cls} {...rest}>
+    <motion.button ref={ref} type={type} className={cls} {...press} {...(rest as object)}>
       {icon}
       {children}
-    </button>
+    </motion.button>
   )
 })

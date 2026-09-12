@@ -50,7 +50,7 @@ interface OrderItem { key: number; name: string }
 function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { item: OrderItem; index: number; last: boolean; pos: string; names: string[]; taken: Set<string>; onPick: (name: string) => void; onMove: (d: number) => void }) {
   const controls = useDragControls()
   return (
-    <Reorder.Item value={item} dragListener={false} dragControls={controls} as="li"
+    <Reorder.Item value={item} dragListener={false} dragControls={controls} as="li" transition={{ type: 'spring', visualDuration: 0.3, bounce: 0 }}
       className="relative flex items-center gap-2 px-2 sm:px-3 py-2 bg-surface border-b border-border last:border-b-0"
       whileDrag={{ scale: 1.015, boxShadow: 'var(--shadow-hover)', zIndex: 5, backgroundColor: 'var(--surface)' }}>
       <button type="button" aria-label="拖曳調整棒次" title="拖曳調整棒次" onPointerDown={(e) => { e.preventDefault(); controls.start(e) }}
