@@ -23,7 +23,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       className={cx(
         'relative inline-flex items-center bg-surface-3/60 border border-transparent rounded-[10px] text-ink min-w-0 cursor-pointer',
         'hover:bg-surface-3 focus-within:bg-surface focus-within:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] transition-colors motion-reduce:transition-none',
-        size === 'sm' ? 'h-8 text-[13px]' : 'h-9 text-sm',
+        size === 'sm' ? 'h-9 md:h-8 text-[13px]' : 'h-10 md:h-9 text-sm',
         className,
       )}
     >
