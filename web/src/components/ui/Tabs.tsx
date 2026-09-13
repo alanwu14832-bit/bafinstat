@@ -35,7 +35,7 @@ export function Tabs<T extends string>({ items, value, onChange, size = 'md', cl
             onClick={() => onChange(item.value)}
             className={cx(
               'relative rounded-[6px] whitespace-nowrap font-medium transition-colors cursor-pointer motion-reduce:transition-none',
-              size === 'sm' ? 'h-9 px-3 text-[12px] md:h-7 md:px-2.5' : 'h-10 px-3.5 text-[13px] md:h-8 md:px-3',
+              size === 'sm' ? 'h-9 px-3 text-[12px] pointer-fine:h-7 pointer-fine:px-2.5' : 'h-10 px-3.5 text-[13px] pointer-fine:h-8 pointer-fine:px-3',
               active ? 'text-ink' : 'text-ink-2 hover:text-ink',
             )}
           >

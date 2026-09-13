@@ -71,15 +71,15 @@ function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { it
       className="relative flex items-center gap-2 px-2 sm:px-3 py-2 bg-surface border-b border-border last:border-b-0"
       whileDrag={{ scale: 1.015, boxShadow: 'var(--shadow-hover)', zIndex: 5, backgroundColor: 'var(--surface)' }}>
       <button type="button" aria-label="拖曳調整棒次" title="拖曳調整棒次" onPointerDown={(e) => { e.preventDefault(); controls.start(e) }}
-        className="size-9 md:size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
+        className="size-9 pointer-fine:size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
         <GripVertical className="size-4" />
       </button>
       <PlateBadge size={28} active={!!item.name}>{index + 1}</PlateBadge>
       <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
       <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? pos || '無守位' : ''}</span>
       <div className="hidden sm:flex shrink-0">
-        <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
-        <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
+        <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
+        <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
       </div>
     </Reorder.Item>
   )

@@ -40,12 +40,12 @@ function MobileFilters() {
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
-        className={cx('lg:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none',
+        className={cx('xl:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none',
           count ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')}>
         <SlidersHorizontal className="size-3.5" />
         篩選{count > 0 && <span className="tnum">・{count}</span>}
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="篩選" side="bottom" desktopFrom="never" className="lg:hidden" panelClassName="max-h-[88vh]"
+      <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="篩選" side="bottom" desktopFrom="never" className="xl:hidden" panelClassName="max-h-[88vh]"
         header={<div className="px-4 h-11 flex items-center justify-between">
           <span className="text-sm font-semibold text-ink">篩選{count > 0 && <span className="text-muted font-normal ml-1.5 tnum">{count} 項生效</span>}</span>
           <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="size-9 -mr-2 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer"><X className="size-5" /></button>
@@ -75,8 +75,8 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
           className="lg:hidden size-9 -ml-2 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer shrink-0">
           <Menu className="size-5" />
         </button>
-        <div className="lg:hidden text-[15px] font-semibold text-ink whitespace-nowrap truncate min-w-0">{item?.label ?? '頁面'}</div>
-        {children && <div className="hidden lg:block min-w-0 flex-1 scroll-x -my-2 py-2">{children}</div>}
+        <div className="xl:hidden text-[15px] font-semibold text-ink whitespace-nowrap truncate min-w-0">{item?.label ?? '頁面'}</div>
+        {children && <div className="hidden xl:block min-w-0 flex-1 scroll-x -my-2 py-2">{children}</div>}
         <div className="flex items-center gap-2 ml-auto shrink-0">
           <MobileFilters />
           <CloudStatus />

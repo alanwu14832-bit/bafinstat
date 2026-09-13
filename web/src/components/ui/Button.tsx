@@ -24,7 +24,7 @@ const variantCls: Record<ButtonVariant, string> = {
   ghost: 'bg-transparent text-ink-2 hover:bg-surface-3/70 hover:text-ink active:bg-surface-3',
 }
 const sizeCls: Record<ButtonSize, string> = {
-  sm: 'h-9 md:h-8 px-3 text-[13px] gap-1.5 [&>svg]:size-3.5',
+  sm: 'h-9 pointer-fine:h-8 px-3 text-[13px] gap-1.5 [&>svg]:size-3.5',
   md: 'h-9 px-4 text-sm gap-2 [&>svg]:size-4',
   lg: 'h-11 px-5 text-[15px] gap-2 [&>svg]:size-4',
 }
