@@ -144,69 +144,12 @@ export async function pushRoster(players: Player[], renames: Record<string, stri
     fail('守備紀錄', (await sb.from('fielding_lines').update({ player: to }).eq('player', from)).error)
     for (const col of ['winning_pitcher', 'losing_pitcher', 'save_pitcher']) fail('比賽清單', (await sb.from('games').update({ [col]: to }).eq(col, from)).error)
     fail('球員名單', (await sb.from('players').delete().eq('name', from)).error)
-    softFail(await sb.from('player_accounts').update({ player_name: to }).eq('player_name', from))
   }
   if (players.length) fail('球員名單', (await sb.from('players').upsert(players.map(toPlayerRow), { onConflict: 'name' })).error)
-  if (removed.length) {
-    fail('球員名單', (await sb.from('players').delete().in('name', removed)).error)
-    softFail(await sb.from('player_accounts').delete().in('player_name', removed))
-  }
+  if (removed.length) fail('球員名單', (await sb.from('players').delete().in('name', removed)).error)
 }
 
 // ---------------------------------------------------------------- editors allowlist
-/** Ignore failures that only mean the player-account migration has not been run yet. */
-function softFail({ error }: { error: { code?: string; message: string } | null }) {
-  if (error && error.code !== '42P01' && !/player_accounts/.test(error.message)) throw new Error(error.message)
-}
-
-/* ------------------------------------------------------------ 球員帳號 */
-/** The roster name this account is linked to, or null when it has not claimed one. */
-export async function fetchMyPlayerName(): Promise<string | null> {
-  const { data, error } = await supabase().rpc('my_player_name')
-  if (error) return null
-  return (data as string | null) ?? null
-}
-
-/** Sign up with an email and password, remembering which roster name to claim once the session exists. */
-export async function signUpPlayer(email: string, password: string, playerName: string): Promise<{ needsConfirm: boolean }> {
-  const { data, error } = await supabase().auth.signUp({
-    email, password,
-    options: { data: { player_name: playerName }, emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` },
-  })
-  if (error) throw new Error(/already registered/i.test(error.message) ? '這個信箱已經註冊過了，請直接登入' : error.message)
-  if (data.session) { await claimPlayerName(playerName); return { needsConfirm: false } }
-  return { needsConfirm: true }
-}
-
-/** Link this account to a roster name. The database checks the name exists and is not already taken. */
-export async function claimPlayerName(name: string): Promise<string> {
-  const { data, error } = await supabase().rpc('claim_player_name', { name })
-  if (error) throw new Error(error.code === '42883' ? '這個功能還沒開通，請管理員執行 2026-09-14_player_accounts.sql' : error.message.replace(/^.*?:\s*/, ''))
-  return data as string
-}
-
-/** After a sign-in, claim the name chosen at sign-up (no-op when already linked). */
-export async function claimPendingName(user: User): Promise<void> {
-  const want = (user.user_metadata as { player_name?: string } | null)?.player_name
-  if (!want) return
-  if (await fetchMyPlayerName()) return
-  try { await claimPlayerName(want) } catch { /* the page shows the real state */ }
-}
-
-export interface PlayerAccount { player_name: string; email: string | null; claimed_at: string }
-/** Who has registered (editors only; null when the migration has not been run). */
-export async function fetchPlayerAccounts(): Promise<PlayerAccount[] | null> {
-  const { data, error } = await supabase().from('player_accounts').select('player_name, email, claimed_at')
-  if (error) return null
-  return (data ?? []) as PlayerAccount[]
-}
-
-/** Unlink an account so the player (or someone else) can register that name again. */
-export async function unlinkPlayerAccount(playerName: string) {
-  const { error } = await supabase().from('player_accounts').delete().eq('player_name', playerName)
-  if (error) throw new Error(error.message)
-}
-
 /**
  * Is this signed-in email allowed to write? Reads the `editors` table (see supabase/migrations/2026-09-11_editors.sql).
  * Returns true when the table does not exist yet (older projects where every signed-in user may write).
