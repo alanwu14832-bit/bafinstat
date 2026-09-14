@@ -14,14 +14,14 @@ import { PlayerSelect } from '../components/ui/PlayerSelect'
 import { claimPlayerName } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import {
-  VOTE_LABEL, WEEKDAYS, addDays, attendanceRate, canVote, castVote, deleteBreak, deleteSeries, examBreak, generatePractices, isLateReply, loadPractice,
+  VOTE_LABEL, WEEKDAYS, addDays, canVote, castVote, deleteBreak, deleteSeries, examBreak, generatePractices, isLateReply, loadPractice,
   notifyNow, practiceStart, saveBreak, saveSeries, setRollCall, taipeiToday, tally, updatePractice, weekdayOf,
   type Practice, type PracticeBreak, type PracticeData, type PracticeSeries, type Vote, type VoteStatus,
 } from '../data/practice'
 import { currentSubscription, needsInstall, pushConfigured, pushSupported, subscribePush, unsubscribePush } from '../data/push'
 import { cx } from '../lib/format'
 
-type Tab = 'next' | 'rate' | 'manage'
+type Tab = 'next' | 'manage'
 const err = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const daysUntil = (iso: string) => Math.round((new Date(`${iso}T00:00:00Z`).getTime() - new Date(`${taipeiToday()}T00:00:00Z`).getTime()) / 86_400_000)
 const whenLabel = (iso: string) => { const n = daysUntil(iso); return n === 0 ? '今天' : n === 1 ? '明天' : n === 2 ? '後天' : n > 0 ? `${n} 天後` : `${-n} 天前` }
@@ -322,7 +322,7 @@ function ManagePanel({ data, onChanged, onError }: { data: PracticeData; onChang
         <ul className="text-[13px] text-ink-2 leading-relaxed list-disc pl-5 space-y-1">
           <li>每天 18:00 系統會通知隔天有練球的人；截止是練球當天 09:00，之後回覆會標「晚回」。</li>
           <li>臨時取消：展開那一場按「停練並通知」。臨時加練：先在固定練球新增一筆只涵蓋那天的，再按儲存。</li>
-          <li>練球當天展開那一場就能點名；「依投票預填」後只要改沒來的人。出席率以點名為準，沒點名的場次用投票算。</li>
+          <li>練球當天展開那一場就能點名；「依投票預填」後只要改沒來的人。點名結果會留在那一場裡。</li>
           <li>球員要用名單上的信箱登入才能投票：到「球員」頁「編輯名單」填 Email 欄。</li>
         </ul>
       </Card>
@@ -366,9 +366,7 @@ export function PracticePage() {
     setBusy(true); setError(null)
     try { await castVote({ practice_id: p.id, player_name: myName, status: s, reason, late_reply: isLateReply(p) }); await refresh() } catch (e) { setError(err(e)) } finally { setBusy(false) }
   }
-  const teamRates = isEditor ? activeNames.map((n) => ({ name: n, ...attendanceRate(n, d.practices, d.votes, d.rolls) })).sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1) || a.name.localeCompare(b.name, 'zh-Hant')) : []
-  const heldCount = d.practices.filter((p) => p.status === 'scheduled' && practiceStart(p).getTime() <= Date.now()).length
-  const tabs: Array<{ value: Tab; label: string }> = [{ value: 'next', label: '練球' }, ...(isEditor ? [{ value: 'rate' as Tab, label: '出席率' }, { value: 'manage' as Tab, label: '管理' }] : [])]
+  const tabs: Array<{ value: Tab; label: string }> = [{ value: 'next', label: '練球' }, ...(isEditor ? [{ value: 'manage' as Tab, label: '管理' }] : [])]
   const rowProps = { data: d, activeNames, isEditor, myName, editorEmail: cloud.user?.email ?? null, onChanged: refresh, onError: setError }
 
   return (
@@ -426,27 +424,6 @@ export function PracticePage() {
           </Card>
         )}
       </>)}
-
-      {tab === 'rate' && isEditor && (
-        <Card title="全隊出席率" subtitle={`最近 120 天、已進行 ${heldCount} 次練球。會到與小遲都算到；下次一定（請假）不計入分母；沒回覆又沒到算缺席。只有管理員看得到這一頁。`} flush>
-          {heldCount ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
-                <thead><tr className="text-left text-[12px] text-muted"><th className="px-4 md:px-5 py-2 font-medium">球員</th><th className="px-3 py-2 font-medium text-right">出席率</th><th className="px-3 py-2 font-medium text-right">到</th><th className="px-3 py-2 font-medium text-right">請假</th><th className="px-3 py-2 font-medium text-right pr-4 md:pr-5">缺席</th></tr></thead>
-                <tbody className="divide-y divide-[var(--border)]">
-                  {teamRates.map((r) => (
-                    <tr key={r.name}>
-                      <td className="px-4 md:px-5 py-2 font-medium text-ink">{r.name}</td>
-                      <td className={cx('px-3 py-2 text-right tnum', r.rate !== null && r.rate < 0.6 && 'text-critical')}>{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</td>
-                      <td className="px-3 py-2 text-right tnum">{r.attended}</td><td className="px-3 py-2 text-right tnum text-muted">{r.excused}</td><td className="px-3 py-2 text-right tnum pr-4 md:pr-5">{r.absent}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : <EmptyState compact title="還沒有進行過的練球" />}
-        </Card>
-      )}
 
       {tab === 'manage' && isEditor && <ManagePanel data={d} onChanged={refresh} onError={setError} />}
 
