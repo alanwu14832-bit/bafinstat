@@ -11,9 +11,9 @@ logo.onload = () => {
 }
 logo.src = `${import.meta.env.BASE_URL}mark.png`
 
-// Service worker only receives push notifications; it never caches the app.
-if ('serviceWorker' in navigator && !import.meta.env.DEV) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined) })
+// The practice reminders are gone; remove the service worker they needed from anyone who already has it.
+if ('serviceWorker' in navigator) {
+  void navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => void r.unregister())).catch(() => undefined)
 }
 
 createRoot(document.getElementById('root')!).render(
