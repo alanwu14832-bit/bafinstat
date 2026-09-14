@@ -1,0 +1,59 @@
+name: 測試通過就自動上線
+
+# 推到開發分支後自動跑測試與建置，通過就把分支合併進 main；
+# Vercel 與 GitHub Pages 都是看 main，所以合併完網站就會自己更新，不用再開 PR。
+# 要暫停自動上線：GitHub → Actions → 左邊選這個 workflow → 右上 ⋯ → Disable workflow。
+
+on:
+  push:
+    branches: ['claude/baseball-stats-platform-avxula']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 同時只跑一個，避免兩次推送互相覆蓋
+concurrency:
+  group: auto-deploy
+  cancel-in-progress: false
+
+jobs:
+  test-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安裝套件
+        working-directory: web
+        run: npm ci
+
+      - name: 跑測試
+        working-directory: web
+        run: npm test
+
+      - name: 建置（含型別檢查）
+        working-directory: web
+        run: npm run build
+
+      - name: 合併進 main
+        run: |
+          set -e
+          SHA=$(git rev-parse HEAD)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          git checkout -B deploy origin/main
+          if ! git merge --no-ff --no-edit "$SHA" -m "自動上線：合併 ${GITHUB_REF_NAME}（測試通過）"; then
+            echo "::error::與 main 有衝突，這次沒有上線。請手動把 main 合併進開發分支後再推一次。"
+            exit 1
+          fi
+          git push origin HEAD:main
+          echo "已合併進 main，Vercel 會在約一分鐘後更新網站。" >> "$GITHUB_STEP_SUMMARY"
