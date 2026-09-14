@@ -7,7 +7,7 @@ export const inputCls = (size: 'sm' | 'md' = 'md') =>
     'bg-surface-3/60 border border-transparent rounded-[10px] text-ink placeholder:text-muted min-w-0',
     'hover:bg-surface-3 focus:bg-surface focus:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] focus:outline-none',
     'transition-colors motion-reduce:transition-none disabled:opacity-50',
-    size === 'sm' ? 'h-8 px-2.5 text-[13px]' : 'h-9 px-3 text-sm',
+    size === 'sm' ? 'h-9 pointer-fine:h-8 px-2.5 text-[13px]' : 'h-10 pointer-fine:h-9 px-3 text-sm',
   )
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {

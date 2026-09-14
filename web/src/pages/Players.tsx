@@ -163,8 +163,8 @@ export function PlayersPage() {
             {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" aria-label="上一位" className="size-10 md:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
-            <Button variant="ghost" aria-label="下一位" className="size-10 md:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
+            <Button variant="ghost" aria-label="上一位" className="size-10 pointer-fine:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
+            <Button variant="ghost" aria-label="下一位" className="size-10 pointer-fine:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
           </div>
         </div>
         <div className="px-4 md:px-5 pb-3 -mt-1 flex items-center gap-2 flex-wrap">

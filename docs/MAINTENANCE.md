@@ -54,7 +54,6 @@
 | 練球當天 09:00 | 截止 | 之後仍可回覆，但會標「晚回」 |
 | 練球當天 | 紀錄員 | 展開那一場 → 「依投票預填點名」→ 只改沒來的人 |
 | 臨時取消 | 紀錄員 | 展開那一場 → 「停練並通知」（會推播） |
-| 學期末 | 管理員 | 「出席率」分頁看全隊表（只有紀錄員看得到，球員看不到出席率） |
 | 有人換信箱／搞錯名字 | 管理員 | 「球員」頁 → 編輯名單 → 「練球帳號」欄解除綁定，請他重新註冊 |
 
 推播要先設定一次（見 `docs/SUPABASE_SETUP.md` 的「練球通知」）；沒設定時投票與點名照常可用，只是沒有通知。
@@ -88,7 +87,9 @@
 
 ## 5. 改網站怎麼改
 
-- 所有改動都走 GitHub：在 Claude Code 描述需求 → 它在分支上改好並推上去 → 你在 GitHub 開 PR 合併到 `main` → Vercel 約 1 分鐘後自動上線。
+- 所有改動都走 GitHub：在 Claude Code 描述需求 → 它在開發分支上改好並推上去 → GitHub Actions（`.github/workflows/auto-deploy.yml`）自動跑測試與建置 → 通過就合併進 `main` → Vercel 約 1 分鐘後上線。**不用手動開 PR**。
+- 測試沒過就不會合併，網站維持原樣；到 GitHub → Actions 看那次紅色的紀錄就知道卡在哪。
+- 想改回「先看過再上線」：GitHub → Actions → 左邊選「測試通過就自動上線」→ 右上 ⋯ → Disable workflow。
 - 出問題想退回：Vercel → Deployments → 找上一個正常的版本 → **Promote to Production**，10 秒退回，不用改程式。
 - 資料庫結構有變動時（很少見），Claude 會附一個 `supabase/migrations/*.sql`，到 Supabase → SQL Editor 貼上執行一次。
 

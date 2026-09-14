@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, attendanceRate, canVote, examBreak, expandSeries, isLateReply, tally, voteDeadline, weekdayOf, type Practice, type RollCall, type Vote } from './practice'
+import { addDays, canVote, examBreak, expandSeries, isLateReply, tally, voteDeadline, weekdayOf, type Practice, type Vote } from './practice'
 
 const p = (id: string, date: string, status: Practice['status'] = 'scheduled', time = '18:30'): Practice => ({ id, series_id: 's1', date, time, place: null, status, note: null, notified_at: null })
 
@@ -52,20 +52,4 @@ describe('練球 helpers', () => {
     expect(tally(x, votes, ['甲', '乙', '丙', '丁'])).toEqual({ yes: 1, late: 1, no: 1, none: 1 })
   })
 
-  it('attendanceRate: roll call wins, 小遲 attends, 請假 is excused, silence is an absence, future and cancelled are skipped', () => {
-    const now = new Date('2026-09-20T00:00:00Z')
-    const practices = [p('p1', '2026-09-01'), p('p2', '2026-09-08'), p('p3', '2026-09-15'), p('p4', '2026-09-10', 'cancelled'), p('p5', '2026-09-29')]
-    const votes: Vote[] = [
-      { practice_id: 'p1', player_name: '甲', status: 'yes', late_reply: false, updated_at: '' },
-      { practice_id: 'p2', player_name: '甲', status: 'late', late_reply: false, updated_at: '' },
-      { practice_id: 'p3', player_name: '甲', status: 'no', late_reply: false, updated_at: '' },
-      { practice_id: 'p5', player_name: '甲', status: 'yes', late_reply: false, updated_at: '' },
-      { practice_id: 'p1', player_name: '乙', status: 'yes', late_reply: false, updated_at: '' },
-    ]
-    const rolls: RollCall[] = [{ practice_id: 'p1', player_name: '乙', present: false }]
-    expect(attendanceRate('甲', practices, votes, rolls, now)).toEqual({ attended: 2, excused: 1, absent: 0, rate: 1 })
-    // 乙 said yes but the roll call says absent; no answer on p2/p3 counts as absent
-    expect(attendanceRate('乙', practices, votes, rolls, now)).toEqual({ attended: 0, excused: 0, absent: 3, rate: 0 })
-    expect(attendanceRate('丙', [], [], [], now).rate).toBeNull()
-  })
 })

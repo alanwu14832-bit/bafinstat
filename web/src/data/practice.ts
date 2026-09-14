@@ -54,25 +54,6 @@ export function tally(practice: Practice, votes: Vote[], activeNames: string[]):
   return t
 }
 
-/**
- * 出席率: roll call wins when it exists, otherwise the vote (會到 and 小遲 count as attended). Only practices that
- * already happened and were not cancelled count; 下次一定 (請假) is excused (out of the denominator), no reply is an absence.
- */
-export function attendanceRate(player: string, practices: Practice[], votes: Vote[], rolls: RollCall[], now = new Date()): { attended: number; excused: number; absent: number; rate: number | null } {
-  let attended = 0, excused = 0, absent = 0
-  for (const p of practices) {
-    if (p.status !== 'scheduled' || practiceStart(p).getTime() > now.getTime()) continue
-    const r = rolls.find((x) => x.practice_id === p.id && x.player_name === player)
-    const v = votes.find((x) => x.practice_id === p.id && x.player_name === player)
-    if (r) { if (r.present) attended++; else if (v?.status === 'no') excused++; else absent++ }
-    else if (v?.status === 'yes' || v?.status === 'late') attended++
-    else if (v?.status === 'no') excused++
-    else absent++
-  }
-  const den = attended + absent
-  return { attended, excused, absent, rate: den ? attended / den : null }
-}
-
 // ---------------------------------------------------------------- cloud
 const fail = (what: string, error: { message: string } | null) => { if (error) throw new Error(/row-level security/.test(error.message) ? `${what}：你的帳號沒有這個權限` : `${what}：${error.message}`) }
 const missing = (error: { code?: string; message: string } | null) => !!error && (error.code === '42P01' || /practice|schema cache/.test(error.message))

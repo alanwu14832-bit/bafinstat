@@ -22,12 +22,12 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
   const body = (
     <>
       {hasHeader && (
-        <header className={cx('flex items-start justify-between gap-4 px-5 pt-5', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
+        <header className={cx('flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 px-5 pt-5', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
           <div className="min-w-0">
             {title && <h3 className="text-[15px] font-semibold text-ink leading-5 truncate">{title}</h3>}
             {subtitle && <p className="text-xs text-muted leading-4 mt-0.5">{subtitle}</p>}
           </div>
-          {action && <div className="shrink-0 flex items-center gap-2 -my-1">{action}</div>}
+          {action && <div className="shrink-0 flex items-center gap-2 flex-wrap sm:-my-1">{action}</div>}
         </header>
       )}
       <div className={cx(!flush && (hasHeader ? 'px-5 pb-5' : 'p-5'), 'min-w-0 flex-1', bodyClassName)}>{children}</div>

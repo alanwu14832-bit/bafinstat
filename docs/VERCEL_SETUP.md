@@ -15,6 +15,8 @@
 
 之後每次 push 到 `main` 自動重新部署；其他分支或 PR 會得到預覽網址。
 
+開發分支的改動不需要手動開 PR：`.github/workflows/auto-deploy.yml` 會在測試與建置通過後把分支合併進 `main`，Vercel 接著自動部署。要暫停就到 GitHub → Actions 停用該 workflow。
+
 ## 2. Supabase 端要補的設定
 Authentication → URL Configuration：
 - Site URL 改成 Vercel 網址（或保留 GitHub Pages 皆可）。

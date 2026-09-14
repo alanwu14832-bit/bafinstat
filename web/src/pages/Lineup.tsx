@@ -44,6 +44,23 @@ function FieldDiagram({ lineup, names, onPick }: { lineup: Lineup; names: string
   )
 }
 
+/** Phone layout: the diagram's dropdowns overlap below ~640px, so small screens get a straight list instead. */
+function PositionList({ lineup, names, onPick }: { lineup: Lineup; names: string[]; onPick: (pos: FieldPos, name: string) => void }) {
+  const taken = useMemo(() => new Set([...Object.values(lineup.field), lineup.dh].filter(Boolean) as string[]), [lineup])
+  return (
+    <ul className="rounded-[12px] border border-border divide-y divide-[var(--border)] overflow-hidden">
+      {FIELD_POSITIONS.map((p) => (
+        <li key={p} className="flex items-center gap-2.5 px-2.5 py-2 bg-surface">
+          <span className={cx('w-9 shrink-0 text-center text-[12px] font-semibold leading-none px-1 py-1.5 rounded-[6px]', lineup.field[p] ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{p}</span>
+          <span className="w-12 shrink-0 text-[12px] text-muted">{POSITION_LABEL[p]}</span>
+          <PlayerSelect aria-label={`${p} ${POSITION_LABEL[p]}`} value={lineup.field[p] ?? ''} onChange={(n) => onPick(p, n)} names={names} taken={taken} placeholder="—"
+            className={cx('flex-1 min-w-0', lineup.field[p] && 'border-ink/40')} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 interface OrderItem { key: number; name: string }
 
 /** One batting slot: drag by the grip (so the dropdown stays tappable), or use the arrows. */
@@ -54,15 +71,15 @@ function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { it
       className="relative flex items-center gap-2 px-2 sm:px-3 py-2 bg-surface border-b border-border last:border-b-0"
       whileDrag={{ scale: 1.015, boxShadow: 'var(--shadow-hover)', zIndex: 5, backgroundColor: 'var(--surface)' }}>
       <button type="button" aria-label="拖曳調整棒次" title="拖曳調整棒次" onPointerDown={(e) => { e.preventDefault(); controls.start(e) }}
-        className="size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
+        className="size-9 pointer-fine:size-8 shrink-0 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-ink hover:bg-surface-2 cursor-grab active:cursor-grabbing touch-none select-none">
         <GripVertical className="size-4" />
       </button>
       <PlateBadge size={28} active={!!item.name}>{index + 1}</PlateBadge>
       <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
       <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? pos || '無守位' : ''}</span>
       <div className="hidden sm:flex shrink-0">
-        <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
-        <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
+        <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
+        <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
       </div>
     </Reorder.Item>
   )
@@ -120,12 +137,13 @@ export function LineupPage() {
   }
   return (
     <>
-      <PageHeader title="先發陣容" description="在球場圖上選每個守位的球員，再排打序；陣容會存在這台裝置，開始紀錄比賽時自動帶入。"
+      <PageHeader title="先發陣容" description="先選每個守位的球員，再排打序；陣容會存在這台裝置，開始紀錄比賽時自動帶入。手機是清單、電腦是球場圖。"
         actions={<div className="flex items-center gap-2"><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 md:gap-5 items-start">
-        <Card className="xl:col-span-7" title="守備陣容" subtitle="點每個守位的下拉選單選人；同一人只會站一個位置" bodyClassName="p-3 sm:p-5">
-          <FieldDiagram lineup={lineup} names={names} onPick={pick} />
+        <Card className="xl:col-span-7" title="守備陣容" subtitle="每個守位選一個人；同一人只會站一個位置" bodyClassName="p-3 sm:p-5">
+          <div className="sm:hidden"><PositionList lineup={lineup} names={names} onPick={pick} /></div>
+          <div className="hidden sm:block"><FieldDiagram lineup={lineup} names={names} onPick={pick} /></div>
           <div className="mt-4 pt-4 border-t border-border flex items-center gap-3 flex-wrap">
             <span className="text-[12px] font-medium text-ink-2">指定打擊 DH</span>
             <PlayerSelect size="sm" aria-label="DH 指定打擊" value={lineup.dh} onChange={setDh} names={names} placeholder="不用 DH" className="w-[160px]" />

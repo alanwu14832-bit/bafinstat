@@ -19,7 +19,7 @@ export function ThemeToggle({ className, size = 'sm' }: { className?: string; si
         return (
           <button key={value} type="button" role="radio" aria-checked={active} aria-label={label} title={label} onClick={() => setTheme(value)}
             className={cx('rounded-[6px] inline-flex items-center justify-center cursor-pointer transition-colors motion-reduce:transition-none',
-              size === 'md' ? 'h-10 flex-1 min-w-[44px]' : 'size-7',
+              size === 'md' ? 'h-10 flex-1 min-w-[44px]' : 'size-9 pointer-fine:size-7',
               active ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_var(--border)]' : 'text-muted hover:text-ink')}>
             <Icon className={size === 'md' ? 'size-4' : 'size-3.5'} />
           </button>
@@ -45,7 +45,7 @@ export function FontToggle({ className, size = 'sm' }: { className?: string; siz
         return (
           <button key={value} type="button" role="radio" aria-checked={active} aria-label={label} title={label} onClick={() => setFont(value)}
             className={cx('rounded-[6px] inline-flex items-center justify-center cursor-pointer transition-colors motion-reduce:transition-none leading-none',
-              size === 'md' ? 'h-10 flex-1 min-w-[44px] text-[15px]' : 'size-7 text-[12px]',
+              size === 'md' ? 'h-10 flex-1 min-w-[44px] text-[15px]' : 'size-9 pointer-fine:size-7 text-[12px]',
               value === 'serif' ? 'font-[family-name:var(--font-serif)]' : 'font-[family-name:var(--font-sans)]',
               active ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08),0_0_0_1px_var(--border)] font-semibold' : 'text-muted hover:text-ink')}>
             {glyph}
