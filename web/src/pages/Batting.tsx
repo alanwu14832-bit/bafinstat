@@ -34,7 +34,8 @@ export function BattingPage() {
   const s = useStats()
   const navigate = useNavigate()
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
-  const [view, setView] = useState<View>(linked.initialView)
+  const { view, setView } = linked
+  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}`)
   const [qualifiedOnly, setQualifiedOnly] = useState(false)
   const minPA = Math.max(1, Math.ceil(s.summary.games * MIN_PA_RATIO))
   const rows = useMemo(() => (qualifiedOnly ? s.batters.filter((b) => b.pa >= minPA) : s.batters), [s.batters, qualifiedOnly, minPA])
@@ -60,14 +61,14 @@ export function BattingPage() {
       <PageHeader title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
-      <Card title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
-        <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} key={`${view}-${linked.sortKey ?? ''}`} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={520} />
+      <Card id="stats" title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
+        <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名" data={opsRank} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
+        <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
         <DonutCard title="擊球型態" subtitle="全隊場內球的滾地／飛球／平飛比例" segments={bbType} centerCaption="場內球" />
-        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，場內球 ≥ 3 的打者" data={quality} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
-        <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} formatValue={(v) => `${v.toFixed(1)}%`} />
+        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，場內球 ≥ 3 的打者" data={quality} onBarClick={openPlayer} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
+        <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
     </>
   )

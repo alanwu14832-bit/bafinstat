@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -35,7 +35,8 @@ export function PitchingPage() {
   const navigate = useNavigate()
   const params = useDataStore((st) => st.params)
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
-  const [view, setView] = useState<View>(linked.initialView)
+  const { view, setView } = linked
+  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}`)
   const minIP = Math.max(1, Math.ceil(s.summary.games * 0.7))
 
   const eraFip = useMemo(() => s.pitchers.filter((p) => p.ip >= minIP).map((p) => ({ name: p.name, ERA: Number((p.era ?? 0).toFixed(2)), FIP: Number((p.fip ?? 0).toFixed(2)) })), [s.pitchers, minIP])
@@ -61,18 +62,18 @@ export function PitchingPage() {
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
       <StatGroup>
-        <StatTile label="團隊 ERA" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
-        <StatTile label="團隊 FIP" value={s.teamPitch.fip ?? 0} format="era" />
-        <StatTile label="CSW%" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
-        <StatTile label="首球好球率" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
+        <StatTile label="團隊 ERA" to="?view=basic&sort=era&dir=asc#stats" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
+        <StatTile label="團隊 FIP" to="?view=advanced&sort=fip&dir=asc#stats" value={s.teamPitch.fip ?? 0} format="era" />
+        <StatTile label="CSW%" to="?view=process&sort=cswPct#stats" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
+        <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
-      <Card title="投手成績" subtitle="點投手開啟個人檔案" flush>
-        <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} key={`${view}-${linked.sortKey ?? ''}`} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={480} />
+      <Card id="stats" title="投手成績" subtitle="點投手開啟個人檔案" flush>
+        <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯" data={eraFip} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
-        <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
-        <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
+        <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
+        <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} onBarClick={openPlayer} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
+        <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} onBarClick={openPlayer} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
         <LineChartCard title="ERA / WHIP 走勢" subtitle="近 5 場滾動" data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
       </div>
     </>

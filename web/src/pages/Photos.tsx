@@ -102,7 +102,9 @@ export function PhotosPage() {
               if (editing && editing !== 'new' && editing.id === a.id) return <li key={a.id} className="md:col-span-2 xl:col-span-3"><AlbumForm initial={a} onSave={save} onCancel={() => setEditing(null)} onDelete={() => remove(a.id)} /></li>
               return (
                 <li key={a.id}>
-                  <Card className="h-full" bodyClassName="p-5 flex flex-col gap-3 h-full">
+                  <Card className="h-full relative lift" bodyClassName="p-5 flex flex-col gap-3 h-full">
+                    {/* The whole card opens the album; the buttons row sits above this layer. */}
+                    <a href={a.url} target="_blank" rel="noreferrer" aria-label={`開啟相簿：${albumTitle(a, base.games)}`} tabIndex={-1} className="absolute inset-0 z-[1] rounded-[inherit]" />
                     <div className="flex items-start gap-3">
                       <span className="size-10 rounded-[12px] bg-surface-2 text-ink-2 grid place-items-center shrink-0"><Camera className="size-5" /></span>
                       <div className="min-w-0 flex-1">
@@ -112,7 +114,7 @@ export function PhotosPage() {
                       {sc && <Badge variant={sc.result === 'W' ? 'good' : sc.result === 'L' ? 'critical' : 'neutral'} className="tnum">{sc.text}</Badge>}
                     </div>
                     {a.note && <p className="text-[13px] text-ink-2 leading-relaxed">{a.note}</p>}
-                    <div className="mt-auto flex items-center gap-2">
+                    <div className="relative z-[2] mt-auto flex items-center gap-2">
                       <Button variant="primary" size="sm" icon={<ExternalLink />} href={a.url} className={cx('flex-1')} title={a.url}>開啟相簿</Button>
                       <span className="text-[11px] text-muted whitespace-nowrap">{albumProvider(a.url)}</span>
                       {canEdit && <Button variant="ghost" size="sm" aria-label="編輯" icon={<Pencil />} onClick={() => setEditing(a)} />}

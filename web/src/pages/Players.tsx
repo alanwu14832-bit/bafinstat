@@ -225,24 +225,24 @@ export function PlayersPage() {
         <>
           {bat ? (
             <StatGroup>
-              <StatTile label="打擊率 AVG" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
-              <StatTile label="上壘率 OBP" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
-              <StatTile label="長打率 SLG" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
-              <StatTile label="OPS" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
-              <StatTile label="wOBA" value={bat.woba ?? 0} format="decimal3" />
-              <StatTile label="K% / BB%" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
-              <StatTile label="Whiff% / Hard%" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
-              <StatTile label="得點圈 AVG" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
+              <StatTile label="打擊率 AVG" to="/batting?sort=avg" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
+              <StatTile label="上壘率 OBP" to="/batting?sort=obp" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
+              <StatTile label="長打率 SLG" to="/batting?sort=slg" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
+              <StatTile label="OPS" to="/batting?sort=ops" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
+              <StatTile label="wOBA" to="/batting?view=advanced&sort=woba" value={bat.woba ?? 0} format="decimal3" />
+              <StatTile label="K% / BB%" to="/batting?view=advanced&sort=kPct&dir=asc" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
+              <StatTile label="Whiff% / Hard%" to="/batting?view=process&sort=whiffPct&dir=asc" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
+              <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
             </StatGroup>
           ) : (
             <Card><EmptyState compact title="目前篩選條件下沒有打席" /></Card>
           )}
           {pit && (
             <StatGroup>
-              <StatTile label="ERA" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP`} />
-              <StatTile label="FIP" value={pit.fip ?? 0} format="era" />
-              <StatTile label="WHIP" value={pit.whip ?? 0} format="ratio" />
-              <StatTile label="K / BB" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`CSW% ${pct(pit.cswPct)}`} />
+              <StatTile label="ERA" to="/pitching?sort=era&dir=asc" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP`} />
+              <StatTile label="FIP" to="/pitching?view=advanced&sort=fip&dir=asc" value={pit.fip ?? 0} format="era" />
+              <StatTile label="WHIP" to="/pitching?sort=whip&dir=asc" value={pit.whip ?? 0} format="ratio" />
+              <StatTile label="K / BB" to="/pitching?view=advanced&sort=kbb" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`CSW% ${pct(pit.cswPct)}`} />
             </StatGroup>
           )}
           {compare && cmpPlayer && (
