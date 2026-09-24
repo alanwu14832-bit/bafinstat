@@ -39,7 +39,16 @@ export function applyTheme(mode: ThemeMode, animate = false) {
   }
   if (mode === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', mode)
+  syncThemeColor()
 }
+
+/** The phone's status bar takes the page background, so the top of the screen reads as one surface. */
+function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()
+  if (meta && bg) meta.setAttribute('content', bg)
+}
+if (typeof window !== 'undefined') window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', syncThemeColor)
 
 export function applyFont(mode: FontMode) {
   if (typeof document === 'undefined') return

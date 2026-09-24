@@ -7,7 +7,7 @@ import { EASE } from './Reveal'
  * Renders `format(value)` and, when the value changes (or first mounts), counts from the previous value
  * to the new one over ~0.9s so a stat tile reads as "settling" rather than popping.
  */
-export function CountUp({ value, format, duration = 0.9 }: { value: number; format: (v: number) => string; duration?: number }) {
+export function CountUp({ value, format, duration = 0.5 }: { value: number; format: (v: number) => string; duration?: number }) {
   const reduced = usePrefersReducedMotion()
   const [text, setText] = useState(() => format(value))
   const from = useRef(0)

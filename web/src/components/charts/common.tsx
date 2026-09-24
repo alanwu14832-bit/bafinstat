@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 import type { TooltipPayloadEntry } from 'recharts'
@@ -49,12 +50,17 @@ export function useChartTheme(): ChartTheme {
   return chartTheme(useThemeTokens())
 }
 
-/** Recharts entrance animation props (disabled under reduced motion). */
+/**
+ * Recharts animation props. Charts arrive already drawn: a page people revisit all day should not replay a
+ * draw-in. Once mounted, a change of data (a new filter) animates so the eye can follow what moved.
+ */
 export function useChartAnimation() {
   const reduced = usePrefersReducedMotion()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { const id = requestAnimationFrame(() => setMounted(true)); return () => cancelAnimationFrame(id) }, [])
   return {
-    isAnimationActive: !reduced,
-    animationDuration: 600,
+    isAnimationActive: !reduced && mounted,
+    animationDuration: 350,
     animationEasing: 'ease-out' as const,
     animationBegin: 0,
   }

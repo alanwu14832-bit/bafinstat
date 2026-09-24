@@ -2,13 +2,13 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { motion, type HTMLMotionProps } from 'framer-motion'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 
-export const EASE = [0.22, 1, 0.36, 1] as const
+export const EASE = [0.23, 1, 0.32, 1] as const
 
 /**
  * Fades and rises its content the first time it scrolls into view. Wrap sections and cards with it;
  * `delay` staggers siblings. Honors prefers-reduced-motion (renders static).
  */
-export function Reveal({ delay = 0, y = 12, as = 'div', ...rest }: HTMLMotionProps<'div'> & { delay?: number; y?: number; as?: 'div' | 'section' }) {
+export function Reveal({ delay = 0, y = 8, as = 'div', ...rest }: HTMLMotionProps<'div'> & { delay?: number; y?: number; as?: 'div' | 'section' }) {
   const reduced = usePrefersReducedMotion()
   const ref = useRef<HTMLDivElement>(null)
   // Something that mounts above the fold (or that the page has already scrolled past, e.g. after a jump
@@ -22,14 +22,14 @@ export function Reveal({ delay = 0, y = 12, as = 'div', ...rest }: HTMLMotionPro
   }, [])
   const Tag = as === 'section' ? motion.section : motion.div
   if (reduced) return <Tag {...rest} />
-  if (!animated) return <Tag ref={ref} initial={{ opacity: 0, y: y * 0.5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay }} {...rest} />
+  if (!animated) return <Tag ref={ref} initial={{ opacity: 0, y: y * 0.5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE, delay }} {...rest} />
   return (
     <Tag
       ref={ref}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '100000px 0px -8% 0px' }}
-      transition={{ duration: 0.55, ease: EASE, delay }}
+      transition={{ duration: 0.32, ease: EASE, delay }}
       {...rest}
     />
   )
