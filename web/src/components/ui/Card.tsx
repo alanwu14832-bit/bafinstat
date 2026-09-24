@@ -13,12 +13,14 @@ export interface CardProps {
   flush?: boolean
   /** Skip the scroll-in reveal (for cards inside dialogs or live views). */
   still?: boolean
+  /** Anchor for links such as /pitching?sort=era#stats; clears the sticky top bar when scrolled to. */
+  id?: string
 }
 
 /** The one container: white surface floating on the gray ground with a soft shadow, no border. Header and body share the same 20px inset. */
-export function Card({ title, subtitle, action, children, className, bodyClassName, flush, still }: CardProps) {
+export function Card({ title, subtitle, action, children, className, bodyClassName, flush, still, id }: CardProps) {
   const hasHeader = !!(title || subtitle || action)
-  const cls = cx('bg-surface rounded-[var(--radius)] shadow-[var(--shadow-card)] flex flex-col min-w-0', className)
+  const cls = cx('bg-surface rounded-[var(--radius)] shadow-[var(--shadow-card)] flex flex-col min-w-0', id && 'scroll-mt-28', className)
   const body = (
     <>
       {hasHeader && (
@@ -33,8 +35,8 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
       <div className={cx(!flush && (hasHeader ? 'px-5 pb-5' : 'p-5'), 'min-w-0 flex-1', bodyClassName)}>{children}</div>
     </>
   )
-  if (still) return <section className={cls}>{body}</section>
-  return <Reveal as="section" className={cls}>{body}</Reveal>
+  if (still) return <section id={id} className={cls}>{body}</section>
+  return <Reveal as="section" id={id} className={cls}>{body}</Reveal>
 }
 
 /** Heading for a group of components that does not need a box around it. */

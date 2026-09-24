@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cx } from '../../lib/format'
 import { EmptyState } from './EmptyState'
@@ -31,6 +31,8 @@ export interface DataTableProps<Row> {
   maxHeight?: number | string
   defaultSort?: { key: keyof Row & string; dir: 'asc' | 'desc' }
   dense?: boolean
+  /** Scroll the sorted column into view on open (the table was reached from a link that picked it). */
+  revealSort?: boolean
   className?: string
 }
 
@@ -49,14 +51,31 @@ function compare(a: unknown, b: unknown): number {
  * The first column is pinned so names stay visible while wide stat tables scroll sideways.
  */
 export function DataTable<Row extends object>({
-  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, className,
+  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, revealSort, className,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState(defaultSort ?? null)
+  const scroller = useRef<HTMLDivElement>(null)
+
+  // On a narrow screen a column such as ERA sits far to the right; bring it next to the pinned name column.
+  useLayoutEffect(() => {
+    const box = scroller.current
+    const th = box?.querySelector<HTMLElement>('th[aria-sort]')
+    if (!revealSort || !box || !th) return
+    const pinned = box.querySelector<HTMLElement>('th')?.offsetWidth ?? 0
+    if (th.offsetLeft + th.offsetWidth <= box.clientWidth) return
+    box.scrollLeft = Math.max(0, th.offsetLeft - pinned - 24)
+  }, [revealSort])
 
   const sorted = useMemo(() => {
     if (!sort) return rows
     const { key, dir } = sort
-    return [...rows].sort((a, b) => compare(a[key], b[key]) * (dir === 'asc' ? 1 : -1))
+    // Blanks ("—", e.g. ERA with no innings) stay at the bottom whichever way the column is sorted.
+    const blank = (v: unknown) => v === null || v === undefined || (typeof v === 'number' && Number.isNaN(v))
+    return [...rows].sort((a, b) => {
+      const x = a[key], y = b[key]
+      if (blank(x) || blank(y)) return blank(x) === blank(y) ? 0 : blank(x) ? 1 : -1
+      return compare(x, y) * (dir === 'asc' ? 1 : -1)
+    })
   }, [rows, sort])
 
   const toggleSort = (key: keyof Row & string) =>
@@ -66,7 +85,7 @@ export function DataTable<Row extends object>({
   const pin = (i: number) => (i === 0 ? 'sticky left-0 z-[1] bg-inherit' : '')
 
   return (
-    <div className={cx('overflow-x-auto overflow-y-auto scroll-x', className)} style={{ maxHeight }}>
+    <div ref={scroller} className={cx('overflow-x-auto overflow-y-auto scroll-x', className)} style={{ maxHeight }}>
       <span role="status" aria-live="polite" className="sr-only">{sort ? `依 ${String(columns.find((c) => c.key === sort.key)?.header ?? sort.key)} ${sort.dir === 'asc' ? '升冪' : '降冪'}排序` : ''}</span>
       <table className="w-full border-collapse text-[13px] tnum whitespace-nowrap">
         <thead className="sticky top-0 z-[2] bg-surface">
@@ -81,7 +100,7 @@ export function DataTable<Row extends object>({
                   scope="col"
                   style={{ width: col.width }}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
-                  className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], pin(i), i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
+                  className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], i === 0 && 'sticky left-0 z-[1] bg-surface', i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
                     sortable && 'cursor-pointer select-none hover:text-ink active:opacity-60')}
                   onClick={sortable ? () => toggleSort(col.key) : undefined}
                   title={sortable ? '點擊排序' : undefined}

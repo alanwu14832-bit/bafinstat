@@ -14,11 +14,13 @@ export interface StackedBarCardProps extends Omit<ChartFrameProps, 'children' | 
   formatValue?: (v: number) => string
   /** Normalize each bar to 100%. */
   percent?: boolean
+  /** Makes each bar a button (e.g. open that player). */
+  onBarClick?: (datum: StackedDatum) => void
 }
 
 const pctTick = (v: number) => `${Math.round(v * 100)}%`
 
-export function StackedBarCard({ data, series, layout = 'vertical', formatValue, percent, height, ...frame }: StackedBarCardProps) {
+export function StackedBarCard({ data, series, layout = 'vertical', formatValue, percent, height, onBarClick, ...frame }: StackedBarCardProps) {
   const resolved = resolveSeries(series.slice(0, 6))
   const anim = useChartAnimation()
   const horizontal = layout === 'horizontal'
@@ -34,6 +36,11 @@ export function StackedBarCard({ data, series, layout = 'vertical', formatValue,
           stackOffset={percent ? 'expand' : 'none'}
           margin={{ top: 6, right: 8, bottom: 0, left: horizontal ? 0 : -12 }}
           barCategoryGap="28%"
+          onClick={onBarClick ? (state) => {
+            const i = Number(state?.activeTooltipIndex)
+            if (Number.isInteger(i) && data[i]) onBarClick(data[i])
+          } : undefined}
+          style={onBarClick ? { cursor: 'pointer' } : undefined}
         >
           <CartesianGrid stroke="var(--grid)" strokeDasharray="0" vertical={horizontal} horizontal={!horizontal} />
           {horizontal ? (
