@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useOpenGame } from '../hooks/useOpenGame'
 import { PageHeader } from '../components/layout/PageHeader'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { Card } from '../components/ui/Card'
@@ -25,6 +26,7 @@ export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="
 export function OverviewPage() {
   const s = useStats()
   const navigate = useNavigate()
+  const openGame = useOpenGame()
   const { summary, team, teamPitch, summaries } = s
   const opponentFilter = useDataStore((st) => st.filters.opponent)
   const resetFilters = useDataStore((st) => st.resetFilters)
@@ -34,12 +36,12 @@ export function OverviewPage() {
   const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, id: g.game.id, us: g.runsUs, opp: g.runsOpp, opponent: g.game.opponent })), [summaries])
   const cumulative = useMemo(() => {
     let acc = 0
-    return summaries.map((g) => ({ name: shortDate(g.game.date), diff: (acc += g.runsUs - g.runsOpp) }))
+    return summaries.map((g) => ({ id: g.game.id, name: shortDate(g.game.date), diff: (acc += g.runsUs - g.runsOpp) }))
   }, [summaries])
   const opsTrend = useMemo(() => summaries.map((_, i) => {
     const window = summaries.slice(Math.max(0, i - 4), i + 1).map((g) => g.game.id)
     const t = teamBatting(s.dataset, s.batting.filter((p) => window.includes(p.gameId)))
-    return { name: shortDate(summaries[i].game.date), ops: Number((t.ops ?? 0).toFixed(3)), obp: Number((t.obp ?? 0).toFixed(3)) }
+    return { id: summaries[i].game.id, name: shortDate(summaries[i].game.date), ops: Number((t.ops ?? 0).toFixed(3)), obp: Number((t.obp ?? 0).toFixed(3)) }
   }), [summaries, s.batting, s.dataset])
   const innings = useMemo(() => summary.runsByInningUs.map((v, i) => ({ name: `${i + 1}`, us: v, opp: summary.runsByInningOpp[i] ?? 0 })).filter((_, i) => i < 9), [summary])
   const spray = useMemo(() => sprayCounts(s.batting), [s.batting])
@@ -97,10 +99,10 @@ export function OverviewPage() {
       </StatGroup>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={(d) => navigate(`/games?game=${encodeURIComponent(String(d.id))}`)} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
+        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={openGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
-        <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分" data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
-        <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均" data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
+        <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分；點一下看那一場" onPointClick={openGame} data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
+        <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均；點一下看那一場" onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
         <BarChartCard title="逐局得失分" subtitle={opponentFilter !== 'all' ? `對 ${opponentFilter} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
       </div>
       <div className="md:hidden">

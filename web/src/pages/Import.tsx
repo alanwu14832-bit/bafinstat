@@ -85,11 +85,13 @@ export function ImportPage() {
         actions={<Button icon={<FileSpreadsheet />} href={TEMPLATE_URL} download>下載總表範本</Button>} />
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
         <Card className="xl:col-span-3" title="上傳檔案" subtitle="總表、單場模板，或以前的單場紀錄表（舊格式）都可以；不同格式會算出一樣的數據">
-          <div role="button" tabIndex={0} aria-label="拖曳檔案到此處或點選上傳" onClick={() => inputRef.current?.click()} onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+          <div role="button" tabIndex={0} data-press="none" aria-label="拖曳檔案到此處或點選上傳" onClick={() => inputRef.current?.click()} onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
             onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragEnter={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
-            className={cx('flex flex-col items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed px-6 py-10 text-center cursor-pointer transition-colors motion-reduce:transition-none',
-              dragging ? 'border-ink bg-surface-2' : 'border-border-strong hover:bg-surface-2/60')}>
-            <UploadCloud className="size-6 text-muted mb-1" strokeWidth={1.6} />
+            className={cx('group flex flex-col items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-dashed px-6 py-10 text-center cursor-pointer',
+              'transition-[background-color,border-color,scale] duration-[var(--dur-base)] ease-[var(--ease-out)] motion-reduce:transition-colors active:scale-[0.99] motion-reduce:active:scale-100',
+              // a file held over the area: the zone swells a touch and the cloud rises to meet it
+              dragging ? 'border-ink bg-surface-2 scale-[1.01] motion-reduce:scale-100' : 'border-border-strong hover:bg-surface-2/60')}>
+            <UploadCloud className={cx('size-6 mb-1 transition-[translate,color] duration-[var(--dur-base)] ease-[var(--ease-out)] motion-reduce:transition-none', dragging ? '-translate-y-1 text-ink' : 'text-muted pointer-fine:group-hover:-translate-y-0.5')} strokeWidth={1.6} />
             <div className="text-sm font-medium text-ink">拖曳檔案到這裡，或點選選擇</div>
             <div className="text-xs text-muted">.xlsx・會辨識「打席紀錄／投球紀錄」、「單場-打擊／單場-投球」，或舊格式的「當日比賽統計」</div>
             <input ref={inputRef} type="file" accept=".xlsx,.xlsm,.xls" className="hidden" onChange={onPick} />

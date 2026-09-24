@@ -1,9 +1,37 @@
+import { Fragment, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
 import { PitchLegend } from '../components/ui/PlayByPlay'
 
 const TEMPLATE_URL = (import.meta.env.VITE_TEMPLATE_URL as string | undefined) ?? `${import.meta.env.BASE_URL}BAFIN_棒球數據總表.xlsx`
+
+const PAGES: Record<string, string> = { 相簿: '/photos', 比賽: '/games', 先發陣容: '/lineup', 紀錄比賽: '/record', 球員: '/players', 即時比分: '/live', 資料匯入: '/import', 數據字典: '/dictionary', 總覽: '/', 打擊: '/batting', 投球: '/pitching', 守備: '/fielding' }
+const pageLink = 'text-ink underline decoration-[color-mix(in_srgb,var(--ink)_30%,transparent)] underline-offset-2 hover:decoration-[var(--ink)] transition-colors motion-reduce:transition-none'
+
+/** A page name in running text, as a link to that page. */
+function PageLink({ to, children }: { to: string; children: ReactNode }) {
+  return <Link to={to} className={pageLink}>{children}</Link>
+}
+
+/** Turns 「相簿」-style page names (and 資料匯入頁) in an FAQ answer into links; sheet names such as 「設定」 stay text. */
+function withPageLinks(text: string): ReactNode {
+  const parts = text.split(/(「(?:相簿|比賽|先發陣容|紀錄比賽|球員|即時比分)」|資料匯入(?=頁))/)
+  return parts.map((part, i) => {
+    const name = part.replace(/[「」]/g, '')
+    if (i % 2 === 0 || !PAGES[name]) return <Fragment key={i}>{part}</Fragment>
+    return <Fragment key={i}>{part.startsWith('「') ? '「' : ''}<PageLink to={PAGES[name]}>{name}</PageLink>{part.startsWith('「') ? '」' : ''}</Fragment>
+  })
+}
+
+/** Badge-shaped link to a page, for the 「賽後怎麼看數據」 list. */
+function PageChip({ name }: { name: string }) {
+  return (
+    <Link to={PAGES[name]} className="press inline-flex items-center h-6 px-2 rounded-[6px] text-[12px] font-medium bg-surface-2 text-ink hover:bg-surface-3 transition-colors motion-reduce:transition-none whitespace-nowrap">
+      {name}
+    </Link>
+  )
+}
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -52,7 +80,7 @@ export function GuidePage() {
         </Card>
 
         <Card title="2. 比賽中" subtitle="用哪一張表">
-          <div className="mb-4 rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2 leading-relaxed"><span className="font-medium text-ink">不想用 Excel？</span>紀錄員登入後，直接到「紀錄比賽」頁逐球點按：局數、出局、壘上、得分、結果代碼都會自動寫好，賽後按「結束比賽」就存進資料庫，全隊即時看到。</div>
+          <div className="mb-4 rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2 leading-relaxed"><span className="font-medium text-ink">不想用 Excel？</span>紀錄員登入後，直接到「<PageLink to="/record">紀錄比賽</PageLink>」頁逐球點按：局數、出局、壘上、得分、結果代碼都會自動寫好，賽後按「結束比賽」就存進資料庫，全隊即時看到。</div>
           <ol className="flex flex-col gap-4">
             <Step n={1} title="我隊進攻 → 單場-打擊">每個打席一列：局、棒次、打者、逐球（球1…球12 填 SS/CS/F/IP/B）、打擊結果、落點 1–9、軌跡 G/F/L、強度 強/中/弱、盜壘、得分、打點、結果代碼。</Step>
             <Step n={2} title="對方進攻 → 單場-投球">同樣每個打席一列，主角是我方投手；多了被盜壘、暴投、捕逸、牽制出局。結果代碼 R = 非自責失分、ER = 自責分。</Step>
@@ -70,7 +98,7 @@ export function GuidePage() {
           <ol className="flex flex-col gap-4">
             <Step n={1} title="檢查單場-摘要">它會自動算出當場的逐局比分、每個人的打擊與投球成績。核對 R/H/E 跟記分板一致，順便在守備區塊填每個人的 PO / A / E（至少填失誤；沒填的 PO／A 網站會由投球紀錄推定）。</Step>
             <Step n={2} title="貼回三張紀錄表">把「單場-打擊」有資料的列（A 欄到「備註」欄）複製，到「打席紀錄」最後一列下方<strong className="font-medium text-ink">貼上值</strong>；「單場-投球」貼到「投球紀錄」；守備區塊貼到「守備紀錄」。「總表」立刻更新。</Step>
-            <Step n={3} title="上傳到網站">資料匯入 → 紀錄員登入 → 拖入檔案 → 「合併（略過重複的比賽ID）」。整份總表、只含三張「單場-」工作表的檔案、或舊格式的單場紀錄表都可以，網站會自動辨識並算出一樣的數據。</Step>
+            <Step n={3} title="上傳到網站"><PageLink to="/import">資料匯入</PageLink> → 紀錄員登入 → 拖入檔案 → 「合併（略過重複的比賽ID）」。整份總表、只含三張「單場-」工作表的檔案、或舊格式的單場紀錄表都可以，網站會自動辨識並算出一樣的數據。</Step>
           </ol>
         </Card>
       </div>
@@ -83,18 +111,18 @@ export function GuidePage() {
         </Card>
         <Card title="賽後怎麼看數據">
           <ul className="text-[13px] text-ink-2 flex flex-col gap-3 leading-relaxed">
-            <li className="flex gap-2.5"><Badge className="mt-0.5 shrink-0">總覽</Badge><span>戰績、得失分、OPS 走勢、逐局得失分、落點熱區。上方篩選列可以只看某個杯賽、某段期間、某個對手或主客場。</span></li>
-            <li className="flex gap-2.5"><Badge className="mt-0.5 shrink-0">打擊 / 投球</Badge><span>三組欄位：基本（AVG/OBP/SLG）、進階（wOBA、ISO、BABIP、得點圈）、過程（Whiff%、CSW%、GB/FB/LD%、Hard%）。點欄位標題排序，點球員進個人檔案。</span></li>
-            <li className="flex gap-2.5"><Badge className="mt-0.5 shrink-0">比賽</Badge><span>點任一場：逐局比分、Box Score，以及「逐打席・打擊／投球」完整的逐球紀錄。</span></li>
-            <li className="flex gap-2.5"><Badge className="mt-0.5 shrink-0">球員</Badge><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢。</span></li>
-            <li className="flex gap-2.5"><Badge className="mt-0.5 shrink-0">數據字典</Badge><span>每一項指標的定義與公式，和總表的「數據字典」工作表一致。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="總覽" /></span><span>戰績、得失分、OPS 走勢、逐局得失分、落點熱區。上方篩選列可以只看某個杯賽、某段期間、某個對手或主客場。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0 inline-flex gap-1"><PageChip name="打擊" /><PageChip name="投球" /></span><span>三組欄位：基本（AVG/OBP/SLG）、進階（wOBA、ISO、BABIP、得點圈）、過程（Whiff%、CSW%、GB/FB/LD%、Hard%）。點欄位標題排序，點球員進個人檔案。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="比賽" /></span><span>點任一場：逐局比分、Box Score，以及「逐打席・打擊／投球」完整的逐球紀錄。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="球員" /></span><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="數據字典" /></span><span>每一項指標的定義與公式，和總表的「數據字典」工作表一致。</span></li>
           </ul>
         </Card>
       </div>
 
       <Card title="常見問題">
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {FAQ.map(([q, a]) => (<div key={q}><dt className="text-[13px] font-medium text-ink">{q}</dt><dd className="text-[13px] text-ink-2 mt-1 leading-relaxed">{a}</dd></div>))}
+          {FAQ.map(([q, a]) => (<div key={q}><dt className="text-[13px] font-medium text-ink">{q}</dt><dd className="text-[13px] text-ink-2 mt-1 leading-relaxed">{withPageLinks(a)}</dd></div>))}
         </dl>
       </Card>
     </>

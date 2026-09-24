@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Sheet } from '../components/ui/Sheet'
@@ -47,6 +47,8 @@ const boxPit: Column<PitchingLine>[] = [
 export function GamesPage() {
   const s = useStats()
   const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
+  const openPlayer = (r: { name: string }) => navigate(`/players?player=${encodeURIComponent(r.name)}`)
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
   const [view, setViewState] = useState<'schedule' | 'results'>('results')
@@ -186,8 +188,8 @@ export function GamesPage() {
                 )}
                 {tab === 'box' && (
                   <>
-                    <Card title="打擊" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} dense /></Card>
-                    <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} dense /></Card>
+                    <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                    <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
                   </>
                 )}
                 {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} /></Card>}

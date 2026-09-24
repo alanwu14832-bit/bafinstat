@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisCommon, ChartFrame, ChartLegend, ChartTooltip, resolveSeries, useChartAnimation, type ChartFrameProps, type SeriesConfig } from './common'
+import { axisCommon, chartClick, ChartFrame, ChartLegend, ChartTooltip, resolveSeries, useChartAnimation, type ChartFrameProps, type SeriesConfig } from './common'
 
 export interface BarDatum {
   name: string
@@ -57,12 +57,7 @@ export function BarChartCard({
           margin={{ top: showLabels && !horizontal ? 18 : 6, right: showLabels && horizontal ? 40 : 8, bottom: 0, left: horizontal ? 0 : -12 }}
           barGap={2}
           barCategoryGap="28%"
-          // Chart-level click: the whole column (bar + the gap above it) is the tap target, not just the bar.
-          onClick={onBarClick ? (state) => {
-            const i = Number(state?.activeTooltipIndex)
-            if (Number.isInteger(i) && data[i]) onBarClick(data[i])
-          } : undefined}
-          style={onBarClick ? { cursor: 'pointer' } : undefined}
+          {...chartClick(data, onBarClick)}
         >
           <CartesianGrid stroke="var(--grid)" strokeDasharray="0" vertical={horizontal} horizontal={!horizontal} />
           {horizontal ? (

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Search } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { statLink } from '../data/statLinks'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Tabs } from '../components/ui/Tabs'
 import { Card } from '../components/ui/Card'
@@ -57,9 +59,17 @@ export function DictionaryPage() {
                       {t.formula && <code className="block mt-1.5 text-[12px] text-ink-2 font-mono bg-surface-2 rounded-[6px] px-2.5 py-1.5 break-words whitespace-pre-wrap">{t.formula}</code>}
                       {t.note && <p className="text-[12px] text-muted mt-1.5 leading-relaxed">{t.note}</p>}
                     </div>
-                    <div className="flex gap-1.5 md:justify-end">
-                      {t.status === '新增' && <Badge variant="accent">新增</Badge>}
-                      <Badge variant={t.priority === 'P0' ? 'neutral' : 'outline'}>{t.priority} {PRIORITY_LABEL[t.priority]}</Badge>
+                    <div className="flex flex-wrap items-center gap-1.5 md:flex-col md:items-end">
+                      <div className="flex gap-1.5">
+                        {t.status === '新增' && <Badge variant="accent">新增</Badge>}
+                        <Badge variant={t.priority === 'P0' ? 'neutral' : 'outline'}>{t.priority} {PRIORITY_LABEL[t.priority]}</Badge>
+                      </div>
+                      {statLink(t.key) && (
+                        <Link to={statLink(t.key)!} aria-label={`看 ${t.key} 排行`}
+                          className="press group inline-flex items-center gap-0.5 h-8 pointer-fine:h-6 px-2 -mx-1 rounded-[6px] text-[12px] font-medium text-ink-2 hover:text-ink hover:bg-surface-2 transition-colors motion-reduce:transition-none">
+                          看排行<ChevronRight aria-hidden className="size-3.5 transition-[translate] duration-[var(--dur-base)] group-hover:translate-x-0.5" />
+                        </Link>
+                      )}
                     </div>
                   </li>
                 ))}
