@@ -140,6 +140,20 @@
     transform-origin: left;
     animation: draw-x 600ms var(--ease-out) both;
   }
+  /* Card-like things you can open lift toward a mouse and sink under a finger. Hover is gated to real
+     pointers so a tap on a phone never leaves a card stuck in the raised state. */
+  .lift {
+    transition: translate var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), scale var(--dur-press) var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .lift:hover { translate: 0 -2px; box-shadow: var(--shadow-hover); }
+  }
+  .lift:active { translate: 0 0; scale: 0.985; transition-duration: var(--dur-press); }
+  /* Plain controls: a small squeeze the moment a finger lands (pointer-down, not release). */
+  .press {
+    transition: scale var(--dur-press) var(--ease-out);
+  }
+  .press:active:not(:disabled) { scale: 0.97; }
   .hairline {
     border: 1px solid var(--border);
   }
@@ -176,3 +190,11 @@ html[data-font="serif"] .font-semibold,
 html[data-font="serif"] h1, html[data-font="serif"] h2, html[data-font="serif"] h3, html[data-font="serif"] h4,
 html[data-font="serif"] .text-display { font-weight: 700; }
 html[data-font="serif"] .font-bold { font-weight: 700; }
+
+/* People who turn off transparency get a solid dim instead of a blurred backdrop. */
+@media (prefers-reduced-transparency: reduce) {
+  .scrim { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lift, .lift:hover, .lift:active, .press:active { translate: none !important; scale: none !important; }
+}
