@@ -31,7 +31,7 @@ export function OverviewPage() {
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
   const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
 
-  const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, us: g.runsUs, opp: g.runsOpp, opponent: g.game.opponent })), [summaries])
+  const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, id: g.game.id, us: g.runsUs, opp: g.runsOpp, opponent: g.game.opponent })), [summaries])
   const cumulative = useMemo(() => {
     let acc = 0
     return summaries.map((g) => ({ name: shortDate(g.game.date), diff: (acc += g.runsUs - g.runsOpp) }))
@@ -79,25 +79,25 @@ export function OverviewPage() {
       <PageHeader title="總覽" description={`${TEAM_NAME}・${summary.games} 場比賽，依上方篩選即時計算。`} />
       <DemoBanner />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="戰績（勝-敗-和）" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} note={`勝率 ${f3(summary.winPct)}`} />
-        <StatTile label="每場得失分" value={summary.runsPerGame ?? 0} display={`${f2(summary.runsPerGame)}/${f2(summary.runsAllowedPerGame)}`} note={`${summary.rs} 得・${summary.ra} 失`} />
-        <StatTile label="團隊打擊率" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
-        <StatTile label="團隊 OPS" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
-        <StatTile label="得點圈 AVG" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
-        <StatTile label="BB% / K%" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)}/${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} />
+        <StatTile label="戰績（勝-敗-和）" to="/games?view=results" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} note={`勝率 ${f3(summary.winPct)}`} />
+        <StatTile label="每場得失分" to="/games?view=results" value={summary.runsPerGame ?? 0} display={`${f2(summary.runsPerGame)}/${f2(summary.runsAllowedPerGame)}`} note={`${summary.rs} 得・${summary.ra} 失`} />
+        <StatTile label="團隊打擊率" to="/batting?view=basic&sort=avg" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
+        <StatTile label="團隊 OPS" to="/batting?view=basic&sort=ops" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
+        <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
+        <StatTile label="BB% / K%" to="/batting?view=advanced&sort=bbPct" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)}/${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} />
       </StatGroup>
       <div className="hidden md:block">
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
-        <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
-        <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
-        <StatTile label="BB/9" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="每場失誤 / 守備率" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
-        <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+        <StatTile label="團隊防禦率" to="/pitching?view=basic&sort=era&dir=asc" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
+        <StatTile label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
+        <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
+        <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
+        <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
+        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
       </StatGroup>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；橫軸標示對手" data={perGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
+        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={(d) => navigate(`/games?game=${encodeURIComponent(String(d.id))}`)} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
         <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分" data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
         <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均" data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
@@ -105,12 +105,12 @@ export function OverviewPage() {
       </div>
       <div className="md:hidden">
       <StatGroup columns="grid-cols-2">
-        <StatTile label="團隊防禦率" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
-        <StatTile label="團隊 WHIP" value={teamPitch.whip ?? 0} format="ratio" />
-        <StatTile label="團隊 K / BB" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
-        <StatTile label="BB/9" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="每場失誤 / 守備率" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
-        <StatTile label="盜壘" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+        <StatTile label="團隊防禦率" to="/pitching?view=basic&sort=era&dir=asc" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
+        <StatTile label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
+        <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
+        <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
+        <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
+        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
       </StatGroup>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">

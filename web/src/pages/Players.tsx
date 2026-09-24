@@ -192,8 +192,8 @@ export function PlayersPage() {
                   return (
                     <li key={p.name}>
                       <button type="button" role="option" aria-selected={active} onClick={() => choose(p.name)}
-                        className={cx('w-full text-left flex items-center gap-3 px-3 py-2 rounded-[var(--radius-sm)] border cursor-pointer transition-colors motion-reduce:transition-none',
-                          active ? 'border-ink bg-surface-2' : 'border-border hover:bg-surface-2/70')}>
+                        className={cx('lift w-full text-left flex items-center gap-3 px-3 py-2 rounded-[var(--radius-sm)] border cursor-pointer bg-surface',
+                          active ? 'border-ink bg-surface-2' : 'border-border')}>
                         <PlateBadge size={30} active={active}>{p.number ?? p.name.slice(0, 1)}</PlateBadge>
                         <span className="min-w-0 flex-1">
                           <span className="block text-[13px] font-medium text-ink truncate">{p.name}</span>

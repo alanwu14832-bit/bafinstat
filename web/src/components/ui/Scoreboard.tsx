@@ -56,7 +56,8 @@ export function LineScoreBoard({ top, bottom, innings, current, showErrors = tru
     </tr>
   )
   return (
-    <div className={cx('rounded-[var(--radius-sm)] overflow-hidden', className)} style={{ background: BOARD.bg, color: BOARD.ink, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+    <div className={cx('rounded-[calc(var(--radius-sm)+5px)] p-[5px] bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--ink)_6%,transparent)]', className)}>
+    <div className="rounded-[var(--radius-sm)] overflow-hidden" style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%), ${BOARD.bg}`, color: BOARD.ink, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.22), 0 12px 26px -12px rgba(0,0,0,0.45)' }}>
       <div className="overflow-x-auto scroll-x">
         <table className="border-collapse min-w-full text-[13px]">
           <thead>
@@ -72,6 +73,7 @@ export function LineScoreBoard({ top, bottom, innings, current, showErrors = tru
         </table>
       </div>
       {footer}
+    </div>
     </div>
   )
 }

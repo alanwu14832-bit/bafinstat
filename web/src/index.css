@@ -50,6 +50,23 @@
     font-size: 14px;
     line-height: 1.5;
     overflow-x: hidden;
+    /* keep content out of the notch when a phone is turned sideways (viewport-fit=cover) */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* No grey flash on tap: every control draws its own pressed state instead. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* With the tap flash gone every control needs its own pressed state. Buttons squeeze a little the moment a
+     finger lands; :where keeps this at zero specificity so any component can override it. Components that
+     animate their own press (the Button component, the sheet backdrop) opt out with data-press="none". */
+  :where(button, [role="button"], summary):not(:disabled):not([data-press="none"]):active {
+    scale: 0.97;
+  }
+  /* A quick second tap is a second tap, not a zoom (recorders tap fast during games). */
+  a, button, select, label, summary, [role="button"], [role="tab"], [role="option"], [role="radio"] {
+    touch-action: manipulation;
   }
   /* Theme switches cross-fade instead of snapping. */
   html.theme-transition,
@@ -121,23 +138,28 @@
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: "tnum", "lnum";
   }
-  /* Rows rise in as a list mounts or re-sorts; --i staggers them (capped by the caller). */
-  @keyframes rise-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .rise-in {
-    animation: rise-in var(--dur-slow) var(--ease-out) both;
-    animation-delay: calc(var(--i, 0) * 22ms);
-  }
   @keyframes draw-x {
     from { transform: scaleX(0); }
     to { transform: scaleX(1); }
   }
   .draw-x {
     transform-origin: left;
-    animation: draw-x 700ms var(--ease-out) both;
+    animation: draw-x 600ms var(--ease-out) both;
   }
+  /* Card-like things you can open lift toward a mouse and sink under a finger. Hover is gated to real
+     pointers so a tap on a phone never leaves a card stuck in the raised state. */
+  .lift {
+    transition: translate var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), scale var(--dur-press) var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .lift:hover { translate: 0 -2px; box-shadow: var(--shadow-hover); }
+  }
+  .lift:active { translate: 0 0; scale: 0.985; transition-duration: var(--dur-press); }
+  /* Plain controls: a small squeeze the moment a finger lands (pointer-down, not release). */
+  .press {
+    transition: scale var(--dur-press) var(--ease-out);
+  }
+  .press:active:not(:disabled) { scale: 0.97; }
   .hairline {
     border: 1px solid var(--border);
   }
@@ -174,3 +196,13 @@ html[data-font="serif"] .font-semibold,
 html[data-font="serif"] h1, html[data-font="serif"] h2, html[data-font="serif"] h3, html[data-font="serif"] h4,
 html[data-font="serif"] .text-display { font-weight: 700; }
 html[data-font="serif"] .font-bold { font-weight: 700; }
+
+/* People who turn off transparency get a solid dim instead of a blurred backdrop. */
+@media (prefers-reduced-transparency: reduce) {
+  .scrim { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* reduced motion: presses dim instead of moving */
+  .lift, .lift:hover, .lift:active, .press:active, :where(button, [role="button"], summary):active { translate: none !important; scale: none !important; }
+  :where(button, [role="button"], summary):not(:disabled):active, .press:active { opacity: 0.7; }
+}

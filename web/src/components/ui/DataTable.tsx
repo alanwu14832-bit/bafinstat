@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cx } from '../../lib/format'
 import { EmptyState } from './EmptyState'
@@ -82,7 +82,7 @@ export function DataTable<Row extends object>({
                   style={{ width: col.width }}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], pin(i), i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
-                    sortable && 'cursor-pointer select-none hover:text-ink')}
+                    sortable && 'cursor-pointer select-none hover:text-ink active:opacity-60')}
                   onClick={sortable ? () => toggleSort(col.key) : undefined}
                   title={sortable ? '點擊排序' : undefined}
                 >
@@ -104,12 +104,12 @@ export function DataTable<Row extends object>({
             </tr>
           ) : (
             sorted.map((row, i) => (
-              <tr style={{ '--i': Math.min(i, 14) } as CSSProperties}
+              <tr
                 key={rowKey(row, i)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(row) } : undefined}
-                className={cx('rise-in bg-surface border-b border-border last:border-b-0 transition-colors motion-reduce:transition-none motion-reduce:animate-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70')}
+                className={cx('bg-surface border-b border-border last:border-b-0 transition-colors duration-[var(--dur-fast)] motion-reduce:transition-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70')}
               >
                 {columns.map((col, ci) => (
                   <td key={col.key} className={cx(cellPad, alignCls[col.align ?? 'left'], 'text-ink', pin(ci), ci === 0 && 'pl-4', ci === columns.length - 1 && 'pr-4', col.className)}>

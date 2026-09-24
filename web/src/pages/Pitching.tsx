@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
@@ -28,11 +29,13 @@ function columnsFor(view: View): Column<PitchingLine>[] {
   return [name, n('bf', 'BF'), n('pc', 'PC'), p('strikePct', 'Strike%'), p('fStrikePct', 'F-Strike%'), p('cswPct', 'CSW%'), p('whiffPct', 'Whiff%'), { key: 'pPerIP', header: 'P/IP', align: 'right', sortable: true, format: (v) => f1(v as number | null) }, { key: 'pPerBF', header: 'P/BF', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('bip', 'BIP'), p('gbPct', 'GB%'), p('fbPct', 'FB%'), p('ldPct', 'LD%'), p('hardPct', 'Hard%')]
 }
 
+
 export function PitchingPage() {
   const s = useStats()
   const navigate = useNavigate()
   const params = useDataStore((st) => st.params)
-  const [view, setView] = useState<View>('basic')
+  const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
+  const [view, setView] = useState<View>(linked.initialView)
   const minIP = Math.max(1, Math.ceil(s.summary.games * 0.7))
 
   const eraFip = useMemo(() => s.pitchers.filter((p) => p.ip >= minIP).map((p) => ({ name: p.name, ERA: Number((p.era ?? 0).toFixed(2)), FIP: Number((p.fip ?? 0).toFixed(2)) })), [s.pitchers, minIP])
@@ -64,7 +67,7 @@ export function PitchingPage() {
         <StatTile label="首球好球率" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
       <Card title="投手成績" subtitle="點投手開啟個人檔案" flush>
-        <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} defaultSort={{ key: 'outs', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={480} />
+        <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} key={`${view}-${linked.sortKey ?? ''}`} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={480} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯" data={eraFip} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
