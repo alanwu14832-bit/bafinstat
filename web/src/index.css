@@ -58,6 +58,12 @@
   html {
     -webkit-tap-highlight-color: transparent;
   }
+  /* With the tap flash gone every control needs its own pressed state. Buttons squeeze a little the moment a
+     finger lands; :where keeps this at zero specificity so any component can override it. Components that
+     animate their own press (the Button component, the sheet backdrop) opt out with data-press="none". */
+  :where(button, [role="button"], summary):not(:disabled):not([data-press="none"]):active {
+    scale: 0.97;
+  }
   /* A quick second tap is a second tap, not a zoom (recorders tap fast during games). */
   a, button, select, label, summary, [role="button"], [role="tab"], [role="option"], [role="radio"] {
     touch-action: manipulation;
@@ -196,5 +202,7 @@ html[data-font="serif"] .font-bold { font-weight: 700; }
   .scrim { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lift, .lift:hover, .lift:active, .press:active { translate: none !important; scale: none !important; }
+  /* reduced motion: presses dim instead of moving */
+  .lift, .lift:hover, .lift:active, .press:active, :where(button, [role="button"], summary):active { translate: none !important; scale: none !important; }
+  :where(button, [role="button"], summary):not(:disabled):active, .press:active { opacity: 0.7; }
 }

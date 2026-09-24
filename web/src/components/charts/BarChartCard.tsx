@@ -19,6 +19,8 @@ export interface BarChartCardProps extends Omit<ChartFrameProps, 'children' | 'l
   categoryWidth?: number
   /** Series name shown in the tooltip for a given datum (e.g. that game's opponent). */
   nameFor?: (seriesKey: string, datum: BarDatum) => string
+  /** Makes each bar a button (e.g. open that game). */
+  onBarClick?: (datum: BarDatum) => void
   /** Datum field rendered as a second, muted line under each x-axis label (vertical layout only). */
   xSubKey?: string
 }
@@ -37,7 +39,7 @@ function TwoLineTick({ x = 0, y = 0, payload, sub }: TickProps & { sub: (i: numb
 const MUTED = 'var(--surface-3)'
 
 export function BarChartCard({
-  data, series, layout = 'vertical', highlightKey, showLabels, formatValue, categoryWidth = 56, height, nameFor, xSubKey, ...frame
+  data, series, layout = 'vertical', highlightKey, showLabels, formatValue, categoryWidth = 56, height, nameFor, xSubKey, onBarClick, ...frame
 }: BarChartCardProps) {
   const resolved = resolveSeries(series)
   const anim = useChartAnimation()
@@ -55,6 +57,12 @@ export function BarChartCard({
           margin={{ top: showLabels && !horizontal ? 18 : 6, right: showLabels && horizontal ? 40 : 8, bottom: 0, left: horizontal ? 0 : -12 }}
           barGap={2}
           barCategoryGap="28%"
+          // Chart-level click: the whole column (bar + the gap above it) is the tap target, not just the bar.
+          onClick={onBarClick ? (state) => {
+            const i = Number(state?.activeTooltipIndex)
+            if (Number.isInteger(i) && data[i]) onBarClick(data[i])
+          } : undefined}
+          style={onBarClick ? { cursor: 'pointer' } : undefined}
         >
           <CartesianGrid stroke="var(--grid)" strokeDasharray="0" vertical={horizontal} horizontal={!horizontal} />
           {horizontal ? (
@@ -86,6 +94,7 @@ export function BarChartCard({
               maxBarSize={24}
               radius={horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0]}
               {...anim}
+              {...(onBarClick ? { activeBar: { fillOpacity: 0.78 } } : {})}
             >
               {highlightKey !== undefined &&
                 data.map((d) => <Cell key={d.name} fill={d.name === highlightKey ? s.color : MUTED} />)}

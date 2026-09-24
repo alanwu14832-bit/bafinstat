@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
@@ -28,10 +29,12 @@ function columnsFor(view: View): Column<BattingLine>[] {
   return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), p('gbPct', 'GB%'), p('fbPct', 'FB%'), p('ldPct', 'LD%'), p('hardPct', 'Hard%'), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
 }
 
+
 export function BattingPage() {
   const s = useStats()
   const navigate = useNavigate()
-  const [view, setView] = useState<View>('basic')
+  const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
+  const [view, setView] = useState<View>(linked.initialView)
   const [qualifiedOnly, setQualifiedOnly] = useState(false)
   const minPA = Math.max(1, Math.ceil(s.summary.games * MIN_PA_RATIO))
   const rows = useMemo(() => (qualifiedOnly ? s.batters.filter((b) => b.pa >= minPA) : s.batters), [s.batters, qualifiedOnly, minPA])
@@ -58,7 +61,7 @@ export function BattingPage() {
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
       <Card title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
-        <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} defaultSort={{ key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={520} />
+        <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} key={`${view}-${linked.sortKey ?? ''}`} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={(r) => navigate(`/players?player=${encodeURIComponent(r.name)}`)} dense maxHeight={520} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名" data={opsRank} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />

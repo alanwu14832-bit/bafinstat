@@ -47,7 +47,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
                   aria-label={label}
                   className={({ isActive }) =>
                     cx(
-                      'relative flex items-center h-9 rounded-[var(--radius-sm)] pl-[13px] pr-3 overflow-hidden whitespace-nowrap',
+                      'press relative flex items-center h-9 rounded-[var(--radius-sm)] pl-[13px] pr-3 overflow-hidden whitespace-nowrap',
                       'text-[13px] transition-colors motion-reduce:transition-none',
                       isActive ? 'text-ink font-medium' : 'text-ink-2 hover:text-ink hover:bg-surface-2 active:bg-surface-3',
                     )

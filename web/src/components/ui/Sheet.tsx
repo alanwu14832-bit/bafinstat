@@ -184,7 +184,7 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
       : 'absolute inset-y-0 left-0 w-[280px] max-w-[85vw] bg-bg flex flex-col shadow-[var(--shadow-modal)]'
   return createPortal(
     <div className={cx('fixed inset-0 z-50 flex', centered ? 'items-center justify-center p-6' : 'items-end', className)} role="dialog" aria-modal="true" aria-label={ariaLabel}>
-      <motion.button type="button" aria-label="關閉" tabIndex={-1} onClick={() => onClose()} style={{ opacity: scrimAlpha }} className="scrim absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px] cursor-default" />
+      <motion.button type="button" data-press="none" aria-label="關閉" tabIndex={-1} onClick={() => onClose()} style={{ opacity: scrimAlpha }} className="scrim absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px] cursor-default" />
       <motion.div ref={panelRef} tabIndex={-1} style={{ x, y, opacity: alpha, scale, willChange: 'transform' }} className={cx(panelBase, 'outline-none', panelClassName)} {...panelDrag}>
         {!centered && axis === 'y' && (
           <div {...handleProps} className="shrink-0 pt-2 pb-1 flex justify-center cursor-grab active:cursor-grabbing touch-none select-none" aria-hidden><span className="h-[5px] w-9 rounded-full bg-border-strong" /></div>

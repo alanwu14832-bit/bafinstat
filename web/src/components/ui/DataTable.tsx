@@ -82,7 +82,7 @@ export function DataTable<Row extends object>({
                   style={{ width: col.width }}
                   aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], pin(i), i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
-                    sortable && 'cursor-pointer select-none hover:text-ink')}
+                    sortable && 'cursor-pointer select-none hover:text-ink active:opacity-60')}
                   onClick={sortable ? () => toggleSort(col.key) : undefined}
                   title={sortable ? '點擊排序' : undefined}
                 >

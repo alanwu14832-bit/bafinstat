@@ -43,10 +43,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   const reduced = usePrefersReducedMotion()
   // press feedback on pointer-down, release springs back (critically damped)
   const press = reduced ? {} : { whileTap: { scale: 0.97 }, transition: { type: 'spring' as const, visualDuration: 0.12, bounce: 0 } }
-  if (to) return <MotionLink to={to} className={cls} aria-label={rest['aria-label']} title={rest.title} {...press}>{icon}{children}</MotionLink>
-  if (href) return <motion.a href={href} download={download} className={cls} aria-label={rest['aria-label']} title={rest.title} target={/^https?:/.test(href) ? '_blank' : undefined} rel={/^https?:/.test(href) ? 'noreferrer' : undefined} {...press}>{icon}{children}</motion.a>
+  if (to) return <MotionLink data-press="none" to={to} className={cls} aria-label={rest['aria-label']} title={rest.title} {...press}>{icon}{children}</MotionLink>
+  if (href) return <motion.a data-press="none" href={href} download={download} className={cls} aria-label={rest['aria-label']} title={rest.title} target={/^https?:/.test(href) ? '_blank' : undefined} rel={/^https?:/.test(href) ? 'noreferrer' : undefined} {...press}>{icon}{children}</motion.a>
   return (
-    <motion.button ref={ref} type={type} className={cls} {...press} {...(rest as object)}>
+    <motion.button ref={ref} type={type} data-press="none" className={cls} {...press} {...(rest as object)}>
       {icon}
       {children}
     </motion.button>

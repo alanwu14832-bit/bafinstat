@@ -16,6 +16,9 @@ if ('serviceWorker' in navigator) {
   void navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => void r.unregister())).catch(() => undefined)
 }
 
+// iOS Safari applies :active (our pressed states) only when a touch listener exists up the tree.
+document.addEventListener('touchstart', () => undefined, { passive: true })
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
