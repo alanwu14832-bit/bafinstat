@@ -61,7 +61,7 @@
   /* With the tap flash gone every control needs its own pressed state. Buttons squeeze a little the moment a
      finger lands; :where keeps this at zero specificity so any component can override it. Components that
      animate their own press (the Button component, the sheet backdrop) opt out with data-press="none". */
-  :where(button, [role="button"], summary):not(:disabled):not([data-press="none"]):active {
+  :where(button, [role="button"], summary):not(:disabled):not([data-press="none"]):is(:active, [data-pressed]) {
     scale: 0.97;
   }
   /* A quick second tap is a second tap, not a zoom (recorders tap fast during games). */
@@ -151,12 +151,12 @@
   .lift {
     transition: translate var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), scale var(--dur-press) var(--ease-out);
   }
-  .lift:active { translate: 0 0; scale: 0.985; transition-duration: var(--dur-press); }
+  .lift:is(:active, [data-pressed]) { translate: 0 0; scale: 0.985; transition-duration: var(--dur-press); }
   /* Plain controls: a small squeeze the moment a finger lands (pointer-down, not release). */
   .press {
     transition: scale var(--dur-press) var(--ease-out);
   }
-  .press:active:not(:disabled) { scale: 0.97; }
+  .press:is(:active, [data-pressed]):not(:disabled) { scale: 0.97; }
   .hairline {
     border: 1px solid var(--border);
   }
@@ -178,8 +178,10 @@
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
+  /* A tap focuses the chart (or one of recharts' internal layers); no ring around the plot for that. */
   .recharts-surface:focus,
-  .recharts-wrapper:focus {
+  .recharts-wrapper:focus,
+  .recharts-wrapper :focus {
     outline: none;
   }
 }
@@ -200,8 +202,8 @@ html[data-font="serif"] .font-bold { font-weight: 700; }
 }
 @media (prefers-reduced-motion: reduce) {
   /* reduced motion: presses dim instead of moving */
-  .lift, .lift:hover, .lift:active, .press:active, :where(button, [role="button"], summary):active { translate: none !important; scale: none !important; }
-  :where(button, [role="button"], summary):not(:disabled):active, .press:active { opacity: 0.7; }
+  .lift, .lift:hover, .lift:is(:active, [data-pressed]), .press:is(:active, [data-pressed]), :where(button, [role="button"], summary):is(:active, [data-pressed]) { translate: none !important; scale: none !important; }
+  :where(button, [role="button"], summary):not(:disabled):not([data-press="none"]):is(:active, [data-pressed]), .press:is(:active, [data-pressed]) { opacity: 0.7; }
 }
 
 /* In the utilities layer (not components) so the raised shadow wins over a card's own shadow-[…] class. */
