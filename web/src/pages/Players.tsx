@@ -106,21 +106,46 @@ export function PlayersPage() {
   const cmpPit = compare ? pitchByName.get(compare) : undefined
   const cmpPlayer = compare ? roster.find((p) => p.name === compare) : undefined
 
-  const AXES: Array<{ key: keyof BattingLine; label: string; invert?: boolean }> = [
-    { key: 'avg', label: '打擊率' }, { key: 'obp', label: '上壘率' }, { key: 'slg', label: '長打率' }, { key: 'kPct', label: '避免三振', invert: true }, { key: 'bbPct', label: '選球' }, { key: 'hardPct', label: '強擊' },
-  ]
-  const radar = useMemo(() => {
-    const pool = s.batters.filter((b) => b.pa >= 3)
-    const pct = (b: BattingLine | undefined, a: (typeof AXES)[number]) => (b ? percentile(b[a.key] as number | null, pool.map((x) => x[a.key] as number | null), a.invert) : 0)
-    return AXES.map((a) => ({ axis: a.label, player: pct(bat, a), team: 50, other: pct(cmpBat, a) }))
-  }, [bat, cmpBat, s.batters])
-
   const gameLog: GameLogRow[] = useMemo(() => s.summaries.map((g) => {
     const pas = s.batting.filter((p) => p.gameId === g.game.id && p.batter === selected)
     if (!pas.length) return null
     const l = battingLines(s.dataset, pas)[0]
     return { id: g.game.id, date: g.game.date, opponent: g.game.opponent, pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
   }).filter((r): r is GameLogRow => r !== null).reverse(), [s.summaries, s.batting, s.dataset, selected])
+
+  // Radar: this player's team percentile on six axes. The second shape is someone to compare with (the
+  // compare pick, else this player's last 5 games), never a flat 50 — the median is the dashed ring.
+  const AXES: Array<{ key: keyof BattingLine; label: string; invert?: boolean; fmt: (v: number | null) => string }> = [
+    { key: 'avg', label: '打擊率', fmt: f3 }, { key: 'obp', label: '上壘率', fmt: f3 }, { key: 'slg', label: '長打率', fmt: f3 },
+    { key: 'kPct', label: '避免三振', invert: true, fmt: (v) => `K% ${pct0(v)}` }, { key: 'bbPct', label: '選球', fmt: (v) => `BB% ${pct0(v)}` }, { key: 'hardPct', label: '強擊', fmt: (v) => `Hard% ${pct0(v)}` },
+  ]
+  const RECENT = 5
+  const recentBat = useMemo(() => {
+    if (compare || gameLog.length <= RECENT) return undefined
+    const ids = gameLog.slice(0, RECENT).map((g) => g.id)
+    const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected))[0]
+    return l && l.pa >= 3 ? l : undefined
+  }, [compare, gameLog, s.dataset, s.batting, selected])
+  const radar = useMemo(() => {
+    const pool = s.batters.filter((b) => b.pa >= 3)
+    const vals = (a: (typeof AXES)[number]) => pool.map((x) => x[a.key] as number | null)
+    const pr = (b: BattingLine | undefined, a: (typeof AXES)[number]) => (b ? percentile(b[a.key] as number | null, vals(a), a.invert) : 0)
+    // rank among qualified teammates, 1 = best
+    const rank = (v: number | null, a: (typeof AXES)[number]) => {
+      const xs = vals(a).filter((x): x is number => x !== null)
+      return v === null ? '' : `隊內第 ${xs.filter((x) => (a.invert ? x < v : x > v)).length + 1}／${xs.length}`
+    }
+    const second = cmpBat ?? recentBat
+    return AXES.map((a) => {
+      const mine = bat ? (bat[a.key] as number | null) : null
+      const theirs = second ? (second[a.key] as number | null) : null
+      return {
+        axis: a.label, player: pr(bat, a), other: pr(second, a),
+        playerDetail: `${a.fmt(mine)}（${rank(mine, a)}）`,
+        otherDetail: cmpBat ? `${a.fmt(theirs)}（${rank(theirs, a)}）` : a.fmt(theirs),
+      }
+    })
+  }, [bat, cmpBat, recentBat, s.batters])
 
   const trend = useMemo(() => {
     const rows = [...gameLog].reverse()
@@ -253,7 +278,10 @@ export function PlayersPage() {
             </Card>
           )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" subtitle={compare ? `${player.name} 與 ${compare} 的隊內百分位` : '與同隊打者比較（50 = 隊內中位）'} data={radar} series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : [{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />}
+            {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" data={radar} reference={50}
+              subtitle={compare ? `與 ${compare} 比較；虛線 = 隊內中位（PR 50）` : recentBat ? `整季 vs 近 ${RECENT} 場的狀態；虛線 = 隊內中位（PR 50）` : '0–100，越外圈越好；虛線 = 隊內中位（PR 50）'}
+              series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : recentBat ? [{ key: 'player', label: '整季' }, { key: 'other', label: `近 ${RECENT} 場` }] : [{ key: 'player', label: player.name }]}
+              formatValue={(v) => `PR ${Math.round(v)}`} detail={(d, k) => String(d[k === 'player' ? 'playerDetail' : 'otherDetail'] ?? '')} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}

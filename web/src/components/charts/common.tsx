@@ -54,12 +54,29 @@ export function useChartTheme(): ChartTheme {
  * Chart-level click: the whole column under the pointer (the bar, a point, the gap above it) is the target,
  * which is far easier to hit on a phone than a thin bar or a 4px dot. Spread onto <BarChart>, <LineChart>, …
  */
+// A tap can deliver its click before the chart has placed the finger (see primeTouch). The click is then
+// parked here and completed by the chart's next pointer update, if that lands within a moment.
+let parked: { at: number; pick: (i: number) => void } | null = null
+
 export function chartClick<D>(data: D[], onPick?: (datum: D) => void) {
   if (!onPick) return {}
+  const indexOf = (state: { activeTooltipIndex?: unknown } | null) => {
+    // null means no column under the pointer; Number(null) would be 0, the first datum.
+    const raw = state?.activeTooltipIndex
+    const i = raw === null || raw === undefined || raw === '' ? NaN : Number(raw)
+    return Number.isInteger(i) && data[i] ? i : null
+  }
   return {
     onClick: (state: { activeTooltipIndex?: unknown } | null) => {
-      const i = Number(state?.activeTooltipIndex)
-      if (Number.isInteger(i) && data[i]) onPick(data[i])
+      const i = indexOf(state)
+      if (i !== null) { parked = null; onPick(data[i]); return }
+      parked = { at: Date.now(), pick: (j) => onPick(data[j]) }
+    },
+    onMouseMove: (state: { activeTooltipIndex?: unknown } | null) => {
+      if (!parked) return
+      const i = indexOf(state)
+      if (Date.now() - parked.at > 400) { parked = null; return }
+      if (i !== null) { const p = parked; parked = null; p.pick(i) }
     },
     style: { cursor: 'pointer' },
   }
@@ -168,6 +185,16 @@ export interface ChartFrameProps extends Omit<CardProps, 'children'> {
  * Card wrapper for charts. Rises in on mount via framer-motion and is
  * visible immediately (no intersection observer gating).
  */
+/**
+ * Recharts only learns which column is under the pointer from mouse movement, so a finger tap reaches the
+ * chart's onClick with no column. Replaying the touch point as a mousemove first lets the tap pick (and
+ * show the tooltip for) the column it landed on.
+ */
+function primeTouch(e: React.PointerEvent<HTMLDivElement>) {
+  if (e.pointerType === 'mouse') return
+  e.target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: e.clientX, clientY: e.clientY }))
+}
+
 export function ChartFrame({ height = 260, legend, footer, children, ...card }: ChartFrameProps) {
   const reduced = usePrefersReducedMotion()
   return (
@@ -179,7 +206,7 @@ export function ChartFrame({ height = 260, legend, footer, children, ...card }: 
     >
       <Card {...card} className="h-full">
         {legend && <div className="mb-3">{legend}</div>}
-        <div style={{ height, width: '100%' }} className="min-w-0">
+        <div style={{ height, width: '100%' }} className="min-w-0" onPointerDownCapture={primeTouch}>
           {children}
         </div>
         {footer && <div className="mt-3 text-xs text-muted">{footer}</div>}
