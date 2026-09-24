@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisCommon, ChartFrame, ChartTooltip, resolveSeries, useChartAnimation, useChartTheme, type ChartFrameProps, type SeriesConfig } from './common'
+import { axisCommon, chartClick, ChartFrame, ChartTooltip, resolveSeries, useChartAnimation, useChartTheme, type ChartFrameProps, type SeriesConfig } from './common'
 
 export interface AreaDatum {
   name: string
@@ -14,9 +14,11 @@ export interface AreaChartCardProps extends Omit<ChartFrameProps, 'children' | '
   formatValue?: (v: number) => string
   /** Draw a zero baseline (useful for +/- run differential). */
   zeroLine?: boolean
+  /** Makes each point a button (e.g. open that game). */
+  onPointClick?: (datum: AreaDatum) => void
 }
 
-export function AreaChartCard({ data, series, formatValue, zeroLine, height = 260, ...frame }: AreaChartCardProps) {
+export function AreaChartCard({ data, series, formatValue, zeroLine, height = 260, onPointClick, ...frame }: AreaChartCardProps) {
   const [s] = resolveSeries([series])
   const anim = useChartAnimation()
   const theme = useChartTheme()
@@ -29,7 +31,7 @@ export function AreaChartCard({ data, series, formatValue, zeroLine, height = 26
   return (
     <ChartFrame height={height} {...frame}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -4 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -4 }} {...chartClick(data, onPointClick)}>
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={hex} stopOpacity={0.16} />

@@ -31,10 +31,22 @@ export function CountLights({ balls, strikes, outs, size = 'md', onBoard, classN
 
 export interface BoardTeam { name: string; line: Array<number | null>; r: number; h: number; e?: number; us?: boolean }
 
+/** The focal board sits in a thin tray (outer shell, inner core) with a faint top sheen, so it reads as a real panel. */
+export function BoardTray({ children, className, innerClassName }: { children: ReactNode; className?: string; innerClassName?: string }) {
+  return (
+    <div className={cx('rounded-[calc(var(--radius-sm)+5px)] p-[5px] bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--ink)_6%,transparent)]', className)}>
+      <div className={cx('rounded-[var(--radius-sm)] overflow-hidden', innerClassName)} style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%), ${BOARD.bg}`, color: BOARD.ink, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.22), 0 12px 26px -12px rgba(0,0,0,0.45)' }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Line score as a scoreboard panel: innings across, R H E on the right. `current` lights the inning in play.
+ * `bare` drops the tray when the board already sits inside a larger one.
  */
-export function LineScoreBoard({ top, bottom, innings, current, showErrors = true, footer, className }: { top: BoardTeam; bottom: BoardTeam; innings: number; current?: { inning: number; half: 'top' | 'bottom' }; showErrors?: boolean; footer?: ReactNode; className?: string }) {
+export function LineScoreBoard({ top, bottom, innings, current, showErrors = true, footer, bare, className }: { top: BoardTeam; bottom: BoardTeam; innings: number; current?: { inning: number; half: 'top' | 'bottom' }; showErrors?: boolean; footer?: ReactNode; bare?: boolean; className?: string }) {
   const n = Math.max(innings, top.line.length, bottom.line.length, 1)
   const cell = 'px-2 py-1.5 text-center min-w-8 tabular-nums'
   const row = (t: BoardTeam, half: 'top' | 'bottom') => (
@@ -55,9 +67,8 @@ export function LineScoreBoard({ top, bottom, innings, current, showErrors = tru
       {showErrors && <td className={cx(cell, 'figure font-semibold text-[14px] pr-4')}>{t.e ?? 0}</td>}
     </tr>
   )
-  return (
-    <div className={cx('rounded-[calc(var(--radius-sm)+5px)] p-[5px] bg-[color-mix(in_srgb,var(--ink)_5%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--ink)_6%,transparent)]', className)}>
-    <div className="rounded-[var(--radius-sm)] overflow-hidden" style={{ background: `linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0) 42%), ${BOARD.bg}`, color: BOARD.ink, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 1px rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.22), 0 12px 26px -12px rgba(0,0,0,0.45)' }}>
+  const table = (
+    <>
       <div className="overflow-x-auto scroll-x">
         <table className="border-collapse min-w-full text-[13px]">
           <thead>
@@ -73,9 +84,10 @@ export function LineScoreBoard({ top, bottom, innings, current, showErrors = tru
         </table>
       </div>
       {footer}
-    </div>
-    </div>
+    </>
   )
+  if (bare) return <div className={className} style={{ color: BOARD.ink, borderColor: BOARD.line }}>{table}</div>
+  return <BoardTray className={className}>{table}</BoardTray>
 }
 
 /** Home-plate shaped number badge for batting slots and jersey numbers. */

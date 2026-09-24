@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarPlus, MapPin, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CalendarPlus, MapPin, Pencil, PenLine, Plus, Trash2, X } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -112,6 +112,7 @@ export function ScheduleSection() {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {tone === 'up' && <Button variant="ghost" size="sm" href={calendarUrl(g)} icon={<CalendarPlus />} title="加到 Google 日曆" aria-label="加到 Google 日曆" />}
+          {tone === 'past' && canEdit && <Button variant="outline" size="sm" icon={<PenLine />} to={`/record?game=${encodeURIComponent(g.id)}`} title="到紀錄比賽補記這一場">去紀錄</Button>}
           {canEdit && <Button variant="ghost" size="sm" icon={<Pencil />} aria-label="編輯" onClick={() => setEditing(g)} />}
         </div>
       </li>

@@ -1,5 +1,5 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { axisCommon, ChartFrame, ChartLegend, ChartTooltip, resolveSeries, useChartAnimation, type ChartFrameProps, type SeriesConfig } from './common'
+import { axisCommon, chartClick, ChartFrame, ChartLegend, ChartTooltip, resolveSeries, useChartAnimation, type ChartFrameProps, type SeriesConfig } from './common'
 
 export interface StackedDatum {
   name: string
@@ -36,11 +36,7 @@ export function StackedBarCard({ data, series, layout = 'vertical', formatValue,
           stackOffset={percent ? 'expand' : 'none'}
           margin={{ top: 6, right: 8, bottom: 0, left: horizontal ? 0 : -12 }}
           barCategoryGap="28%"
-          onClick={onBarClick ? (state) => {
-            const i = Number(state?.activeTooltipIndex)
-            if (Number.isInteger(i) && data[i]) onBarClick(data[i])
-          } : undefined}
-          style={onBarClick ? { cursor: 'pointer' } : undefined}
+          {...chartClick(data, onBarClick)}
         >
           <CartesianGrid stroke="var(--grid)" strokeDasharray="0" vertical={horizontal} horizontal={!horizontal} />
           {horizontal ? (

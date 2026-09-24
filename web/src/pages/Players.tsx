@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
+import { useOpenGame } from '../hooks/useOpenGame'
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { PlateBadge } from '../components/ui/Scoreboard'
@@ -78,6 +79,7 @@ export function PlayersPage() {
   const s = useStats()
   const reduced = usePrefersReducedMotion()
   const [params, setParams] = useSearchParams()
+  const openGame = useOpenGame()
   const roster = useMemo(() => [...s.dataset.roster].sort((a, b) => Number(!!b.status && b.status !== '現役' ? 0 : 1) - Number(!!a.status && a.status !== '現役' ? 0 : 1)), [s.dataset.roster])
   const names = useMemo(() => roster.map((p) => p.name), [roster])
   const requested = params.get('player')
@@ -125,7 +127,7 @@ export function PlayersPage() {
     return rows.map((_, i) => {
       const ids = rows.slice(0, i + 1).map((r) => r.id)
       const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected))[0]
-      return { name: shortDate(rows[i].date), AVG: Number((l?.avg ?? 0).toFixed(3)), OPS: Number((l?.ops ?? 0).toFixed(3)) }
+      return { id: rows[i].id, name: shortDate(rows[i].date), AVG: Number((l?.avg ?? 0).toFixed(3)), OPS: Number((l?.ops ?? 0).toFixed(3)) }
     })
   }, [gameLog, s.batting, s.dataset, selected])
   const spray = useMemo(() => sprayCounts(s.batting.filter((p) => p.batter === selected)), [s.batting, selected])
@@ -254,9 +256,9 @@ export function PlayersPage() {
             {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" subtitle={compare ? `${player.name} 與 ${compare} 的隊內百分位` : '與同隊打者比較（50 = 隊內中位）'} data={radar} series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : [{ key: 'player', label: player.name }, { key: 'team', label: '隊內中位' }]} formatValue={(v) => `${Math.round(v)}`} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
-          {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今" data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
-            <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
+            <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
         </>
       )}

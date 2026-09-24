@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, Flame, Maximize2, Minimize2, RefreshCw, Save, Target, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -57,10 +57,13 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const today = new Date().toISOString().slice(0, 10)
   const last = useMemo(() => playedGames(base).slice(-1)[0], [base])
   const scheduled = useMemo(() => base.games.filter((g) => g.status === 'scheduled').sort((a, b) => a.date.localeCompare(b.date)), [base.games])
-  const [fromSchedule, setFromSchedule] = useState<string>(() => scheduled.find((g) => g.date >= today)?.id ?? '')
+  // ?game= (the 賽程 page's 去紀錄 on a game already past) picks that entry; otherwise the next one coming up
+  const [params] = useSearchParams()
+  const initial = scheduled.find((g) => g.id === params.get('game')) ?? scheduled.find((g) => g.date >= today)
+  const [fromSchedule, setFromSchedule] = useState<string>(() => initial?.id ?? '')
   // the lineup drawn up on the 先發陣容 page wins; otherwise last game's order is a good starting point
   const saved = useMemo(() => { const l = readLineup(); return l && l.order.some(Boolean) ? l : null }, [])
-  const [game, setGame] = useState<Game>(() => { const s = scheduled.find((g) => g.date >= today); return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' } })
+  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' } })
   const pickSchedule = (id: string) => { setFromSchedule(id); const s = scheduled.find((g) => g.id === id); if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined })) }
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)

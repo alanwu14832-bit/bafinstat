@@ -51,6 +51,21 @@ export function useChartTheme(): ChartTheme {
 }
 
 /**
+ * Chart-level click: the whole column under the pointer (the bar, a point, the gap above it) is the target,
+ * which is far easier to hit on a phone than a thin bar or a 4px dot. Spread onto <BarChart>, <LineChart>, …
+ */
+export function chartClick<D>(data: D[], onPick?: (datum: D) => void) {
+  if (!onPick) return {}
+  return {
+    onClick: (state: { activeTooltipIndex?: unknown } | null) => {
+      const i = Number(state?.activeTooltipIndex)
+      if (Number.isInteger(i) && data[i]) onPick(data[i])
+    },
+    style: { cursor: 'pointer' },
+  }
+}
+
+/**
  * Recharts animation props. Charts arrive already drawn: a page people revisit all day should not replay a
  * draw-in. Once mounted, a change of data (a new filter) animates so the eye can follow what moved.
  */

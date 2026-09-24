@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
+import { useOpenGame } from '../hooks/useOpenGame'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
@@ -33,6 +34,7 @@ function columnsFor(view: View): Column<PitchingLine>[] {
 export function PitchingPage() {
   const s = useStats()
   const navigate = useNavigate()
+  const openGame = useOpenGame()
   const params = useDataStore((st) => st.params)
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
@@ -46,7 +48,7 @@ export function PitchingPage() {
     const window = s.summaries.slice(Math.max(0, i - 4), i + 1).map((x) => x.game.id)
     const line = pitchingLines(s.pitching.filter((p) => window.includes(p.gameId)), [], params)
     const outs = line.reduce((a, l) => a + l.outs, 0), er = line.reduce((a, l) => a + l.er, 0), bb = line.reduce((a, l) => a + l.bb, 0), h = line.reduce((a, l) => a + l.h, 0)
-    return { name: shortDate(g.game.date), ERA: outs ? Number(((er * params.inningsPerGame) / (outs / 3)).toFixed(2)) : 0, WHIP: outs ? Number(((bb + h) / (outs / 3)).toFixed(2)) : 0 }
+    return { id: g.game.id, name: shortDate(g.game.date), ERA: outs ? Number(((er * params.inningsPerGame) / (outs / 3)).toFixed(2)) : 0, WHIP: outs ? Number(((bb + h) / (outs / 3)).toFixed(2)) : 0 }
   }), [s.summaries, s.pitching, params])
 
   const footer = useMemo(() => {
@@ -74,7 +76,7 @@ export function PitchingPage() {
         <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
         <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} onBarClick={openPlayer} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
         <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} onBarClick={openPlayer} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
-        <LineChartCard title="ERA / WHIP 走勢" subtitle="近 5 場滾動" data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
+        <LineChartCard title="ERA / WHIP 走勢" subtitle="近 5 場滾動；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
       </div>
     </>
   )
