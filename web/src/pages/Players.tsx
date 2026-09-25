@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
+import { median, previousSeason, sameGroup } from '../data/radar'
+import { filterGames } from '../data/filters'
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { PlateBadge } from '../components/ui/Scoreboard'
@@ -89,6 +91,8 @@ export function PlayersPage() {
   const [compare, setCompare] = useState<string>('')
   const [editingRoster, setEditingRoster] = useState(false)
   const base = useDataStore((st) => st.base)
+  const filters = useDataStore((st) => st.filters)
+  const statParams = useDataStore((st) => st.params)
   const cloud = useDataStore((st) => st.cloud)
   const saveRoster = useDataStore((st) => st.saveRoster)
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
@@ -113,39 +117,67 @@ export function PlayersPage() {
     return { id: g.game.id, date: g.game.date, opponent: g.game.opponent, pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
   }).filter((r): r is GameLogRow => r !== null).reverse(), [s.summaries, s.batting, s.dataset, selected])
 
-  // Radar: this player's team percentile on six axes. The second shape is someone to compare with (the
-  // compare pick, else this player's last 5 games), never a flat 50 — the median is the dashed ring.
+  // Radar: this player's team percentile on six axes. The second shape is someone or something to compare
+  // with — never a flat 50; the median is the dashed ring. Every shape sits on the same ruler: PR against the
+  // qualified teammates in the current filter, so moving outward always means better than more of the team.
   const AXES: Array<{ key: keyof BattingLine; label: string; invert?: boolean; fmt: (v: number | null) => string }> = [
     { key: 'avg', label: '打擊率', fmt: f3 }, { key: 'obp', label: '上壘率', fmt: f3 }, { key: 'slg', label: '長打率', fmt: f3 },
     { key: 'kPct', label: '避免三振', invert: true, fmt: (v) => `K% ${pct0(v)}` }, { key: 'bbPct', label: '選球', fmt: (v) => `BB% ${pct0(v)}` }, { key: 'hardPct', label: '強擊', fmt: (v) => `Hard% ${pct0(v)}` },
   ]
   const RECENT = 5
+  const pool = useMemo(() => s.batters.filter((b) => b.pa >= 3), [s.batters])
   const recentBat = useMemo(() => {
-    if (compare || gameLog.length <= RECENT) return undefined
+    if (gameLog.length <= RECENT) return undefined
     const ids = gameLog.slice(0, RECENT).map((g) => g.id)
-    const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected))[0]
+    const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected), statParams)[0]
     return l && l.pa >= 3 ? l : undefined
-  }, [compare, gameLog, s.dataset, s.batting, selected])
-  const radar = useMemo(() => {
-    const pool = s.batters.filter((b) => b.pa >= 3)
+  }, [gameLog, s.dataset, s.batting, selected, statParams])
+  const group = useMemo(() => sameGroup(s.dataset.roster, selected), [s.dataset.roster, selected])
+  const groupPool = useMemo(() => (group ? pool.filter((b) => group.names.has(b.name)) : []), [group, pool])
+  const prev = useMemo(() => previousSeason(s.games[s.games.length - 1]?.date), [s.games])
+  // When the filter already covers that year (e.g. 全部), "last season" would overlap what is on screen.
+  const spansPrev = !!prev && s.games.some((g) => g.date.startsWith(String(prev.year)))
+  const lastBat = useMemo(() => {
+    if (!prev || spansPrev) return undefined
+    // same filters as the page, with the date range moved to the season before
+    const ids = new Set(filterGames(s.dataset, { ...filters, from: prev.from, to: prev.to }).games.map((g) => g.id))
+    const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && p.batter === selected && (filters.position === 'all' || (p.pos ?? '') === filters.position))
+    const l = battingLines(s.dataset, pas, statParams)[0]
+    return l && l.pa >= 3 ? l : undefined
+  }, [prev, spansPrev, s.dataset, filters, selected, statParams])
+
+  type Basis = 'recent' | 'pos' | 'last' | 'team'
+  const bases: Array<{ value: Basis; label: string; short: string; line?: Partial<Record<keyof BattingLine, unknown>>; why: string; note: (v: string) => string }> = [
+    { value: 'recent', label: `近 ${RECENT} 場`, short: `近 ${RECENT} 場`, line: recentBat, why: `出賽不到 ${RECENT + 1} 場`, note: (v) => v },
+    {
+      value: 'pos', label: group ? `同守位（${group.group}中位）` : '同守位中位', short: group ? `${group.group}中位` : '同守位',
+      line: group && groupPool.length >= 3 ? Object.fromEntries(AXES.map((a) => [a.key, median(groupPool.map((b) => b[a.key] as number | null))])) : undefined,
+      why: group ? `${group.group}不到 3 人達 3 打席` : '名單沒填主守位', note: (v) => `${v}（${groupPool.length} 人中位）`,
+    },
+    { value: 'last', label: prev ? `上一季（${prev.year} 年）` : '上一季', short: prev ? `${prev.year} 年` : '上一季', line: lastBat, why: spansPrev ? '篩選跨年，先在上方選單一年份' : '沒有上一季的資料', note: (v) => `${v}（${prev?.year} 年）` },
+    { value: 'team', label: '全隊平均', short: '全隊平均', line: s.team, why: '', note: (v) => `全隊 ${v}` },
+  ]
+  const [basisPick, setBasisPick] = useState<Basis | ''>('')
+  const basis = bases.find((b) => b.value === basisPick && b.line) ?? bases.find((b) => b.line)
+  const radar = (() => {
     const vals = (a: (typeof AXES)[number]) => pool.map((x) => x[a.key] as number | null)
-    const pr = (b: BattingLine | undefined, a: (typeof AXES)[number]) => (b ? percentile(b[a.key] as number | null, vals(a), a.invert) : 0)
+    const pr = (v: number | null | undefined, a: (typeof AXES)[number]) => (v === undefined ? 0 : percentile(v, vals(a), a.invert))
     // rank among qualified teammates, 1 = best
     const rank = (v: number | null, a: (typeof AXES)[number]) => {
       const xs = vals(a).filter((x): x is number => x !== null)
       return v === null ? '' : `隊內第 ${xs.filter((x) => (a.invert ? x < v : x > v)).length + 1}／${xs.length}`
     }
-    const second = cmpBat ?? recentBat
+    const second = cmpBat ?? basis?.line
     return AXES.map((a) => {
       const mine = bat ? (bat[a.key] as number | null) : null
-      const theirs = second ? (second[a.key] as number | null) : null
+      const theirs = second ? ((second[a.key] as number | null | undefined) ?? null) : null
       return {
-        axis: a.label, player: pr(bat, a), other: pr(second, a),
+        axis: a.label, player: bat ? pr(mine, a) : 0, other: second ? pr(theirs, a) : 0,
         playerDetail: `${a.fmt(mine)}（${rank(mine, a)}）`,
-        otherDetail: cmpBat ? `${a.fmt(theirs)}（${rank(theirs, a)}）` : a.fmt(theirs),
+        otherDetail: cmpBat ? `${a.fmt(theirs)}（${rank(theirs, a)}）` : basis ? basis.note(a.fmt(theirs)) : '',
       }
     })
-  }, [bat, cmpBat, recentBat, s.batters])
+  })()
 
   const trend = useMemo(() => {
     const rows = [...gameLog].reverse()
@@ -279,8 +311,12 @@ export function PlayersPage() {
           )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
             {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" data={radar} reference={50}
-              subtitle={compare ? `與 ${compare} 比較；虛線 = 隊內中位（PR 50）` : recentBat ? `整季 vs 近 ${RECENT} 場的狀態；虛線 = 隊內中位（PR 50）` : '0–100，越外圈越好；虛線 = 隊內中位（PR 50）'}
-              series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : recentBat ? [{ key: 'player', label: '整季' }, { key: 'other', label: `近 ${RECENT} 場` }] : [{ key: 'player', label: player.name }]}
+              subtitle={compare ? `與 ${compare} 比較；越外圈越好，虛線 = 隊內中位` : '越外圈越好；虛線 = 隊內中位（PR 50）'}
+              action={!compare && (
+                <Select size="sm" label="比較" aria-label="雷達圖比較對象" value={basis?.value ?? ''} onChange={(e) => setBasisPick(e.target.value as Basis)}
+                  options={bases.map((b) => ({ value: b.value, label: b.line ? b.label : `${b.label}・${b.why}`, disabled: !b.line }))} />
+              )}
+              series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : basis ? [{ key: 'player', label: player.name }, { key: 'other', label: basis.short }] : [{ key: 'player', label: player.name }]}
               formatValue={(v) => `PR ${Math.round(v)}`} detail={(d, k) => String(d[k === 'player' ? 'playerDetail' : 'otherDetail'] ?? '')} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
