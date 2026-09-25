@@ -5,6 +5,8 @@ import { cx } from '../../lib/format'
 export interface SelectOption {
   value: string
   label: string
+  /** Shown but not pickable (e.g. a comparison with no data yet). */
+  disabled?: boolean
 }
 
 export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
@@ -35,7 +37,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         {...rest}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>
         ))}
       </select>
       <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-3.5 text-muted" />
