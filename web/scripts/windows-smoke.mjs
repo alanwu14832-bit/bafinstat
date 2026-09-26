@@ -19,7 +19,8 @@ for (let i = 0; i < 60; i++) {
 
 mkdirSync('smoke', { recursive: true })
 const failures = []
-const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined })
+// Playwright hides scrollbars by default; keep them, since Windows' space-taking scrollbars are part of what is checked
+const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined, ignoreDefaultArgs: ['--hide-scrollbars'] })
 try {
   for (const s of SIZES) {
     const ctx = await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.scale })
@@ -32,7 +33,7 @@ try {
       const m = await page.evaluate(() => ({
         overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         scrollbar: window.innerWidth - document.documentElement.clientWidth,
-        cjkFont: document.fonts.check('16px "Noto Sans TC"'),
+        cjkFont: document.fonts.check('16px "Noto Sans TC"', '總覽'),
         shortcut: document.querySelector('aside kbd')?.textContent ?? '',
       }))
       const tag = `${s.width}x${s.height}@${s.scale} ${path}`
