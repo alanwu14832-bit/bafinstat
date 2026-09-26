@@ -25,7 +25,7 @@
 
 ## 2. 加一個紀錄員（約 2 分鐘）
 
-1. Supabase → **Authentication → Users → Invite user**，填對方的 Email。對方會收到信設定密碼。
+1. Supabase → **Authentication → Users → Add user → Create new user**，填對方的 Email 和一組密碼，勾 **Auto Confirm User**，把密碼私訊給對方。（不要用 Invite user：Supabase 內建的寄信服務只寄給 Supabase 專案團隊的成員，每小時最多 2 封，紀錄員收不到邀請信。）
 2. Supabase → **Table Editor → `editors`** → Insert row，`email` 填同一個信箱。
 3. 請對方到網站左下角登入。登入後側欄會多出「先發陣容／紀錄比賽／資料匯入」。
 
@@ -72,7 +72,7 @@
 
 | 症狀 | 原因 | 處理 |
 |---|---|---|
-| 網站打得開但數據是「示範」或空的、右上角「雲端失敗」 | Supabase 免費專案 **7 天沒人用會自動暫停**（休賽期最常見） | Supabase 後台 → 該專案 → **Restore project**，約 1 分鐘。這個 repo 有 `.github/workflows/keepalive.yml` 每 3 天自動戳一次資料庫防止暫停；只要 GitHub 的 Actions 沒被關掉就不會發生 |
+| 網站打得開但數據是「示範」或空的、右上角「雲端失敗」 | Supabase 免費專案 **7 天沒人用會自動暫停**（休賽期最常見） | Supabase 後台 → 該專案 → **Restore project**，約 1 分鐘。這個 repo 有 `.github/workflows/keepalive.yml` 每 3 天自動戳一次資料庫防止暫停；只要 GitHub 的 Actions 沒被關掉就不會發生。注意：公開 repo **60 天沒有任何 commit**，GitHub 會自動停用排程 workflow（暑假最容易碰到）；到 GitHub → Actions → Keep Supabase awake 按 **Enable workflow** 即可 |
 | 紀錄員登入後看不到「紀錄比賽」 | 信箱不在 `editors` 表，或大小寫不同 | 到 `editors` 表核對，信箱一律小寫 |
 | 匯錯資料、一場記了兩次 | — | 「比賽」頁點那場 → 右上角垃圾桶刪除；或「資料匯入」選「以此檔取代雲端全部資料」用上個月的備份整份還原 |
 | 某個人的名字有兩種寫法、數據被拆開 | 打字不一致 | 「球員 → 編輯名單」把其中一個改名成另一個，所有紀錄會自動合併 |
