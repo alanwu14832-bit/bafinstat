@@ -11,6 +11,7 @@ import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 import { Sheet } from '../ui/Sheet'
 import { FontToggle, ThemeToggle } from './ThemeToggle'
+import { TEAM } from '../../config/team'
 
 export const SIDEBAR_WIDTH = 248
 export const SIDEBAR_WIDTH_COLLAPSED = 72
@@ -107,8 +108,8 @@ function Brand({ collapsed, reduced }: { collapsed: boolean; reduced: boolean })
         transition={reduced ? { duration: 0 } : { duration: 0.16, ease: EASE, delay: collapsed ? 0 : 0.06 }}
         aria-hidden={collapsed}
       >
-        <div className="text-[13.5px] font-semibold text-ink leading-4 tracking-[-0.01em]">台大工管財金系棒</div>
-        <div className="text-[11px] text-muted leading-4 mt-px">NTU BaFiN・數據平台</div>
+        <div className="text-[13.5px] font-semibold text-ink leading-4 tracking-[-0.01em]">{TEAM.org}</div>
+        <div className="text-[11px] text-muted leading-4 mt-px">{TEAM.short}・數據平台</div>
       </motion.div>
     </div>
   )

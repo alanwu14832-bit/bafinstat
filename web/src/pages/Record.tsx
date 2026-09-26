@@ -28,6 +28,7 @@ import {
 
 import { readDraft, writeDraft } from '../record/draft'
 import { readLineup, toLineupSlots } from '../record/lineup'
+import { TEAM } from '../config/team'
 import { Diamond } from '../record/Diamond'
 
 const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
@@ -63,7 +64,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const [fromSchedule, setFromSchedule] = useState<string>(() => initial?.id ?? '')
   // the lineup drawn up on the 先發陣容 page wins; otherwise last game's order is a good starting point
   const saved = useMemo(() => { const l = readLineup(); return l && l.order.some(Boolean) ? l : null }, [])
-  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: 7, recorder: '' } })
+  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
   const pickSchedule = (id: string) => { setFromSchedule(id); const s = scheduled.find((g) => g.id === id); if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined })) }
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)
@@ -95,7 +96,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <Field label="杯賽"><Input list="rec-tournaments" value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
           <Field label="對手"><Input list="rec-opponents" value={game.opponent} onChange={(e) => g('opponent', e.target.value)} placeholder="必填" /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} className="w-full" /></Field>
-          <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? 7} onChange={(e) => g('innings', Number(e.target.value) || 7)} className="tnum" /></Field>
+          <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? TEAM.innings} onChange={(e) => g('innings', Number(e.target.value) || TEAM.innings)} className="tnum" /></Field>
           <Field label="場地"><Input value={game.venue ?? ''} onChange={(e) => g('venue', e.target.value)} /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>

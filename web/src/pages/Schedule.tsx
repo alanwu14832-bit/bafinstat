@@ -11,6 +11,7 @@ import { useFilterOptions } from '../hooks/useStats'
 import { nextGameId } from '../record/model'
 import { TEAM_NAME } from '../data/seed'
 import type { Game } from '../data/types'
+import { TEAM } from '../config/team'
 import { cx } from '../lib/format'
 
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
@@ -33,7 +34,7 @@ function calendarUrl(g: Game): string {
 function GameForm({ initial, onSave, onCancel, onDelete }: { initial: Game | null; onSave: (g: Game) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void> }) {
   const base = useDataStore((s) => s.base)
   const opts = useFilterOptions()
-  const [g, setG] = useState<Game>(initial ?? { id: '', date: today(), tournament: opts.tournaments[0] ?? '友誼賽', opponent: '', homeAway: '主', innings: 7, status: 'scheduled' })
+  const [g, setG] = useState<Game>(initial ?? { id: '', date: today(), tournament: opts.tournaments[0] ?? '友誼賽', opponent: '', homeAway: '主', innings: TEAM.innings, status: 'scheduled' })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const set = <K extends keyof Game>(k: K, v: Game[K]) => setG((x) => ({ ...x, [k]: v }))

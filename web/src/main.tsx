@@ -1,15 +1,16 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import { TEAM, teamAsset } from './config/team'
 import App from './App'
 
-// Use the team logo as the tab icon when web/public/mark.png exists; otherwise keep the inline SVG monogram.
+// Use the team mark as the tab icon when it exists; otherwise keep the inline SVG baseball.
 const logo = new Image()
 logo.onload = () => {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (link) link.href = logo.src
 }
-logo.src = `${import.meta.env.BASE_URL}mark.png`
+logo.src = teamAsset(TEAM.mark)
 
 // The practice reminders are gone; remove the service worker they needed from anyone who already has it.
 if ('serviceWorker' in navigator) {

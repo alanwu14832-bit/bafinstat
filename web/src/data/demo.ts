@@ -53,7 +53,12 @@ function pitchesFor(rng: () => number, result: string): string[] {
 }
 const bases = ['無', '無', '無', '1', '1', '2', '12', '3', '13', '23', '123']
 
-export function generateDemo(roster: Player[], opts: { games?: number; seed?: number; startDate?: string } = {}): Dataset {
+// A new team's site can start with no roster at all; the demo then brings its own placeholder players.
+const DEMO_POS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'P', 'OF', 'IF']
+const DEMO_ROSTER: Player[] = DEMO_POS.map((pos, i) => ({ number: String(i + 1), name: `示範球員${i + 1}`, primaryPos: pos, status: '現役' }))
+
+export function generateDemo(teamRoster: Player[], opts: { games?: number; seed?: number; startDate?: string } = {}): Dataset {
+  const roster = teamRoster.length ? teamRoster : DEMO_ROSTER
   const n = opts.games ?? 14
   const rng = mulberry32(opts.seed ?? 20251010)
   const players = roster.map((p) => p.name)

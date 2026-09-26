@@ -4,6 +4,7 @@
  */
 import { type BattingPA, type Dataset, type Game, type PitchingPA, type Player } from './types'
 import { normalizeDataset } from './normalize'
+import { TEAM } from '../config/team'
 
 export interface RawPA {
   code: string | null; order: number; name: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null
@@ -15,10 +16,13 @@ export interface RawGame {
   pitchers: Array<{ name: string; role: string; decision: string }>; batting: RawPA[]; pitching: RawPA[]; warnings?: string[]
 }
 
-const modules = import.meta.glob('./seed/games/*.json', { eager: true, import: 'default' }) as Record<string, RawGame>
+declare const __TEAM_SEED__: boolean
+// Only BaFiN's own build carries these games; for any other team the branch is dropped at build time.
+const modules = (__TEAM_SEED__ ? import.meta.glob('./seed/games/*.json', { eager: true, import: 'default' }) : {}) as Record<string, RawGame>
 const RAW_GAMES: RawGame[] = Object.keys(modules).sort().map((k) => modules[k])
 
-export const TEAM_NAME = '喝FIN就好BA'
+/** This deployment's team name as it appears in games and workbooks (VITE_TEAM_NAME). */
+export const TEAM_NAME = TEAM.name
 
 const NON_FIELD = new Set(['DH', 'PH', 'PR', ''])
 
