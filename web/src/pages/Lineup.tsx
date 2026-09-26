@@ -153,15 +153,15 @@ export function LineupPage() {
     // a game recorded, cancelled or deleted since it was picked stays visible so the warning below makes sense
     ...(lineup.gameId && !scheduled.some((g) => g.id === lineup.gameId) ? [{ value: lineup.gameId, label: game ? `${gameLabel(game)}・${game.status === 'cancelled' ? '已取消' : '已紀錄'}` : `${lineup.gameId}・賽程裡找不到` }] : []),
     ...scheduled.map((g) => ({ value: g.id, label: gameLabel(g) })),
-    ...listOnly.map((r) => ({ value: REG + registrationKey(r.season, r.tournament), label: `${r.season} ${r.tournament}・報名名單（賽程還沒排）` })),
+    ...listOnly.map((r) => ({ value: REG + registrationKey(r.season, r.tournament), label: `${r.season} ${r.tournament}` })),
     // a list deleted (or since scheduled) after it was picked stays visible, like a game above
     ...(!lineup.gameId && lineup.regKey && !listOnly.some((r) => registrationKey(r.season, r.tournament) === lineup.regKey)
-      ? [{ value: REG + lineup.regKey, label: `${lineup.regKey.replace('|', ' ')}・${reg ? '報名名單' : '報名名單已刪除'}` }] : []),
+      ? [{ value: REG + lineup.regKey, label: `${lineup.regKey.replace('|', ' ')}${reg ? '' : '・報名名單已刪除'}` }] : []),
   ]
   const poolHint = game
     ? listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）` : '這個賽事還沒有報名名單，列出全隊'
     : lineup.regKey
-      ? listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）；到「比賽 → 賽程」排上這場，紀錄時就能直接選` : '這份報名名單還沒有人，列出全隊'
+      ? listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）` : '這份報名名單還沒有人，列出全隊'
       : '未選比賽：列出全隊'
 
   if (!canEdit) {
