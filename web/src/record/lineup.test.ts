@@ -42,6 +42,11 @@ describe('bench and the chosen game', () => {
     // garbage in the new fields is dropped rather than crashing the page
     localStorage.setItem(LINEUP_KEY, JSON.stringify({ field: null, order: 'x', bench: ['丙', 3, '', '丙', null], gameId: 7, reentry: 'yes' }))
     expect(readLineup()).toEqual({ ...emptyLineup(), bench: ['丙'] })
+    // a list picked without a game survives; a game always wins over it
+    localStorage.setItem(LINEUP_KEY, JSON.stringify({ regKey: '2026|新生盃' }))
+    expect(readLineup()!.regKey).toBe('2026|新生盃')
+    localStorage.setItem(LINEUP_KEY, JSON.stringify({ gameId: 'G1', regKey: '2026|新生盃' }))
+    expect(readLineup()).toMatchObject({ gameId: 'G1', regKey: '' })
     localStorage.setItem(LINEUP_KEY, 'null')
     expect(readLineup()).toBeNull()
     localStorage.removeItem(LINEUP_KEY)

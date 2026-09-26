@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  eligibleNames, parseRegistration, readLocalRegistrations, registrationFor, registrationKey, removeFromRegistrations, renameInRegistrations, REGISTRATIONS_KEY,
+  eligibleNames, parseRegistration, registrationByKey, unscheduledRegistrations, readLocalRegistrations, registrationFor, registrationKey, removeFromRegistrations, renameInRegistrations, REGISTRATIONS_KEY,
   seasonOf, sortRegistrations, withoutRegistration, withRegistration, writeLocalRegistrations,
 } from './registrations'
 import type { Registration } from './types'
@@ -60,5 +60,19 @@ describe('local persistence', () => {
     expect(readLocalRegistrations()).toEqual([])
     localStorage.setItem(REGISTRATIONS_KEY, JSON.stringify([{ season: 2026 }, null, { season: 2026, tournament: '大專盃', players: 'x' }]))
     expect(readLocalRegistrations()).toEqual([{ season: 2026, tournament: '大專盃', players: [] }])
+  })
+})
+
+describe('lists whose games are not on the schedule yet', () => {
+  const regs = [{ season: 2026, tournament: '大專盃', players: ['甲'] }, { season: 2026, tournament: '新生盃', players: ['乙', '丙'] }, { season: 2025, tournament: '新生盃', players: [] }]
+  it('are offered on their own until a game of that year + tournament is scheduled', () => {
+    expect(unscheduledRegistrations(regs, []).length).toBe(3)
+    expect(unscheduledRegistrations(regs, [{ date: '2026-10-03', tournament: '大專盃' }]).map((r) => `${r.season}${r.tournament}`)).toEqual(['2026新生盃', '2025新生盃'])
+    expect(unscheduledRegistrations(regs, [{ date: '2026-10-03', tournament: ' 新生盃 ' }]).map((r) => `${r.season}${r.tournament}`)).toEqual(['2026大專盃', '2025新生盃'])
+  })
+  it('are found again by their key', () => {
+    expect(registrationByKey(regs, registrationKey(2026, '新生盃'))?.players).toEqual(['乙', '丙'])
+    expect(registrationByKey(regs, '2024|新生盃')).toBeUndefined()
+    expect(registrationByKey(regs, '')).toBeUndefined()
   })
 })

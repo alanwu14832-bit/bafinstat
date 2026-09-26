@@ -26,6 +26,17 @@ export function registrationFor(regs: Registration[], game: Pick<Game, 'date' | 
   return regs.find((r) => registrationKey(r.season, r.tournament) === key)
 }
 
+/** The list with this registrationKey, or undefined. */
+export function registrationByKey(regs: Registration[], key: string | null | undefined): Registration | undefined {
+  return key ? regs.find((r) => registrationKey(r.season, r.tournament) === key) : undefined
+}
+
+/** Lists no scheduled game points at (e.g. 新生盃 entered before its games are on the schedule), so they can still be picked. */
+export function unscheduledRegistrations(regs: Registration[], scheduled: Pick<Game, 'date' | 'tournament'>[]): Registration[] {
+  const taken = new Set(scheduled.map((g) => registrationKey(seasonOf(g.date), g.tournament ?? '')))
+  return regs.filter((r) => !taken.has(registrationKey(r.season, r.tournament)))
+}
+
 /** allNames narrowed to the list when it has at least one player; otherwise (no list, empty list) unchanged. */
 export function eligibleNames(allNames: string[], reg?: Registration): string[] {
   if (!reg?.players.length) return allNames

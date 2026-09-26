@@ -21,7 +21,7 @@ import { Sheet } from '../components/ui/Sheet'
 import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
 import { LOC_HOLES, POSITIONS, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
-import { registrationFor } from '../data/registrations'
+import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { cx } from '../lib/format'
@@ -71,7 +71,9 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   // a lineup drawn up for another game (or one already played) is not carried into this one: last week's bench would leak in
   const [applied, setApplied] = useState(() => !!stored && (!stored.gameId || stored.gameId === initial?.id))
   const saved = applied && stored?.order.some(Boolean) ? stored : null
-  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
+  // a lineup drawn up for a 報名名單 whose game is not on the schedule yet: start with that tournament, so the same list applies
+  const lineupReg = !initial && applied ? registrationByKey(registrations, stored?.regKey) : undefined
+  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)
     const slots: LineupSlot[] = Array.from({ length: 9 }, () => ({ name: '', pos: '' }))

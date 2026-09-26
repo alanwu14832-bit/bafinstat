@@ -13,7 +13,7 @@ import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../compo
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { useDataStore } from '../store/data'
 import { FIELD_POSITIONS } from '../data/types'
-import { registrationFor } from '../data/registrations'
+import { registrationByKey, registrationFor, registrationKey, unscheduledRegistrations } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { POSITION_LABEL } from '../lib/fmt'
 import { cx } from '../lib/format'
@@ -100,7 +100,9 @@ export function LineupPage() {
   // which game this lineup is for decides whose names are offered (that tournament's 報名名單, when there is one)
   const scheduled = useMemo(() => scheduledGames(base.games), [base.games])
   const game = useMemo(() => base.games.find((g) => g.id === lineup.gameId), [base.games, lineup.gameId])
-  const reg = useMemo(() => (game ? registrationFor(registrations, game) : undefined), [registrations, game])
+  // a 報名名單 whose games are not on the schedule yet (新生盃 entered early) can be picked on its own
+  const listOnly = useMemo(() => unscheduledRegistrations(registrations, scheduled), [registrations, scheduled])
+  const reg = useMemo(() => (game ? registrationFor(registrations, game) : registrationByKey(registrations, lineup.regKey)), [registrations, game, lineup.regKey])
   const names = useMemo(() => candidateNames(base.roster, reg), [base.roster, reg])
   const listed = !!reg?.players.length
   // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
@@ -143,13 +145,24 @@ export function LineupPage() {
     try { await navigator.clipboard.writeText(lineupText(lineup, game?.opponent)); setMsg('已複製陣容文字，可以貼到群組') } catch { setMsg('這個瀏覽器不允許複製，請手動選取') }
   }
   const toRecord = () => { writeLineup({ ...lineup, updatedAt: new Date().toISOString() }); navigate(lineup.gameId ? `/record?game=${encodeURIComponent(lineup.gameId)}` : '/record') }
+  const REG = 'reg:'
+  const pickValue = lineup.gameId || (lineup.regKey ? REG + lineup.regKey : '')
+  const pickGame = (v: string) => update((l) => (v.startsWith(REG) ? { ...l, gameId: '', regKey: v.slice(REG.length) } : { ...l, gameId: v, regKey: '' }))
   const gameOptions = [
     { value: '', label: '未指定（不依賽事篩選）' },
     // a game recorded, cancelled or deleted since it was picked stays visible so the warning below makes sense
     ...(lineup.gameId && !scheduled.some((g) => g.id === lineup.gameId) ? [{ value: lineup.gameId, label: game ? `${gameLabel(game)}・${game.status === 'cancelled' ? '已取消' : '已紀錄'}` : `${lineup.gameId}・賽程裡找不到` }] : []),
     ...scheduled.map((g) => ({ value: g.id, label: gameLabel(g) })),
+    ...listOnly.map((r) => ({ value: REG + registrationKey(r.season, r.tournament), label: `${r.season} ${r.tournament}・報名名單（賽程還沒排）` })),
+    // a list deleted (or since scheduled) after it was picked stays visible, like a game above
+    ...(!lineup.gameId && lineup.regKey && !listOnly.some((r) => registrationKey(r.season, r.tournament) === lineup.regKey)
+      ? [{ value: REG + lineup.regKey, label: `${lineup.regKey.replace('|', ' ')}・${reg ? '報名名單' : '報名名單已刪除'}` }] : []),
   ]
-  const poolHint = !game ? '未選比賽：列出全隊' : listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）` : '這個賽事還沒有報名名單，列出全隊'
+  const poolHint = game
+    ? listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）` : '這個賽事還沒有報名名單，列出全隊'
+    : lineup.regKey
+      ? listed ? `依「${reg!.season} ${reg!.tournament}」報名名單（${reg!.players.length} 人）；到「比賽 → 賽程」排上這場，紀錄時就能直接選` : '這份報名名單還沒有人，列出全隊'
+      : '未選比賽：列出全隊'
 
   if (!canEdit) {
     return (
@@ -166,7 +179,7 @@ export function LineupPage() {
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       <Card bodyClassName="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-4">
-          <Field label="這份陣容是哪一場" className="sm:w-[420px]"><Select value={lineup.gameId} onChange={(e) => update((l) => ({ ...l, gameId: e.target.value }))} options={gameOptions} className="w-full" /></Field>
+          <Field label="這份陣容是哪一場" className="sm:w-[420px]"><Select value={pickValue} onChange={(e) => pickGame(e.target.value)} options={gameOptions} className="w-full" /></Field>
           <span className="text-[12px] text-muted sm:pb-2">{poolHint}</span>
         </div>
       </Card>
@@ -178,7 +191,7 @@ export function LineupPage() {
             <span className="text-[12px] font-medium text-ink-2">指定打擊 DH</span>
             <PlayerSelect size="sm" aria-label="DH 指定打擊" value={lineup.dh} onChange={setDh} names={names} placeholder="不用 DH" className="w-[160px]" />
             <span className="text-[12px] text-muted">選了 DH 會自動取代投手的棒次；取消 DH 投手會回到那一棒</span>
-            <Button variant="ghost" size="sm" icon={<Eraser />} className="ml-auto" onClick={() => { if (window.confirm('清空守位、打序與板凳？（選的比賽會保留）')) update((l) => ({ ...emptyLineup(), gameId: l.gameId })) }}>全部清空</Button>
+            <Button variant="ghost" size="sm" icon={<Eraser />} className="ml-auto" onClick={() => { if (window.confirm('清空守位、打序與板凳？（選的比賽會保留）')) update((l) => ({ ...emptyLineup(), gameId: l.gameId, regKey: l.regKey })) }}>全部清空</Button>
           </div>
         </Card>
         <Card className="xl:col-span-5 xl:row-span-2" title="打序" subtitle="按住左邊的把手拖曳就能換棒次；先排好守位再按「依守位填入」" flush
