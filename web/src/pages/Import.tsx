@@ -9,7 +9,7 @@ import { Checkbox, Field, Input } from '../components/ui/Input'
 import { cx } from '../lib/format'
 import { datasetToWorkbook, legacyToDataset, parseWorkbook, type ImportReport } from '../data/xlsx'
 import { useFilterOptions } from '../hooks/useStats'
-import type { Dataset } from '../data/types'
+import type { Dataset, Registration } from '../data/types'
 import { useDataStore } from '../store/data'
 import { TEAM } from '../config/team'
 import { CloudPanel } from '../components/ui/CloudPanel'
@@ -29,7 +29,7 @@ function Metric({ label, value }: { label: string; value: number | string }) {
 
 export function ImportPage() {
   const [dragging, setDragging] = useState(false)
-  const [pending, setPending] = useState<{ dataset: Dataset; report: ImportReport; file: string } | null>(null)
+  const [pending, setPending] = useState<{ dataset: Dataset; report: ImportReport; registrations?: Registration[]; file: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [legacyId, setLegacyId] = useState('')
@@ -37,7 +37,7 @@ export function ImportPage() {
   const [legacyDate, setLegacyDate] = useState('')
   const opts = useFilterOptions()
   const inputRef = useRef<HTMLInputElement>(null)
-  const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo, cloud } = useDataStore()
+  const { base, source, importedAt, replaceDataset, appendDataset, resetToSeed, params, setParams, demo, setDemo, cloud, registrations, saveRegistration } = useDataStore()
   const canWriteCloud = cloud.configured && !!cloud.user && cloud.isEditor
   const cloudReadOnly = cloud.configured && !canWriteCloud
 
@@ -64,14 +64,20 @@ export function ImportPage() {
       const skipped = r?.skipped ? `（略過 ${r.skipped} 場已存在的比賽）` : ''
       // e.g. the cloud has no day_roster column yet: the games are saved, their 當日登錄名單 is not
       const lost = r?.warnings.length ? ` ${[...new Set(r.warnings.map((w) => w.message))].join('；')}` : ''
-      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席。${lost}`)
+      // 報名名單 in the file replace the lists of the same year + tournament; the games are already saved even if this fails
+      let regs = ''
+      if (pending.registrations?.length) {
+        try { for (const reg of pending.registrations) await saveRegistration(reg); regs = `、${pending.registrations.length} 份報名名單` }
+        catch (e) { regs = `；報名名單沒有匯入：${e instanceof Error ? e.message : String(e)}` }
+      }
+      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席${regs}。${lost}`)
       setPending(null)
       if (demo) setDemo(false)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
-  const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base), `${TEAM.filePrefix}_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base, registrations), `${TEAM.filePrefix}_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
   const sourceLabel = source === 'cloud' ? `雲端資料庫${importedAt ? `・同步於 ${new Date(importedAt).toLocaleString('zh-TW')}` : ''}` : source === 'seed' ? '內建範例（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`
 
   if (cloud.configured && !canWriteCloud) {
@@ -113,7 +119,7 @@ export function ImportPage() {
                 </div>
               )}
               <dl className="px-4 py-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
-                {[['比賽', pending.report.games], ['打席', pending.report.batting], ['投球打席', pending.report.pitching], ['守備列', pending.report.fielding], ['球員', pending.report.roster]].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
+                {[['比賽', pending.report.games], ['打席', pending.report.batting], ['投球打席', pending.report.pitching], ['守備列', pending.report.fielding], ['球員', pending.report.roster], ...(pending.report.registrations ? [['報名名單', pending.report.registrations]] : [])].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
               </dl>
               {pending.report.warnings.length > 0 && (
                 <ul className="px-4 py-3 text-xs text-ink-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">{pending.report.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />{w}</li>)}</ul>
