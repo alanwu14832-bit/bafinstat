@@ -74,8 +74,18 @@ export interface Game {
   isDemo?: boolean
   /** undefined = played (has records); scheduled games appear on 賽程 and are excluded from every statistic */
   status?: GameStatus
+  /** 當日登錄名單 (who was available, who started, substitutions). Optional: older games, imports and demo games have none. */
+  dayRoster?: GameDayRoster
 }
 export type GameStatus = 'scheduled' | 'cancelled'
+
+/** One substitution during a game (recorded live on 紀錄比賽). */
+export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out: string; pos: string; inning: number; half: 'top' | 'bottom'; slot?: number }
+/** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
+export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean }
+
+/** A tournament registration list (報名名單) for one year. Not part of Dataset: it lives in its own store slice (like albums). */
+export interface Registration { season: number; tournament: string; players: string[]; updatedAt?: string }
 
 export interface BattingPA {
   gameId: string

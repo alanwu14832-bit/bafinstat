@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Pencil, Trash2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Sheet } from '../components/ui/Sheet'
-import { LineScoreBoard } from '../components/ui/Scoreboard'
+import { LineScoreBoard, PlateBadge } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Tabs } from '../components/ui/Tabs'
@@ -16,6 +16,7 @@ import { ScheduleSection, daysToNextGame } from './Schedule'
 import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
 import { auditGame } from '../data/audit'
+import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { useStats } from '../hooks/useStats'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
 import { f2, f3, pct } from '../lib/fmt'
@@ -25,6 +26,58 @@ import { cx } from '../lib/format'
 interface GameRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; venue: string; result: 'W' | 'L' | 'T'; score: string; hitsUs: number; hitsOpp: number; errorsUs: number; lob: number; pitches: number; isDemo: boolean }
 
 const resultBadge = (r: GameRow['result']) => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
+
+const posChip = 'inline-flex items-center justify-center h-5 min-w-8 px-1.5 rounded-[6px] bg-surface-2 text-[11px] font-medium text-ink-2 tnum shrink-0'
+const nameBtn = 'min-w-0 h-9 pointer-fine:h-7 truncate text-left text-[13px] font-medium text-ink hover:underline underline-offset-2 cursor-pointer'
+const halfLabel = (r: AppearanceRow) => (r.inning ? `第${r.inning}局${r.half === 'bottom' ? '下' : '上'}` : '')
+
+/** 當日登錄名單: starters, who came in (with the logged kind / inning / replaced player) and who sat. */
+function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances; hasRoster: boolean; reentry: boolean; onPlayer: (r: { name: string }) => void }) {
+  // without a saved roster the bench is unknown, so 未上場 only shows when there is something to list
+  const showBench = !a.inferred || a.bench.length > 0
+  const group = (title: string, count: number, body: ReactNode) => (
+    <section className="px-5 py-4 min-w-0">
+      <h4 className="text-[11px] font-medium text-muted mb-2">{title} <span className="tnum">{count}</span></h4>
+      {body}
+    </section>
+  )
+  const none = <p className="text-[12px] text-muted">—</p>
+  return (
+    <Card title="當日登錄名單" flush
+      subtitle={!a.inferred ? '點球員看個人檔案' : hasRoster ? '登錄名單沒有填先發，先發與替補由紀錄推定' : '這場沒有登錄名單，先發與替補由紀錄推定'}
+      action={reentry && <Badge variant="outline">允許再上場</Badge>}>
+      <div className={cx('grid grid-cols-1 divide-y md:divide-y-0 md:divide-x divide-[var(--border)]', showBench ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
+        {group('先發', a.starters.length, a.starters.length ? (
+          <ul className="flex flex-col">
+            {a.starters.map((r) => (
+              <li key={r.name} className="flex items-center gap-2.5 min-h-9 pointer-fine:min-h-8">
+                <PlateBadge size={22} active={r.order !== undefined}>{r.order ?? 'P'}</PlateBadge>
+                <span className={posChip}>{r.pos || '—'}</span>
+                <button type="button" className={nameBtn} onClick={() => onPlayer(r)}>{r.name}</button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="text-[12px] text-muted">打席沒有棒次，無法推定先發</p>)}
+        {group('替補上場', a.subs.length, a.subs.length ? (
+          <ul className="flex flex-col">
+            {a.subs.map((r, i) => (
+              <li key={`${r.name}-${i}`} className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-h-9 pointer-fine:min-h-8 py-1">
+                <button type="button" className={nameBtn} onClick={() => onPlayer(r)}>{r.name}</button>
+                {r.kind ? <Badge variant={r.kind === 'P' ? 'accent' : 'neutral'}>{SUB_KIND_LABEL[r.kind]}</Badge> : r.pos && <span className={posChip}>{r.pos}</span>}
+                <span className="text-[12px] text-muted tnum">{[halfLabel(r), r.replaced && `替 ${r.replaced}`, r.kind === 'DEF' && r.pos].filter(Boolean).join('・')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : none)}
+        {showBench && group('未上場', a.bench.length, a.bench.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {a.bench.map((n) => <button key={n} type="button" onClick={() => onPlayer({ name: n })} className="h-9 pointer-fine:h-7 px-2.5 rounded-full border border-border text-[12px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink cursor-pointer transition-colors motion-reduce:transition-none">{n}</button>)}
+          </div>
+        ) : <p className="text-[12px] text-muted">到場的人都上場了</p>)}
+      </div>
+    </Card>
+  )
+}
 
 function LineScore({ s }: { s: GameSummary }) {
   const n = Math.max(s.lineUs.length, s.lineOpp.length)
@@ -107,6 +160,8 @@ export function GamesPage() {
   const pbpBat = useMemo(() => (current ? s.dataset.batting.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
   const pbpPit = useMemo(() => (current ? s.dataset.pitching.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
   const issues = useMemo(() => (current ? auditGame(pbpBat, pbpPit) : []), [current, pbpBat, pbpPit])
+  // from the unfiltered dataset: the 守位 filter would hide substitutes
+  const appearances = useMemo(() => (current ? gameAppearances(s.dataset, current.game) : null), [current, s.dataset])
   const flags = useMemo(() => {
     const bat = new Map<number, string[]>(), pit = new Map<number, string[]>()
     for (const i of issues) { const m = i.side === 'bat' ? bat : pit; m.set(i.index, [...(m.get(i.index) ?? []), i.message]) }
@@ -190,6 +245,7 @@ export function GamesPage() {
                   <>
                     <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
                     <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                    {appearances && <DayRosterCard a={appearances} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
                   </>
                 )}
                 {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} /></Card>}

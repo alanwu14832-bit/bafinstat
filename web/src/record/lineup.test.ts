@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, toLineupSlots, type Lineup } from './lineup'
+import { autoOrder, emptyLineup, LINEUP_KEY, lineupIssues, lineupText, positionOf, readLineup, starters, toggleBench, toLineupSlots, withoutStarter, type Lineup } from './lineup'
+import type { Game } from '../data/types'
+import { gameLabel, scheduledGames } from '../data/schedule'
 
 const roster = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'].map((name) => ({ name }))
 const full: Lineup = { ...emptyLineup(), field: { P: '壬', C: '甲', '1B': '乙', '2B': '丙', '3B': '戊', SS: '丁', LF: '己', CF: '庚', RF: '辛' } }
@@ -28,5 +30,65 @@ describe('starting lineup', () => {
     expect(issues).toContain('甲 同時排在 C、1B')
     expect(issues).toContain('甲 在打序出現兩次')
     expect(issues).toContain('路人 不在球員名單')
+  })
+})
+
+describe('bench and the chosen game', () => {
+  it('reads a lineup saved before 板凳 existed with an empty bench and no game', () => {
+    localStorage.setItem(LINEUP_KEY, JSON.stringify({ field: { P: '壬', C: '甲' }, dh: '', order: ['甲', '', '', '', '', '', '', '', ''], updatedAt: '2026-09-01T00:00:00Z' }))
+    const l = readLineup()!
+    expect(l.bench).toEqual([]); expect(l.gameId).toBe(''); expect(l.reentry).toBe(false)
+    expect(l.field).toEqual({ P: '壬', C: '甲' }); expect(l.order[0]).toBe('甲'); expect(l.updatedAt).toBe('2026-09-01T00:00:00Z')
+    // garbage in the new fields is dropped rather than crashing the page
+    localStorage.setItem(LINEUP_KEY, JSON.stringify({ field: null, order: 'x', bench: ['丙', 3, '', '丙', null], gameId: 7, reentry: 'yes' }))
+    expect(readLineup()).toEqual({ ...emptyLineup(), bench: ['丙'] })
+    localStorage.setItem(LINEUP_KEY, 'null')
+    expect(readLineup()).toBeNull()
+    localStorage.removeItem(LINEUP_KEY)
+  })
+
+  it('starters include the pitcher who does not bat under a DH; starters cannot go on the bench', () => {
+    const l = autoOrder({ ...full, dh: '癸' })
+    expect(starters(l)).toContain('壬'); expect(starters(l)).toContain('癸'); expect(starters(l)).toHaveLength(10)
+    expect(toggleBench(l, '壬')).toBe(l)
+    const b = toggleBench(toggleBench(l, '子'), '丑')
+    expect(b.bench).toEqual(['子', '丑'])
+    expect(toggleBench(b, '子').bench).toEqual(['丑'])
+    expect(withoutStarter(['子', '甲', '丑'], b)).toEqual(['子', '丑'])
+  })
+
+  it('lineupText lists the bench after the order', () => {
+    const l = { ...autoOrder({ ...full, dh: '癸' }), bench: ['子', '丑'] }
+    const text = lineupText(l, '對手')
+    expect(text.split('\n').at(-2)).toBe('P 壬')
+    expect(text.split('\n').at(-1)).toBe('板凳：子、丑')
+    expect(lineupText(autoOrder(full))).not.toContain('板凳')
+  })
+
+  it('flags a player both starting and benched, bench strangers, a stale game and players off the registration list', () => {
+    const roster12 = [...roster, { name: '子' }, { name: '丑' }]
+    const l: Lineup = { ...autoOrder(full), bench: ['甲', '子', '子', '路人'], gameId: 'G1' }
+    const issues = lineupIssues(l, roster12)
+    expect(issues).toContain('甲 同時在先發和板凳')
+    expect(issues).toContain('子 在板凳出現兩次')
+    expect(issues).toContain('路人 不在球員名單')
+    const games: Game[] = [{ id: 'G1', date: '2026-10-03', tournament: '大專盃', opponent: '台大', homeAway: '主', status: 'scheduled' }]
+    const ok = { ...l, bench: ['子'] }
+    expect(lineupIssues(ok, roster12, { games })).toEqual([])
+    expect(lineupIssues(ok, roster12, { games: [{ ...games[0], status: undefined }] })).toEqual(['選的那場已經紀錄或取消了，請重選'])
+    expect(lineupIssues(ok, roster12, { games: [] })).toEqual(['選的那場已經紀錄或取消了，請重選'])
+    expect(lineupIssues({ ...ok, gameId: '' }, roster12, { games: [] })).toEqual([])
+    const eligible = new Set(roster12.map((p) => p.name).filter((n) => n !== '甲' && n !== '子'))
+    expect(lineupIssues(ok, roster12, { games, eligible })).toEqual(['甲 不在報名名單', '子 不在報名名單'])
+  })
+})
+
+describe('picking a scheduled game', () => {
+  it('lists only scheduled games, soonest first (time breaks ties), with one label format everywhere', () => {
+    const g = (id: string, date: string, time?: string, status?: Game['status']): Game => ({ id, date, time, tournament: '大專盃', opponent: id, homeAway: '主', status })
+    const games = [g('C', '2026-10-04', undefined, 'scheduled'), g('B', '2026-10-03', '13:00', 'scheduled'), g('A', '2026-10-03', '09:00', 'scheduled'), g('P', '2026-09-01'), g('X', '2026-10-01', undefined, 'cancelled')]
+    expect(scheduledGames(games).map((x) => x.id)).toEqual(['A', 'B', 'C'])
+    expect(gameLabel(games[1])).toBe('2026-10-03 13:00 vs B（大專盃）')
+    expect(gameLabel(games[0])).toBe('2026-10-04 vs C（大專盃）')
   })
 })

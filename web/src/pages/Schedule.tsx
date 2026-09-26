@@ -9,6 +9,7 @@ import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
 import { useFilterOptions } from '../hooks/useStats'
 import { nextGameId } from '../record/model'
+import { scheduledGames } from '../data/schedule'
 import { TEAM_NAME } from '../data/seed'
 import type { Game } from '../data/types'
 import { TEAM } from '../config/team'
@@ -80,7 +81,7 @@ export function ScheduleSection() {
   const [editing, setEditing] = useState<Game | null | 'new'>(null)
   const [error, setError] = useState<string | null>(null)
   const t = today()
-  const upcoming = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= t).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? '')), [base.games, t])
+  const upcoming = useMemo(() => scheduledGames(base.games).filter((g) => g.date >= t), [base.games, t])
   const missed = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date < t).sort((a, b) => b.date.localeCompare(a.date)), [base.games, t])
   const cancelled = useMemo(() => base.games.filter((g) => g.status === 'cancelled').sort((a, b) => b.date.localeCompare(a.date)), [base.games])
   const save = async (g: Game) => { try { await saveGame({ game: g, batting: [], pitching: [], fielding: [] }); setEditing(null); setError(null) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } }

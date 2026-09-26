@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
-import { Field, Input, inputCls } from './Input'
+import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import type { GameEdit } from '../../data/edit'
-import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type FieldingLine, type Game, type PitchingPA } from '../../data/types'
+import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA } from '../../data/types'
+import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 
 /* ------------------------------------------------------------------ generic editable table */
@@ -118,6 +119,11 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
+type StarterDraft = GameDayRoster['starters'][number]
+const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
+const chip = (active: boolean) => cx('h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
+const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === 'bottom' ? '下' : '上'} ` : ''}${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}${s.pos ? `（${s.pos}）` : ''}`
+
 const fldCols: Col<FieldingLine>[] = [
   { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'innings', label: '局數', kind: 'int', w: 48 },
   { key: 'po', label: 'PO', kind: 'int', w: 44 }, { key: 'a', label: 'A', kind: 'int', w: 44 }, { key: 'e', label: 'E', kind: 'int', w: 44 }, { key: 'dp', label: 'DP', kind: 'int', w: 44 },
@@ -139,9 +145,26 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [bat, setBat] = useState<BatDraft[]>(() => initial.batting.map(toBatDraft))
   const [pit, setPit] = useState<PitDraft[]>(() => initial.pitching.map(toPitDraft))
   const [fld, setFld] = useState<FieldingLine[]>(() => initial.fielding.map((f) => ({ ...f })))
-  const [tab, setTab] = useState<'bat' | 'pit' | 'fld'>('bat')
+  // 當日登錄名單 (optional; games recorded before it existed, imports and old backups have none)
+  const [starters, setStarters] = useState<StarterDraft[]>(() => (initial.game.dayRoster?.starters ?? []).map((x) => ({ ...x })))
+  const [bench, setBench] = useState<string[]>(() => initial.game.dayRoster?.bench ?? [])
+  const [subs, setSubs] = useState<DayRosterSub[]>(() => initial.game.dayRoster?.subs ?? [])
+  const [reentry, setReentry] = useState(!!initial.game.dayRoster?.reentry)
+  const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>('bat')
   const [error, setError] = useState<string | null>(null)
-  const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher)])].filter(Boolean), [roster, bat, pit])
+  // names already in this game's roster stay selectable even when they left the team roster
+  const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher), ...dayRosterNames(initial.game.dayRoster)])].filter(Boolean), [roster, bat, pit, initial.game.dayRoster])
+  const starterSet = useMemo(() => new Set(starters.map((x) => x.name.trim()).filter(Boolean)), [starters])
+  const benchChoices = useMemo(() => names.filter((n) => !starterSet.has(n)), [names, starterSet])
+  const toggleBench = (n: string) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))
+  // for older games: the first batter per batting order plus the first pitcher (the same rule as the game page)
+  const inferStarters = () => {
+    const out: StarterDraft[] = []
+    for (const p of [...bat].filter((p) => p.order && p.batter.trim()).sort((a, b) => a.order! - b.order!)) if (!out.some((x) => x.order === p.order || x.name === p.batter)) out.push({ order: p.order, pos: p.pos ?? '', name: p.batter })
+    const sp = pit.find((p) => p.pitcher.trim())?.pitcher
+    if (sp && !out.some((x) => x.name === sp)) out.push({ pos: 'P', name: sp })
+    setStarters(out)
+  }
   const pitcherNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher).filter(Boolean))]; return [...used, ...names.filter((n) => !used.includes(n))] }, [pit, names])
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const text = (k: keyof Game) => (e: React.ChangeEvent<HTMLInputElement>) => g(k, (e.target.value || undefined) as never)
@@ -150,12 +173,20 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     setError(null)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(game.date)) { setError('日期格式需為 YYYY-MM-DD'); return }
     if (!game.opponent?.trim()) { setError('請填對手'); return }
+    const listed = starters.filter((x) => x.name.trim())
+    const dupName = listed.map((x) => x.name.trim()).find((n, i, a) => a.indexOf(n) !== i)
+    if (dupName) { setTab('roster'); setError(`登錄名單的先發有重複的球員：${dupName}`); return }
+    const dupOrder = listed.map((x) => x.order).find((o, i, a) => o !== undefined && Number.isFinite(o) && a.indexOf(o) !== i)
+    if (dupOrder !== undefined) { setTab('roster'); setError(`登錄名單的先發有兩個第 ${dupOrder} 棒`); return }
+    // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster
+    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry })
     try {
-      await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim() }, batting: bat.map(fromBatDraft).filter((p) => p.batter.trim()), pitching: pit.map(fromPitDraft).filter((p) => p.pitcher.trim()), fielding: fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 })) })
+      await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim(), dayRoster }, batting: bat.map(fromBatDraft).filter((p) => p.batter.trim()), pitching: pit.map(fromPitDraft).filter((p) => p.pitcher.trim()), fielding: fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 })) })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
   const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % 9) + 1 : undefined })
   const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : undefined })
+  const blankStarter = (prev?: StarterDraft): StarterDraft => ({ order: prev ? (prev.order && prev.order < 9 ? prev.order + 1 : undefined) : 1, pos: '', name: '' })
   const blankFld = (): FieldingLine => ({ gameId: game.id, player: '', pos: '', innings: game.innings, po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 })
 
   return (
@@ -181,12 +212,45 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Tabs size="sm" aria-label="編輯區" value={tab} onChange={setTab} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }]} />
-          <span className="text-xs text-muted">局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。</span>
+          <Tabs size="sm" aria-label="編輯區" value={tab} onChange={setTab} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }, { value: 'roster', label: '登錄名單', count: starterSet.size + bench.filter((n) => !starterSet.has(n)).length }]} />
+          <span className="text-xs text-muted">{tab === 'roster' ? '先發、板凳（到場未先發）與替補紀錄；全部留空＝這場沒有登錄名單。' : '局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。'}</span>
         </div>
         {tab === 'bat' && <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />}
         {tab === 'pit' && <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />}
         {tab === 'fld' && <EditableTable rows={fld} cols={fldCols} onChange={setFld} blank={blankFld} listId="game-editor-names" names={names} />}
+        {tab === 'roster' && (
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[12px] font-medium text-ink-2">先發 <span className="text-muted font-normal">棒次留空＝不打擊的投手（指定打擊時）</span></div>
+                {starters.length === 0 && bat.some((p) => p.order) && <Button size="sm" variant="ghost" onClick={inferStarters}>由打席推定先發</Button>}
+              </div>
+              <EditableTable rows={starters} cols={starterCols} onChange={setStarters} blank={blankStarter} listId="game-editor-names" names={names} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[12px] font-medium text-ink-2">板凳（到場未先發） <span className="text-muted font-normal tnum">{bench.filter((n) => !starterSet.has(n)).length} 人</span></div>
+                {bench.length > 0 && <Button size="sm" variant="ghost" onClick={() => setBench([])}>清除</Button>}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {benchChoices.map((n) => <button key={n} type="button" aria-pressed={bench.includes(n)} onClick={() => toggleBench(n)} className={chip(bench.includes(n))}>{n}</button>)}
+                {benchChoices.length === 0 && <span className="text-[12px] text-muted">沒有可選的球員</span>}
+              </div>
+              <Checkbox label="允許被換下的球員再上場" checked={reentry} onChange={setReentry} className="mt-1 min-h-9 pointer-fine:min-h-7" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-[12px] font-medium text-ink-2">替補紀錄 <span className="text-muted font-normal tnum">{subs.length} 筆・紀錄比賽時自動記下</span></div>
+                {subs.length > 0 && <Button size="sm" variant="ghost" icon={<Trash2 />} className="text-critical hover:text-critical" onClick={() => { if (window.confirm('清除這場所有替補紀錄（代打、代跑、守備、換投）？儲存修改後才會生效。')) setSubs([]) }}>清除替補紀錄</Button>}
+              </div>
+              {subs.length > 0 ? (
+                <ol className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[13px] text-ink-2">
+                  {subs.map((x, i) => <li key={i} className="px-3 py-2 tnum">{subText(x)}</li>)}
+                </ol>
+              ) : <p className="text-[12px] text-muted">沒有替補紀錄</p>}
+            </div>
+          </div>
+        )}
       </section>
 
       {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical" />{error}</div>}

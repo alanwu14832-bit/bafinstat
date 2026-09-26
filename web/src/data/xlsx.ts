@@ -5,9 +5,10 @@
  * workbook saved without cached formula values still imports correctly.
  */
 import * as XLSX from 'xlsx'
-import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
+import type { BattingPA, Dataset, DayRosterSub, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
 import { cleanLoc, normalizeDataset } from './normalize'
+import { parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
 
 type Row = Record<string, unknown>
 
@@ -117,13 +118,65 @@ function parseRoster(rows: Row[]): Player[] {
   }))
 }
 function parseGames(rows: Row[]): Game[] {
-  return rows.filter((r) => str(r['比賽ID'])).map((r) => ({
-    id: str(r['比賽ID']), date: toISODate(r['日期']), time: toTime(r['時間']), tournament: str(r['杯賽']) || '未分類', opponent: str(r['對手']) || '未知',
-    homeAway: (str(r['主客']) === '客' ? '客' : '主') as HomeAway, venue: str(r['場地']) || undefined, weather: str(r['天氣']) || undefined, recorder: str(r['紀錄者']) || undefined,
-    innings: opt(r['局數']), winningPitcher: str(r['勝投']) || undefined, losingPitcher: str(r['敗投']) || undefined, savePitcher: str(r['救援']) || undefined,
-    holds: str(r['中繼']) ? str(r['中繼']).split(/[,，、\s]+/).filter(Boolean) : undefined, note: str(r['備註']) || undefined,
-    status: /預定|未開始|scheduled/i.test(str(r['狀態'])) ? 'scheduled' : /取消|cancel/i.test(str(r['狀態'])) ? 'cancelled' : undefined,
-  }))
+  return rows.filter((r) => str(r['比賽ID'])).map((r) => {
+    const dayRoster = dayRosterFromCells(r)
+    return {
+      id: str(r['比賽ID']), date: toISODate(r['日期']), time: toTime(r['時間']), tournament: str(r['杯賽']) || '未分類', opponent: str(r['對手']) || '未知',
+      homeAway: (str(r['主客']) === '客' ? '客' : '主') as HomeAway, venue: str(r['場地']) || undefined, weather: str(r['天氣']) || undefined, recorder: str(r['紀錄者']) || undefined,
+      innings: opt(r['局數']), winningPitcher: str(r['勝投']) || undefined, losingPitcher: str(r['敗投']) || undefined, savePitcher: str(r['救援']) || undefined,
+      holds: str(r['中繼']) ? str(r['中繼']).split(/[,，、\s]+/).filter(Boolean) : undefined, note: str(r['備註']) || undefined,
+      status: /預定|未開始|scheduled/i.test(str(r['狀態'])) ? 'scheduled' : /取消|cancel/i.test(str(r['狀態'])) ? 'cancelled' : undefined,
+      ...(dayRoster ? { dayRoster } : {}),
+    }
+  })
+}
+
+// ---------------------------------------------------------------- 當日登錄名單 columns of 比賽清單 (先發名單 / 板凳 / 替補紀錄 / 允許再上場)
+// Human-readable and hand-editable; lists split on , ， 、 ； ; only (never whitespace: a name may contain a space).
+const LIST_SEP = /[,，、；;]/
+const HALF_LABEL = { top: '上', bottom: '下' } as const
+const KIND_BY_LABEL = Object.fromEntries(Object.entries(SUB_KIND_LABEL).map(([k, v]) => [v, k])) as Record<string, DayRosterSub['kind']>
+/** full-width digits → a number, so ５上 or １．甲 typed with a Chinese IME still parse. Only the captured numbers are
+ *  converted: a name such as 陳１ keeps its full-width digit. */
+const digits = (s: string) => Number(s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)))
+const splitList = (v: unknown) => str(v).split(LIST_SEP).map((x) => x.trim()).filter(Boolean)
+
+/** `1.甲(CF)` · `P.壬(P)` (a starter without batting order: the pitcher who does not bat under a DH) · `甲` */
+const STARTER_RE = /^(?:([0-9０-９]+)\s*[.．]?|([Pp])\s*[.．])?\s*(.+?)\s*(?:[（(]\s*([^（）()]*?)\s*[)）])?$/
+/** `5上 第1棒 代打 戊 替 甲(PH)` · `6下 換投 己 替 壬(P)`; 局, 第N棒 (1-based slot) and ` 替 X` are optional */
+const D = '[0-9０-９]+'
+const subRe = (sep: string) => new RegExp(`^(${D})\\s*局?\\s*([上下])\\s*(?:第\\s*(${D})\\s*棒\\s*)?(代打|代跑|守備|換投)\\s*(?:第\\s*(${D})\\s*棒\\s*)?(.+?)(?:${sep}替${sep}(.*?))?\\s*(?:[（(]\\s*([^（）()]*?)\\s*[)）])?$`)
+// The export always writes ` 替 ` with spaces, so match that first: a name containing 替 (代替者、張替) stays whole.
+// Only when that finds no replaced player but 替 is there (hand-typed `己替壬`) fall back to splitting without spaces.
+const SUB_STRICT = subRe('\\s+')
+const SUB_LOOSE = subRe('\\s*')
+const matchSub = (t: string) => { const m = SUB_STRICT.exec(t); return m && (m[7] !== undefined || !m[6].includes('替')) ? m : SUB_LOOSE.exec(t) ?? m }
+
+/** The four 比賽清單 cells for a game's day roster (all blank when it has none). */
+export function dayRosterCells(r?: GameDayRoster): { 先發名單: string; 板凳: string; 替補紀錄: string; 允許再上場: string } {
+  if (!r) return { 先發名單: '', 板凳: '', 替補紀錄: '', 允許再上場: '' }
+  return {
+    先發名單: r.starters.map((s) => `${s.order ?? 'P'}.${s.name}(${s.pos})`).join('、'),
+    板凳: r.bench.join('、'),
+    替補紀錄: (r.subs ?? []).map((s) => `${s.inning}${HALF_LABEL[s.half]}${s.slot === undefined ? '' : ` 第${s.slot + 1}棒`} ${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}(${s.pos})`).join('；'),
+    允許再上場: r.reentry ? '是' : '',
+  }
+}
+
+/** Parse the day-roster cells of a 比賽清單 row back. undefined when 先發名單 / 板凳 / 替補紀錄 are all blank (old workbooks). */
+export function dayRosterFromCells(row: Row): GameDayRoster | undefined {
+  if (!str(row['先發名單']) && !str(row['板凳']) && !str(row['替補紀錄'])) return undefined
+  const starters = splitList(row['先發名單']).map((t) => {
+    const m = STARTER_RE.exec(t)!
+    return { name: m[3], pos: m[4] ?? '', ...(m[1] ? { order: digits(m[1]) } : {}) }
+  })
+  const subs = splitList(row['替補紀錄']).flatMap((t): DayRosterSub[] => {
+    const m = matchSub(t)
+    if (!m) return []
+    const slot = m[3] ?? m[5]
+    return [{ kind: KIND_BY_LABEL[m[4]], in: m[6], out: m[7] ?? '', pos: m[8] ?? '', inning: digits(m[1]), half: m[2] === '下' ? 'bottom' : 'top', ...(slot ? { slot: digits(slot) - 1 } : {}) }]
+  })
+  return parseDayRoster({ starters, bench: splitList(row['板凳']), subs, reentry: /^(是|y|yes|true|1|v|✓|○|o)$/i.test(str(row['允許再上場'])) })
 }
 
 /** Read the 單場-摘要 header block (labels in B/E columns, values to the right). */
@@ -322,7 +375,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: 
 /** Export the current dataset as a CSV bundle (one sheet per log) for backup. */
 export function datasetToWorkbook(ds: Dataset): XLSX.WorkBook {
   const wb = XLSX.utils.book_new()
-  const games = ds.games.map((g) => ({ 比賽ID: g.id, 日期: g.date, 時間: g.time ?? '', 杯賽: g.tournament, 對手: g.opponent, 主客: g.homeAway, 場地: g.venue ?? '', 天氣: g.weather ?? '', 紀錄者: g.recorder ?? '', 局數: g.innings ?? '', 勝投: g.winningPitcher ?? '', 敗投: g.losingPitcher ?? '', 救援: g.savePitcher ?? '', 狀態: g.status === 'scheduled' ? '預定' : g.status === 'cancelled' ? '取消' : '', 中繼: (g.holds ?? []).join(','), 備註: g.note ?? '' }))
+  const games = ds.games.map((g) => ({ 比賽ID: g.id, 日期: g.date, 時間: g.time ?? '', 杯賽: g.tournament, 對手: g.opponent, 主客: g.homeAway, 場地: g.venue ?? '', 天氣: g.weather ?? '', 紀錄者: g.recorder ?? '', 局數: g.innings ?? '', 勝投: g.winningPitcher ?? '', 敗投: g.losingPitcher ?? '', 救援: g.savePitcher ?? '', 狀態: g.status === 'scheduled' ? '預定' : g.status === 'cancelled' ? '取消' : '', 中繼: (g.holds ?? []).join(','), 備註: g.note ?? '', ...dayRosterCells(g.dayRoster) }))
   const bat = ds.batting.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 棒次: p.order ?? '', 守位: p.pos ?? '', 打者: p.batter, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 盜壘: p.sb || '', 盜壘失敗: p.cs || '', 失誤進壘: p.advOnError || '', 壘死: p.outOnBase || '', 得分: p.run || '', 打點: p.rbi || '', 結果代碼: p.code ?? '', 備註: p.note ?? '' }))
   const pit = ds.pitching.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 對方棒次: p.oppOrder ?? '', 投手: p.pitcher, 對方打者: p.oppBatter ?? '', ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 被盜壘: p.sba || '', 阻殺: p.cs || '', 暴投: p.wp || '', 捕逸: p.pb || '', 牽制出局: p.pk || '', 結果代碼: p.code ?? '', 備註: p.note ?? '' }))
   const fld = ds.fielding.map((f) => ({ 比賽ID: f.gameId, 球員: f.player, 守位: f.pos, 局數: f.innings ?? '', 刺殺PO: f.po, 助殺A: f.a, 失誤E: f.e, 雙殺DP: f.dp, 捕逸PB: f.pb, 被盜壘SB: f.sb, 阻殺CS: f.cs, 備註: f.note ?? '' }))

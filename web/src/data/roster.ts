@@ -3,6 +3,7 @@
  * Renaming a player also renames every record that carries the old name, so stats stay attached.
  */
 import type { Dataset, Player } from './types'
+import { dayRosterNames, renameInDayRoster } from './gameRoster'
 
 export interface RosterChange {
   /** original name → new player (name may differ = rename); '' original = new player */
@@ -17,6 +18,8 @@ export function playersWithRecords(ds: Dataset): Set<string> {
   for (const p of ds.pitching) s.add(p.pitcher)
   for (const f of ds.fielding) s.add(f.player)
   for (const g of ds.games) for (const n of [g.winningPitcher, g.losingPitcher, g.savePitcher, ...(g.holds ?? [])]) if (n) s.add(n)
+  // a bench-only player is on a game's 當日登錄名單: deleting him would leave a dangling name there
+  for (const g of ds.games) for (const n of dayRosterNames(g.dayRoster)) s.add(n)
   return s
 }
 
@@ -29,6 +32,7 @@ export function renamesOf(change: RosterChange): Record<string, string> {
 
 export function applyRosterChange(base: Dataset, change: RosterChange): Dataset {
   const renames = renamesOf(change)
+  const pairs = Object.entries(renames)
   const rn = (n?: string) => (n && renames[n]) || n
   const removed = new Set(change.removed)
   const edited = new Map(change.players.filter((c) => c.original).map((c) => [c.original, c.player]))
@@ -36,7 +40,7 @@ export function applyRosterChange(base: Dataset, change: RosterChange): Dataset 
   for (const c of change.players) if (!c.original && c.player.name.trim() && !roster.some((p) => p.name === c.player.name)) roster.push(c.player)
   return {
     roster,
-    games: base.games.map((g) => ({ ...g, winningPitcher: rn(g.winningPitcher), losingPitcher: rn(g.losingPitcher), savePitcher: rn(g.savePitcher), holds: g.holds?.map((h) => rn(h)!) })),
+    games: base.games.map((g) => ({ ...g, winningPitcher: rn(g.winningPitcher), losingPitcher: rn(g.losingPitcher), savePitcher: rn(g.savePitcher), holds: g.holds?.map((h) => rn(h)!), ...(g.dayRoster ? { dayRoster: renameInDayRoster(g.dayRoster, pairs) } : {}) })),
     batting: base.batting.map((p) => (renames[p.batter] ? { ...p, batter: renames[p.batter] } : p)),
     pitching: base.pitching.map((p) => (renames[p.pitcher] ? { ...p, pitcher: renames[p.pitcher] } : p)),
     fielding: base.fielding.map((f) => (renames[f.player] ? { ...f, player: renames[f.player] } : f)),

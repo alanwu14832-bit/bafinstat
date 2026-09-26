@@ -14,6 +14,7 @@
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
+import { parseDayRoster } from './gameRoster'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
@@ -172,7 +173,11 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
   const fielding: FieldingLine[] = input.fielding.map((f) => ({ ...f, player: f.player.trim(), pos: f.pos.trim().toUpperCase() }))
-  const games: Game[] = input.games.map((g) => ({ ...g, id: g.id.trim(), tournament: g.tournament?.trim() || '未分類', opponent: g.opponent?.trim() || '未知' }))
+  const games: Game[] = input.games.map(({ dayRoster, ...g }) => {
+    // the key is dropped when there is no (usable) roster, so games without one look exactly as before
+    const r = parseDayRoster(dayRoster)
+    return { ...g, id: g.id.trim(), tournament: g.tournament?.trim() || '未分類', opponent: g.opponent?.trim() || '未知', ...(r ? { dayRoster: r } : {}) }
+  })
 
   for (const g of games) {
     const bat = batting.filter((p) => p.gameId === g.id)

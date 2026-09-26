@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { addPitch, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, toGameEdit, withInPlay } from './model'
+import {
+  addPitch, appeared, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
+  substitute, toGameEdit, unusedBench, withInPlay, type RecordState,
+} from './model'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
 import { summarizeGame, battingLines, pitchingLines } from '../data/stats'
@@ -104,5 +107,115 @@ describe('foul flies, pickoff throws and the in-play pitch', () => {
     expect(s.pitching[1].note).toBe('牽制 2 次')
     expect((s.pitching[1] as unknown as Record<string, unknown>).pka).toBeUndefined()
     expect(s.extras.pka).toBe(0)
+  })
+})
+
+describe('game-day roster: bench, substitutions, re-entry', () => {
+  const pool = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸', '子', '丑']
+
+  it('someone new in the current pitcher\'s slot at P is a pitching change, so later pitches are his', () => {
+    const s = substitute(newGame(game, lineup, '壬', { bench: ['癸'] }), 8, '癸', 'P')
+    expect(s.pitcher).toBe('癸')
+    expect(s.lineup[8]).toEqual({ name: '癸', pos: 'P' })
+    expect(s.subs?.map((x) => x.kind)).toEqual(['P'])
+    expect(leftGame(s)).toContain('壬')
+    // a pinch hitter for the pitcher is still just a PH (the pitcher changes later, through 換投)
+    expect(substitute(newGame(game, lineup, '壬'), 8, '癸', 'PH').pitcher).toBe('壬')
+  })
+
+  it('newGame keeps the starters and a bench that never repeats a starter; the 3-argument call still works', () => {
+    const plain = newGame(game, lineup, '壬')
+    expect(plain.starters).toEqual(lineup); expect(plain.starters).not.toBe(lineup)
+    expect(plain.startingPitcher).toBe('壬'); expect(plain.bench).toEqual([]); expect(plain.subs).toEqual([]); expect(plain.reentry).toBe(false)
+    const s = newGame(game, lineup, '壬', { bench: ['癸', '甲', '壬', '子', '癸', ''], reentry: true })
+    expect(s.bench).toEqual(['癸', '子']); expect(s.reentry).toBe(true)
+  })
+
+  it('substitute logs who came in for whom; a position-only change logs nothing', () => {
+    let s = newGame({ ...game, homeAway: '客' }, lineup, '壬', { bench: ['癸', '子'] })
+    s = substitute(s, 2, '癸', 'PH')
+    expect(s.lineup[2]).toEqual({ name: '癸', pos: 'PH' })
+    expect(s.subs).toEqual([{ kind: 'PH', in: '癸', out: '丙', pos: 'PH', inning: 1, half: 'top', slot: 2 }])
+    expect(leftGame(s)).toEqual(['丙']); expect(unusedBench(s)).toEqual(['子'])
+    s = substitute(s, 2, '', '2B') // the pinch hitter stays in the game at 2B
+    expect(s.lineup[2]).toEqual({ name: '癸', pos: '2B' }); expect(s.subs).toHaveLength(1)
+    s = substitute(endHalf(s), 0, '子', 'C')
+    expect(s.subs![1]).toMatchObject({ kind: 'DEF', in: '子', out: '甲', inning: 1, half: 'bottom', slot: 0 })
+    expect(startersOf(s)).toEqual(lineup)
+  })
+
+  it('subCandidates: unused bench first, then who has not played, substituted-out players last and greyed out unless re-entry is on', () => {
+    let s = newGame(game, lineup, '壬', { bench: ['子'] })
+    s = substitute(s, 2, '癸', 'PH')
+    const c = subCandidates(s, pool, 'batter')
+    expect(c.names).toEqual(['子', '丑', '丙'])
+    expect(c.tag('子')).toBe('（板凳）'); expect(c.tag('丙')).toBe('（已下場）'); expect(c.tag('丑')).toBeUndefined()
+    expect([...c.disabled]).toEqual(['丙'])
+    s = setReentry(s, true)
+    expect(subCandidates(s, pool, 'batter').disabled.size).toBe(0)
+    expect(setReentry(s, false).reentry).toBe(false)
+    // a pitching change may also bring a fielder to the mound
+    expect(subCandidates(s, pool, 'pitcher').names).toEqual(['子', '丑', '甲', '乙', '癸', '丁', '戊', '己', '庚', '辛', '丙'])
+  })
+
+  it('changePitcher without a DH: a reliever takes the pitcher\'s batting slot, a fielder moving to the mound keeps his own', () => {
+    let s = newGame(game, lineup, '壬', { bench: ['子'] })
+    s = changePitcher(s, '子')
+    expect(s.pitcher).toBe('子'); expect(s.lineup[8]).toEqual({ name: '子', pos: 'P' })
+    expect(s.subs).toEqual([{ kind: 'P', in: '子', out: '壬', pos: 'P', inning: 1, half: 'top', slot: 8 }])
+    expect(leftGame(s)).toEqual(['壬']); expect(unusedBench(s)).toEqual([])
+    s = changePitcher(s, '庚') // the CF comes in to pitch; 子's slot is left for the recorder
+    expect(s.lineup[6]).toEqual({ name: '庚', pos: 'P' }); expect(s.lineup[8]).toEqual({ name: '子', pos: 'P' })
+    expect(s.subs![1]).toMatchObject({ kind: 'P', in: '庚', out: '子', slot: 8 })
+    expect(onField(s).has('子')).toBe(true)
+  })
+
+  it('changePitcher with a DH only changes the pitcher; his replacement can still be put into a batting slot', () => {
+    const dhLineup = lineup.map((l, i) => (i === 8 ? { name: '癸', pos: 'DH' } : l))
+    let s = newGame(game, dhLineup, '壬')
+    s = changePitcher(s, '子')
+    expect(s.lineup).toEqual(dhLineup)
+    expect(s.subs).toEqual([{ kind: 'P', in: '子', out: '壬', pos: 'P', inning: 1, half: 'top' }])
+    expect(leftGame(s)).toEqual(['壬'])
+    const c = subCandidates(s, pool, 'batter')
+    expect(c.names).toContain('子'); expect(c.tag('子')).toBe('（投手）')
+    expect(toGameEdit(s).game.dayRoster!.starters.at(-1)).toEqual({ name: '壬', pos: 'P' })
+  })
+
+  it('old drafts without the roster fields still work: starters and who left come from the rows, the saved game keeps its roster', () => {
+    const legacy = { ...newGame({ ...game, homeAway: '客' }, lineup, '壬') } as Partial<RecordState>
+    for (const k of ['starters', 'startingPitcher', 'bench', 'reentry', 'subs'] as const) delete legacy[k]
+    let s = legacy as RecordState
+    expect(leftGame(s)).toEqual([]); expect(unusedBench(s)).toEqual([]); expect(startingPitcherOf(s)).toBe('壬'); expect([...appeared(s)]).toHaveLength(9)
+    s = commitPA(s, defaultPlan(s, '一安'))
+    s = substitute(s, 1, '癸', 'PH') // continued on the new version: substitutions are logged from here on
+    s = commitPA(s, defaultPlan(s, '三振'))
+    // 乙 never batted, so the row fallback sees 癸 as the slot's starter (the documented gap for old drafts) …
+    expect(startersOf(s).slice(0, 2)).toEqual([{ name: '甲', pos: 'C' }, { name: '癸', pos: 'PH' }])
+    // … but the log still knows 乙 left
+    expect(leftGame(s)).toEqual(['乙'])
+    expect(subCandidates(s, pool, 'batter')).toMatchObject({ names: ['子', '丑', '乙'] })
+    expect(subCandidates(s, pool, 'batter').disabled.has('乙')).toBe(true)
+    expect(toGameEdit(s).game.dayRoster).toBeUndefined()
+    const kept = { starters: [{ name: '甲', pos: 'C', order: 1 }], bench: ['丑'], reentry: false }
+    expect(toGameEdit({ ...s, game: { ...s.game, dayRoster: kept } }).game.dayRoster).toBe(kept)
+    // a draft that never logged anything: who left is read off the batting rows
+    const rowsOnly = { ...s, subs: undefined, lineup: s.lineup.map((l, i) => (i === 0 ? { name: '子', pos: 'C' } : l)) }
+    expect(leftGame(rowsOnly)).toEqual(['甲'])
+  })
+
+  it('toGameEdit attaches the day roster and it survives normalizeGameEdit', () => {
+    const dhLineup = lineup.map((l, i) => (i === 8 ? { name: '癸', pos: 'DH' } : l))
+    let s = newGame(game, dhLineup, '壬', { bench: ['子', '丑'], reentry: true })
+    s = changePitcher(s, '子')
+    s = commitPA(s, defaultPlan(s, '三振'))
+    const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
+    const r = fragment.games[0].dayRoster!
+    expect(r.starters).toHaveLength(10)
+    expect(r.starters[0]).toEqual({ name: '甲', pos: 'C', order: 1 })
+    expect(r.starters[9]).toEqual({ name: '壬', pos: 'P' })
+    expect(r.bench).toEqual(['子', '丑'])
+    expect(r.subs).toEqual([{ kind: 'P', in: '子', out: '壬', pos: 'P', inning: 1, half: 'top' }])
+    expect(r.reentry).toBe(true)
   })
 })

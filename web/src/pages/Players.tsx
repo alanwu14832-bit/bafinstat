@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { median, previousSeason, sameGroup } from '../data/radar'
 import { filterGames } from '../data/filters'
-import { ChevronDown, ChevronLeft, ChevronRight, Pencil, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { StatHint } from '../components/ui/StatHint'
@@ -14,6 +14,9 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { RosterEditor } from '../components/ui/RosterEditor'
+import { RegistrationEditor } from '../components/ui/RegistrationEditor'
+import { Tabs } from '../components/ui/Tabs'
+import { seasonOf } from '../data/registrations'
 import { useDataStore } from '../store/data'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DataTable, type Column } from '../components/ui/DataTable'
@@ -90,11 +93,17 @@ export function PlayersPage() {
   const [q, setQ] = useState('')
   const [compare, setCompare] = useState<string>('')
   const [editingRoster, setEditingRoster] = useState(false)
+  const [showRegs, setShowRegs] = useState(false)
+  const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
   const filters = useDataStore((st) => st.filters)
   const statParams = useDataStore((st) => st.params)
   const cloud = useDataStore((st) => st.cloud)
   const saveRoster = useDataStore((st) => st.saveRoster)
+  const registrations = useDataStore((st) => st.registrations)
+  const registrationsSupported = useDataStore((st) => st.registrationsSupported)
+  const saveRegistration = useDataStore((st) => st.saveRegistration)
+  const deleteRegistration = useDataStore((st) => st.deleteRegistration)
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
   useEffect(() => { if (requested && names.includes(requested)) setSelected(requested) }, [requested, names])
 
@@ -197,7 +206,18 @@ export function PlayersPage() {
 
   const choose = (name: string) => { setSelected(name); setParams({ player: name }, { replace: true }); setOpen(false); setQ('') }
   const step = (d: number) => { const n = names[(index + d + names.length) % names.length]; if (n) choose(n) }
-  const filtered = useMemo(() => roster.filter((p) => !q || p.name.includes(q) || (p.number ?? '').includes(q)), [roster, q])
+  // 報名名單 of the tournament picked in the 杯賽 filter, for the years the filtered games are in (every year when no game
+  // matches yet). null = no filter or no list, and then the panel shows nothing extra.
+  const registered = useMemo(() => {
+    const t = filters.tournament === 'all' ? '' : filters.tournament.trim()
+    const lists = t ? registrations.filter((r) => r.tournament === t) : []
+    const seasons = new Set(s.games.map((g) => seasonOf(g.date)))
+    const used = seasons.size ? lists.filter((r) => seasons.has(r.season)) : lists
+    const names = new Set(used.flatMap((r) => r.players))
+    return names.size ? { names, label: `${[...new Set(used.map((r) => r.season))].sort().join('・')} ${t}` } : null
+  }, [filters.tournament, registrations, s.games])
+  const onlyRegistered = rosterView === 'reg' && !!registered
+  const filtered = useMemo(() => roster.filter((p) => (!q || p.name.includes(q) || (p.number ?? '').includes(q)) && (!onlyRegistered || registered!.names.has(p.name))), [roster, q, onlyRegistered, registered])
 
   return (
     <>
@@ -239,11 +259,20 @@ export function PlayersPage() {
           {open && (
             <motion.div id="roster-panel" key="roster" initial={reduced ? false : { height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={reduced ? undefined : { height: 0, opacity: 0 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden border-t border-border">
-              <div className="px-4 md:px-5 py-3 flex items-center gap-3">
+              <div className="px-4 md:px-5 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap">
                 <Input icon={<Search />} size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋姓名或背號" aria-label="搜尋球員" className="w-full sm:w-[240px]" autoFocus />
                 <span className="text-xs text-muted tnum whitespace-nowrap">{filtered.length} / {roster.length} 人</span>
-                {canEdit && <Button size="sm" variant="outline" icon={<Pencil />} className="ml-auto" onClick={() => { setEditingRoster(true); setOpen(false) }}>編輯名單</Button>}
+                <div className="ml-auto flex items-center gap-1.5">
+                  <Button size="sm" variant="outline" icon={<ClipboardList />} onClick={() => { setShowRegs(true); setOpen(false) }} title="各杯賽每年的報名名單">報名名單</Button>
+                  {canEdit && <Button size="sm" variant="outline" icon={<Pencil />} onClick={() => { setEditingRoster(true); setOpen(false) }}>編輯名單</Button>}
+                </div>
               </div>
+              {registered && (
+                <div className="px-4 md:px-5 pb-3 -mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
+                  <Tabs size="sm" aria-label="名單範圍" value={rosterView} onChange={setRosterView} items={[{ value: 'all', label: '全部球員' }, { value: 'reg', label: '報名名單' }]} />
+                  <span className="text-xs text-muted">{registered.label} 報名 {registered.names.size} 人</span>
+                </div>
+              )}
               <ul className="px-4 md:px-5 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 max-h-[52vh] overflow-y-auto" role="listbox" aria-label="球員名單">
                 {filtered.map((p) => {
                   const b = byName.get(p.name); const pl = pitchByName.get(p.name)
@@ -255,7 +284,7 @@ export function PlayersPage() {
                           active ? 'border-ink bg-surface-2' : 'border-border')}>
                         <PlateBadge size={30} active={active}>{p.number ?? p.name.slice(0, 1)}</PlateBadge>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[13px] font-medium text-ink truncate">{p.name}</span>
+                          <span className="flex items-center gap-1.5 min-w-0"><span className="text-[13px] font-medium text-ink truncate">{p.name}</span>{registered?.names.has(p.name) && <Badge variant="accent" className="shrink-0">已報名</Badge>}</span>
                           <span className="block text-[11px] text-muted truncate">{posLabel(p.primaryPos)}{p.bats ? `・${hand(p.bats)}` : ''}{p.status && p.status !== '現役' ? `・${p.status}` : ''}</span>
                         </span>
                         <span className="text-right tnum text-[11px] text-ink-2 shrink-0 leading-4">
@@ -266,7 +295,7 @@ export function PlayersPage() {
                     </li>
                   )
                 })}
-                {filtered.length === 0 && <li className="col-span-full text-[13px] text-muted text-center py-6">沒有符合的球員</li>}
+                {filtered.length === 0 && <li className="col-span-full text-[13px] text-muted text-center py-6">{onlyRegistered && !q ? '報名名單上的人都不在球員名單' : '沒有符合的球員'}</li>}
               </ul>
             </motion.div>
           )}
@@ -276,6 +305,12 @@ export function PlayersPage() {
       {editingRoster && (
         <Card title="編輯球員名單" subtitle="背號、姓名、守位、慣用手、狀態；儲存後全站更新">
           <RosterEditor base={base} busy={cloud.pushing} onCancel={() => setEditingRoster(false)} onSave={async (c) => { await saveRoster(c); setEditingRoster(false) }} />
+        </Card>
+      )}
+      {showRegs && (
+        <Card title="報名名單" subtitle="每個杯賽每年一份；先發陣容與紀錄比賽選到那個杯賽的比賽時，只列出名單上的人" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setShowRegs(false)}>關閉</Button>}>
+          <RegistrationEditor registrations={registrations} roster={base.roster} games={base.games} supported={registrationsSupported} canEdit={canEdit}
+            focusTournament={filters.tournament === 'all' ? undefined : filters.tournament} onSave={saveRegistration} onDelete={deleteRegistration} />
         </Card>
       )}
       {!player ? (

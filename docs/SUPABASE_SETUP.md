@@ -54,14 +54,19 @@ npm run dev
 | `pitching_pa` | 投球紀錄 | `(game_id, seq)` |
 | `fielding_lines` | 守備紀錄 | `(game_id, seq)` |
 | `record_drafts` | 網站「紀錄比賽」進行中的狀態：換裝置接續、公開的「即時比分」頁讀取（任何人可讀，登入者可寫） | `game_id` |
+| `albums` | 相簿連結（每場比賽或活動的 Google Drive 資料夾） | `id` |
+| `registrations` | 報名名單：某年某杯賽報名的球員（球員頁 →「報名名單」） | `(season, tournament)` |
+
+`games.day_roster`（jsonb）是那場的**當日登錄名單**：先發（含棒次、守位）、板凳（到場未先發）、替補紀錄（代打／代跑／守備／換投）與「允許再上場」。由「先發陣容 → 紀錄比賽」自動存入，也可在比賽頁「修改資料 → 登錄名單」補登。
 
 刪除 `games` 的一列會連帶刪掉該場所有打席（on delete cascade）。統計全部由網站計算，資料庫只存原始紀錄。
 
 ## 已建好的專案要補的表
-後來加的兩個，舊專案到 SQL Editor 各執行一次（重複執行安全）：
+後來加的，舊專案到 SQL Editor 各執行一次（重複執行安全）：
 - `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
+- `supabase/migrations/2026-09-26_rosters.sql`：**當日登錄名單與報名名單**。在 `games` 加 `day_roster` 欄（先發、板凳、替補紀錄、允許再上場），並建立 `registrations` 表（某年某杯賽的報名名單）。沒執行時比賽照常紀錄與儲存，只是登錄名單存不進雲端（存檔時會提醒）、比賽頁的「當日登錄名單」改由打席紀錄推定、球員頁的報名名單會提示尚未開通，先發陣容與紀錄比賽的候選名單則列出全隊。
 
 ## 誰能登入、誰能寫
 - 帳號：Authentication → Users → Add user（設 email 與密碼）。請關閉 Providers → Email 的 **Enable email signups**，避免任何人自行註冊。
