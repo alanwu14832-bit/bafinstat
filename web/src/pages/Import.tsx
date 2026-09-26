@@ -62,7 +62,9 @@ export function ImportPage() {
       const r = mode === 'replace' ? await replaceDataset(ds) : await appendDataset(ds)
       const where = cloud.configured && cloud.user ? '已寫入雲端' : mode === 'replace' ? '已取代本地資料' : '已合併到本地資料'
       const skipped = r?.skipped ? `（略過 ${r.skipped} 場已存在的比賽）` : ''
-      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席。`)
+      // e.g. the cloud has no day_roster column yet: the games are saved, their 當日登錄名單 is not
+      const lost = r?.warnings.length ? ` ${[...new Set(r.warnings.map((w) => w.message))].join('；')}` : ''
+      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席。${lost}`)
       setPending(null)
       if (demo) setDemo(false)
     } catch (e) {

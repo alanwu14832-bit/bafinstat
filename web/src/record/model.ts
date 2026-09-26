@@ -11,7 +11,7 @@
  *     into the row's 備註 as「牽制 N 次」
  *   - a ball in play always ends with an IP pitch: 界外飛 recorded as F becomes IP, a missing IP is appended
  */
-import type { BattingPA, Game, PitchingPA } from '../data/types'
+import type { BattingPA, DayRosterSub, Game, GameDayRoster, PitchingPA } from '../data/types'
 import type { GameEdit } from '../data/edit'
 
 export type Half = 'top' | 'bottom'
@@ -45,6 +45,17 @@ export interface RecordState {
   startedAt: string
   /** last local change (ISO); used to pick the newer of a local vs cloud draft */
   updatedAt?: string
+  // 當日登錄名單. All optional: drafts started before these existed (this device, record_drafts, the public Live page)
+  // lack them, so every reader goes through startersOf / appeared / … below, which fall back to the rows.
+  /** the lineup as the game started (substitute() overwrites `lineup` in place) */
+  starters?: LineupSlot[]
+  startingPitcher?: string
+  /** 板凳: came today, did not start */
+  bench?: string[]
+  /** 允許再上場: players substituted out may come back */
+  reentry?: boolean
+  /** every substitution, in the order it happened */
+  subs?: DayRosterSub[]
 }
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
@@ -86,19 +97,99 @@ export function withInPlay(pitches: string[], result: string): string[] {
   return [...pitches, 'IP']
 }
 
-export function newGame(game: Game, lineup: LineupSlot[], pitcher: string): RecordState {
-  return { game, lineup, slot: 0, pitcher, oppOrder: 1, oppBatter: '', inning: 1, half: 'top', outs: 0, runners: [], batting: [], pitching: [], pitches: [], extras: { ...EXTRAS0 }, finished: false, startedAt: new Date().toISOString() }
+export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean } = {}): RecordState {
+  // the bench never repeats a starter (Setup may have promoted a bench player into the lineup)
+  const starting = new Set([...lineup.map((l) => l.name), pitcher])
+  const bench = [...new Set((opts.bench ?? []).filter((n) => n && !starting.has(n)))]
+  return {
+    game, lineup, slot: 0, pitcher, oppOrder: 1, oppBatter: '', inning: 1, half: 'top', outs: 0, runners: [], batting: [], pitching: [], pitches: [], extras: { ...EXTRAS0 }, finished: false, startedAt: new Date().toISOString(),
+    starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry, subs: [],
+  }
 }
 
 export const addPitch = (s: RecordState, code: string): RecordState => ({ ...s, pitches: [...s.pitches, code] })
 export const undoPitch = (s: RecordState): RecordState => ({ ...s, pitches: s.pitches.slice(0, -1) })
 export const addExtra = (s: RecordState, key: keyof Extras): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
 export const setOppBatter = (s: RecordState, name: string): RecordState => ({ ...s, oppBatter: name })
-export const changePitcher = (s: RecordState, name: string): RecordState => ({ ...s, pitcher: name })
+/**
+ * New pitcher, logged as a 換投. Without a DH the old pitcher bats in the lineup as P: a pitcher from the bench takes
+ * that slot; a fielder who moves to the mound keeps his own slot (now P) and the old pitcher's slot is left for the
+ * recorder to change. With a DH (the old pitcher is not in the lineup) only `pitcher` changes.
+ */
+export function changePitcher(s: RecordState, name: string): RecordState {
+  if (!name || name === s.pitcher) return { ...s, pitcher: name }
+  const old = s.lineup.findIndex((l) => l.name === s.pitcher)
+  let lineup = s.lineup
+  if (old >= 0 && s.lineup[old].pos === 'P') {
+    const fielder = s.lineup.findIndex((l) => l.name === name)
+    lineup = s.lineup.map((l, i) => (fielder >= 0 ? (i === fielder ? { ...l, pos: 'P' } : l) : i === old ? { name, pos: 'P' } : l))
+  }
+  const sub: DayRosterSub = { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}) }
+  return { ...s, pitcher: name, lineup, subs: [...(s.subs ?? []), sub] }
+}
 export const setSlot = (s: RecordState, slot: number): RecordState => ({ ...s, slot: ((slot % s.lineup.length) + s.lineup.length) % s.lineup.length })
 export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + 9) % 9) + 1 })
-/** Substitute (pinch hitter / defensive change) in a lineup slot. */
-export const substitute = (s: RecordState, slot: number, name: string, pos: string): RecordState => ({ ...s, lineup: s.lineup.map((l, i) => (i === slot ? { name: name || l.name, pos: pos || l.pos } : l)) })
+/** Substitute (pinch hitter / defensive change) in a lineup slot. A new name is logged; a position-only change (no name) is not. */
+export function substitute(s: RecordState, slot: number, name: string, pos: string): RecordState {
+  // someone new taking the current pitcher's slot at P is a pitching change: route it so `pitcher` follows
+  const cur = s.lineup[slot]
+  if (cur && name && name !== cur.name && cur.name === s.pitcher && (pos || cur.pos) === 'P') return changePitcher(s, name)
+  const lineup = s.lineup.map((l, i) => (i === slot ? { name: name || l.name, pos: pos || l.pos } : l))
+  const old = s.lineup[slot]
+  if (!old || !name || name === old.name) return { ...s, lineup }
+  const sub: DayRosterSub = { kind: pos === 'PH' ? 'PH' : pos === 'PR' ? 'PR' : 'DEF', in: name, out: old.name, pos: pos || old.pos, inning: s.inning, half: s.half, slot }
+  return { ...s, lineup, subs: [...(s.subs ?? []), sub] }
+}
+export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s, reentry: on })
+
+/* ------------------------------------------------ who is in the game (all tolerant of drafts without the roster fields) */
+/** In the game right now: the batting order plus the pitcher (under a DH he is not in `lineup`). */
+export function onField(s: RecordState): Set<string> {
+  return new Set([...s.lineup.map((l) => l.name), s.pitcher].filter(Boolean))
+}
+/** The starting lineup. Older drafts have no copy: the first batter in each slot started there (a pinch hitter shares the order). */
+export function startersOf(s: RecordState): LineupSlot[] {
+  if (s.starters) return s.starters
+  return s.lineup.map((l, i) => { const p = s.batting.find((b) => b.order === i + 1 && b.batter); return p ? { name: p.batter, pos: p.pos ?? l.pos } : l })
+}
+export function startingPitcherOf(s: RecordState): string {
+  return s.startingPitcher ?? (s.pitching.find((p) => p.pitcher)?.pitcher || s.pitcher)
+}
+/** Everyone who has been in the game (started, came in, batted, pitched, or is out there now). */
+export function appeared(s: RecordState): Set<string> {
+  const subs = s.subs ?? []
+  const out = new Set<string>([...startersOf(s).map((l) => l.name), startingPitcherOf(s), ...subs.flatMap((x) => [x.out, x.in]), ...s.batting.map((p) => p.batter), ...s.pitching.map((p) => p.pitcher), ...onField(s)])
+  out.delete('')
+  return out
+}
+/** Substituted out: was in the game, is not any more. */
+export function leftGame(s: RecordState): string[] {
+  const now = onField(s)
+  return [...appeared(s)].filter((n) => !now.has(n))
+}
+/** Bench players who have not come in yet. */
+export function unusedBench(s: RecordState): string[] {
+  const seen = appeared(s)
+  return (s.bench ?? []).filter((n) => !seen.has(n))
+}
+
+export interface SubCandidates { names: string[]; disabled: Set<string>; tag: (name: string) => string | undefined }
+/**
+ * Who can come in, best first: today's unused bench, then the rest of `pool` who have not played, (for a pitching
+ * change) the fielders who could move to the mound, then players already substituted out, who stay greyed out
+ * unless re-entry is allowed.
+ */
+export function subCandidates(s: RecordState, pool: string[], mode: 'batter' | 'pitcher'): SubCandidates {
+  const bench = unusedBench(s)
+  const seen = appeared(s)
+  const left = leftGame(s)
+  const fielders = mode === 'pitcher' ? s.lineup.map((l) => l.name).filter((n) => n && n !== s.pitcher) : []
+  // a pitcher without a batting slot (pinch-hit for without a DH, then relieved) must be able to take that slot
+  const mound = mode === 'batter' && s.pitcher && !s.lineup.some((l) => l.name === s.pitcher) ? [s.pitcher] : []
+  const names = [...new Set([...bench, ...pool.filter((n) => !seen.has(n)), ...mound, ...fielders, ...left])]
+  const benchSet = new Set(bench), leftSet = new Set(left)
+  return { names, disabled: s.reentry ? new Set() : leftSet, tag: (n) => (benchSet.has(n) ? '（板凳）' : leftSet.has(n) ? '（已下場）' : mound.includes(n) ? '（投手）' : undefined) }
+}
 
 export interface PAPlan {
   result: string
@@ -259,10 +350,20 @@ export function score(s: RecordState): Score {
   return { us: lineUs.reduce((a, b) => a + b, 0), opp: lineOpp.reduce((a, b) => a + b, 0), lineUs, lineOpp }
 }
 
+/** The 當日登錄名單 this game produces: starters with their batting order (the non-batting pitcher under a DH without one), bench, substitutions. */
+export function dayRosterOf(s: RecordState): GameDayRoster {
+  const starters: GameDayRoster['starters'] = startersOf(s).flatMap((l, i) => (l.name ? [{ name: l.name, pos: l.pos, order: i + 1 }] : []))
+  const sp = startingPitcherOf(s)
+  if (sp && !starters.some((x) => x.name === sp)) starters.push({ name: sp, pos: 'P' })
+  return { starters, bench: s.bench ?? [], subs: s.subs ?? [], reentry: !!s.reentry }
+}
+
 /** Package the game for saveGame (normalize derives fielding, innings and warnings). */
 export function toGameEdit(s: RecordState, extra: Partial<Game> = {}): GameEdit {
   const played = Math.max(1, ...s.batting.map((p) => p.inning), ...s.pitching.map((p) => p.inning))
-  return { game: { ...s.game, innings: s.finished ? played : s.game.innings ?? played, ...extra }, batting: s.batting, pitching: s.pitching, fielding: [] }
+  // only drafts started with the roster fields know the bench; older ones keep whatever the game already had
+  const roster = s.starters ? { dayRoster: dayRosterOf(s) } : {}
+  return { game: { ...s.game, innings: s.finished ? played : s.game.innings ?? played, ...roster, ...extra }, batting: s.batting, pitching: s.pitching, fielding: [] }
 }
 
 /** G+YYYYMMDD-NN, NN = next free sequence for that date. */

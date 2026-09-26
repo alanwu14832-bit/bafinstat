@@ -54,13 +54,16 @@ const FAQ: Array<[string, string]> = [
   ['賽程怎麼排？', '紀錄員登入後到「比賽」頁切到「賽程」分頁，按「新增賽程」填日期、時間、對手、主客、場地與集合備註。隊員在同一個分頁看得到接下來的比賽並可加到 Google 日曆；打完的比賽在「成績」分頁。比賽當天紀錄員在「紀錄比賽」用「從賽程帶入」選這場，資料自動填好、比賽ID 沿用。排定但還沒記錄的比賽不會算進任何統計。'],
   ['三游穿越安打的落點要填三壘還是左外野？', '都不是：落點記「處理球的人」，沒人碰到的穿越球就填縫隙代碼——56 三游、46 二游（中間）、34 一二、78 左中、89 右中。紀錄比賽頁的落點區有「穿越／落地的縫隙」按鈕。出局一律填處理球的守備員 1–9（例如三游之間被游擊手接到就是 6）。'],
   ['一個人守很多位置，名單守位怎麼填？', '名單的主／副守位除了 P、C、1B…RF，也可以選 IF 內野手、OF 外野手、UT 工具人。比賽時每個打席的守位仍記當場實際站的位置。'],
-  ['要先排陣容再開始記？', '登入後到「先發陣容」：球場圖上每個守位有下拉選單選人，右邊排打序（可按「依守位填入」）。陣容存在這台裝置，開「紀錄比賽」時自動帶入；也能複製成文字貼到群組。'],
+  ['要先排陣容再開始記？', '登入後到「先發陣容」：先選這份陣容是哪一場，球場圖上每個守位有下拉選單選人，右邊排打序（可按「依守位填入」），再在「板凳（今天有到）」點選到場但沒先發的人。陣容存在這台裝置，開「紀錄比賽」時自動帶入那一場；也能複製成文字貼到群組。'],
+  ['板凳、換人和當日登錄名單？', '從「先發陣容」帶到「紀錄比賽」後，換投、代打／換人會先列出板凳，被換下場的人預設不能再上（這場允許的話勾「允許再上場」）。「換人」可以選任一棒，我隊守備時也能用（守備調動；不選人就是只改守位）。每次換人都會記下，存檔時連同先發與板凳一起存成這場的當日登錄名單：到「比賽」點那一場，在「攻守成績」最下方看先發、替補上場與未上場。以前的比賽沒有名單，先發與替補由打席紀錄推定；紀錄員可以在「修改資料」的「登錄名單」分頁補上或修正。'],
+  ['報名名單怎麼用？', '到「球員」頁展開名單，按「報名名單」：每個杯賽每年一份（例如 2026 大專盃），紀錄員按「新增報名名單」選年度、杯賽，點選報名的球員後儲存。之後「先發陣容」與「紀錄比賽」選到那個杯賽的比賽時只列出名單上的人；沒有名單的杯賽（例如友誼賽）照常列出全隊。上方篩選選了杯賽時，球員名單可以切換「全部球員／報名名單」，報名的人會標「已報名」。'],
   ['紀錄時怎麼知道現在是在記打擊還是投球？', '打席區上方有一條狀態列：黑底「現在紀錄：打擊」是我隊進攻，橘色「現在紀錄：投球」是對方進攻、記我隊投手。對方球員不記姓名，只記第幾棒。想專心記可按「全螢幕」。'],
   ['讀取錯誤或記錯了，要怎麼改？', '到「比賽」點那一場，按右上角「修改資料」：比賽資訊、每個打席、守備都能直接改、增刪列，儲存後所有統計立即重算。雲端模式需先登入。也可以改總表後重傳（取代模式）。'],
   ['同一場比賽改了資料要重傳？', '上傳時選「以此檔取代雲端全部資料」會用總表覆蓋雲端；「合併」只會加入新的比賽ID。'],
   ['球員名字打錯了、要加新人或有人離隊？', '紀錄員登入後到「球員」頁展開名單，按「編輯名單」：可以新增、改背號守位、改名（所有紀錄會一起改）、把狀態改成離隊或畢業，或按「匯入 Excel」整份名冊套進來（同名以檔案為準、空白欄位保留舊值，會先顯示差異再套用）。'],
   ['ERA 為什麼是 7 局換算？', '社會組／校際多為 7 局制。可在「設定」工作表或網站的資料匯入頁改成 9。'],
   ['誰可以上傳？', '只有在 Supabase 建立帳號的紀錄員能寫入；其他人不用登入就能看。'],
+  ['登錄名單存不進雲端、報名名單說要管理員執行 SQL？', '雲端資料庫還沒加上當日登錄名單與報名名單。管理員到 Supabase 的 SQL Editor 執行一次 supabase/migrations/2026-09-26_rosters.sql（重複執行也安全，步驟見 docs/SUPABASE_SETUP.md）。執行前比賽照常紀錄與儲存，只是登錄名單不會存進雲端、報名名單無法使用。'],
 ]
 
 export function GuidePage() {
@@ -114,8 +117,8 @@ export function GuidePage() {
           <ul className="text-[13px] text-ink-2 flex flex-col gap-3 leading-relaxed">
             <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="總覽" /></span><span>戰績、得失分、OPS 走勢、逐局得失分、落點熱區。上方篩選列可以只看某個杯賽、某段期間、某個對手或主客場。</span></li>
             <li className="flex gap-2.5"><span className="mt-px shrink-0 inline-flex gap-1"><PageChip name="打擊" /><PageChip name="投球" /></span><span>三組欄位：基本（AVG/OBP/SLG）、進階（wOBA、ISO、BABIP、得點圈）、過程（Whiff%、CSW%、GB/FB/LD%、Hard%）。點欄位標題排序，點球員進個人檔案。</span></li>
-            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="比賽" /></span><span>點任一場：逐局比分、Box Score，以及「逐打席・打擊／投球」完整的逐球紀錄。</span></li>
-            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="球員" /></span><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="比賽" /></span><span>點任一場：逐局比分、Box Score、當日登錄名單（先發／替補上場／未上場），以及「逐打席・打擊／投球」完整的逐球紀錄。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="球員" /></span><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢；展開名單可看各杯賽的報名名單。</span></li>
             <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="數據字典" /></span><span>每一項指標的定義與公式，和總表的「數據字典」工作表一致。</span></li>
           </ul>
         </Card>
@@ -123,7 +126,7 @@ export function GuidePage() {
 
       <Card title="常見問題">
         <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {FAQ.map(([q, a]) => (<div key={q}><dt className="text-[13px] font-medium text-ink">{q}</dt><dd className="text-[13px] text-ink-2 mt-1 leading-relaxed">{withPageLinks(a)}</dd></div>))}
+          {FAQ.map(([q, a]) => (<div key={q}><dt className="text-[13px] font-medium text-ink">{q}</dt><dd className="text-[13px] text-ink-2 mt-1 leading-relaxed break-words">{withPageLinks(a)}</dd></div>))}
         </dl>
       </Card>
     </>

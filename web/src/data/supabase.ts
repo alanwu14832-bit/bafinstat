@@ -5,8 +5,9 @@
  * runs exactly as before (local-only).
  */
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
-import type { BattingPA, Dataset, FieldingLine, Game, HomeAway, PitchingPA, Player } from './types'
+import type { BattingPA, Dataset, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player } from './types'
 import { normalizeDataset } from './normalize'
+import { parseDayRoster } from './gameRoster'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -22,7 +23,7 @@ export function supabase(): SupabaseClient {
 
 // ---------------------------------------------------------------- row ↔ model mapping
 interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
-interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null }
+interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null; day_roster?: GameDayRoster | null }
 interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null }
 interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; code: string | null; note: string | null }
 interface FieldingRow { game_id: string; seq: number; player: string; pos: string; innings: number | null; po: number; a: number; e: number; dp: number; pb: number; sb: number; cs: number; note: string | null }
@@ -34,7 +35,9 @@ export function toPlayerRow(p: Player): PlayerRow {
   return { name: p.name, number: n(p.number), primary_pos: n(p.primaryPos), secondary_pos: n(p.secondaryPos), bats: n(p.bats), throws: n(p.throws), status: n(p.status), note: n(p.note) }
 }
 export function toGameRow(g: Game): GameRow {
-  return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note), status: n(g.status) }
+  // day_roster is left out (not null) when a game has none: postgrest fills a key missing from some rows of an array
+  // upsert with NULL, and an old-workbook import must not wipe rosters saved in the cloud
+  return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note), status: n(g.status), ...(g.dayRoster ? { day_roster: g.dayRoster } : {}) }
 }
 export function toBattingRow(p: BattingPA, seq: number): BattingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), batting_order: p.order ?? null, pos: n(p.pos), batter: p.batter, pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sb: p.sb, cs: p.cs, adv_on_error: p.advOnError, out_on_base: p.outOnBase, run: p.run, rbi: p.rbi, code: n(p.code), note: n(p.note) }
@@ -49,7 +52,7 @@ export function toFieldingRow(f: FieldingLine, seq: number): FieldingRow {
 export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; batting: BattingRow[]; pitching: PitchingRow[]; fielding: FieldingRow[] }): Dataset {
   return {
     roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note) })),
-    games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined) })),
+    games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined), dayRoster: parseDayRoster(r.day_roster) })),
     batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note) })),
     pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, code: u(r.code), note: u(r.note) })),
     fielding: rows.fielding.map((r) => ({ gameId: r.game_id, player: r.player, pos: r.pos, innings: u(r.innings === null ? null : Number(r.innings)), po: r.po, a: r.a, e: r.e, dp: r.dp, pb: r.pb, sb: r.sb, cs: r.cs, note: u(r.note) })),
@@ -84,13 +87,46 @@ async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 5
   for (let i = 0; i < rows.length; i += size) await fn(rows.slice(i, i + size))
 }
 
+/** games columns added by later migrations; a project that has not run them still accepts saves without them. */
+const OPTIONAL_GAME_COLUMNS = ['day_roster', 'status', 'updated_by'] as const
+type PgError = { message: string; code?: string }
+/** Optional games columns a PostgREST error says are missing: PGRST204 "Could not find the 'day_roster' column of
+ *  'games' in the schema cache", or 42703 "column games.day_roster does not exist". */
+export function missingGameColumns(e: PgError | null): string[] {
+  if (!e || !(e.code === 'PGRST204' || e.code === '42703' || /could not find|does not exist/i.test(e.message))) return []
+  return OPTIONAL_GAME_COLUMNS.filter((c) => new RegExp(`\\b${c}\\b`).test(e.message))
+}
+const isMissingGameColumn = (e: PgError | null) => missingGameColumns(e).length > 0
+
+/**
+ * Upsert games rows, dropping optional columns an older schema lacks (up to 3 retries, one column per error).
+ * Rows with and without day_roster go in separate requests, so games without a roster never get a NULL written over one.
+ */
+async function upsertGames(rows: Array<Record<string, unknown>>): Promise<{ error: PgError | null; dropped: string[] }> {
+  const dropped: string[] = []
+  const strip = (r: Record<string, unknown>) => { const o = { ...r }; for (const c of dropped) delete o[c]; return o }
+  for (const group of [rows.filter((r) => 'day_roster' in r), rows.filter((r) => !('day_roster' in r))]) {
+    if (!group.length) continue
+    let { error } = await supabase().from('games').upsert(group.map(strip), { onConflict: 'id' })
+    for (let i = 0; error && i < 3; i++) {
+      const miss = missingGameColumns(error).filter((c) => !dropped.includes(c))
+      if (!miss.length) break
+      dropped.push(...miss)
+      ;({ error } = await supabase().from('games').upsert(group.map(strip), { onConflict: 'id' }))
+    }
+    if (error) return { error, dropped }
+  }
+  return { error: null, dropped }
+}
+
 /**
  * Write a dataset to the cloud. mode 'replace' wipes games not present in the
  * upload; 'append' only writes games whose id is new (existing games untouched);
  * 'upsert' overwrites exactly the games in the upload and leaves the rest alone (in-app edits).
- * Returns the number of games written.
+ * Returns the number of games written, and `dropped`: games columns the project lacks (migration not run),
+ * e.g. 'day_roster' means the 當日登錄名單 was not saved.
  */
-export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number }> {
+export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number; dropped: string[] }> {
   const sb = supabase()
   const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
   let games = ds.games
@@ -113,13 +149,14 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
     const gone = (data ?? []).map((r: { id: string }) => r.id).filter((id) => !ids.has(id))
     if (gone.length) { const { error: e2 } = await sb.from('games').delete().in('id', gone); fail('刪除舊比賽', e2) }
   }
+  let dropped: string[] = []
   if (games.length) {
     const { data: auth } = await sb.auth.getUser()
     const by = auth.user?.email ?? null
-    let { error } = await sb.from('games').upsert(games.map((g) => ({ ...toGameRow(g), updated_by: by })), { onConflict: 'id' })
-    // older schema without the audit / status columns: retry without them
-    if (error && /updated_by|status/.test(error.message)) ({ error } = await sb.from('games').upsert(games.map((g) => { const { status: _s, ...row } = toGameRow(g); return row }), { onConflict: 'id' }))
-    fail('比賽清單', error)
+    // older schema without the audit / status / day_roster columns: those are stripped and the upsert retried
+    const res = await upsertGames(games.map((g) => ({ ...toGameRow(g), updated_by: by })))
+    dropped = res.dropped
+    fail('比賽清單', res.error)
     // child rows: clear then insert, per game batch
     const idList = [...ids]
     for (const table of ['batting_pa', 'pitching_pa', 'fielding_lines']) {
@@ -130,7 +167,20 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
     await chunked(seqBy(ds.pitching).map(([r, s]) => toPitchingRow(r, s)), async (rows) => { const { error: e } = await sb.from('pitching_pa').insert(rows); fail('投球紀錄', e) })
     await chunked(seqBy(ds.fielding).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }
-  return { games: games.length, skipped }
+  return { games: games.length, skipped, dropped }
+}
+
+/**
+ * Rewrite only the day_roster of these games (renames inside the jsonb, clearing a roster; pushRoster cannot reach
+ * into jsonb). Returns false when the column does not exist yet (migration not run); other errors throw.
+ */
+export async function updateGameDayRosters(entries: Array<{ id: string; day_roster: GameDayRoster | null }>): Promise<boolean> {
+  for (const { id, day_roster } of entries) {
+    const { error } = await supabase().from('games').update({ day_roster }).eq('id', id)
+    if (isMissingGameColumn(error)) return false
+    if (error) throw new Error(`比賽清單: ${error.message}`)
+  }
+  return true
 }
 
 // ---------------------------------------------------------------- roster
@@ -210,12 +260,21 @@ export function onAuthChange(cb: (user: User | null) => void) {
   return () => data.subscription.unsubscribe()
 }
 
-/** Refetch whenever any table changes (debounced). */
+/** Refetch whenever any table changes (debounced). registrations is subscribed separately (subscribeRegistrationChanges),
+ *  only once the table is known to exist: a missing table in this channel would break live refresh for all of them. */
 export function subscribeCloudChanges(onChange: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
   const bump = () => { if (timer) clearTimeout(timer); timer = setTimeout(onChange, 800) }
   const ch = supabase().channel('bafin-data')
   for (const table of ['games', 'batting_pa', 'pitching_pa', 'fielding_lines', 'players']) ch.on('postgres_changes', { event: '*', schema: 'public', table }, bump)
+  ch.subscribe()
+  return () => { if (timer) clearTimeout(timer); void supabase().removeChannel(ch) }
+}
+/** Live refresh of 報名名單 (debounced). Call only after fetchRegistrations returned rows (table exists). */
+export function subscribeRegistrationChanges(onChange: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const ch = supabase().channel('bafin-registrations')
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'registrations' }, () => { if (timer) clearTimeout(timer); timer = setTimeout(onChange, 800) })
   ch.subscribe()
   return () => { if (timer) clearTimeout(timer); void supabase().removeChannel(ch) }
 }
@@ -236,4 +295,24 @@ export async function upsertAlbum(row: Omit<AlbumRow, 'created_at' | 'updated_at
 export async function deleteAlbumRow(id: string) {
   const { error } = await supabase().from('albums').delete().eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+// ---------------------------------------------------------------- tournament registration lists (報名名單)
+export interface RegistrationRow { season: number; tournament: string; players: string[]; updated_by: string | null; updated_at: string }
+const registrationsMissing = (e: PgError | null) => !!e && (e.code === '42P01' || e.code === 'PGRST205' || /registrations/.test(e.message))
+const registrationsError = (e: PgError) => new Error(/row-level security/.test(e.message) ? '你的帳號不在紀錄員名單，無法寫入' : registrationsMissing(e) ? '報名名單需要管理員先在 Supabase 執行 supabase/migrations/2026-09-26_rosters.sql' : e.message)
+/** Returns null when the registrations table does not exist yet (supabase/migrations/2026-09-26_rosters.sql not run). */
+export async function fetchRegistrations(): Promise<RegistrationRow[] | null> {
+  const { data, error } = await supabase().from('registrations').select('*').order('season', { ascending: false }).order('tournament', { ascending: true })
+  if (error) { if (registrationsMissing(error)) return null; throw new Error(error.message) }
+  return (data ?? []) as RegistrationRow[]
+}
+export async function upsertRegistration(row: Omit<RegistrationRow, 'updated_at'>): Promise<RegistrationRow> {
+  const { data, error } = await supabase().from('registrations').upsert({ ...row, updated_at: new Date().toISOString() }, { onConflict: 'season,tournament' }).select('*').single()
+  if (error) throw registrationsError(error)
+  return data as RegistrationRow
+}
+export async function deleteRegistrationRow(season: number, tournament: string) {
+  const { error } = await supabase().from('registrations').delete().eq('season', season).eq('tournament', tournament)
+  if (error) throw registrationsError(error)
 }

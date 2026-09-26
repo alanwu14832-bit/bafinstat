@@ -152,6 +152,7 @@ end $$;
 
 -- 1) schedule: a game row can exist before it is played
 alter table games add column if not exists status text;   -- null = played, 'scheduled', 'cancelled'
+alter table games add column if not exists day_roster jsonb;   -- 當日登錄名單: starters, bench, substitutions, re-entry rule
 
 -- 2) album links: one row per link, optionally tied to a game
 create table if not exists albums (
@@ -173,6 +174,22 @@ create policy "public read" on albums for select using (true);
 drop policy if exists "editors write" on albums;
 create policy "editors write" on albums for all to authenticated using (is_editor()) with check (is_editor());
 
+-- ---------------------------------------------------------------- Tournament registration lists (報名名單)
+-- one row per year + tournament (e.g. 2026 大專盃); a game finds its list by year(date) + tournament
+create table if not exists registrations (
+  season     int  not null,
+  tournament text not null,
+  players    text[] not null default '{}',
+  updated_by text,
+  updated_at timestamptz not null default now(),
+  primary key (season, tournament)
+);
+alter table registrations enable row level security;
+drop policy if exists "public read" on registrations;
+create policy "public read" on registrations for select using (true);
+drop policy if exists "editors write" on registrations;
+create policy "editors write" on registrations for all to authenticated using (is_editor()) with check (is_editor());
+
 -- ---------------------------------------------------------------- Realtime (live refresh on every device)
 do $$
 begin
@@ -180,4 +197,4 @@ begin
     create publication supabase_realtime;
   end if;
 end $$;
-alter publication supabase_realtime add table games, batting_pa, pitching_pa, fielding_lines, players;
+alter publication supabase_realtime add table games, batting_pa, pitching_pa, fielding_lines, players, registrations;

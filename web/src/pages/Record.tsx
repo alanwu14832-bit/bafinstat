@@ -6,7 +6,7 @@ import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, Flame, Maximize2, Min
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Field, Input } from '../components/ui/Input'
+import { Checkbox, Field, Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { Tabs } from '../components/ui/Tabs'
 import { CloudPanel } from '../components/ui/CloudPanel'
@@ -15,14 +15,18 @@ import { useDataStore } from '../store/data'
 import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
-import { PlayerSelect, rosterNames } from '../components/ui/PlayerSelect'
+import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../components/ui/PlayerSelect'
+import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
-import { LOC_HOLES, POSITIONS, type Game } from '../data/types'
+import { LOC_HOLES, POSITIONS, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
+import { registrationFor } from '../data/registrations'
+import { gameLabel, scheduledGames } from '../data/schedule'
+import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { cx } from '../lib/format'
 import {
-  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, OUT_RESULTS, runnerEvent, score, setOppOrder, setSlot, substitute, toGameEdit, toggleEarned, undoPitch,
+  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, OUT_RESULTS, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
@@ -53,19 +57,21 @@ const chip = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border
 /* ------------------------------------------------------------------ setup */
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const base = useDataStore((s) => s.base)
+  const registrations = useDataStore((s) => s.registrations)
   const opts = useFilterOptions()
-  const names = useMemo(() => rosterNames(base.roster), [base.roster])
   const today = new Date().toISOString().slice(0, 10)
   const last = useMemo(() => playedGames(base).slice(-1)[0], [base])
-  const scheduled = useMemo(() => base.games.filter((g) => g.status === 'scheduled').sort((a, b) => a.date.localeCompare(b.date)), [base.games])
-  // ?game= (the 賽程 page's 去紀錄 on a game already past) picks that entry; otherwise the next one coming up
+  const scheduled = useMemo(() => scheduledGames(base.games), [base.games])
+  // the lineup drawn up on the 先發陣容 page, read first: the game it was drawn up for is the default game
+  const stored = useMemo(() => readLineup(), [])
+  // ?game= (賽程's 去紀錄, 先發陣容's 帶到紀錄比賽) picks that entry; then the lineup's own game; otherwise the next one coming up
   const [params] = useSearchParams()
-  const initial = scheduled.find((g) => g.id === params.get('game')) ?? scheduled.find((g) => g.date >= today)
+  const initial = scheduled.find((g) => g.id === params.get('game')) ?? scheduled.find((g) => g.id === stored?.gameId) ?? scheduled.find((g) => g.date >= today)
   const [fromSchedule, setFromSchedule] = useState<string>(() => initial?.id ?? '')
-  // the lineup drawn up on the 先發陣容 page wins; otherwise last game's order is a good starting point
-  const saved = useMemo(() => { const l = readLineup(); return l && l.order.some(Boolean) ? l : null }, [])
+  // a lineup drawn up for another game (or one already played) is not carried into this one: last week's bench would leak in
+  const [applied, setApplied] = useState(() => !!stored && (!stored.gameId || stored.gameId === initial?.id))
+  const saved = applied && stored?.order.some(Boolean) ? stored : null
   const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
-  const pickSchedule = (id: string) => { setFromSchedule(id); const s = scheduled.find((g) => g.id === id); if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined })) }
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)
     const slots: LineupSlot[] = Array.from({ length: 9 }, () => ({ name: '', pos: '' }))
@@ -73,7 +79,36 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
     return slots
   })
   const [pitcher, setPitcher] = useState(() => saved?.field.P || (last ? base.pitching.find((p) => p.gameId === last.id)?.pitcher ?? '' : ''))
+  const [bench, setBench] = useState<string[]>(() => (applied && stored ? stored.bench : []))
+  const [reentry, setAllowReentry] = useState(() => (applied && stored ? stored.reentry : false))
+  const pickSchedule = (id: string) => {
+    setFromSchedule(id)
+    const s = scheduled.find((g) => g.id === id)
+    if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined }))
+    // switching away from the lineup's own game drops what it carried (its bench and re-entry belong to that game)
+    if (applied && stored?.gameId && stored.gameId !== id) { setBench([]); setAllowReentry(false); setApplied(false) }
+    // picking the game the 先發陣容 lineup was drawn up for brings it in now
+    if (!applied && stored?.gameId && stored.gameId === id) {
+      if (stored.order.some(Boolean)) { setLineup(toLineupSlots(stored)); if (stored.field.P) setPitcher(stored.field.P) }
+      setBench(stored.bench); setAllowReentry(stored.reentry); setApplied(true)
+    }
+  }
+  const lineupGame = stored?.gameId ? base.games.find((g) => g.id === stored.gameId) : undefined
+  const lineupNote = !applied && stored?.gameId ? `先發陣容頁的陣容是給 ${lineupGame ? `${lineupGame.date} vs ${lineupGame.opponent}` : stored.gameId} 那場的，這場沒有帶入` : null
+  // candidates follow the game being set up: its year + tournament's 報名名單 when there is one (the recorder can widen it)
+  const reg = useMemo(() => registrationFor(registrations, game), [registrations, game])
+  const listed = !!reg?.players.length
+  const [everyone, setEveryone] = useState(false)
+  const names = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg), [base.roster, reg, everyone])
   const inLineup = useMemo(() => new Set(lineup.map((l) => l.name).filter(Boolean)), [lineup])
+  const starting = useMemo(() => new Set([...inLineup, pitcher]), [inLineup, pitcher])
+  const benchNames = useMemo(() => {
+    const active = activeNames(base.roster)
+    return [...new Set([...names.filter((n) => active.has(n)), ...bench])].filter((n) => !starting.has(n))
+  }, [names, base.roster, bench, starting])
+  const benchCount = bench.filter((n) => !starting.has(n)).length
+  // like 先發陣容: a bench player picked into the lineup is marked, and leaves the bench when the game starts
+  const benchTag = (n: string) => (bench.includes(n) && !starting.has(n) ? '（板凳）' : undefined)
   const [error, setError] = useState<string | null>(null)
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const start = () => {
@@ -82,14 +117,17 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
     if (!pitcher.trim()) { setError('請填先發投手'); return }
     // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
     const id = fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
-    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher.trim()))
+    const slots = lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos }))
+    // Setup may have promoted a bench player: the bench is whoever is left over
+    const sp = pitcher.trim()
+    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry }))
   }
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
       <Card className="xl:col-span-2" title="比賽資訊" subtitle="比賽ID 會依日期自動編號">
         <datalist id="rec-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
-        {scheduled.length > 0 && <Field label="從賽程帶入" className="mb-3"><Select value={fromSchedule} onChange={(e) => pickSchedule(e.target.value)} className="w-full" options={[{ value: '', label: '不用，手動填' }, ...scheduled.map((g) => ({ value: g.id, label: `${g.date}${g.time ? ` ${g.time}` : ''} vs ${g.opponent}（${g.tournament}）` }))]} /></Field>}
+        {scheduled.length > 0 && <Field label="從賽程帶入" className="mb-3"><Select value={fromSchedule} onChange={(e) => pickSchedule(e.target.value)} className="w-full" options={[{ value: '', label: '不用，手動填' }, ...scheduled.map((g) => ({ value: g.id, label: gameLabel(g) }))]} /></Field>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="時間"><Input type="time" value={game.time ?? ''} onChange={(e) => g('time', e.target.value || undefined)} className="tnum" /></Field>
@@ -101,24 +139,45 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
       </Card>
-      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={saved ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'}>
+      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={[lineupNote, saved ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}>
+        {listed && <RegistrationHint reg={reg!} everyone={everyone} onToggle={() => setEveryone(!everyone)} className="mb-3" />}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
               <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
-              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} placeholder="球員" className="flex-1 min-w-0" />
+              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
               <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} placeholder="必填" className="w-full" /></Field>
-          <div className="flex flex-col gap-2 sm:items-end">
-            {error && <span className="text-[13px] text-critical">{error}</span>}
-            <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">開始紀錄</Button>
+          <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} tag={benchTag} placeholder="必填" className="w-full" /></Field>
+        </div>
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="text-[13px] font-medium text-ink">板凳（今天有到）</span>
+            <Badge variant={benchCount ? 'neutral' : 'outline'}>{benchCount} 人</Badge>
+            <div className="ml-auto flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => setBench((b) => [...new Set([...b, ...benchNames])])}>全選</Button><Button variant="ghost" size="sm" onClick={() => setBench([])}>清除</Button></div>
           </div>
+          <p className="text-[12px] text-muted mb-2">先發以外、今天到場可以上場的人；換人時會優先列出</p>
+          <PlayerChips names={benchNames} selected={bench} onToggle={(n) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))} empty="先發以外沒有其他現役球員" />
+          <Checkbox className="mt-3 min-h-9 pointer-fine:min-h-7" label="允許被換下的球員再上場" checked={reentry} onChange={setAllowReentry} />
+        </div>
+        <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
+          {error && <span className="text-[13px] text-critical">{error}</span>}
+          <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">開始紀錄</Button>
         </div>
       </Card>
+    </div>
+  )
+}
+
+/** Which names the dropdowns offer when the game has a 報名名單, with a way out when someone is missing from it. */
+function RegistrationHint({ reg, everyone, onToggle, className }: { reg: Registration; everyone: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <div className={cx('text-[12px] text-muted flex items-center gap-x-2 gap-y-1 flex-wrap', className)}>
+      <span>{everyone ? '列出全隊（不限報名名單）' : `依「${reg.season} ${reg.tournament}」報名名單（${reg.players.length} 人）`}</span>
+      <button type="button" onClick={onToggle} className="h-9 pointer-fine:h-7 text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{everyone ? '只列報名名單' : '名單外的人？列出全隊'}</button>
     </div>
   )
 }
@@ -126,9 +185,16 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
 /* ------------------------------------------------------------------ live */
 function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean; focus: boolean; onToggleFocus: () => void }) {
   const base = useDataStore((s) => s.base)
-  const names = useMemo(() => rosterNames(base.roster), [base.roster])
+  const registrations = useDataStore((s) => s.registrations)
+  const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
+  // mid-game nobody may get stuck: if the 報名名單 is missing someone, the recorder can list the whole team
+  const [everyone, setEveryone] = useState(false)
+  const pool = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg), [base.roster, reg, everyone])
+  // today's bench first, players already substituted out last (greyed out unless re-entry is allowed)
+  const pitcherCands = useMemo(() => subCandidates(state, pool, 'pitcher'), [state, pool])
+  const batterCands = useMemo(() => subCandidates(state, pool, 'batter'), [state, pool])
   const [newPitcher, setNewPitcher] = useState('')
-  const [sub, setSub] = useState<{ name: string; pos: string }>({ name: '', pos: 'PH' })
+  const [sub, setSub] = useState<{ slot: number; name: string; pos: string }>({ slot: 0, name: '', pos: 'PH' })
   const side = offense(state)
   const sc = score(state)
   const c = count(state.pitches)
@@ -156,6 +222,29 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const halfLabel = `${state.inning} ${state.half === 'top' ? '上' : '下'}`
   const oppName = state.game.opponent
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
+  // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
+  // while fielding the 守位 box starts from the slot's position — except a P that is no longer the pitcher (after a fielder
+  // moved to the mound), which would put a second P in the lineup
+  const fieldPos = (i: number) => { const l = state.lineup[i]; return !l || (l.pos === 'P' && l.name !== state.pitcher) ? '' : l.pos }
+  const openTool = (t: 'pitcher' | 'lineup') => {
+    if (tool === t) { setTool('none'); return }
+    if (t === 'lineup') setSub({ slot: state.slot, name: '', pos: side === 'us' ? 'PH' : fieldPos(state.slot) })
+    setTool(t)
+  }
+  const subSlot = state.lineup[sub.slot]
+  // a position-only change is allowed, but a bare PH / PR with nobody picked is not (it would restamp the batter's position)
+  const canSub = !!subSlot && (!!sub.name || (!!sub.pos && sub.pos !== subSlot.pos && sub.pos !== 'PH' && sub.pos !== 'PR'))
+  const confirmSub = () => { if (!canSub) return; apply((s) => substitute(s, sub.slot, sub.name, sub.pos)); setSub({ slot: state.slot, name: '', pos: 'PH' }); setTool('none') }
+  // without a DH the old pitcher bats as P: say what 換投 does to the lineup
+  const pSlot = state.lineup.findIndex((l) => l.name === state.pitcher && l.pos === 'P')
+  const pitcherHint = !newPitcher || pSlot < 0 ? null
+    : state.lineup.some((l) => l.name === newPitcher) ? `${newPitcher} 改守投手；${state.pitcher} 還在第 ${pSlot + 1} 棒，接著用「換人」換掉他或改他的守位` : `${newPitcher} 接替 ${state.pitcher} 的第 ${pSlot + 1} 棒`
+  const toolExtras = (
+    <div className="basis-full flex items-center gap-x-4 gap-y-1 flex-wrap">
+      <Checkbox label="允許再上場" className="min-h-9 pointer-fine:min-h-7" checked={!!state.reentry} onChange={() => apply((s) => setReentry(s, !s.reentry))} />
+      {!!reg?.players.length && <RegistrationHint reg={reg} everyone={everyone} onToggle={() => setEveryone(!everyone)} />}
+    </div>
+  )
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
@@ -223,7 +312,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 <div className="min-w-0"><div className="text-[16px] font-semibold text-ink leading-5 truncate">{batterSlot?.name ?? '—'} <span className="text-muted font-normal text-[13px]">{batterSlot?.pos}</span></div><div className="text-[12px] text-ink-2">我隊打者・第 {state.slot + 1} 棒</div></div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex items-center gap-3 min-w-[11rem] flex-1">
                 <PlateBadge size={40} active={false}>{state.oppOrder}</PlateBadge>
                 <div className="min-w-0 flex-1"><div className="text-[16px] font-semibold text-ink leading-5">對方第 {state.oppOrder} 棒</div><div className="text-[12px] text-ink-2 mt-1 flex items-center gap-2 flex-wrap">我隊投手 <span className="font-medium text-ink">{state.pitcher}</span>
                   <span className={cx('inline-flex items-center gap-1 h-5 px-1.5 rounded-[6px] text-[11px] font-semibold tnum', countTone === 'critical' ? 'bg-[color-mix(in_srgb,var(--critical)_16%,transparent)] text-critical' : countTone === 'warning' ? 'bg-[color-mix(in_srgb,var(--warning)_20%,transparent)] text-[color-mix(in_srgb,var(--warning)_45%,var(--ink))]' : 'bg-surface-2 text-ink-2')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>
@@ -233,23 +322,28 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             )}
             <div className="flex items-center gap-2">
               <CountLights balls={c.balls} strikes={c.strikes} outs={state.outs} />
-              <Button variant="ghost" size="sm" onClick={() => setTool(tool === 'none' ? (side === 'us' ? 'lineup' : 'pitcher') : 'none')} icon={<ArrowRightLeft />}>{side === 'us' ? '代打／換人' : '換投'}</Button>
+              {side === 'opp' && <Button variant="ghost" size="sm" onClick={() => openTool('pitcher')} icon={<ArrowRightLeft />} aria-pressed={tool === 'pitcher'}>換投</Button>}
+              <Button variant="ghost" size="sm" onClick={() => openTool('lineup')} icon={<ArrowRightLeft />} aria-pressed={tool === 'lineup'}>{side === 'us' ? '代打／換人' : '換人'}</Button>
             </div>
           </div>
           {tool === 'pitcher' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
               {pitchCount.size > 0 && <div className="basis-full text-[12px] text-ink-2 flex flex-wrap gap-x-3">{[...pitchCount.entries()].map(([n, c]) => <span key={n} className="tnum">{n} <span className={cx('font-medium', c >= params.pitchMax ? 'text-critical' : c >= params.pitchWarn ? 'text-warning' : 'text-ink')}>{c}</span> 球</span>)}</div>}
-              <Field label="換上投手" className="flex-1 min-w-[200px]"><PlayerSelect value={newPitcher} onChange={setNewPitcher} names={names.filter((n) => n !== state.pitcher)} placeholder="選擇投手" className="w-full" /></Field>
+              <Field label="換上投手" className="flex-1 min-w-[200px]"><PlayerSelect value={newPitcher} onChange={setNewPitcher} names={pitcherCands.names} disabled={pitcherCands.disabled} tag={pitcherCands.tag} placeholder="選擇投手" className="w-full" /></Field>
               <Button onClick={() => { if (newPitcher) { apply((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }} disabled={!newPitcher}>確定換投</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
+              {pitcherHint && <p className="basis-full text-[12px] text-ink-2">{pitcherHint}</p>}
+              {toolExtras}
             </div>
           )}
           {tool === 'lineup' && (
             <div className="mt-3 flex items-end gap-2 flex-wrap">
-              <Field label={`第 ${state.slot + 1} 棒換成`} className="flex-1 min-w-[180px]"><PlayerSelect value={sub.name} onChange={(n) => setSub({ ...sub, name: n })} names={names} taken={new Set(state.lineup.map((l) => l.name))} placeholder="選擇球員" className="w-full" /></Field>
-              <Field label="守位／代打"><Select value={sub.pos} onChange={(e) => setSub({ ...sub, pos: e.target.value })} options={POSITIONS.map((p) => ({ value: p, label: p }))} /></Field>
-              <Button onClick={() => { if (sub.name) { apply((s) => substitute(s, s.slot, sub.name, sub.pos)); setSub({ name: '', pos: 'PH' }); setTool('none') } }} disabled={!sub.name}>確定</Button>
+              <Field label="換哪一棒" className="min-w-[140px]"><Select value={String(sub.slot)} onChange={(e) => { const i = Number(e.target.value); setSub((x) => ({ ...x, slot: i, pos: side === 'us' ? x.pos : fieldPos(i) })) }} options={state.lineup.map((l, i) => ({ value: String(i), label: `第 ${i + 1} 棒 ${l.name}` }))} className="w-full" /></Field>
+              <Field label="換成" className="flex-1 min-w-[180px]"><PlayerSelect value={sub.name} onChange={(n) => setSub({ ...sub, name: n })} names={batterCands.names} disabled={batterCands.disabled} tag={batterCands.tag} placeholder="不換人，只改守位" className="w-full" /></Field>
+              <Field label="守位／代打"><Select value={sub.pos} onChange={(e) => setSub({ ...sub, pos: e.target.value })} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} /></Field>
+              <Button onClick={confirmSub} disabled={!canSub}>確定</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
+              {toolExtras}
             </div>
           )}
 
@@ -410,6 +504,7 @@ export function RecordPage() {
   const navigate = useNavigate()
   const cloud = useDataStore((s) => s.cloud)
   const saveGame = useDataStore((s) => s.saveGame)
+  const dayRosterSupported = useDataStore((s) => s.dayRosterSupported)
   const [state, setState] = useState<RecordState | null>(() => readDraft())
   const [history, setHistory] = useState<RecordState[]>([])
   const [finish, setFinish] = useState<{ w: string; l: string; sv: string } | null>(null)
@@ -431,7 +526,8 @@ export function RecordPage() {
   // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying)
   useEffect(() => { writeDraft(state) }, [state])
   // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
-  const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}` : ''
+  // substitutions, the pitcher and the re-entry switch are part of the key, so a lineup change syncs without waiting for the next play
+  const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}/${(state.subs ?? []).length}/${state.reentry ? 1 : 0}/${state.pitcher}/${state.lineup.map((l) => `${l.name}:${l.pos}`).join(',')}` : ''
   useEffect(() => {
     if (!state || !cloud.configured || !cloud.user || !cloud.isEditor || !(state.batting.length || state.pitching.length)) return
     const t = window.setTimeout(() => {
@@ -470,7 +566,12 @@ export function RecordPage() {
   const saveDraft = async () => {
     if (!state) return
     setMsg(null)
-    try { const w = await saveGame(toGameEdit(state)); setMsg(w.length ? `已儲存（${w.length} 則提醒，結束比賽時會列出）` : '已儲存，全隊現在就看得到這場的進度') } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
+    try {
+      const w = await saveGame(toGameEdit(state))
+      // like the autosave, also refresh the resumable progress (another device then gets the latest substitutions too)
+      if (cloud.configured && cloud.user) { const ok = await saveCloudDraft(state.game.id, state, cloud.user.email).catch(() => null); if (ok === false) setDraftsSupported(false) }
+      setMsg(w.length ? `已儲存（${w.length} 則提醒，結束比賽時會列出）` : '已儲存，全隊現在就看得到這場的進度')
+    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
   }
   const complete = async () => {
     if (!state || !finish) return
@@ -514,6 +615,7 @@ export function RecordPage() {
         </div>
       )}
       {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
+      {cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
       {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
         <>
           <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>
