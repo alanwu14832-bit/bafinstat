@@ -60,6 +60,31 @@ export function unassigned(l: Lineup): string[] {
   return names.filter((n) => !inOrder.has(n))
 }
 
+/**
+ * Set (or clear) the DH and keep the batting order right. A DH bats instead of the pitcher, so adding one takes the
+ * pitcher's slot (or just clears it when the DH already has a slot of his own, e.g. a fielder moved to DH); switching the
+ * DH hands the old DH's slot to the new one; dropping the DH puts the pitcher back into that slot.
+ */
+export function setDesignatedHitter(l: Lineup, name: string): Lineup {
+  const field = { ...l.field }
+  for (const p of FIELD_POSITIONS) if (name && field[p] === name) delete field[p]
+  const pitcher = field.P ?? ''
+  const prev = l.dh
+  let order = [...l.order]
+  const at = (n: string) => (n ? order.indexOf(n) : -1)
+  if (name && name !== prev) {
+    const own = at(name)
+    const slot = prev && at(prev) >= 0 ? at(prev) : at(pitcher)
+    if (own >= 0) { if (slot >= 0 && slot !== own) order[slot] = '' }
+    else if (slot >= 0) order[slot] = name
+  } else if (!name && prev) {
+    const slot = at(prev)
+    if (slot >= 0) order[slot] = pitcher && at(pitcher) < 0 ? pitcher : ''
+  }
+  order = order.map((n, i) => (n && order.indexOf(n) !== i ? '' : n))
+  return { ...l, field, dh: name, order, bench: l.bench.filter((n) => n !== name) }
+}
+
 /** Fill the empty batting slots with fielders who are not batting yet (a DH replaces the pitcher). */
 export function autoOrder(l: Lineup): Lineup {
   const pool = unassigned(l).filter((n) => !(l.dh && n === l.field.P))

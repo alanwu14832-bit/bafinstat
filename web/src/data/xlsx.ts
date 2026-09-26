@@ -5,10 +5,11 @@
  * workbook saved without cached formula values still imports correctly.
  */
 import * as XLSX from 'xlsx'
-import type { BattingPA, Dataset, DayRosterSub, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player } from './types'
+import type { BattingPA, Dataset, DayRosterSub, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player, Registration } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
 import { cleanLoc, normalizeDataset } from './normalize'
 import { parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
+import { sortRegistrations } from './registrations'
 
 type Row = Record<string, unknown>
 
@@ -20,6 +21,8 @@ export interface ImportReport {
   fielding: number
   roster: number
   warnings: string[]
+  /** 報名名單 lists found in the workbook (master mode), one per year + tournament */
+  registrations?: number
   /** legacy mode: the parsed game so the user can set 比賽ID / 杯賽 before confirming */
   legacy?: RawGame
 }
@@ -117,6 +120,20 @@ function parseRoster(rows: Row[]): Player[] {
     status: str(r['狀態']) || undefined, note: str(r['備註']) || undefined,
   }))
 }
+/** 報名名單 sheet: one player per row (年度, 杯賽, 球員), grouped into one list per year + tournament. */
+function parseRegistrations(rows: Row[]): Registration[] {
+  const lists = new Map<string, Registration>()
+  for (const r of rows) {
+    const season = Math.trunc(Number(str(r['年度']).replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))))
+    const tournament = str(r['杯賽']); const player = str(r['球員'])
+    if (!season || !tournament || !player) continue
+    const key = `${season}\u0000${tournament}`
+    const reg = lists.get(key) ?? { season, tournament, players: [] }
+    if (!reg.players.includes(player)) reg.players.push(player)
+    lists.set(key, reg)
+  }
+  return sortRegistrations([...lists.values()])
+}
 function parseGames(rows: Row[]): Game[] {
   return rows.filter((r) => str(r['比賽ID'])).map((r) => {
     const dayRoster = dayRosterFromCells(r)
@@ -194,6 +211,8 @@ function parseSingleMeta(wb: XLSX.WorkBook): Game | null {
     recorder: str(meta['紀錄者']) || undefined, innings: opt(meta['局數']),
     winningPitcher: str(meta['勝投']) || undefined, losingPitcher: str(meta['敗投']) || undefined, savePitcher: str(meta['救援']) || undefined,
     holds: str(meta['中繼']) ? str(meta['中繼']).split(/[,，、\s]+/).filter(Boolean) : undefined,
+    // 當日登錄名單 from the template's 板凳 / 允許再上場 cells (starters are read from the plate appearances)
+    ...(() => { const dayRoster = parseDayRoster({ starters: [], bench: splitList(meta['板凳']), reentry: /^(是|y|yes|true|1|v|✓|○|o)$/i.test(str(meta['允許再上場'])) }); return dayRoster ? { dayRoster } : {} })(),
   }
 }
 
@@ -327,7 +346,7 @@ export function legacyToDataset(raw: RawGame, overrides: { id: string; tournamen
   return normalizeDataset(rawGameToDataset(g)).dataset
 }
 
-export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: Dataset; report: ImportReport } {
+export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: Dataset; report: ImportReport; registrations?: Registration[] } {
   const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
   const warnings: string[] = []
@@ -337,6 +356,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: 
     const batting = parseBatting(sheetRows(wb, '打席紀錄', '打者'))
     const pitching = parsePitching(sheetRows(wb, '投球紀錄', '投手'))
     const fielding = parseFielding(sheetRows(wb, '守備紀錄', '球員'))
+    const registrations = parseRegistrations(sheetRows(wb, '報名名單', '球員'))
     const ids = new Set(games.map((g) => g.id))
     const orphan = new Set([...batting, ...pitching, ...fielding].map((p) => p.gameId).filter((id) => id && !ids.has(id)))
     if (orphan.size) warnings.push(`有 ${orphan.size} 個比賽ID 在紀錄中出現但不在『比賽清單』：${[...orphan].slice(0, 5).join('、')}`)
@@ -344,7 +364,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: 
     if (unknownBatters.size) warnings.push(`有 ${unknownBatters.size} 位打者不在『球員名單』：${[...unknownBatters].slice(0, 5).join('、')}`)
     const norm = normalizeDataset({ roster, games, batting, pitching, fielding })
     warnings.push(...norm.warnings.map((w) => `${w.gameId}：${w.message}`))
-    return { dataset: norm.dataset, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings } }
+    return { dataset: norm.dataset, registrations, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, registrations: registrations.length, warnings } }
   }
   if (names.includes('單場-打擊') || names.includes('單場-摘要')) {
     const game = parseSingleMeta(wb)
@@ -373,7 +393,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: 
 }
 
 /** Export the current dataset as a CSV bundle (one sheet per log) for backup. */
-export function datasetToWorkbook(ds: Dataset): XLSX.WorkBook {
+export function datasetToWorkbook(ds: Dataset, registrations: Registration[] = []): XLSX.WorkBook {
   const wb = XLSX.utils.book_new()
   const games = ds.games.map((g) => ({ 比賽ID: g.id, 日期: g.date, 時間: g.time ?? '', 杯賽: g.tournament, 對手: g.opponent, 主客: g.homeAway, 場地: g.venue ?? '', 天氣: g.weather ?? '', 紀錄者: g.recorder ?? '', 局數: g.innings ?? '', 勝投: g.winningPitcher ?? '', 敗投: g.losingPitcher ?? '', 救援: g.savePitcher ?? '', 狀態: g.status === 'scheduled' ? '預定' : g.status === 'cancelled' ? '取消' : '', 中繼: (g.holds ?? []).join(','), 備註: g.note ?? '', ...dayRosterCells(g.dayRoster) }))
   const bat = ds.batting.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 棒次: p.order ?? '', 守位: p.pos ?? '', 打者: p.batter, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 盜壘: p.sb || '', 盜壘失敗: p.cs || '', 失誤進壘: p.advOnError || '', 壘死: p.outOnBase || '', 得分: p.run || '', 打點: p.rbi || '', 結果代碼: p.code ?? '', 備註: p.note ?? '' }))
@@ -382,6 +402,9 @@ export function datasetToWorkbook(ds: Dataset): XLSX.WorkBook {
   const roster = ds.roster.map((p) => ({ 背號: p.number ?? '', 姓名: p.name, 主守位: p.primaryPos ?? '', 副守位: p.secondaryPos ?? '', 打擊慣用: p.bats ?? '', 投球慣用: p.throws ?? '', 狀態: p.status ?? '', 備註: p.note ?? '' }))
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(games), '比賽清單')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(roster), '球員名單')
+  // 報名名單: one player per row, same layout as the master workbook's sheet (header kept even when empty)
+  const regRows = sortRegistrations(registrations).flatMap((r) => r.players.map((p) => [r.season, r.tournament, p, '']))
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['年度', '杯賽', '球員', '備註'], ...regRows]), '報名名單')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bat), '打席紀錄')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pit), '投球紀錄')
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fld), '守備紀錄')

@@ -17,6 +17,9 @@ Sheets
 All stats are live formulas over the logs; nothing is hard-coded.
 """
 import json, os, sys, datetime as dt
+# Windows prints to a legacy code page when output is piped; Chinese text would crash print() there
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter as L
@@ -102,8 +105,11 @@ PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數"
 FLD_INPUT = ["比賽ID", "球員", "守位", "局數", "刺殺PO", "助殺A", "失誤E", "雙殺DP", "捕逸PB", "被盜壘SB", "阻殺CS", "備註"]
 FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
-             "我隊失誤", "對手失誤", "我隊殘壘", "勝投", "敗投", "救援", "中繼", "備註"] + [f"我{i}" for i in range(1, 10)] + [f"對{i}" for i in range(1, 10)]
-GAME_INPUT = {"比賽ID", "日期", "時間", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝投", "敗投", "救援", "中繼", "備註"}
+             "我隊失誤", "對手失誤", "我隊殘壘", "勝投", "敗投", "救援", "中繼", "備註",
+             # schedule + 當日登錄名單 (same columns and formats as the website's backup export)
+             "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場"] + [f"我{i}" for i in range(1, 10)] + [f"對{i}" for i in range(1, 10)]
+GAME_INPUT = {"比賽ID", "日期", "時間", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝投", "敗投", "救援", "中繼", "備註",
+              "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場"}
 
 def colmap(names):
     return {n: i + 1 for i, n in enumerate(names)}
@@ -134,6 +140,8 @@ LISTS = {
     "軌跡": ["G", "F", "L"],
     "強度": ["強", "中", "弱"],
     "任務": ["SP", "RP", "CL"],
+    "比賽狀態": ["預定", "取消"],
+    "是否": ["是"],
 }
 LIST_COL = {name: 5 + i for i, name in enumerate(list(LISTS.keys()))}   # lists start at column E
 
@@ -154,6 +162,8 @@ lines = [
     ("設定：每場局數、FIP 常數、wOBA 權重與所有下拉選單清單（杯賽、守位、打擊結果…）。新增杯賽或對手請先在這裡加入。", False),
     ("球員名單：球員基本資料。總表的球員列由此帶出，最多 30 人；打擊慣用手用來計算拉打／反方向。", False),
     ("比賽清單：每場比賽一列。黃色欄位手動輸入（比賽ID、日期、杯賽、對手、主客…），灰色欄位自動由紀錄算出（得分、安打、失誤、殘壘、逐局得分）。", False),
+    ("比賽清單的最後幾欄：狀態（預定／取消，空白＝已打完）；當日登錄名單的先發名單（例 1.甲(CF)、2.乙(SS)…、P.壬(P)，P. 是有 DH 時不打擊的投手）、板凳（例 丙、丁）、替補紀錄（例 5上 第9棒 代打 戊 替 甲(PH)，「替」前後要空格）、允許再上場（是／空白）。網站紀錄的比賽會自動填好。", False),
+    ("報名名單：每個杯賽每年報名的球員，一人一列（年度、杯賽、球員）。網站的先發陣容與紀錄比賽只會列出該場賽事報名的人；沒有名單的杯賽列出全隊。", False),
     ("打席紀錄／投球紀錄／守備紀錄：全時期資料庫。每個打席一列，所有統計都由這三張表即時計算。灰色標題欄為公式，請勿覆蓋。", False),
     ("總表：全時期統計。上方黃色篩選格可選杯賽、日期區間、守位、對手、主客、勝敗，下方球隊／打擊／投球／守備四張表同步更新。", False),
     ("單場-摘要／單場-打擊／單場-投球：新比賽的紀錄模板，版面沿用原本的單場紀錄表，並自動算出當場攻守成績。", False),
@@ -243,13 +253,29 @@ for i, l in enumerate(ROSTER[:ROSTER_ROWS]):
     put(ws, 4 + i, 7, "現役", f_input, fill_input)
 dv(ws, "名單守位", f"C4:D{3 + ROSTER_ROWS}")
 ROSTER_NAME = f"球員名單!$B$4:$B${3 + ROSTER_ROWS}"
+
+# ============================================================================ 報名名單 (tournament registration lists)
+ws_reg = wb.create_sheet("報名名單")
+title(ws_reg, "報名名單", 4, "每個杯賽每年一份，一位球員一列。網站的先發陣容與紀錄比賽只列出該場賽事報名的人；沒有名單的杯賽列出全隊。")
+REG_COLS = ["年度", "杯賽", "球員", "備註"]
+for i, h in enumerate(REG_COLS):
+    hdr(ws_reg, 3, i + 1, h, width=[8, 14, 14, 30][i])
+REG_ROWS = 300
+for rr in range(4, 4 + REG_ROWS):
+    for cc in range(1, 5):
+        put(ws_reg, rr, cc, None, f_input, fill_input, "0" if cc == 1 else None)
+dv(ws_reg, "杯賽清單", f"B4:B{3 + REG_ROWS}")
+_reg_name = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False)
+ws_reg.add_data_validation(_reg_name); _reg_name.add(f"C4:C{3 + REG_ROWS}")
+ws_reg.freeze_panes = "A4"
 ws.freeze_panes = "A4"
 
 # ============================================================================ 比賽清單
 ws = wb.create_sheet("比賽清單")
 title(ws, "比賽清單", 12, "每場一列。黃底輸入；灰色欄自動計算。比賽ID 建議格式 G+YYYYMMDD+-場次，例如 G20251010-01。")
 widths = {"比賽ID": 14, "日期": 11, "時間": 7, "年度": 6, "杯賽": 12, "對手": 12, "主客": 6, "場地": 12, "天氣": 8, "紀錄者": 8, "局數": 6, "勝敗": 6,
-          "勝投": 9, "敗投": 9, "救援": 9, "中繼": 12, "備註": 20}
+          "勝投": 9, "敗投": 9, "救援": 9, "中繼": 12, "備註": 20,
+          "狀態": 8, "先發名單": 44, "板凳": 24, "替補紀錄": 44, "允許再上場": 10}
 for name, col in GM.items():
     hdr(ws, 3, col, name, auto=name not in GAME_INPUT, width=widths.get(name, 8))
 GAME_ROWS = 200
@@ -279,6 +305,8 @@ for rr in range(4, 4 + GAME_ROWS):
 dv(ws, "杯賽清單", f"{GL['杯賽']}4:{GL['杯賽']}{3 + GAME_ROWS}")
 dv(ws, "對手清單", f"{GL['對手']}4:{GL['對手']}{3 + GAME_ROWS}")
 dv(ws, "主客", f"{GL['主客']}4:{GL['主客']}{3 + GAME_ROWS}")
+dv(ws, "比賽狀態", f"{GL['狀態']}4:{GL['狀態']}{3 + GAME_ROWS}")
+dv(ws, "是否", f"{GL['允許再上場']}4:{GL['允許再上場']}{3 + GAME_ROWS}")
 ws.freeze_panes = "C4"
 # seed games
 def _time(t):
@@ -796,11 +824,14 @@ for col, w in zip("ABCDEFGHIJKLMNOPQRSTUV", [3, 10, 14, 10, 12, 8, 8, 8, 8, 8, 8
 meta = [("比賽ID", "G20251010-01"), ("日期", dt.datetime(2025, 10, 10)), ("時間", dt.time(11, 40)), ("杯賽", "友誼賽"), ("對手", "群風"), ("主客", "主"),
         ("場地", "台大棒球場"), ("天氣", "大晴天"), ("紀錄者", "王廷宇"), ("局數", 5), ("人數", 13), ("",""),
         ("勝投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "W"), None)),
-        ("敗投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "L"), None)), ("救援", None)]
+        ("敗投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "L"), None)), ("救援", None),
+        ("板凳", None), ("允許再上場", None)]   # 當日登錄名單: 到場沒先發的人（丙、丁）; 是 = 被換下的人可以再上場
 for i, (k, v) in enumerate(meta):
     if not k: continue
     rr = 2 + (i % 6); cc = 2 + (i // 6) * 3
     put(ws, rr, cc, k, f_bold, fill_band); c = put(ws, rr, cc + 1, v, f_input, fill_input, "yyyy-mm-dd" if k == "日期" else ("hh:mm" if k == "時間" else None), center)
+    if k == "板凳": ws.merge_cells(start_row=rr, start_column=cc + 1, end_row=rr, end_column=cc + 5)   # room for several names
+    if k == "允許再上場": dv(ws, "是否", f"{L(cc + 1)}{rr}")
 GID = "$C$2"
 # line score
 LS = 9
@@ -925,9 +956,9 @@ for i, s in enumerate(STAT_DICTIONARY):
 ws.freeze_panes = "A4"; ws.auto_filter.ref = f"A3:H{3 + len(STAT_DICTIONARY)}"
 
 # sheet order & tab colors
-order = ["說明", "總表", "比賽清單", "球員名單", "打席紀錄", "投球紀錄", "守備紀錄", "單場-摘要", "單場-打擊", "單場-投球", "設定", "數據字典"]
+order = ["說明", "總表", "比賽清單", "球員名單", "報名名單", "打席紀錄", "投球紀錄", "守備紀錄", "單場-摘要", "單場-打擊", "單場-投球", "設定", "數據字典"]
 wb._sheets = [wb[n] for n in order]
-for n, colr in [("總表", "1F3A2E"), ("比賽清單", "2E5E4E"), ("球員名單", "2E5E4E"), ("打席紀錄", "6B7B75"), ("投球紀錄", "6B7B75"), ("守備紀錄", "6B7B75"),
+for n, colr in [("總表", "1F3A2E"), ("比賽清單", "2E5E4E"), ("球員名單", "2E5E4E"), ("報名名單", "2E5E4E"), ("打席紀錄", "6B7B75"), ("投球紀錄", "6B7B75"), ("守備紀錄", "6B7B75"),
                 ("單場-摘要", "D98D1C"), ("單場-打擊", "D98D1C"), ("單場-投球", "D98D1C")]:
     wb[n].sheet_properties.tabColor = colr
 wb.active = 1

@@ -11,6 +11,10 @@ import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 import { Sheet } from '../ui/Sheet'
 import { FontToggle, ThemeToggle } from './ThemeToggle'
+
+// the collapse shortcut is Ctrl+B on Windows / Linux and ⌘B on Apple devices (AppShell accepts both)
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+const SHORTCUT = IS_MAC ? '⌘B' : 'Ctrl B'
 import { TEAM } from '../../config/team'
 
 export const SIDEBAR_WIDTH = 248
@@ -143,12 +147,12 @@ export function Sidebar() {
           onClick={toggle}
           aria-label={collapsed ? '展開側邊欄' : '收合側邊欄'}
           aria-expanded={!collapsed}
-          title={`${collapsed ? '展開' : '收合'} (Ctrl/⌘+B)`}
+          title={`${collapsed ? '展開' : '收合'} (${SHORTCUT})`}
           className="flex items-center h-9 w-full rounded-[var(--radius-sm)] pl-[13px] pr-3 text-ink-2 hover:text-ink hover:bg-surface-2 overflow-hidden whitespace-nowrap cursor-pointer transition-colors motion-reduce:transition-none"
         >
           {collapsed ? <PanelLeftOpen className="size-[18px] shrink-0" strokeWidth={1.8} /> : <PanelLeftClose className="size-[18px] shrink-0" strokeWidth={1.8} />}
           <motion.span className="ml-3 text-[12px]" initial={false} animate={{ opacity: collapsed ? 0 : 1 }} transition={reduced ? { duration: 0 } : { duration: 0.16, ease: EASE }} aria-hidden={collapsed}>
-            收合側邊欄 <kbd className="ml-1.5 text-muted font-body text-[11px]">⌘B</kbd>
+            收合側邊欄 <kbd className="ml-1.5 text-muted font-body text-[11px]">{SHORTCUT}</kbd>
           </motion.span>
         </button>
       </div>

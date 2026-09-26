@@ -17,7 +17,7 @@ import { registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { POSITION_LABEL } from '../lib/fmt'
 import { cx } from '../lib/format'
-import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
+import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
 
 /** Where each position's dropdown sits on the field (percent of the diagram box). */
 const SPOTS: Record<FieldPos, { x: number; y: number }> = {
@@ -119,11 +119,8 @@ export function LineupPage() {
     // a starter is never on the bench too
     return { ...l, field, dh, bench: l.bench.filter((n) => n !== name) }
   })
-  const setDh = (name: string) => update((l) => {
-    const field = { ...l.field }
-    for (const p of FIELD_POSITIONS) if (name && field[p] === name) delete field[p]
-    return { ...l, field, dh: name, bench: l.bench.filter((n) => n !== name) }
-  })
+  // the DH takes over the pitcher's batting slot (and gives it back when the DH is dropped)
+  const setDh = (name: string) => update((l) => setDesignatedHitter(l, name))
   const setOrder = (i: number, name: string) => update((l) => ({ ...l, order: l.order.map((n, k) => (k === i ? name : n === name && name ? '' : n)) }))
   const move = (i: number, d: number) => {
     const j = i + d
@@ -180,7 +177,7 @@ export function LineupPage() {
           <div className="mt-4 pt-4 border-t border-border flex items-center gap-3 flex-wrap">
             <span className="text-[12px] font-medium text-ink-2">指定打擊 DH</span>
             <PlayerSelect size="sm" aria-label="DH 指定打擊" value={lineup.dh} onChange={setDh} names={names} placeholder="不用 DH" className="w-[160px]" />
-            <span className="text-[12px] text-muted">有 DH 時投手不排進打序</span>
+            <span className="text-[12px] text-muted">選了 DH 會自動取代投手的棒次；取消 DH 投手會回到那一棒</span>
             <Button variant="ghost" size="sm" icon={<Eraser />} className="ml-auto" onClick={() => { if (window.confirm('清空守位、打序與板凳？（選的比賽會保留）')) update((l) => ({ ...emptyLineup(), gameId: l.gameId })) }}>全部清空</Button>
           </div>
         </Card>

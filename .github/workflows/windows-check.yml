@@ -1,0 +1,56 @@
+name: Windows 相容性檢查
+
+# 在真的 Windows 電腦（GitHub 提供）上：安裝、跑測試、建置網站、產生 Excel 公版，
+# 再用 Windows 內建的 Edge 打開每一頁，檢查有沒有錯誤或畫面往旁邊溢出。只做檢查，不影響上線。
+
+on:
+  push:
+    branches: ['claude/baseball-stats-platform-avxula']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安裝套件
+        working-directory: web
+        run: npm ci
+
+      - name: 跑測試
+        working-directory: web
+        run: npm test
+
+      - name: 建置網站
+        working-directory: web
+        run: npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 產生 Excel 公版
+        run: |
+          pip install openpyxl
+          python tools/build_workbook.py
+
+      - name: 用 Edge 打開每一頁
+        working-directory: web
+        run: |
+          npm i --no-save playwright-core@1.56
+          node scripts/windows-smoke.mjs
+
+      - name: 上傳截圖
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-screenshots
+          path: web/smoke/
+          if-no-files-found: ignore

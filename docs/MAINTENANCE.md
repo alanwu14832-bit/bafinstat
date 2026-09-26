@@ -68,6 +68,17 @@
 - 出問題想退回：Vercel → Deployments → 找上一個正常的版本 → **Promote to Production**，10 秒退回，不用改程式。
 - 資料庫結構有變動時（很少見），Claude 會附一個 `supabase/migrations/*.sql`，到 Supabase → SQL Editor 貼上執行一次。
 
+### 公版 Excel 跟著網站更新
+
+- 公版是 `data/BAFIN_棒球數據總表.xlsx`，由 `tools/build_workbook.py` 產生；網站每次建置會自動把它放到「下載總表範本」的連結。
+- 網站的「匯出備份」多了哪個欄位或工作表，公版也要有。自動測試（`web/src/data/template.test.ts`）會比對兩邊，少了就測試失敗、網站不會上線，並寫出缺哪一欄。
+- 修正方式：在 `tools/build_workbook.py` 加上那一欄，執行 `python3 tools/build_workbook.py`（Windows 用 `py tools\build_workbook.py`），一起推上去。請 Claude 改功能時，它會一併處理。
+
+### Windows
+
+- 每次推送，`.github/workflows/windows-check.yml` 會在真的 Windows 電腦上安裝、跑測試、建置、產生公版，並用 Edge 打開每一頁檢查錯誤與畫面溢出；GitHub → Actions → 「Windows 相容性檢查」看結果，截圖在該次執行的 Artifacts。這個檢查不影響上線。
+- 公版只用 Excel 2007 以後都有的函數（SUMIFS、COUNTIFS、IFERROR、INDEX/MATCH），Windows 的 Excel 2010 以後都能開。
+
 ## 6. 壞了怎麼辦
 
 | 症狀 | 原因 | 處理 |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { autoOrder, emptyLineup, LINEUP_KEY, lineupIssues, lineupText, positionOf, readLineup, starters, toggleBench, toLineupSlots, withoutStarter, type Lineup } from './lineup'
+import { autoOrder, emptyLineup, LINEUP_KEY, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, toLineupSlots, withoutStarter, type Lineup } from './lineup'
 import type { Game } from '../data/types'
 import { gameLabel, scheduledGames } from '../data/schedule'
 
@@ -92,3 +92,27 @@ describe('picking a scheduled game', () => {
     expect(gameLabel(games[0])).toBe('2026-10-04 vs C（大專盃）')
   })
 })
+
+describe('designated hitter keeps the batting order right', () => {
+  const base = (): Lineup => ({ ...emptyLineup(), field: { P: '壬', C: '甲', '1B': '乙', '2B': '丙', '3B': '丁', SS: '戊', LF: '己', CF: '庚', RF: '辛' }, order: ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'] })
+  it('adding a DH takes the pitcher\'s slot', () => {
+    const l = setDesignatedHitter(base(), '癸')
+    expect(l.dh).toBe('癸'); expect(l.order[8]).toBe('癸'); expect(l.order).not.toContain('壬')
+  })
+  it('a fielder moved to DH keeps his own slot and the pitcher\'s slot is cleared', () => {
+    const l = setDesignatedHitter(base(), '己')
+    expect(l.field.LF).toBeUndefined(); expect(l.order[5]).toBe('己'); expect(l.order[8]).toBe('')
+  })
+  it('switching the DH hands over the slot; dropping it brings the pitcher back', () => {
+    const a = setDesignatedHitter(setDesignatedHitter(base(), '癸'), '子')
+    expect(a.order[8]).toBe('子'); expect(a.order).not.toContain('癸')
+    const b = setDesignatedHitter(a, '')
+    expect(b.dh).toBe(''); expect(b.order[8]).toBe('壬')
+  })
+  it('works when the pitcher is not in the order yet', () => {
+    const l = setDesignatedHitter({ ...base(), order: ['甲', '', '', '', '', '', '', '', ''] }, '癸')
+    expect(l.order).toEqual(['甲', '', '', '', '', '', '', '', ''])
+    expect(autoOrder(l).order).toContain('癸'); expect(autoOrder(l).order).not.toContain('壬')
+  })
+})
+

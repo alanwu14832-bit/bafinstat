@@ -17,6 +17,9 @@ Row 2 of the PA sheets is the sheet's own example row (范立) and is skipped.
 """
 import argparse, json, os, re, sys, datetime as dt
 from openpyxl import load_workbook
+# Windows prints to a legacy code page when output is piped; Chinese text would crash print() there
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 POSN = {1: "P", 2: "C", 3: "1B", 4: "2B", 5: "3B", 6: "SS", 7: "LF", 8: "CF", 9: "RF"}
 
