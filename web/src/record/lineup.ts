@@ -19,12 +19,14 @@ export interface Lineup {
   bench: string[]
   /** id of the scheduled game this lineup is for ('' = not chosen) */
   gameId: string
+  /** 報名名單 (season|tournament) picked when the game is not on the schedule yet; only used while gameId is '' */
+  regKey: string
   /** 允許再上場: players substituted out may come back in this game */
   reentry: boolean
   updatedAt: string
 }
 
-export const emptyLineup = (): Lineup => ({ field: {}, dh: '', order: Array.from({ length: 9 }, () => ''), bench: [], gameId: '', reentry: false, updatedAt: '' })
+export const emptyLineup = (): Lineup => ({ field: {}, dh: '', order: Array.from({ length: 9 }, () => ''), bench: [], gameId: '', regKey: '', reentry: false, updatedAt: '' })
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -37,7 +39,7 @@ export function sanitizeLineup(raw: unknown): Lineup | null {
   for (const p of FIELD_POSITIONS) if (str(f[p])) field[p] = str(f[p])
   const order = Array.from({ length: 9 }, (_, i) => str(Array.isArray(o.order) ? o.order[i] : ''))
   const bench = [...new Set((Array.isArray(o.bench) ? o.bench : []).map(str).filter(Boolean))]
-  return { field, dh: str(o.dh), order, bench, gameId: str(o.gameId), reentry: o.reentry === true, updatedAt: str(o.updatedAt) }
+  return { field, dh: str(o.dh), order, bench, gameId: str(o.gameId), regKey: str(o.gameId) ? '' : str(o.regKey), reentry: o.reentry === true, updatedAt: str(o.updatedAt) }
 }
 
 export const readLineup = (): Lineup | null => {
