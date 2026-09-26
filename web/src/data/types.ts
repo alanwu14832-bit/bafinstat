@@ -3,6 +3,7 @@
  * workbook (打席紀錄 / 投球紀錄 / 守備紀錄 / 比賽清單 / 球員名單). Everything
  * derived (AVG, ERA, Whiff% …) is computed in stats.ts, never stored.
  */
+import { TEAM } from '../config/team'
 
 export type HomeAway = '主' | '客'
 export type GameResult = 'W' | 'L' | 'T'
@@ -183,6 +184,6 @@ export interface StatParams {
 
 /** FanGraphs Guts! 2025 linear weights (see docs/ANALYTICS_RESEARCH.md). */
 export const DEFAULT_PARAMS: StatParams = {
-  inningsPerGame: 7, fipConstant: 3.135, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037,
+  inningsPerGame: TEAM.innings, fipConstant: 3.135, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037,
   pitchWarn: 80, pitchMax: 100,
 }

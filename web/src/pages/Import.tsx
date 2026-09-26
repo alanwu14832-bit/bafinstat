@@ -11,6 +11,7 @@ import { datasetToWorkbook, legacyToDataset, parseWorkbook, type ImportReport } 
 import { useFilterOptions } from '../hooks/useStats'
 import type { Dataset } from '../data/types'
 import { useDataStore } from '../store/data'
+import { TEAM } from '../config/team'
 import { CloudPanel } from '../components/ui/CloudPanel'
 
 const STEPS = [
@@ -68,7 +69,7 @@ export function ImportPage() {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
-  const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base), `BAFIN_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base), `${TEAM.filePrefix}_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
   const sourceLabel = source === 'cloud' ? `雲端資料庫${importedAt ? `・同步於 ${new Date(importedAt).toLocaleString('zh-TW')}` : ''}` : source === 'seed' ? '內建範例（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`
 
   if (cloud.configured && !canWriteCloud) {

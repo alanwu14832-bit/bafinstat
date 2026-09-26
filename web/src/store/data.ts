@@ -11,12 +11,13 @@ import { create } from 'zustand'
 import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
+import { TEAM } from '../config/team'
 import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
-import { DEFAULT_FILTERS, DEFAULT_PARAMS, type Dataset, type Filters, type StatParams } from '../data/types'
+import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, type Dataset, type Filters, type StatParams } from '../data/types'
 
 const DATA_KEY = 'bafin.dataset.v1'
 const DEMO_KEY = 'bafin.demo'
@@ -68,7 +69,9 @@ interface DataState {
 interface Persisted { base: Dataset; importedAt: string | null }
 
 const persisted = readJSON<Persisted>(DATA_KEY)
-const initialBase = persisted?.base ?? SEED_DATASET
+// BaFiN's site starts from its recorded games; any other team starts empty (VITE_TEAM_SEED=0).
+const STARTER = TEAM.seed ? SEED_DATASET : EMPTY_DATASET
+const initialBase = persisted?.base ?? STARTER
 const storedDemo = readJSON<boolean>(DEMO_KEY)
 // First visit with only the seed game and no cloud: show the demo overlay so the dashboard is explorable.
 const initialDemo = cloudConfigured ? (storedDemo ?? false) : (storedDemo ?? initialBase.games.length < 3)
@@ -112,7 +115,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ base: merged, source: 'imported', importedAt })
     return null
   },
-  resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: SEED_DATASET, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
+  resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: STARTER, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
   canEdit: () => { const { cloud } = get(); return !cloud.configured || (!!cloud.user && cloud.isEditor) },
   saveGame: async (edit) => {
     const { cloud, base } = get()
