@@ -14,7 +14,7 @@ export interface RosterChange {
 
 export function playersWithRecords(ds: Dataset): Set<string> {
   const s = new Set<string>()
-  for (const p of ds.batting) s.add(p.batter)
+  for (const p of ds.batting) { s.add(p.batter); if (p.runner) s.add(p.runner) }
   for (const p of ds.pitching) s.add(p.pitcher)
   for (const f of ds.fielding) s.add(f.player)
   for (const g of ds.games) for (const n of [g.winningPitcher, g.losingPitcher, g.savePitcher, ...(g.holds ?? [])]) if (n) s.add(n)
@@ -41,7 +41,7 @@ export function applyRosterChange(base: Dataset, change: RosterChange): Dataset 
   return {
     roster,
     games: base.games.map((g) => ({ ...g, winningPitcher: rn(g.winningPitcher), losingPitcher: rn(g.losingPitcher), savePitcher: rn(g.savePitcher), holds: g.holds?.map((h) => rn(h)!), ...(g.dayRoster ? { dayRoster: renameInDayRoster(g.dayRoster, pairs) } : {}) })),
-    batting: base.batting.map((p) => (renames[p.batter] ? { ...p, batter: renames[p.batter] } : p)),
+    batting: base.batting.map((p) => (renames[p.batter] || (p.runner && renames[p.runner]) ? { ...p, batter: renames[p.batter] ?? p.batter, ...(p.runner ? { runner: renames[p.runner] ?? p.runner } : {}) } : p)),
     pitching: base.pitching.map((p) => (renames[p.pitcher] ? { ...p, pitcher: renames[p.pitcher] } : p)),
     fielding: base.fielding.map((f) => (renames[f.player] ? { ...f, player: renames[f.player] } : f)),
   }

@@ -24,7 +24,7 @@ export function supabase(): SupabaseClient {
 // ---------------------------------------------------------------- row ↔ model mapping
 interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
 interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null; day_roster?: GameDayRoster | null }
-interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null }
+interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; runner?: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null }
 interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; code: string | null; note: string | null }
 interface FieldingRow { game_id: string; seq: number; player: string; pos: string; innings: number | null; po: number; a: number; e: number; dp: number; pb: number; sb: number; cs: number; note: string | null }
 
@@ -40,7 +40,9 @@ export function toGameRow(g: Game): GameRow {
   return { id: g.id, date: g.date, time: n(g.time), tournament: g.tournament || '未分類', opponent: g.opponent || '未知', home_away: g.homeAway, venue: n(g.venue), weather: n(g.weather), recorder: n(g.recorder), innings: g.innings ?? null, winning_pitcher: n(g.winningPitcher), losing_pitcher: n(g.losingPitcher), save_pitcher: n(g.savePitcher), holds: g.holds?.length ? g.holds : null, note: n(g.note), status: n(g.status), ...(g.dayRoster ? { day_roster: g.dayRoster } : {}) }
 }
 export function toBattingRow(p: BattingPA, seq: number): BattingRow {
-  return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), batting_order: p.order ?? null, pos: n(p.pos), batter: p.batter, pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sb: p.sb, cs: p.cs, adv_on_error: p.advOnError, out_on_base: p.outOnBase, run: p.run, rbi: p.rbi, code: n(p.code), note: n(p.note) }
+  return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), batting_order: p.order ?? null, pos: n(p.pos), batter: p.batter, pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sb: p.sb, cs: p.cs, adv_on_error: p.advOnError, out_on_base: p.outOnBase, run: p.run, rbi: p.rbi, code: n(p.code), note: n(p.note),
+    // only when there is one: a project without the column (migration not run) still takes every other row
+    ...(p.runner ? { runner: p.runner } : {}) }
 }
 export function toPitchingRow(p: PitchingPA, seq: number): PitchingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), opp_order: p.oppOrder ?? null, pitcher: p.pitcher, opp_batter: n(p.oppBatter), pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sba: p.sba, cs: p.cs, wp: p.wp, pb: p.pb, pk: p.pk, code: n(p.code), note: n(p.note) }
@@ -53,7 +55,7 @@ export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; ba
   return {
     roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note) })),
     games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined), dayRoster: parseDayRoster(r.day_roster) })),
-    batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note) })),
+    batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, ...(r.runner ? { runner: r.runner } : {}), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note) })),
     pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, code: u(r.code), note: u(r.note) })),
     fielding: rows.fielding.map((r) => ({ gameId: r.game_id, player: r.player, pos: r.pos, innings: u(r.innings === null ? null : Number(r.innings)), po: r.po, a: r.a, e: r.e, dp: r.dp, pb: r.pb, sb: r.sb, cs: r.cs, note: u(r.note) })),
   }
@@ -89,6 +91,8 @@ async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 5
 
 /** games columns added by later migrations; a project that has not run them still accepts saves without them. */
 const OPTIONAL_GAME_COLUMNS = ['day_roster', 'status', 'updated_by'] as const
+/** batting_pa.runner (代跑), added with the rosters migration. */
+export const RUNNER_COLUMN = 'runner'
 type PgError = { message: string; code?: string }
 /** Optional games columns a PostgREST error says are missing: PGRST204 "Could not find the 'day_roster' column of
  *  'games' in the schema cache", or 42703 "column games.day_roster does not exist". */
@@ -163,7 +167,15 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
       await chunked(idList, async (chunk) => { const { error: e } = await sb.from(table).delete().in('game_id', chunk); fail(table, e) }, 200)
     }
     const seqBy = <T extends { gameId: string }>(rows: T[]) => { const c = new Map<string, number>(); return rows.filter((r) => ids.has(r.gameId)).map((r) => { const s = (c.get(r.gameId) ?? 0) + 1; c.set(r.gameId, s); return [r, s] as const }) }
-    await chunked(seqBy(ds.batting).map(([r, s]) => toBattingRow(r, s)), async (rows) => { const { error: e } = await sb.from('batting_pa').insert(rows); fail('打席紀錄', e) })
+    await chunked(seqBy(ds.batting).map(([r, s]) => toBattingRow(r, s)), async (rows) => {
+      let { error: e } = await sb.from('batting_pa').insert(rows)
+      // no 代跑 column yet: save the rows without it (the run stays with the batter) and say so
+      if (e && rows.some((r) => RUNNER_COLUMN in r) && /could not find|does not exist/i.test(e.message) && new RegExp(`\\b${RUNNER_COLUMN}\\b`).test(e.message)) {
+        if (!dropped.includes(RUNNER_COLUMN)) dropped.push(RUNNER_COLUMN)
+        ;({ error: e } = await sb.from('batting_pa').insert(rows.map(({ runner: _r, ...rest }) => rest)))
+      }
+      fail('打席紀錄', e)
+    })
     await chunked(seqBy(ds.pitching).map(([r, s]) => toPitchingRow(r, s)), async (rows) => { const { error: e } = await sb.from('pitching_pa').insert(rows); fail('投球紀錄', e) })
     await chunked(seqBy(ds.fielding).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }
@@ -190,6 +202,8 @@ export async function pushRoster(players: Player[], renames: Record<string, stri
   const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
   for (const [from, to] of Object.entries(renames)) {
     fail('打席紀錄', (await sb.from('batting_pa').update({ batter: to }).eq('batter', from)).error)
+    // 代跑 column (absent until the rosters migration runs: nothing to rename then)
+    { const { error } = await sb.from('batting_pa').update({ runner: to }).eq('runner', from); if (error && !/could not find|does not exist/i.test(error.message)) fail('打席紀錄', error) }
     fail('投球紀錄', (await sb.from('pitching_pa').update({ pitcher: to }).eq('pitcher', from)).error)
     fail('守備紀錄', (await sb.from('fielding_lines').update({ player: to }).eq('player', from)).error)
     for (const col of ['winning_pitcher', 'losing_pitcher', 'save_pitcher']) fail('比賽清單', (await sb.from('games').update({ [col]: to }).eq(col, from)).error)

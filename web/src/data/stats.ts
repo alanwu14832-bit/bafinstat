@@ -120,6 +120,16 @@ export function battingLines(ds: Dataset, pas: BattingPA[], params = DEFAULT_PAR
     accumulateBatting(l, pa, batterHand(ds.roster, pa.batter))
     games.get(pa.batter)!.add(pa.gameId)
   }
+  // 代跑: the run, steals and caught stealing after the batter reached belong to whoever ran for him
+  for (const pa of pas) {
+    if (!pa.batter || !pa.runner || pa.runner === pa.batter || !pa.result) continue
+    const from = map.get(pa.batter)!
+    let to = map.get(pa.runner)
+    if (!to) { to = emptyBatting(pa.runner); map.set(pa.runner, to); games.set(pa.runner, new Set()) }
+    from.r -= pa.run; from.sb -= pa.sb; from.cs -= pa.cs
+    to.r += pa.run; to.sb += pa.sb; to.cs += pa.cs
+    games.get(pa.runner)!.add(pa.gameId)
+  }
   const out = [...map.values()].map((l) => { l.g = games.get(l.name)!.size; return finalizeBatting(l, params) })
   // OPS+ relative to the same slice of the team (100 = team average; no park factor)
   const team = teamBatting(ds, pas, params)

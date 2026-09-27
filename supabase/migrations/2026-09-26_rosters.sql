@@ -1,4 +1,4 @@
--- 當日登錄名單 (game-day roster) and 報名名單 (tournament registration lists). Run once in the SQL Editor (safe to re-run).
+-- 當日登錄名單 (game-day roster), 報名名單 (tournament registration lists) and 代跑 (pinch runner) on plate appearances. Run once in the SQL Editor (safe to re-run).
 
 -- 1) game-day roster: starters, bench, substitutions and the re-entry rule, stored with the game
 alter table games add column if not exists day_roster jsonb;   -- 當日登錄名單
@@ -17,6 +17,9 @@ drop policy if exists "public read" on registrations;
 create policy "public read" on registrations for select using (true);
 drop policy if exists "editors write" on registrations;
 create policy "editors write" on registrations for all to authenticated using (is_editor()) with check (is_editor());
+
+-- 3) 代跑: the pinch runner who took over from the batter on base gets the run / SB / CS of that plate appearance
+alter table batting_pa add column if not exists runner text;
 
 -- realtime (ignore if already added)
 do $$ begin alter publication supabase_realtime add table registrations; exception when others then null; end $$;

@@ -94,7 +94,7 @@ def title(ws, text, span=8, sub=None):
 # ----------------------------------------------------------------------------- column specs
 PITCH_N = 12
 BAT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "棒次", "守位", "打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
-            ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "盜壘", "盜壘失敗", "失誤進壘", "壘死", "得分", "打點", "結果代碼", "備註"]
+            ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "代跑", "盜壘", "盜壘失敗", "失誤進壘", "壘死", "得分", "打點", "結果代碼", "備註"]
 BAT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "一安", "二安", "三安", "全壘打", "壘打數", "保送", "故四", "觸身", "三振",
             "犧觸", "犧飛", "雙殺", "失誤上壘", "得點圈打數", "得點圈安打", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球",
             "首球揮棒", "優質打席", "慣用手", "拉打", "中間", "反方向", "首打席", "上壘"]
@@ -185,6 +185,7 @@ lines = [
     ("出局(前)：打席開始時的出局數 0/1/2。　壘上(前)：打席開始時壘上跑者，無／1／2／3／12／13／23／123 → 用來算得點圈打擊率。", False),
     ("落點：出局填處理球的守備員 1–9（1 投 2 捕 3 一壘 4 二壘 5 三壘 6 游擊 7 左 8 中 9 右）；沒人碰到的穿越安打填縫隙代碼 56 三游／46 二游／34 一二／78 左中／89 右中。軌跡 G 滾地／F 飛球／L 平飛。強度 強／中／弱 → 近似 Statcast 的 Hard-Hit%。", False),
     ("盜壘失敗、暴投、捕逸、牽制出局、阻殺、刺殺、助殺：CPBL 官方紀錄項目，舊表缺少。", False),
+    ("代跑：打者上壘後被代跑換下時，填代跑者的名字；這一列的盜壘、盜壘失敗、得分算代跑者的，安打、打點仍算打者的。", False),
     ("", False),
     ("顏色說明", True),
     ("黃底 = 手動輸入格　　灰色標題 = 自動公式欄　　藍字 = 可調整參數　　綠字 = 連結其他工作表", False),
@@ -434,7 +435,7 @@ def fld_formulas(rr):
     return {"日期": game_lookup(GL["日期"], rr, as_text=False), "杯賽": game_lookup(GL["杯賽"], rr), "對手": game_lookup(GL["對手"], rr),
             "主客": game_lookup(GL["主客"], rr), "勝敗": game_lookup(GL["勝敗"], rr)}
 
-log_widths = {"比賽ID": 14, "打者": 10, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
+log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
 ws_bat = build_log("打席紀錄", BAT_INPUT, BAT_AUTO, bat_formulas, log_widths, "我隊每個打席一列。A–AI 欄輸入（可從『單場-打擊』貼上值），AJ 以後為自動公式。")
 ws_pit = build_log("投球紀錄", PIT_INPUT, PIT_AUTO, pit_formulas, log_widths, "我隊投手面對的每個打席一列。A–AH 欄輸入（可從『單場-投球』貼上值），AI 以後為自動公式。")
 ws_fld = build_log("守備紀錄", FLD_INPUT, FLD_AUTO, fld_formulas, log_widths, "每場每位球員一列。")
@@ -451,7 +452,7 @@ def add_log_validations(ws, cm, kind):
     dv(ws, "結果代碼", f"{L(cm['結果代碼'])}2:{L(cm['結果代碼'])}{last}")
     if kind == "bat":
         dv(ws, "守位清單", f"{L(cm['守位'])}2:{L(cm['守位'])}{last}")
-        d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['打者'])}2:{L(cm['打者'])}{last}")
+        d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['打者'])}2:{L(cm['打者'])}{last}"); d.add(f"{L(cm['代跑'])}2:{L(cm['代跑'])}{last}")
     else:
         d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['投手'])}2:{L(cm['投手'])}{last}")
 add_log_validations(ws_bat, BAT, "bat"); add_log_validations(ws_pit, PIT, "pit")
@@ -628,13 +629,16 @@ put(ws, BAT_START - 1, 2, "打擊成績（守位篩選 = 該打席的守位）",
 def bat_stat_cols():
     n = "$B{r}"
     b = lambda col: S("打席紀錄", BL, col, "打者", n, True)
+    # 代跑: the run / SB / CS of a plate appearance go to the pinch runner when the 代跑 column names one
+    nr = f',打席紀錄!${BL["代跑"]}$2:${BL["代跑"]}${LAST},""'
+    br = lambda col: f'({S("打席紀錄", BL, col, "打者", n, True, extra=nr)}+{S("打席紀錄", BL, col, "代跑", n, True)})'
     cols = [
         ("姓名", None, None), ("主守位", '=IF($B{r}="","",IFERROR(INDEX(球員名單!$C$4:$C$' + str(3 + ROSTER_ROWS) + ',MATCH($B{r},' + ROSTER_NAME + ',0)),""))', None),
-        ("G", "=" + b("首打席"), "0"), ("PA", "=" + b("打席"), "0"), ("AB", "=" + b("打數"), "0"), ("R", "=" + b("得分"), "0"), ("H", "=" + b("安打"), "0"),
+        ("G", "=" + b("首打席"), "0"), ("PA", "=" + b("打席"), "0"), ("AB", "=" + b("打數"), "0"), ("R", "=" + br("得分"), "0"), ("H", "=" + b("安打"), "0"),
         ("1B", "=" + b("一安"), "0"), ("2B", "=" + b("二安"), "0"), ("3B", "=" + b("三安"), "0"), ("HR", "=" + b("全壘打"), "0"), ("TB", "=" + b("壘打數"), "0"),
         ("RBI", "=" + b("打點"), "0"), ("BB", "=" + b("保送"), "0"), ("IBB", "=" + b("故四"), "0"), ("HBP", "=" + b("觸身"), "0"), ("SO", "=" + b("三振"), "0"),
         ("SH", "=" + b("犧觸"), "0"), ("SF", "=" + b("犧飛"), "0"), ("GIDP", "=" + b("雙殺"), "0"), ("ROE", "=" + b("失誤上壘"), "0"),
-        ("SB", "=" + b("盜壘"), "0"), ("CS", "=" + b("盜壘失敗"), "0"), ("SB%", '=IFERROR({SB}/({SB}+{CS}),"")', "0.0%"),
+        ("SB", "=" + br("盜壘"), "0"), ("CS", "=" + br("盜壘失敗"), "0"), ("SB%", '=IFERROR({SB}/({SB}+{CS}),"")', "0.0%"),
         ("AVG", '=IFERROR({H}/{AB},"")', "0.000"), ("OBP", '=IFERROR(({H}+{BB}+{HBP})/({AB}+{BB}+{HBP}+{SF}),"")', "0.000"),
         ("SLG", '=IFERROR({TB}/{AB},"")', "0.000"), ("OPS", '=IFERROR({OBP}+{SLG},"")', "0.000"),
         ("OPS+", '=IFERROR(ROUND(100*({OBP}/{TEAMOBP}+{SLG}/{TEAMSLG}-1),0),"")', "0"), ("ISO", '=IFERROR({SLG}-{AVG},"")', "0.000"),
@@ -856,10 +860,13 @@ LU_COLS = ["棒次", "守位", "球員", "PA", "AB", "R", "H", "2B", "3B", "HR",
 for i, h in enumerate(LU_COLS): hdr(ws, LU, 2 + i, h, auto=i >= 3)
 def tb(col, r):  # sum helper col of template batting for player in D{r}
     return f'SUMIFS({BP}!${BL[col]}$2:${BL[col]}${TROWS},{BP}!${BL["打者"]}$2:${BL["打者"]}${TROWS},$D{r})'
+def tbr(col, r):  # same, with the run / SB of a 代跑 going to the runner
+    rng = lambda c: f'{BP}!${BL[c]}$2:${BL[c]}${TROWS}'
+    return f'(SUMIFS({rng(col)},{rng("打者")},$D{r},{rng("代跑")},"")+SUMIFS({rng(col)},{rng("代跑")},$D{r}))'
 for k in range(15):
     r = LU + 1 + k
     put(ws, r, 2, None, f_input, fill_input, "0", center); put(ws, r, 3, None, f_input, fill_input, None, center); put(ws, r, 4, None, f_input, fill_input)
-    fs = [tb("打席", r), tb("打數", r), tb("得分", r), tb("安打", r), tb("二安", r), tb("三安", r), tb("全壘打", r), tb("打點", r), tb("保送", r), tb("觸身", r), tb("三振", r), tb("盜壘", r)]
+    fs = [tb("打席", r), tb("打數", r), tbr("得分", r), tb("安打", r), tb("二安", r), tb("三安", r), tb("全壘打", r), tb("打點", r), tb("保送", r), tb("觸身", r), tb("三振", r), tbr("盜壘", r)]
     for i, f in enumerate(fs):
         put(ws, r, 5 + i, f'=IF($D{r}="","",{f})', f_base, None, "0", center)
     put(ws, r, 17, f'=IF($D{r}="","",IFERROR(H{r}/F{r},""))', f_base, None, "0.000", center)

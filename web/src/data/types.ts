@@ -97,6 +97,8 @@ export interface BattingPA {
   /** Defensive position of the batter in this game (filterable). */
   pos?: string
   batter: string
+  /** 代跑: who ran for the batter after he reached; the run, SB, CS and out on base are his, the rest is the batter's. */
+  runner?: string
   pitches: string[]
   result: string
   /** Batted-ball location: 1–9 or a gap code (see LOC_HOLES) */
