@@ -44,6 +44,7 @@ create table if not exists batting_pa (
   batting_order int,
   pos           text,
   batter        text not null,
+  runner        text,           -- 代跑: who ran for the batter (gets run / sb / cs)
   pitches       text[] not null default '{}',
   result        text not null default '',
   loc           int,

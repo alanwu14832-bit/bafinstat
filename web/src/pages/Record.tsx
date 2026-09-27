@@ -233,6 +233,23 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
     if (t === 'lineup') setSub({ slot: state.slot, name: '', pos: side === 'us' ? 'PH' : fieldPos(state.slot) })
     setTool(t)
   }
+  // 代跑 from the runner's own menu: that runner's batting slot, as PR
+  const slotOfRunner = (r: { row: number; name: string }) => { const o = state.batting[r.row]?.order; return o && state.lineup[o - 1]?.name === r.name ? o - 1 : state.lineup.findIndex((l) => l.name === r.name) }
+  const openSub = (slot: number, pos: string) => { setSub({ slot, name: '', pos }); setTool('lineup'); setRunnerMenu(null) }
+  const pickSubPos = (pos: string) => setSub((x) => {
+    // picking PR on a slot that is not on base jumps to the lead runner's slot
+    const runners = state.runners.filter((r) => r.side === 'us').sort((a, b) => b.base - a.base)
+    const onBase = runners.some((r) => slotOfRunner(r) === x.slot)
+    const lead = runners.map(slotOfRunner).find((i) => i >= 0)
+    return { ...x, pos, slot: pos === 'PR' && !onBase && lead !== undefined ? lead : x.slot }
+  })
+  // while we field, everyone needs a real position: a PH / PR left as is, or two players at one spot, is flagged
+  const posIssues = side !== 'opp' ? [] : state.lineup.flatMap((l, i) => {
+    if (!l.name) return []
+    if (l.pos === 'PH' || l.pos === 'PR' || !l.pos) return [{ slot: i, text: `第 ${i + 1} 棒 ${l.name} 還是${l.pos === 'PR' ? '代跑' : l.pos === 'PH' ? '代打' : '沒有守位'}` }]
+    const twin = state.lineup.findIndex((o, k) => k < i && o.name && o.pos === l.pos && l.pos !== 'DH')
+    return twin >= 0 ? [{ slot: i, text: `第 ${twin + 1} 棒 ${state.lineup[twin].name} 和第 ${i + 1} 棒 ${l.name} 都守 ${l.pos}` }] : []
+  })
   const subSlot = state.lineup[sub.slot]
   // a position-only change is allowed, but a bare PH / PR with nobody picked is not (it would restamp the batter's position)
   const canSub = !!subSlot && (!!sub.name || (!!sub.pos && sub.pos !== subSlot.pos && sub.pos !== 'PH' && sub.pos !== 'PR'))
@@ -289,6 +306,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                         <button key={e.ev} type="button" onClick={() => { apply((s) => runnerEvent(s, r.row, r.side, e.ev)); setRunnerMenu(null) }}
                           className={cx('h-8 px-2 rounded-[6px] text-[12px] font-medium text-left hover:bg-surface-2 cursor-pointer', (e.ev === 'cs' || e.ev === 'pk' || e.ev === 'out') && 'text-critical')}>{e.label}</button>
                       ))}
+                      {r.side === 'us' && slotOfRunner(r) >= 0 && <button type="button" onClick={() => openSub(slotOfRunner(r), 'PR')} className="col-span-2 h-8 px-2 rounded-[6px] text-[12px] font-medium text-left hover:bg-surface-2 cursor-pointer border-t border-border">代跑…</button>}
                     </div>
                   )}
                 </div>
@@ -342,10 +360,21 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             <div className="mt-3 flex items-end gap-2 flex-wrap">
               <Field label="換哪一棒" className="min-w-[140px]"><Select value={String(sub.slot)} onChange={(e) => { const i = Number(e.target.value); setSub((x) => ({ ...x, slot: i, pos: side === 'us' ? x.pos : fieldPos(i) })) }} options={state.lineup.map((l, i) => ({ value: String(i), label: `第 ${i + 1} 棒 ${l.name}` }))} className="w-full" /></Field>
               <Field label="換成" className="flex-1 min-w-[180px]"><PlayerSelect value={sub.name} onChange={(n) => setSub({ ...sub, name: n })} names={batterCands.names} disabled={batterCands.disabled} tag={batterCands.tag} placeholder="不換人，只改守位" className="w-full" /></Field>
-              <Field label="守位／代打"><Select value={sub.pos} onChange={(e) => setSub({ ...sub, pos: e.target.value })} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} /></Field>
+              <Field label="守位／代打"><Select value={sub.pos} onChange={(e) => pickSubPos(e.target.value)} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} /></Field>
               <Button onClick={confirmSub} disabled={!canSub}>確定</Button>
               <Button variant="ghost" onClick={() => setTool('none')} icon={<X />} aria-label="取消" />
               {toolExtras}
+            </div>
+          )}
+
+          {posIssues.length > 0 && (
+            <div role="status" className="mt-3 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 flex flex-col gap-1">
+              {posIssues.map((x) => (
+                <div key={x.slot} className="flex items-center gap-2 text-[12px] text-ink">
+                  <span className="flex-1 min-w-0">{x.text}，守備位置要改一下</span>
+                  <button type="button" onClick={() => openSub(x.slot, '')} className="shrink-0 h-9 pointer-fine:h-7 text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">設定守位</button>
+                </div>
+              ))}
             </div>
           )}
 

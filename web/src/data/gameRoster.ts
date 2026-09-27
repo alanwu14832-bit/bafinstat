@@ -9,6 +9,8 @@ import type { Dataset, DayRosterSub, Game, GameDayRoster } from './types'
 export const ROSTERS_MIGRATION = 'supabase/migrations/2026-09-26_rosters.sql'
 /** Shown (as a save warning) when the cloud has no games.day_roster column yet. */
 export const DAY_ROSTER_UNSUPPORTED = `當日登錄名單沒有存進雲端：請管理員在 Supabase 執行 ${ROSTERS_MIGRATION}`
+/** Shown when the cloud has no batting_pa.runner column: the 代跑's run / SB was saved on the batter. */
+export const RUNNER_UNSUPPORTED = `代跑沒有存進雲端（得分、盜壘暫時算在原打者）：請管理員在 Supabase 執行 ${ROSTERS_MIGRATION}`
 
 /** Labels of the substitution kinds (Excel 替補紀錄 column, game detail badges). */
 export const SUB_KIND_LABEL: Record<DayRosterSub['kind'], string> = { PH: '代打', PR: '代跑', DEF: '守備', P: '換投' }

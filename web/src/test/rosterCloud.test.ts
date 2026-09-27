@@ -26,6 +26,11 @@ function respond(table: string, ops: Op[]) {
     if (!state.migrated && 'day_roster' in v) return { data: null, error: { code: 'PGRST204', message: "Could not find the 'day_roster' column of 'games' in the schema cache" } }
     return { data: null, error: null }
   }
+  if (table === 'batting_pa' && has('insert')) {
+    const rows = ops.find(([k]) => k === 'insert')![1][0] as Array<Record<string, unknown>>
+    if (!state.migrated && rows.some((r) => 'runner' in r)) return { data: null, error: { code: 'PGRST204', message: "Could not find the 'runner' column of 'batting_pa' in the schema cache" } }
+    return { data: null, error: null }
+  }
   if (table === 'editors') return { data: [{ email: 'a@b.c' }], error: null }
   return { data: [], error: null }
 }
@@ -73,6 +78,15 @@ describe('cloud mode without / with the rosters migration (fake client)', () => 
     expect(warnings.map((w) => w.message)).toContain(DAY_ROSTER_UNSUPPORTED)
     expect(useDataStore.getState().dayRosterSupported).toBe(false)
 
+    // 代跑 without batting_pa.runner: the rows are saved without it and the save says so
+    const { RUNNER_UNSUPPORTED } = await import('../data/gameRoster')
+    const pa = (batter: string, runner?: string) => ({ gameId: 'G2', inning: 1, batter, ...(runner ? { runner } : {}), pitches: [], result: '一安', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 1, rbi: 0, code: 'R' })
+    calls.length = 0
+    const wr = await useDataStore.getState().saveGame({ game: g2, batting: [pa('甲', '丙'), pa('乙')], pitching: [], fielding: [] })
+    expect(wr.map((w) => w.message)).toContain(RUNNER_UNSUPPORTED)
+    const ins = calls.filter((c) => c.table === 'batting_pa' && c.ops[0][0] === 'insert').map((c) => (c.ops[0][1][0] as Array<Record<string, unknown>>).map((x) => x.runner ?? null))
+    expect(ins).toEqual([['丙', null], [null, null]])
+
     // registrations: table missing → not supported, saving says why
     await useDataStore.getState().loadRegistrations()
     expect(useDataStore.getState().registrationsSupported).toBe(false)
@@ -83,6 +97,9 @@ describe('cloud mode without / with the rosters migration (fake client)', () => 
     calls.length = 0
     const w2 = await useDataStore.getState().saveGame({ game: g1, batting: [], pitching: [], fielding: [] })
     expect(w2.map((w) => w.message)).not.toContain(DAY_ROSTER_UNSUPPORTED)
+    calls.length = 0
+    expect((await useDataStore.getState().saveGame({ game: g2, batting: [pa('甲', '丙')], pitching: [], fielding: [] })).map((w) => w.message)).not.toContain(RUNNER_UNSUPPORTED)
+    expect(calls.filter((c) => c.table === 'batting_pa' && c.ops[0][0] === 'insert').map((c) => (c.ops[0][1][0] as Array<Record<string, unknown>>)[0].runner)).toEqual(['丙'])
     expect(useDataStore.getState().dayRosterSupported).toBe(true)
     await useDataStore.getState().loadRegistrations()
     expect(useDataStore.getState().registrationsSupported).toBe(true)

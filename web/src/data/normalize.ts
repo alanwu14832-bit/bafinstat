@@ -160,8 +160,8 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
-  const batting: BattingPA[] = input.batting.map((p) => ({
-    ...p, batter: p.batter.trim(), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const batting: BattingPA[] = input.batting.map(({ runner, ...p }) => ({
+    ...p, batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
@@ -221,7 +221,7 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     if (issues.length) { for (const i of issues.slice(0, 6)) warn(`可疑打席：${i.message}`); if (issues.length > 6) warn(`另有 ${issues.length - 6} 個可疑打席，開啟比賽頁可逐一查看`) }
     const noResult = bat.filter((p) => p.batter && !p.result).length + pit.filter((p) => p.pitcher && !p.result).length
     if (noResult) warn(`${noResult} 個打席沒有「打擊結果」，不計入統計`)
-    const unknown = [...new Set(bat.map((p) => p.batter).filter((n) => n && !names.has(n)))]
+    const unknown = [...new Set(bat.flatMap((p) => [p.batter, p.runner ?? '']).filter((n) => n && !names.has(n)))]
     if (unknown.length) {
       for (const n of unknown) { roster.push({ name: n, status: '現役' }); names.add(n) }
       warn(`名單沒有 ${unknown.join('、')}，已自動加入球員名單`)

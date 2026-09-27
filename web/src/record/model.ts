@@ -137,8 +137,18 @@ export function substitute(s: RecordState, slot: number, name: string, pos: stri
   const lineup = s.lineup.map((l, i) => (i === slot ? { name: name || l.name, pos: pos || l.pos } : l))
   const old = s.lineup[slot]
   if (!old || !name || name === old.name) return { ...s, lineup }
-  const sub: DayRosterSub = { kind: pos === 'PH' ? 'PH' : pos === 'PR' ? 'PR' : 'DEF', in: name, out: old.name, pos: pos || old.pos, inning: s.inning, half: s.half, slot }
-  return { ...s, lineup, subs: [...(s.subs ?? []), sub] }
+  // replacing someone who is on base is 代跑 whatever the position box says: he takes over the runner (and its run / SB / CS)
+  const onBase = s.runners.find((r) => r.side === 'us' && r.name === old.name && s.batting[r.row])
+  const kind: DayRosterSub['kind'] = onBase || pos === 'PR' ? 'PR' : pos === 'PH' ? 'PH' : 'DEF'
+  // (the box starts at PH while we bat: on a runner that means PR)
+  const inPos = onBase && (!pos || pos === 'PH') ? 'PR' : pos || old.pos
+  const sub: DayRosterSub = { kind, in: name, out: old.name, pos: inPos, inning: s.inning, half: s.half, slot }
+  const next: RecordState = { ...s, lineup: lineup.map((l, i) => (i === slot ? { ...l, pos: inPos } : l)), subs: [...(s.subs ?? []), sub] }
+  if (onBase) {
+    next.runners = s.runners.map((r) => (r === onBase ? { ...r, name } : r))
+    next.batting = s.batting.map((p, i) => (i === onBase.row ? { ...p, runner: name } : p))
+  }
+  return next
 }
 export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s, reentry: on })
 

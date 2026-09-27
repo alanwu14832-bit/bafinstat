@@ -27,9 +27,13 @@ import { SprayChart } from '../components/charts/SprayChart'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
+import type { BattingPA } from '../data/types'
 import { battingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
+
+/** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
+const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runner === name
 
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
 
@@ -120,9 +124,9 @@ export function PlayersPage() {
   const cmpPlayer = compare ? roster.find((p) => p.name === compare) : undefined
 
   const gameLog: GameLogRow[] = useMemo(() => s.summaries.map((g) => {
-    const pas = s.batting.filter((p) => p.gameId === g.game.id && p.batter === selected)
-    if (!pas.length) return null
-    const l = battingLines(s.dataset, pas)[0]
+    const pas = s.batting.filter((p) => p.gameId === g.game.id && ranOrBatted(p, selected))
+    const l = battingLines(s.dataset, pas).find((x) => x.name === selected)
+    if (!l) return null
     return { id: g.game.id, date: g.game.date, opponent: g.game.opponent, pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
   }).filter((r): r is GameLogRow => r !== null).reverse(), [s.summaries, s.batting, s.dataset, selected])
 
@@ -138,7 +142,7 @@ export function PlayersPage() {
   const recentBat = useMemo(() => {
     if (gameLog.length <= RECENT) return undefined
     const ids = gameLog.slice(0, RECENT).map((g) => g.id)
-    const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected), statParams)[0]
+    const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && ranOrBatted(p, selected)), statParams).find((x) => x.name === selected)
     return l && l.pa >= 3 ? l : undefined
   }, [gameLog, s.dataset, s.batting, selected, statParams])
   const group = useMemo(() => sameGroup(s.dataset.roster, selected), [s.dataset.roster, selected])
@@ -150,8 +154,8 @@ export function PlayersPage() {
     if (!prev || spansPrev) return undefined
     // same filters as the page, with the date range moved to the season before
     const ids = new Set(filterGames(s.dataset, { ...filters, from: prev.from, to: prev.to }).games.map((g) => g.id))
-    const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && p.batter === selected && (filters.position === 'all' || (p.pos ?? '') === filters.position))
-    const l = battingLines(s.dataset, pas, statParams)[0]
+    const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && ranOrBatted(p, selected) && (filters.position === 'all' || (p.pos ?? '') === filters.position))
+    const l = battingLines(s.dataset, pas, statParams).find((x) => x.name === selected)
     return l && l.pa >= 3 ? l : undefined
   }, [prev, spansPrev, s.dataset, filters, selected, statParams])
 
@@ -192,7 +196,7 @@ export function PlayersPage() {
     const rows = [...gameLog].reverse()
     return rows.map((_, i) => {
       const ids = rows.slice(0, i + 1).map((r) => r.id)
-      const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && p.batter === selected))[0]
+      const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && ranOrBatted(p, selected))).find((x) => x.name === selected)
       return { id: rows[i].id, name: shortDate(rows[i].date), AVG: Number((l?.avg ?? 0).toFixed(3)), OPS: Number((l?.ops ?? 0).toFixed(3)) }
     })
   }, [gameLog, s.batting, s.dataset, selected])

@@ -219,3 +219,35 @@ describe('game-day roster: bench, substitutions, re-entry', () => {
     expect(r.reentry).toBe(true)
   })
 })
+
+describe('代跑 (pinch runner)', () => {
+  const start = () => endHalf(newGame(game, lineup, '壬', { bench: ['癸', '子'] })) // bottom 1: we bat
+  it('takes over the runner: the run and the steal are his, the hit stays with the batter', () => {
+    let s = commitPA(start(), defaultPlan(start(), '一安'))
+    // the box still says PH (its default while we bat): replacing a runner is a 代跑 anyway
+    s = substitute(s, 0, '癸', 'PH')
+    expect(s.lineup[0]).toEqual({ name: '癸', pos: 'PR' })
+    expect(s.runners).toEqual([expect.objectContaining({ base: 1, name: '癸' })])
+    expect(s.subs!.at(-1)).toMatchObject({ kind: 'PR', in: '癸', out: '甲', pos: 'PR' })
+    expect(s.batting[0]).toMatchObject({ batter: '甲', runner: '癸' })
+    s = runnerEvent(s, 0, 'us', 'sb')
+    s = commitPA(s, defaultPlan(s, '全壘打'))
+    expect(s.batting[0]).toMatchObject({ batter: '甲', runner: '癸', sb: 1, run: 1, code: 'R' })
+    const lines = new Map(battingLines(SEED_DATASET, s.batting).map((l) => [l.name, l]))
+    expect(lines.get('甲')).toMatchObject({ pa: 1, h: 1, r: 0, sb: 0 })
+    expect(lines.get('癸')).toMatchObject({ pa: 0, h: 0, r: 1, sb: 1, g: 1 })
+    expect(lines.get('乙')).toMatchObject({ pa: 1, hr: 1, r: 1, rbi: 2 })
+    expect(score(s).us).toBe(2)
+    // and it survives saving the game
+    const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
+    expect(fragment.batting[0]).toMatchObject({ batter: '甲', runner: '癸' })
+  })
+  it('a second pinch runner replaces the first; replacing someone not on base is not a 代跑', () => {
+    let s = commitPA(start(), defaultPlan(start(), '保送'))
+    s = substitute(substitute(s, 0, '癸', 'PR'), 0, '子', 'PR')
+    expect(s.runners[0].name).toBe('子'); expect(s.batting[0].runner).toBe('子')
+    const t = substitute(s, 1, '丑', 'PH') // 乙 is at bat, not on base
+    expect(t.subs!.at(-1)).toMatchObject({ kind: 'PH', out: '乙' })
+    expect(t.batting[0].runner).toBe('子')
+  })
+})

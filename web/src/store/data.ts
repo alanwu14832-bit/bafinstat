@@ -12,14 +12,14 @@ import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
+import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
   deleteCloudRegistration, loadCloudRegistrations, parseRegistration, readLocalRegistrations, removeFromRegistrations, renameInRegistrations, saveCloudRegistration,
   withoutRegistration, withRegistration, writeLocalRegistrations, REGISTRATIONS_UNSUPPORTED,
 } from '../data/registrations'
-import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
+import { DAY_ROSTER_UNSUPPORTED, RUNNER_UNSUPPORTED } from '../data/gameRoster'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
@@ -95,7 +95,10 @@ const initialDemo = cloudConfigured ? (storedDemo ?? false) : (storedDemo ?? ini
 
 const denied = (cloud: DataState['cloud']) => new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
 /** Turn the cloud's missing day_roster column into a warning the save UIs already show. */
-const droppedWarnings = (dropped: string[], gameId = ''): GameWarning[] => (dropped.includes('day_roster') ? [{ gameId, message: DAY_ROSTER_UNSUPPORTED }] : [])
+const droppedWarnings = (dropped: string[], gameId = ''): GameWarning[] => [
+  ...(dropped.includes('day_roster') ? [{ gameId, message: DAY_ROSTER_UNSUPPORTED }] : []),
+  ...(dropped.includes(RUNNER_COLUMN) ? [{ gameId, message: RUNNER_UNSUPPORTED }] : []),
+]
 let registrationsLive = false
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -158,7 +161,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try {
         const { dropped } = await pushCloudDataset(fragment, 'upsert')
-        if (dropped.includes('day_roster')) { warnings.push(...droppedWarnings(dropped, game.id)); set({ dayRosterSupported: false }) }
+        warnings.push(...droppedWarnings(dropped, game.id))
+        if (dropped.includes('day_roster')) set({ dayRosterSupported: false })
         else if (game.dayRoster) set({ dayRosterSupported: true })
         // the upsert leaves day_roster out when the game has none, so a roster removed in the editor is cleared explicitly
         else if (base.games.find((g) => g.id === game.id)?.dayRoster) await updateGameDayRosters([{ id: game.id, day_roster: null }])

@@ -105,3 +105,14 @@ describe('當日登錄名單 columns of 比賽清單', () => {
     expect(rows.map(dayRosterFromCells).every((r) => r === undefined)).toBe(true)
   })
 })
+
+describe('代跑 column of 打席紀錄', () => {
+  it('survives a backup round trip and is blank for everyone else', () => {
+    const i = SEED_DATASET.batting.findIndex((p) => p.run === 1)
+    const ds = { ...SEED_DATASET, batting: SEED_DATASET.batting.map((p, k) => (k === i ? { ...p, runner: '林凱堉' } : p)) }
+    const buf = XLSX.write(datasetToWorkbook(ds), { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+    const { dataset } = parseWorkbook(buf)
+    expect(dataset.batting[i].runner).toBe('林凱堉')
+    expect(dataset.batting.filter((p) => p.runner).length).toBe(1)
+  })
+})

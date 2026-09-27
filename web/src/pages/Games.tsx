@@ -155,7 +155,13 @@ export function GamesPage() {
   const albums = useDataStore((st) => st.albums)
   const gameAlbums = useMemo(() => (current ? albums.filter((a) => a.gameId === current.game.id) : []), [albums, current])
   const editable = current && !current.game.isDemo ? extractGame(base, current.game.id) : null
-  const boxB = useMemo(() => (current ? battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === current.game.id)).sort((a, b) => (s.dataset.batting.find((p) => p.batter === a.name && p.gameId === current.game.id)?.order ?? 99) - (s.dataset.batting.find((p) => p.batter === b.name && p.gameId === current.game.id)?.order ?? 99)) : []), [current, s.dataset])
+  const boxB = useMemo(() => {
+    if (!current) return []
+    const pas = s.dataset.batting.filter((p) => p.gameId === current.game.id)
+    // batting-order slot (a 代跑 who never batted sits in the slot he ran for), then first appearance
+    const at = (name: string) => { const i = pas.findIndex((p) => p.batter === name || p.runner === name); return (pas[i]?.order ?? 99) * 1000 + i }
+    return battingLines(s.dataset, pas).sort((a, b) => at(a.name) - at(b.name))
+  }, [current, s.dataset])
   const boxP = useMemo(() => (current ? pitchingLines(s.dataset.pitching.filter((p) => p.gameId === current.game.id), [current.game]) : []), [current, s.dataset])
   const pbpBat = useMemo(() => (current ? s.dataset.batting.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
   const pbpPit = useMemo(() => (current ? s.dataset.pitching.filter((p) => p.gameId === current.game.id) : []), [current, s.dataset])
