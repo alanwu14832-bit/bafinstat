@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPitch, appeared, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
+  addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
   substitute, toGameEdit, unusedBench, withInPlay, type RecordState,
 } from './model'
 import { normalizeGameEdit } from '../data/edit'
@@ -249,5 +249,17 @@ describe('代跑 (pinch runner)', () => {
     const t = substitute(s, 1, '丑', 'PH') // 乙 is at bat, not on base
     expect(t.subs!.at(-1)).toMatchObject({ kind: 'PH', out: '乙' })
     expect(t.batting[0].runner).toBe('子')
+  })
+})
+
+describe('我隊守備失誤 while the opponent bats', () => {
+  it('goes onto that plate appearance (a hit plus an error) and is cleared for the next one', () => {
+    let s = newGame(game, lineup, '壬') // 主: they bat first
+    s = addError(addError(s, 'LF'), 'SS')
+    s = removeError(s, 'SS')
+    s = commitPA(s, defaultPlan(s, '一安'))
+    expect(s.pitching[0]).toMatchObject({ result: '一安', errors: ['LF'] })
+    s = commitPA(s, defaultPlan(s, '內滾'))
+    expect(s.pitching[1]).not.toHaveProperty('errors')
   })
 })

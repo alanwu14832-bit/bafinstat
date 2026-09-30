@@ -136,6 +136,8 @@ export interface PitchingPA {
   pb: number
   /** pickoffs */
   pk: number
+  /** 守備失誤: our fielders' positions that erred during this plate appearance (one entry per error), see data/errors.ts */
+  errors?: string[]
   code?: string
   note?: string
 }

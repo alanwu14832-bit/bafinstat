@@ -24,9 +24,10 @@ import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
+import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
@@ -192,6 +193,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const [rbiTouched, setRbiTouched] = useState(false)
   const [runnerMenu, setRunnerMenu] = useState<number | null>(null)
   const [tool, setTool] = useState<'none' | 'pitcher' | 'lineup'>('none')
+  const [errOpen, setErrOpen] = useState(false)
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerMenu(null) }, [side, state.inning])
   const implied = impliedResult(state.pitches)
@@ -381,7 +383,22 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 </span>
               ))}
               {state.extras.pka > 0 && <span className="inline-flex items-center text-[12px] text-ink-2 h-7 px-2 rounded-[6px] bg-surface-2">牽制 <span className="tnum text-ink font-medium ml-1">×{state.extras.pka}</span></span>}
+              <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={cx('h-7 px-2 rounded-[6px] border text-[12px] cursor-pointer', errOpen ? 'border-ink bg-ink text-bg' : 'border-border text-ink-2 hover:bg-surface-2')}>我隊失誤{state.extras.errors?.length ? <span className="tnum font-medium ml-1">×{state.extras.errors.length}</span> : null}</button>
               <span className="text-[11px] text-muted self-center ml-1">盜壘、牽制、進壘請點上方壘上的跑者</span>
+              {errOpen && (
+                <div className="basis-full flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-muted">誰失誤（例如一安＋左外野漏接點 LF）：</span>
+                  {FIELD_POSITIONS.map((pos) => {
+                    const n = (state.extras.errors ?? []).filter((x) => x === pos).length
+                    return (
+                      <span key={pos} className="inline-flex items-center rounded-[6px] border border-border overflow-hidden text-[12px]">
+                        <button type="button" onClick={() => apply((s) => addError(s, pos))} className="h-7 px-2 hover:bg-surface-2 cursor-pointer">{pos}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
+                        {n > 0 && <button type="button" aria-label={`${pos} 失誤減一`} onClick={() => apply((s) => removeError(s, pos))} className="h-7 px-1.5 border-l border-border text-muted hover:text-ink cursor-pointer">−</button>}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           )}
 

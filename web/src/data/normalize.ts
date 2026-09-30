@@ -14,6 +14,7 @@
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
+import { cleanErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
@@ -75,13 +76,18 @@ function fillInnings<T extends Seq>(rows: T[]): { rows: T[]; filled: number } {
 
 /** Fielding lines for a game that has none: everyone who took a fielding position in the batting log (subs included,
  *  pitchers come from the pitching log), errors attributed by the opponent's 失誤 batted-ball location. */
-function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]): { lines: FieldingLine[]; unknownErrors: number } {
+export function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]): { lines: FieldingLine[]; unknownErrors: number } {
   const errByPos: Record<string, number> = {}
+  // a pitcher's error goes to whoever was pitching then
+  const errByPitcher = new Map<string, number>()
   let unknownErrors = 0
   for (const p of pitching) {
-    if (p.result !== '失誤') continue
-    const pos = p.loc ? POSITION_BY_NUMBER[p.loc] : undefined
-    if (pos) errByPos[pos] = (errByPos[pos] ?? 0) + 1; else unknownErrors++
+    const e = errorsOf(p)
+    unknownErrors += e.unknown
+    for (const pos of e.positions) {
+      if (pos === 'P' && p.pitcher) errByPitcher.set(p.pitcher, (errByPitcher.get(p.pitcher) ?? 0) + 1)
+      else errByPos[pos] = (errByPos[pos] ?? 0) + 1
+    }
   }
   const innings = game.innings ?? Math.max(1, ...batting.map((p) => p.inning), ...pitching.map((p) => p.inning))
   const blank = { po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 }
@@ -99,7 +105,7 @@ function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]
     if (!outs.has(p.pitcher)) { outs.set(p.pitcher, 0); order.push(p.pitcher) }
     if ((p.code ?? '') in OUT_CODES) outs.set(p.pitcher, outs.get(p.pitcher)! + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1))
   }
-  order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: i === 0 ? errByPos.P ?? 0 : 0, note: i === 0 ? 'SP' : 'RP' }))
+  order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: (errByPitcher.get(name) ?? 0) + (i === 0 ? errByPos.P ?? 0 : 0), note: i === 0 ? 'SP' : 'RP' }))
   if (unknownErrors && lines.length) lines[0].note = `${lines[0].note ?? ''}；另有 ${unknownErrors} 次失誤未記落點，未歸屬個人`
   return { lines, unknownErrors }
 }
@@ -111,7 +117,7 @@ const FLY = new Set(['內飛', '外飛', '界外飛', '犧飛'])
  * Credit PO / A / DP to fielding lines from the opponent's plate appearances. Fielders are looked up by the
  * position they played (first line at that position); pitchers by name. Returns how many outs could not be placed.
  */
-function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited: number; unplaced: number } {
+export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited: number; unplaced: number } {
   const byPos = new Map<string, FieldingLine>()
   for (const l of lines) if (l.pos && l.pos !== 'P' && !byPos.has(l.pos)) byPos.set(l.pos, l)
   const byPitcher = new Map<string, FieldingLine>()
@@ -166,8 +172,8 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map((p) => ({
-    ...p, pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, ...p }) => ({
+    ...p, ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,

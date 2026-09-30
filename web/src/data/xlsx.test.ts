@@ -116,3 +116,13 @@ describe('代跑 column of 打席紀錄', () => {
     expect(dataset.batting.filter((p) => p.runner).length).toBe(1)
   })
 })
+
+describe('守備失誤 column of 投球紀錄', () => {
+  it('survives a backup round trip', () => {
+    const i = SEED_DATASET.pitching.findIndex((p) => p.result === '一安')
+    const ds = { ...SEED_DATASET, pitching: SEED_DATASET.pitching.map((p, k) => (k === i ? { ...p, errors: ['LF', 'SS'] } : p)) }
+    const { dataset } = parseWorkbook(XLSX.write(datasetToWorkbook(ds), { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(dataset.pitching[i].errors).toEqual(['LF', 'SS'])
+    expect(dataset.pitching.filter((p) => p.errors).length).toBe(1)
+  })
+})

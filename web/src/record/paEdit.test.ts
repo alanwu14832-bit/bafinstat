@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, toggleBase, withResult, withRun } from './paEdit'
+import { applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
 import type { BattingPA, PitchingPA } from '../data/types'
 
 const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 1, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
@@ -59,5 +59,39 @@ describe('editing one plate appearance with the recording buttons', () => {
     expect(blankBattingAt([], 0, 'G')).toMatchObject({ order: 1, inning: 1, batter: '' })
     expect(blankPitchingAt([pit({ oppOrder: 4, pitcher: '子', inning: 3 })], 1, 'G')).toMatchObject({ oppOrder: 5, pitcher: '子', inning: 3 })
     expect(blankPitchingAt([pit({ oppOrder: 4, pitcher: '子', inning: 3 })], 0, 'G')).toMatchObject({ oppOrder: 1, pitcher: '子', inning: 3 })
+  })
+})
+
+describe('base running of our batter after he reached', () => {
+  it('a single plus an error, a steal, then home', () => {
+    let p = bat({ result: '一安' })
+    expect(startBase(p)).toBe(1); expect(stillOn(p)).toBe(true)
+    p = applyRunEvent(p, 'err'); p = applyRunEvent(p, 'sb'); p = applyRunEvent(p, 'score')
+    expect(p).toMatchObject({ advOnError: 1, sb: 1, run: 1, code: 'R' })
+    expect(basePath(p).map((s) => `${s.label}${s.base ?? ''}${s.end ?? ''}`)).toEqual(['一安1', '失誤進壘2', '盜壘3', '得分run'])
+    expect(stillOn(p)).toBe(false)
+    p = undoRunStep(p); expect(p).toMatchObject({ run: 0, sb: 1 }); expect(p).not.toHaveProperty('code')
+    p = undoRunStep(p); expect(p.sb).toBe(0)
+    p = undoRunStep(p); expect(p.advOnError).toBe(0)
+  })
+  it('caught stealing, picked off, left on base; outs at the plate have no path', () => {
+    expect(applyRunEvent(bat({ result: '保送', code: 'L' }), 'cs')).toMatchObject({ cs: 1 })
+    expect(applyRunEvent(bat({ result: '保送', code: 'L' }), 'cs')).not.toHaveProperty('code')
+    expect(basePath(applyRunEvent(bat({ result: '二安' }), 'pk')).at(-1)).toMatchObject({ end: 'out' })
+    expect(applyRunEvent(bat({ result: '三安', run: 1, code: 'R' }), 'stranded')).toMatchObject({ run: 0, code: 'L' })
+    expect(basePath(bat({ result: '內滾', code: 'I' }))).toEqual([])
+    expect(startBase(bat({ result: '三振', code: 'L' }))).toBe(1) // 不死三振 and left on base
+    expect(basePath(bat({ result: '全壘打', run: 1, code: 'R' }))).toEqual([{ label: '全壘打', end: 'run' }])
+  })
+  it('a steal can be added after the ending; a new ending replaces the old one', () => {
+    let p = applyRunEvent(bat({ result: '一安' }), 'score')
+    p = applyRunEvent(p, 'err')
+    expect(p).toMatchObject({ run: 1, code: 'R', advOnError: 1 })
+    expect(runEnding(p)).toBe('score')
+    p = applyRunEvent(p, 'cs')
+    expect(p).toMatchObject({ run: 0, cs: 1, advOnError: 1 }); expect(p).not.toHaveProperty('code')
+    p = applyRunEvent({ ...p, code: 'II' }, 'stranded')
+    expect(p).toMatchObject({ cs: 0, outOnBase: 0, code: 'L' })
+    expect(runEnding(bat({ result: '一安' }))).toBeNull()
   })
 })

@@ -13,7 +13,8 @@ import { cx } from '../../lib/format'
 import { POSITIONS, type BattingPA, type PitchingPA } from '../../data/types'
 import { count } from '../../record/model'
 import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../../record/widgets'
-import { toggleBase, withResult, withRun } from '../../record/paEdit'
+import { applyRunEvent, basePath, RUN_EVENTS, runEnding, startBase, toggleBase, undoRunStep, withResult, withRun, type RunEvent } from '../../record/paEdit'
+import { FIELD_POSITIONS } from '../../data/errors'
 
 export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
@@ -27,7 +28,7 @@ const whoOf = (side: PaSide, p: AnyPA) => {
 }
 const extrasOf = (side: PaSide, p: AnyPA) => (isBat(side, p)
   ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.outOnBase && `壘死 ${p.outOnBase}`, p.rbi && `打點 ${p.rbi}`]
-  : [(p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
+  : [(p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
 ).filter(Boolean).join('・')
 
 /* ------------------------------------------------------------------ list */
@@ -101,10 +102,51 @@ function scrollBelowHeader(el: HTMLElement) {
 }
 const Section = ({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) => (
   <section className="flex flex-col gap-2">
-    <div className="flex items-center gap-2 min-h-7"><span className="text-[12px] font-medium text-ink-2">{title}</span>{aside}</div>
+    <div className="flex items-start gap-2 min-h-7"><span className="text-[12px] font-medium text-ink-2 whitespace-nowrap leading-7">{title}</span>{aside}</div>
     {children}
   </section>
 )
+
+/** 一安 1B → 失誤進壘 2B → 盜壘 3B → 得分 */
+function RunPath({ pa }: { pa: BattingPA }) {
+  const steps = basePath(pa)
+  return (
+    <span className="inline-flex items-center gap-1 flex-wrap text-[12px]">
+      {steps.map((st, i) => (
+        <Fragment key={i}>
+          {i > 0 && <ChevronRight className="size-3.5 text-muted" />}
+          <span className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-[6px] border', st.end === 'run' ? 'border-[color-mix(in_srgb,var(--good)_45%,transparent)] text-ink' : st.end === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_40%,transparent)] text-critical' : 'border-border text-ink-2')}>
+            {st.label}{st.base && st.base < 4 ? <span className="text-muted tnum">{st.base}B</span> : null}
+          </span>
+        </Fragment>
+      ))}
+    </span>
+  )
+}
+const runBtn = (out?: boolean, on?: boolean) => cx('h-9 pointer-fine:h-8 px-2.5 rounded-[6px] border text-[12px] font-medium cursor-pointer', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2', out && 'text-critical'))
+/** The 紀錄比賽 runner menu, applied to one row. */
+function RunButtons({ pa, onChange, label }: { pa: BattingPA; onChange: (pa: BattingPA) => void; label: string }) {
+  const ending = runEnding(pa)
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${label} 的跑壘`}>
+      {RUN_EVENTS.map((e) => {
+        // 牽制出局 and 壘死 are the same out on the bases in the data; it shows as 壘死
+        const on = e.ev === ending
+        return <button key={e.ev} type="button" aria-pressed={e.ev === 'sb' || e.ev === 'err' ? undefined : on} onClick={() => onChange(applyRunEvent(pa, e.ev as RunEvent))} className={runBtn(e.out, on)}>{e.label}</button>
+      })}
+      {basePath(pa).length > 1 && <button type="button" onClick={() => onChange(undoRunStep(pa))} className={cx(runBtn(), 'text-ink-2')}>復原上一步</button>}
+    </div>
+  )
+}
+/** Tap to add one, − to take one away (暴投 ×2). */
+function CountButton({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <span className="inline-flex items-center rounded-[6px] border border-border bg-surface overflow-hidden">
+      <button type="button" onClick={() => onChange(value + 1)} className="h-9 pointer-fine:h-8 px-2.5 text-[12px] font-medium hover:bg-surface-2 cursor-pointer">{label}{value > 0 && <span className="ml-1 tnum text-ink">×{value}</span>}</button>
+      {value > 0 && <button type="button" aria-label={`${label}減一`} onClick={() => onChange(value - 1)} className="h-9 pointer-fine:h-8 px-2 border-l border-border text-muted hover:text-ink hover:bg-surface-2 cursor-pointer">−</button>}
+    </span>
+  )
+}
 
 export interface PaPanelProps {
   side: PaSide
@@ -120,9 +162,12 @@ export interface PaPanelProps {
   onDelete: () => void
   onInsert: (at: number) => void
   onMove: (d: -1 | 1) => void
+  /** our half-inning: the rows before this one whose runners may still be on base, editable from here */
+  others?: Array<{ index: number; pa: BattingPA }>
+  onChangeOther?: (index: number, pa: BattingPA) => void
 }
 
-export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove }: PaPanelProps) {
+export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   const c = count(pa.pitches)
   const bases = new Set((pa.basesBefore ?? '').split(''))
@@ -194,30 +239,72 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
         <BattedBallPicker result={pa.result} value={pa} onChange={(v) => set({ loc: v.loc, traj: v.traj, quality: v.quality })} />
       )}
 
-      {/* running and scoring */}
-      <Section title={bat ? '跑壘與得分' : '跑壘與失分'}>
-        {bat ? (
-          <div className="flex flex-col gap-2">
-            <label className="flex items-center gap-2 text-[13px] text-ink-2">代跑<PlayerSelect aria-label="代跑" size="sm" value={bat.runner ?? ''} onChange={(v) => set({ runner: v || undefined })} names={names.filter((n) => n !== bat.batter)} placeholder="沒有代跑" className="w-[160px]" /></label>
-            <div className="flex items-center gap-x-5 gap-y-2 flex-wrap">
-              <Stepper label="得分" value={bat.run} max={1} onChange={(v) => onChange(withRun(bat, v))} />
+      {/* running and scoring: the same moves as tapping a runner while recording */}
+      {bat ? (
+        <>
+          <Section title="打者上壘後" aside={<span className="text-[11px] text-muted">安打＋對方失誤多跑一個壘：按「失誤進壘」</span>}>
+            {startBase(bat) === null ? <p className="text-[12px] text-muted">打者在本壘出局，沒有跑壘。</p> : (
+              <div className="flex flex-col gap-2">
+                <RunPath pa={bat} />
+                <RunButtons pa={bat} onChange={(n) => onChange(n)} label={bat.batter} />
+                {basePath(bat).at(-1)?.end === 'out' && !['I', 'II', 'III'].includes(bat.code ?? '') && <p className="text-[12px] text-warning">在下方「結果代碼」選這是這局第幾個出局。</p>}
+              </div>
+            )}
+            <div className="flex items-center gap-x-5 gap-y-2 flex-wrap mt-1">
+              <label className="flex items-center gap-2 text-[13px] text-ink-2">代跑<PlayerSelect aria-label="代跑" size="sm" value={bat.runner ?? ''} onChange={(v) => set({ runner: v || undefined })} names={names.filter((n) => n !== bat.batter)} placeholder="沒有代跑" className="w-[150px]" /></label>
               <Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: v })} />
-              <Stepper label="盜壘" value={bat.sb} onChange={(v) => set({ sb: v })} />
-              <Stepper label="盜壘失敗" value={bat.cs} onChange={(v) => set({ cs: v })} />
-              <Stepper label="失誤進壘" value={bat.advOnError} onChange={(v) => set({ advOnError: v })} />
-              <Stepper label="壘死" value={bat.outOnBase} onChange={(v) => set({ outOnBase: v })} />
             </div>
-          </div>
-        ) : pit && (
-          <div className="flex items-center gap-x-5 gap-y-2 flex-wrap">
-            <Stepper label="被盜壘" value={pit.sba} onChange={(v) => set({ sba: v })} />
-            <Stepper label="阻殺" value={pit.cs} onChange={(v) => set({ cs: v })} />
-            <Stepper label="暴投" value={pit.wp} onChange={(v) => set({ wp: v })} />
-            <Stepper label="捕逸" value={pit.pb} onChange={(v) => set({ pb: v })} />
-            <Stepper label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
-          </div>
-        )}
-      </Section>
+            <details className="text-[12px] text-ink-2">
+              <summary className="cursor-pointer min-h-9 pointer-fine:min-h-7 inline-flex items-center hover:text-ink">直接調整數字</summary>
+              <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2">
+                <Stepper label="得分" value={bat.run} max={1} onChange={(v) => onChange(withRun(bat, v))} />
+                <Stepper label="盜壘" value={bat.sb} onChange={(v) => set({ sb: v })} />
+                <Stepper label="盜壘失敗" value={bat.cs} onChange={(v) => set({ cs: v })} />
+                <Stepper label="失誤進壘" value={bat.advOnError} onChange={(v) => set({ advOnError: v })} />
+                <Stepper label="壘死" value={bat.outOnBase} onChange={(v) => set({ outOnBase: v })} />
+              </div>
+            </details>
+          </Section>
+          {others.length > 0 && onChangeOther && (
+            <Section title="壘上其他跑者" aside={<span className="text-[11px] text-muted">這局在這個打席之前上壘的人；他們在這個打席期間盜壘、失誤進壘、得分，在這裡記</span>}>
+              <ul className="flex flex-col gap-2">
+                {others.map(({ index: k, pa: o }) => (
+                  <li key={k} className="rounded-[var(--radius-sm)] border border-border bg-surface px-3 py-2 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap text-[13px]">
+                      <span className="font-medium text-ink">{o.runner || o.batter}</span>
+                      {o.runner && <span className="text-[11px] text-muted">代跑（{o.batter}）</span>}
+                      <span className="text-[11px] text-muted tnum">第 {k + 1} 個打席</span>
+                      <RunPath pa={o} />
+                    </div>
+                    <RunButtons pa={o} onChange={(n) => onChangeOther(k, n)} label={o.runner || o.batter} />
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </>
+      ) : pit && (
+        <>
+          <Section title="跑壘與失分" aside={<span className="text-[11px] text-muted">這個打席期間發生的；點一下加一次</span>}>
+            <div className="flex flex-wrap gap-1.5">
+              <CountButton label="被盜壘" value={pit.sba} onChange={(v) => set({ sba: v })} />
+              <CountButton label="阻殺（盜壘失敗）" value={pit.cs} onChange={(v) => set({ cs: v })} />
+              <CountButton label="暴投" value={pit.wp} onChange={(v) => set({ wp: v })} />
+              <CountButton label="捕逸" value={pit.pb} onChange={(v) => set({ pb: v })} />
+              <CountButton label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
+            </div>
+          </Section>
+          <Section title="我隊守備失誤" aside={<span className="text-[11px] text-muted">例如一安＋左外野漏接 → 點 LF；失誤兩次就點兩下</span>}>
+            <div className="flex flex-wrap gap-1.5">
+              {FIELD_POSITIONS.map((pos) => {
+                const n = (pit.errors ?? []).filter((x) => x === pos).length
+                return <CountButton key={pos} label={pos} value={n} onChange={(v) => { const rest = (pit.errors ?? []).filter((x) => x !== pos); const errors = [...rest, ...Array.from({ length: v }, () => pos)]; const nx: PitchingPA = { ...pit, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
+              })}
+            </div>
+            {pit.result === '失誤' && !pit.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：沒點守位時，依落點算一次失誤。</p>}
+          </Section>
+        </>
+      )}
 
       <Section title="結果代碼" aside={<span className="text-[11px] text-muted">I／II／III 這個打席造成第幾個出局；L 殘壘；R 得分{side === 'pit' ? '（非自責）；ER 自責分' : ''}</span>}>
         <div className="flex flex-wrap gap-1.5">
