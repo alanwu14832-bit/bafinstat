@@ -80,6 +80,7 @@ create table if not exists pitching_pa (
   wp           int not null default 0,
   pb           int not null default 0,
   pk           int not null default 0,
+  errors       text[],        -- 守備失誤: positions of our fielders who erred during this plate appearance
   code         text,
   note         text,
   primary key (game_id, seq)

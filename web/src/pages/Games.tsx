@@ -81,8 +81,11 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
 
 function LineScore({ s }: { s: GameSummary }) {
   const n = Math.max(s.lineUs.length, s.lineOpp.length)
-  const top = s.game.homeAway === '主' ? { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs } : { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp }
-  const bottom = s.game.homeAway === '主' ? { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsOpp } : { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsUs }
+  // each team's E is the errors that team made (ours from our fielding lines, theirs from our batters reaching on 失誤)
+  const opp = { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
+  const us = { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
+  const top = s.game.homeAway === '主' ? opp : us
+  const bottom = s.game.homeAway === '主' ? us : opp
   return (
     <LineScoreBoard innings={n} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.name === TEAM_NAME }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.name === TEAM_NAME }} />
   )

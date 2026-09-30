@@ -5,13 +5,14 @@ import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
-import type { GameEdit } from '../../data/edit'
+import { reconcileFielding, type GameEdit } from '../../data/edit'
+import { cleanErrors, errorsText } from '../../data/errors'
 import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { blankBattingAt, blankPitchingAt } from '../../record/paEdit'
+import { blankBattingAt, blankPitchingAt, startBase, stillOn } from '../../record/paEdit'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -92,12 +93,12 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
 
 /* ------------------------------------------------------------------ drafts: pitches edited as text */
 type BatDraft = Omit<BattingPA, 'pitches'> & { pitchesText: string }
-type PitDraft = Omit<PitchingPA, 'pitches'> & { pitchesText: string }
+type PitDraft = Omit<PitchingPA, 'pitches' | 'errors'> & { pitchesText: string; errorsText: string }
 const toBatDraft = (p: BattingPA): BatDraft => { const { pitches, ...rest } = p; return { ...rest, pitchesText: pitches.join(' ') } }
-const toPitDraft = (p: PitchingPA): PitDraft => { const { pitches, ...rest } = p; return { ...rest, pitchesText: pitches.join(' ') } }
+const toPitDraft = (p: PitchingPA): PitDraft => { const { pitches, errors, ...rest } = p; return { ...rest, pitchesText: pitches.join(' '), errorsText: errorsText(errors) } }
 const parsePitches = (t: string) => t.toUpperCase().split(/[\s,，、/]+/).filter(Boolean)
 const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, ...rest } = d; return { ...rest, pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
-const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, ...rest } = d; return { ...rest, pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
+const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, ...rest } = d; const errors = cleanErrors(et); return { ...rest, ...(errors.length ? { errors } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
 
 const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
@@ -121,6 +122,7 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
+  { key: 'errorsText', label: '守備失誤（守位）', kind: 'text', w: 96 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
 type StarterDraft = GameDayRoster['starters'][number]
@@ -181,7 +183,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
         onDelete={() => { setRows(side, (r) => r.filter((_, k) => k !== i)); setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null) }}
         onInsert={(at) => insertPa(side, at)}
-        onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }} />
+        onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
+        // runners of this inning who reached before this plate appearance and are still out there
+        others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && (stillOn(o.pa) || (startBase(o.pa) ?? 4) < 4)) : []}
+        onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} />
     )
   }
   const [error, setError] = useState<string | null>(null)
@@ -215,11 +220,16 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster
     const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry })
     try {
-      await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim(), dayRoster }, batting: bat.map(fromBatDraft).filter((p) => p.batter.trim()), pitching: pit.map(fromPitDraft).filter((p) => p.pitcher.trim()), fielding: fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 })) })
+      const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
+      const pitching = pit.map(fromPitDraft).filter((p) => p.pitcher.trim())
+      const lines = fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 }))
+      // errors / putouts changed in plate appearances move onto the fielders; numbers typed in the 守備 table stay
+      const fielding = reconcileFielding(lines, game, { batting: initial.batting, pitching: initial.pitching }, { batting, pitching })
+      await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim(), dayRoster }, batting, pitching, fielding })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
   const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % 9) + 1 : undefined })
-  const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : undefined })
+  const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', errorsText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : undefined })
   const blankStarter = (prev?: StarterDraft): StarterDraft => ({ order: prev ? (prev.order && prev.order < 9 ? prev.order + 1 : undefined) : 1, pos: '', name: '' })
   const blankFld = (): FieldingLine => ({ gameId: game.id, player: '', pos: '', innings: game.innings, po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 })
 

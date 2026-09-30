@@ -21,7 +21,7 @@ export type Dest = 'out' | 1 | 2 | 3 | 'home'
 export interface LineupSlot { name: string; pos: string }
 export interface Runner { base: Base; side: Side; row: number; name: string }
 /** pka = pickoff throws where the runner was safe (noted, not a template column) */
-export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: number; pka: number }
+export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: number; pka: number; /** 守備失誤: positions of our fielders who erred */ errors?: string[] }
 
 export interface RecordState {
   game: Game
@@ -109,7 +109,15 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
 
 export const addPitch = (s: RecordState, code: string): RecordState => ({ ...s, pitches: [...s.pitches, code] })
 export const undoPitch = (s: RecordState): RecordState => ({ ...s, pitches: s.pitches.slice(0, -1) })
-export const addExtra = (s: RecordState, key: keyof Extras): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
+export const addExtra = (s: RecordState, key: Exclude<keyof Extras, 'errors'>): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
+/** One error by our fielder at `pos` during the opponent plate appearance in progress (a hit plus an error, a bad throw…). */
+export const addError = (s: RecordState, pos: string): RecordState => ({ ...s, extras: { ...s.extras, errors: [...(s.extras.errors ?? []), pos] } })
+export function removeError(s: RecordState, pos: string): RecordState {
+  const list = [...(s.extras.errors ?? [])]
+  const i = list.lastIndexOf(pos)
+  if (i >= 0) list.splice(i, 1)
+  return { ...s, extras: { ...s.extras, errors: list } }
+}
 export const setOppBatter = (s: RecordState, name: string): RecordState => ({ ...s, oppBatter: name })
 /**
  * New pitcher, logged as a 換投. Without a DH the old pitcher bats in the lineup as P: a pitcher from the bench takes
@@ -269,7 +277,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note })
     rowIndex = batting.length - 1
   } else {
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, note })
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, ...(s.extras.errors?.length ? { errors: [...s.extras.errors] } : {}), note })
     rowIndex = pitching.length - 1
   }
   const next: RecordState = { ...s, batting, pitching }

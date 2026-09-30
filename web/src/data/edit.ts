@@ -3,7 +3,7 @@
  * The edited fragment goes through normalizeDataset so the same rules as an import apply
  * (innings from out codes, vocabulary aliases, fielding derived when none is given, warnings).
  */
-import { normalizeDataset, type GameWarning } from './normalize'
+import { creditPlays, deriveFielding, normalizeDataset, type GameWarning } from './normalize'
 import type { BattingPA, Dataset, FieldingLine, Game, PitchingPA } from './types'
 
 export interface GameEdit {
@@ -56,4 +56,47 @@ export function removeGame(base: Dataset, id: string): Dataset {
     pitching: base.pitching.filter((p) => p.gameId !== id),
     fielding: base.fielding.filter((f) => f.gameId !== id),
   }
+}
+
+type Tally = { e: number; po: number; a: number; dp: number }
+/** What the plate appearances alone say each fielder did (errors, and putouts / assists / double plays), keyed by
+ *  position — or by pitcher's name for P, since several pitchers share it. */
+function tallyFromPlays(game: Game, batting: BattingPA[], pitching: PitchingPA[]): Map<string, Tally & { line: FieldingLine }> {
+  const { lines } = deriveFielding(game, batting, pitching)
+  creditPlays(lines, pitching)
+  const out = new Map<string, Tally & { line: FieldingLine }>()
+  for (const l of lines) {
+    const key = l.pos === 'P' ? `P|${l.player}` : l.pos
+    if (!out.has(key)) out.set(key, { e: l.e, po: l.po, a: l.a, dp: l.dp, line: l })
+  }
+  return out
+}
+
+/**
+ * Keep the fielding lines in step with edited plate appearances: whatever the plays implied before the edit and
+ * imply now is added as a difference, so an error or a putout changed in a plate appearance moves E / PO / A on the
+ * right fielder, and numbers typed into the 守備 table stay. PO / A / DP are left alone when the lines never had any
+ * (the save then credits them from scratch).
+ */
+export function reconcileFielding(lines: FieldingLine[], game: Game, before: { batting: BattingPA[]; pitching: PitchingPA[] }, after: { batting: BattingPA[]; pitching: PitchingPA[] }): FieldingLine[] {
+  if (!lines.length) return lines
+  const was = tallyFromPlays(game, before.batting, before.pitching)
+  const now = tallyFromPlays(game, after.batting, after.pitching)
+  const plays = lines.some((l) => l.po || l.a)
+  const out = lines.map((l) => ({ ...l }))
+  const find = (key: string) => (key.startsWith('P|') ? out.find((l) => l.pos === 'P' && l.player === key.slice(2)) : out.find((l) => l.pos === key))
+  for (const key of new Set([...was.keys(), ...now.keys()])) {
+    const a = was.get(key), b = now.get(key)
+    const d = (k: keyof Tally) => (b?.[k] ?? 0) - (a?.[k] ?? 0)
+    const de = d('e'), dpo = plays ? d('po') : 0, da = plays ? d('a') : 0, ddp = plays ? d('dp') : 0
+    if (!de && !dpo && !da && !ddp) continue
+    const line = find(key)
+    if (line) {
+      line.e = Math.max(0, line.e + de); line.po = Math.max(0, line.po + dpo); line.a = Math.max(0, line.a + da); line.dp = Math.max(0, line.dp + ddp)
+    } else if (b) {
+      // a fielder (or pitcher) the lines did not have yet
+      out.push({ ...b.line, e: Math.max(0, de), po: Math.max(0, dpo), a: Math.max(0, da), dp: Math.max(0, ddp) })
+    }
+  }
+  return out
 }

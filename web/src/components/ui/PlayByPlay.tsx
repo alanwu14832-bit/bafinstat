@@ -110,7 +110,7 @@ export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: 
             const header = p.inning !== lastInning
             const changed = !header && p.pitcher !== lastPitcher
             lastInning = p.inning; lastPitcher = p.pitcher
-            const extras = [p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : ''].filter(Boolean).join('・')
+            const extras = [p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : '', p.errors?.length ? `失誤 ${p.errors.join('、')}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" />}

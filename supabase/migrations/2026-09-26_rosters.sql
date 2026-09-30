@@ -21,6 +21,9 @@ create policy "editors write" on registrations for all to authenticated using (i
 -- 3) 代跑: the pinch runner who took over from the batter on base gets the run / SB / CS of that plate appearance
 alter table batting_pa add column if not exists runner text;
 
+-- 4) 守備失誤: our fielders' positions that erred during an opponent plate appearance (a hit plus an error…)
+alter table pitching_pa add column if not exists errors text[];
+
 -- realtime (ignore if already added)
 do $$ begin alter publication supabase_realtime add table registrations; exception when others then null; end $$;
 
