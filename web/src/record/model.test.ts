@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
-  substitute, toGameEdit, unusedBench, withInPlay, type RecordState,
+  substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
 } from './model'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
@@ -261,5 +261,39 @@ describe('我隊守備失誤 while the opponent bats', () => {
     expect(s.pitching[0]).toMatchObject({ result: '一安', errors: ['LF'] })
     s = commitPA(s, defaultPlan(s, '內滾'))
     expect(s.pitching[1]).not.toHaveProperty('errors')
+  })
+})
+
+describe('runners never share a base', () => {
+  const start = () => endHalf(newGame(game, lineup, '壬')) // bottom 1: we bat
+  it('a steal by the trailing runner pushes the lead runner (double steal)', () => {
+    let s = commitPA(start(), defaultPlan(start(), '保送'))
+    s = commitPA(s, defaultPlan(s, '一安')) // 2B 甲, 1B 乙
+    s = runnerEvent(s, 1, 'us', 'sb')
+    expect(s.runners.map((r) => [r.base, r.name])).toEqual([[3, '甲'], [2, '乙']])
+    expect(s.batting.map((p) => p.sb)).toEqual([1, 1])
+    // an error advance only moves the lead runner along: one error, one advance credited
+    s = runnerEvent(s, 1, 'us', 'err')
+    expect(s.runners.map((r) => [r.base, r.name])).toEqual([[3, '乙']])
+    expect(s.batting[0]).toMatchObject({ run: 1, code: 'R', advOnError: 0 })
+    expect(s.batting[1].advOnError).toBe(1)
+  })
+  it('a wild pitch from the pitch row moves every runner up and counts once', () => {
+    let s = newGame(game, lineup, '壬') // top 1: they bat
+    s = commitPA(s, defaultPlan(s, '三安'))
+    s = commitPA(s, defaultPlan(s, '保送')) // 3B, 1B
+    s = wildPitch(s, 'wp')
+    expect(s.runners.map((r) => r.base)).toEqual([2])
+    expect(s.pitching[0].code).toBe('ER')
+    expect(s.extras.wp).toBe(1)
+    expect(wildPitch(newGame(game, lineup, '壬'), 'pb').extras.pb).toBe(1)
+  })
+  it('a plan that stacks two runners on one base, or lets one pass another, is refused', () => {
+    let s = commitPA(start(), defaultPlan(start(), '保送'))
+    s = commitPA(s, defaultPlan(s, '一安'))
+    const plan = defaultPlan(s, '一安')
+    expect(planProblems(s, plan)).toEqual([])
+    expect(planProblems(s, { ...plan, batter: 2 }).join()).toContain('都停在 2B')
+    expect(planProblems(s, { ...plan, runners: { ...plan.runners, 1: 'home', 0: 3 } }).join()).toContain('超過了前面的')
   })
 })

@@ -27,7 +27,7 @@ import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
@@ -194,6 +194,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const [runnerMenu, setRunnerMenu] = useState<number | null>(null)
   const [tool, setTool] = useState<'none' | 'pitcher' | 'lineup'>('none')
   const [errOpen, setErrOpen] = useState(false)
+  const [pkHint, setPkHint] = useState(false)
+  useEffect(() => setPkHint(false), [state.runners.length, state.inning, state.half])
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerMenu(null) }, [side, state.inning])
   const implied = impliedResult(state.pitches)
@@ -210,7 +212,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
     const next = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
-  const confirm = () => { if (!plan) return; apply((s) => commitPA(s, plan)); setPlan(null) }
+  const problems = plan ? planProblems(state, plan) : []
+  const confirm = () => { if (!plan || problems.length) return; apply((s) => commitPA(s, plan)); setPlan(null) }
   const halfLabel = `${state.inning} ${state.half === 'top' ? '上' : '下'}`
   const oppName = state.game.opponent
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
@@ -376,12 +379,22 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
           <div className="mt-2"><PitchPad onPitch={(code) => apply((s) => addPitch(s, code))} disabled={!!plan} /></div>
           {side === 'opp' && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {([['wp', '暴投'], ['pb', '捕逸'], ['pk', '牽制出局']] as const).map(([k, label]) => (
-                <span key={k} className="inline-flex items-center gap-1 text-[12px] text-ink-2">
-                  <button type="button" onClick={() => apply((s) => addExtra(s, k))} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer">{label}</button>
-                  {state.extras[k] > 0 && <span className="tnum text-ink font-medium">×{state.extras[k]}</span>}
-                </span>
-              ))}
+              {([['wp', '暴投'], ['pb', '捕逸'], ['pk', '牽制出局']] as const).map(([k, label]) => {
+                const oppRunners = state.runners.filter((r) => r.side === 'opp')
+                // 暴投／捕逸 move every runner up; 牽制出局 needs to know who: the only runner, or tap him above
+                const act = () => {
+                  if (k !== 'pk') apply((s) => wildPitch(s, k))
+                  else if (oppRunners.length === 1) apply((s) => runnerEvent(s, oppRunners[0].row, 'opp', 'pk'))
+                  else setPkHint(true)
+                }
+                return (
+                  <span key={k} className="inline-flex items-center gap-1 text-[12px] text-ink-2">
+                    <button type="button" onClick={act} disabled={k === 'pk' && !oppRunners.length} title={k === 'pk' ? '壘上跑者被牽制出局' : `${label}：壘上跑者各進一壘`} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer disabled:opacity-40 disabled:cursor-default">{label}</button>
+                    {state.extras[k] > 0 && <span className="tnum text-ink font-medium">×{state.extras[k]}</span>}
+                  </span>
+                )
+              })}
+              {pkHint && state.runners.filter((r) => r.side === 'opp').length > 1 && <span role="status" className="basis-full text-[12px] text-warning">壘上不只一名跑者：請點上方被牽制出局的那位，選「牽制出局」</span>}
               {state.extras.pka > 0 && <span className="inline-flex items-center text-[12px] text-ink-2 h-7 px-2 rounded-[6px] bg-surface-2">牽制 <span className="tnum text-ink font-medium ml-1">×{state.extras.pka}</span></span>}
               <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={cx('h-7 px-2 rounded-[6px] border text-[12px] cursor-pointer', errOpen ? 'border-ink bg-ink text-bg' : 'border-border text-ink-2 hover:bg-surface-2')}>我隊失誤{state.extras.errors?.length ? <span className="tnum font-medium ml-1">×{state.extras.errors.length}</span> : null}</button>
               <span className="text-[11px] text-muted self-center ml-1">盜壘、牽制、進壘請點上方壘上的跑者</span>
@@ -420,6 +433,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                   <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter />
                 </div>
               </div>
+              {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m}，請調整跑者去向</span>)}</div>}
               <div className="flex items-center gap-4 flex-wrap">
                 {side === 'us' && (
                   <div className="inline-flex items-center gap-2 text-[13px]"><span className="text-ink-2">打點</span>
@@ -432,7 +446,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                   <label className="inline-flex items-center gap-2 text-[13px] cursor-pointer"><input type="checkbox" checked={plan.earned} onChange={(e) => setPlan({ ...plan, earned: e.target.checked })} className="size-4 accent-[var(--ink)]" />失分為自責分（ER）</label>
                 )}
                 <div className="ml-auto flex gap-2">
-                  <Button variant="primary" size="lg" onClick={confirm}>{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                  <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0}>{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
                 </div>
               </div>
             </div>
