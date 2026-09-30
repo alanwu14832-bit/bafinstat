@@ -220,7 +220,9 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
 
     // consistency checks
     const byInning = new Map<number, number>()
-    for (const p of pit) if ((p.code ?? '') in OUT_CODES) byInning.set(p.inning, (byInning.get(p.inning) ?? 0) + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1))
+    // the inning's outs = its highest out code (a double play recorded live puts the lead runner's out on his own row,
+    // so adding a second out for every 雙殺 row would count it twice; an old sheet's one-row 雙殺 still reaches III)
+    for (const p of pit) if ((p.code ?? '') in OUT_CODES) byInning.set(p.inning, Math.max(byInning.get(p.inning) ?? 0, OUT_CODES[p.code!]))
     for (const [inn, outs] of byInning) if (outs !== 3 && inn < maxInn) warn(`投球紀錄第 ${inn} 局出局數為 ${outs}（應為 3），請檢查結果代碼`)
     for (const p of [...bat, ...pit]) if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) warn(`第 ${p.inning} 局有 2 出局後的「雙殺」，只計 1 個出局`)
     const issues = auditGame(bat, pit).filter((i) => !i.message.includes('落點'))

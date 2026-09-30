@@ -258,6 +258,28 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   return plan
 }
 
+/** What is impossible about where the plan sends everyone: two runners on one base, or a runner passing the one ahead. */
+export function planProblems(s: RecordState, plan: PAPlan): string[] {
+  const side = offense(s)
+  const batterName = side === 'us' ? s.lineup[s.slot]?.name ?? '打者' : '打者'
+  const people = [
+    ...s.runners.filter((r) => r.side === side).map((r) => ({ name: r.name, from: r.base as number, to: plan.runners[r.row] ?? r.base })),
+    { name: batterName, from: 0, to: plan.batter },
+  ].sort((a, b) => b.from - a.from)
+  const out: string[] = []
+  let ahead: { name: string; to: number } | null = null
+  const label = (b: number) => (b === 4 ? '本壘' : `${b}B`)
+  for (const p of people) {
+    // someone put out is off the bases and blocks nobody; scoring counts as base 4, which several runners may reach
+    if (p.to === 'out') continue
+    const to = p.to === 'home' ? 4 : p.to
+    if (ahead && to === ahead.to && to < 4) out.push(`${ahead.name} 和 ${p.name} 都停在 ${label(to)}`)
+    else if (ahead && to > ahead.to) out.push(`${p.name} 跑到${label(to)}，超過了前面的 ${ahead.name}（${label(ahead.to)}）`)
+    ahead = { name: p.name, to }
+  }
+  return out
+}
+
 /** Runs scored on the play, minus the cases that never earn an RBI (error, double play). */
 export function scoredOn(plan: PAPlan): number { return Object.values(plan.runners).filter((d) => d === 'home').length + (plan.batter === 'home' ? 1 : 0) }
 export function defaultRbi(plan: PAPlan): number { return plan.result === '失誤' || plan.result === '雙殺' ? 0 : scoredOn(plan) }
@@ -316,14 +338,26 @@ export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'pk' | 'pkSafe' | 
 
 /** Something happened to a runner between pitches. */
 export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent): RecordState {
-  const runner = s.runners.find((r) => r.row === row && r.side === side)
+  let runner = s.runners.find((r) => r.row === row && r.side === side)
   if (!runner) return s
+  // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
+  // error just moves him along (counted once), so two runners never share a base
+  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'err' || ev === 'advance') {
+    const ahead = runner.base < 3 ? s.runners.find((x) => x.side === side && x.base === runner!.base + 1) : undefined
+    if (ahead) {
+      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance')
+      if (s.outs >= 3 || offense(s) !== side) return s
+      runner = s.runners.find((r) => r.row === row && r.side === side)
+      if (!runner) return s
+    }
+  }
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   const extras = { ...s.extras }
   let outs = s.outs
   const r = side === 'us' ? batting[row] : pitching[row]
-  const advance = (n: number): Dest => { const b = runner.base + n; return b >= 4 ? 'home' : (b as Base) }
+  const at = runner.base
+  const advance = (n: number): Dest => { const b = at + n; return b >= 4 ? 'home' : (b as Base) }
   let dest: Dest = runner.base
   switch (ev) {
     case 'sb': dest = advance(1); if (side === 'us') (r as BattingPA).sb += 1; else extras.sba += 1; break
@@ -343,6 +377,16 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   else runners = [...runners, { ...runner, base: dest }]
   const next: RecordState = { ...s, batting, pitching, extras, outs, runners: runners.sort((a, b) => b.base - a.base) }
   return outs >= 3 ? endHalf(next) : next
+}
+
+/** 暴投 / 捕逸 from the pitch row: every runner moves up one (lead runner first), counted once for the pitch. */
+export function wildPitch(s: RecordState, kind: 'wp' | 'pb'): RecordState {
+  const side = offense(s)
+  const rows = s.runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base).map((r) => r.row)
+  if (!rows.length) return addExtra(s, kind)
+  // lead runner first so nobody runs into an occupied base; the pitch is counted once, on the last (trailing) runner
+  rows.forEach((row, i) => { s = runnerEvent(s, row, side, i === rows.length - 1 ? kind : 'advance') })
+  return s
 }
 
 /** Flip an opponent run between earned (ER) and unearned (R). */

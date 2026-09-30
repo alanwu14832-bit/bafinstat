@@ -14,22 +14,57 @@ const BALL_RESULTS = new Set(['保送', '故四'])
 // scorers write the hit-by-pitch ball as B, so four balls + 觸身 is normal
 const FOUR_BALL_OK = new Set(['保送', '故四', '觸身'])
 
+/** 不死三振: struck out, but the batter reached (his row then ends R / ER / L, or is put out later on the bases). */
+const reachedOnStrikeout = (p: { result: string; code?: string }) => p.result === '三振' && (p.code === 'R' || p.code === 'ER' || p.code === 'L')
+
+/** The batter made this out himself (not a runner who reached and was put out later on the bases). A strikeout whose
+ *  out is not the next one was a 不死三振 whose runner went out later; our rows mark a later base out with 壘死 / CS. */
+function batterOut(p: { result: string; code?: string; outsBefore?: number }, side: 'bat' | 'pit'): boolean {
+  if (!OUT_RESULTS.has(p.result) || reachedOnStrikeout(p)) return false
+  if (side === 'bat' && ((p as BattingPA).outOnBase || (p as BattingPA).cs)) return false
+  if (p.result === '三振' && p.outsBefore !== undefined && OUT_CODES[p.code ?? ''] !== p.outsBefore + 1) return false
+  return true
+}
+
 function checkSequence<T extends { inning: number; code?: string; result: string; outsBefore?: number; pitches: string[]; loc?: number; traj?: string }>(rows: T[], side: 'bat' | 'pit', out: Issue[]) {
-  let inning = 0, lastOut = 0
-  rows.forEach((p, i) => {
-    const where = `第 ${p.inning} 局・${side === 'bat' ? (p as unknown as BattingPA).batter : `${(p as unknown as PitchingPA).pitcher} 對第 ${(p as unknown as PitchingPA).oppOrder ?? '?'} 棒`}`
-    if (p.inning !== inning) { inning = p.inning; lastOut = 0 }
-    const code = p.code ?? ''
-    // out-code order inside an inning (a runner-out row may legitimately carry a later out, so only flag going backwards or skipping two)
-    if (code in OUT_CODES) {
-      const n = OUT_CODES[code]
-      if (n < lastOut) out.push({ side, index: i, message: `${where}：出局碼 ${code} 在 ${['', 'I', 'II', 'III'][lastOut]} 之後，順序倒退` })
-      else if (n > lastOut + 1) out.push({ side, index: i, message: `${where}：出局碼從 ${lastOut ? ['', 'I', 'II', 'III'][lastOut] : '無'} 跳到 ${code}，中間少了一個出局` })
-      lastOut = Math.max(lastOut, n)
+  const whereOf = (p: T) => `第 ${p.inning} 局・${side === 'bat' ? (p as unknown as BattingPA).batter : `${(p as unknown as PitchingPA).pitcher} 對第 ${(p as unknown as PitchingPA).oppOrder ?? '?'} 棒`}`
+  const roman = ['', 'I', 'II', 'III']
+  // out codes, one inning at a time. A runner put out on the bases carries the out on the row where he reached,
+  // so those codes may sit anywhere in the inning; the batters' own outs must go up in order.
+  const innings = new Map<number, number[]>()
+  rows.forEach((p, i) => { if ((p.code ?? '') in OUT_CODES) innings.set(p.inning, [...(innings.get(p.inning) ?? []), i]) })
+  for (const idx of innings.values()) {
+    let lastBatterOut = 0
+    const seen = new Set<number>()
+    const covered = new Set<number>()
+    for (const i of idx) {
+      const p = rows[i], n = OUT_CODES[p.code!], where = whereOf(p)
+      covered.add(n)
+      // a double play written on one row (old sheets) covers the out before it too
+      if (p.result === '雙殺' && (p.outsBefore === undefined || p.outsBefore <= n - 2)) covered.add(n - 1)
+      if (p.outsBefore !== undefined && n <= p.outsBefore) out.push({ side, index: i, message: `${where}：出局(前) 已有 ${p.outsBefore} 出局，出局碼卻是 ${p.code}，順序倒退` })
+      else if (batterOut(p, side)) {
+        if (n <= lastBatterOut) out.push({ side, index: i, message: `${where}：出局碼 ${p.code} 在 ${roman[lastBatterOut]} 之後，順序倒退` })
+        lastBatterOut = Math.max(lastBatterOut, n)
+      }
+      if (seen.has(n)) out.push({ side, index: i, message: `${where}：這局已經有出局碼 ${p.code}，重複了` })
+      seen.add(n)
     }
+    const max = Math.max(...covered)
+    for (let k = 1; k < max; k++) {
+      if (covered.has(k)) continue
+      const at = idx.find((i) => OUT_CODES[rows[i].code!] > k)!
+      const below = Math.max(0, ...[...covered].filter((x) => x < k))
+      out.push({ side, index: at, message: `${whereOf(rows[at])}：出局碼從 ${below ? roman[below] : '無'} 跳到 ${rows[at].code}，中間少了一個出局` })
+      break
+    }
+  }
+  rows.forEach((p, i) => {
+    const where = whereOf(p)
+    const code = p.code ?? ''
     // result vs code
-    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
-    if (code in OUT_CODES && (HIT_RESULTS.has(p.result) || BALL_RESULTS.has(p.result) || p.result === '觸身') && !(side === 'bat' ? (p as unknown as BattingPA).outOnBase : true)) {
+    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
+    if (code in OUT_CODES && (HIT_RESULTS.has(p.result) || BALL_RESULTS.has(p.result) || p.result === '觸身') && !(side === 'bat' ? (p as unknown as BattingPA).outOnBase || (p as unknown as BattingPA).cs : true)) {
       if (side === 'bat') out.push({ side, index: i, message: `${where}：上壘（${p.result}）卻記出局碼 ${code}，若是壘上被觸殺請填「壘死」` })
     }
     if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) out.push({ side, index: i, message: `${where}：2 出局後不可能雙殺` })
@@ -62,7 +97,7 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[]): Issue[]
     if (p.rbi > 0 && (p.result === '三振' || p.result === '雙殺') ) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」通常不會有打點` })
   })
   pitching.forEach((p, i) => {
-    if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
+    if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛' && p.result !== '三振') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
   })
   return out
 }
