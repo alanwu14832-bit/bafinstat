@@ -16,13 +16,17 @@ const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }>
   B: { label: 'B', cls: 'bg-surface-3 text-ink-2', title: '壞球' },
 }
 
-export function PitchChips({ pitches }: { pitches: string[] }) {
+/** One chip per pitch; with `onRemove` each chip is a button that deletes that pitch. */
+export function PitchChips({ pitches, onRemove }: { pitches: string[]; onRemove?: (index: number) => void }) {
   if (!pitches.length) return <span className="text-muted">—</span>
   return (
     <span className="inline-flex flex-wrap gap-1">
       {pitches.map((p, i) => {
         const s = PITCH_STYLE[p] ?? { label: p, cls: 'bg-surface-2 text-ink-2', title: p }
-        return <span key={i} title={`第 ${i + 1} 球：${s.title}`} className={cx('inline-flex items-center justify-center h-5 min-w-5 px-1 rounded-[4px] text-[11px] font-medium tnum', s.cls)}>{s.label}</span>
+        const cls = cx('inline-flex items-center justify-center px-1 rounded-[4px] font-medium tnum', s.cls)
+        return onRemove
+          ? <button key={i} type="button" onClick={() => onRemove(i)} title={`刪除第 ${i + 1} 球（${s.title}）`} aria-label={`刪除第 ${i + 1} 球 ${s.title}`} className={cx(cls, 'h-8 min-w-8 text-[12px] cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/50')}>{s.label}</button>
+          : <span key={i} title={`第 ${i + 1} 球：${s.title}`} className={cx(cls, 'h-5 min-w-5 text-[11px]')}>{s.label}</span>
       })}
     </span>
   )

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
@@ -9,6 +9,9 @@ import type { GameEdit } from '../../data/edit'
 import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
+import { PaList, PaPanel, type PaSide } from './PaEditor'
+import { auditGame } from '../../data/audit'
+import { blankBattingAt, blankPitchingAt } from '../../record/paEdit'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -152,7 +155,37 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [subs, setSubs] = useState<DayRosterSub[]>(() => initial.game.dayRoster?.subs ?? [])
   const [reentry, setReentry] = useState(!!initial.game.dayRoster?.reentry)
   const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>('bat')
+  // plate appearances: tap one to edit it with the recording buttons (default), or the whole table at once
+  const [paView, setPaView] = useState<'tap' | 'table'>('tap')
+  const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(null)
+  const batRows = useMemo(() => bat.map(fromBatDraft), [bat])
+  const pitRows = useMemo(() => pit.map(fromPitDraft), [pit])
+  const flags = useMemo(() => {
+    const out = { bat: new Map<number, string[]>(), pit: new Map<number, string[]>() }
+    for (const i of auditGame(batRows, pitRows)) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
+    return out
+  }, [batRows, pitRows])
+  const setRows = (side: PaSide, fn: <T>(rows: T[]) => T[]) => (side === 'bat' ? setBat((b) => fn(b)) : setPit((p) => fn(p)))
+  const insertPa = (side: PaSide, at: number) => {
+    if (side === 'bat') setBat((b) => [...b.slice(0, at), toBatDraft(blankBattingAt(b.map(fromBatDraft), at, game.id)), ...b.slice(at)])
+    else setPit((p) => [...p.slice(0, at), toPitDraft(blankPitchingAt(p.map(fromPitDraft), at, game.id)), ...p.slice(at)])
+    setSel({ side, index: at })
+  }
+  const paPanel = (side: PaSide) => {
+    const rows = side === 'bat' ? batRows : pitRows
+    if (!sel || sel.side !== side || !rows[sel.index]) return null
+    const i = sel.index
+    return (
+      <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames}
+        onChange={(pa) => (side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit((p) => p.map((x, k) => (k === i ? toPitDraft(pa as PitchingPA) : x))))}
+        onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
+        onDelete={() => { setRows(side, (r) => r.filter((_, k) => k !== i)); setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null) }}
+        onInsert={(at) => insertPa(side, at)}
+        onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }} />
+    )
+  }
   const [error, setError] = useState<string | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
   // names already in this game's roster stay selectable even when they left the team roster
   const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher), ...dayRosterNames(initial.game.dayRoster)])].filter(Boolean), [roster, bat, pit, initial.game.dayRoster])
   const starterSet = useMemo(() => new Set(starters.map((x) => x.name.trim()).filter(Boolean)), [starters])
@@ -172,8 +205,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
 
   const save = async () => {
     setError(null)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(game.date)) { setError('日期格式需為 YYYY-MM-DD'); return }
-    if (!game.opponent?.trim()) { setError('請填對手'); return }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(game.date)) { setInfoOpen(true); setError('日期格式需為 YYYY-MM-DD'); return }
+    if (!game.opponent?.trim()) { setInfoOpen(true); setError('請填對手'); return }
     const listed = starters.filter((x) => x.name.trim())
     const dupName = listed.map((x) => x.name.trim()).find((n, i, a) => a.indexOf(n) !== i)
     if (dupName) { setTab('roster'); setError(`登錄名單的先發有重複的球員：${dupName}`); return }
@@ -193,8 +226,14 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   return (
     <div className="flex flex-col gap-5">
       <section className="flex flex-col gap-3">
-        <div className="text-[13px] font-semibold text-ink">比賽資訊 <span className="text-muted font-normal ml-1 tnum">{game.id}</span></div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* folded by default: most fixes are to plate appearances, which then sit right under the tabs */}
+        <button type="button" aria-expanded={infoOpen} onClick={() => setInfoOpen(!infoOpen)} className="flex items-center gap-2 text-left cursor-pointer min-h-9 pointer-fine:min-h-7 group">
+          <ChevronRight className={cx('size-4 text-muted transition-transform motion-reduce:transition-none', infoOpen && 'rotate-90')} />
+          <span className="text-[13px] font-semibold text-ink">比賽資訊</span>
+          <span className="text-[12px] text-muted tnum truncate min-w-0">{game.id}{infoOpen ? '' : `・${game.date}・vs ${game.opponent}・${game.homeAway === '主' ? '主場' : '客場'}${game.winningPitcher ? `・勝投 ${game.winningPitcher}` : ''}`}</span>
+          <span className="ml-auto text-[12px] text-ink-2 group-hover:text-ink underline underline-offset-2 shrink-0">{infoOpen ? '收起' : '修改'}</span>
+        </button>
+        {infoOpen && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="時間"><Input type="time" value={game.time ?? ''} onChange={text('time')} className="tnum" /></Field>
           <Field label="杯賽"><Input value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
@@ -208,16 +247,24 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           <Field label="救援"><PlayerSelect value={game.savePitcher ?? ''} onChange={(v) => g('savePitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>
-        </div>
+        </div>}
       </section>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <Tabs size="sm" aria-label="編輯區" value={tab} onChange={setTab} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }, { value: 'roster', label: '登錄名單', count: starterSet.size + bench.filter((n) => !starterSet.has(n)).length }]} />
+          <Tabs size="sm" aria-label="編輯區" value={tab} onChange={(t) => { setTab(t); setSel(null) }} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }, { value: 'roster', label: '登錄名單', count: starterSet.size + bench.filter((n) => !starterSet.has(n)).length }]} />
           <span className="text-xs text-muted">{tab === 'roster' ? '先發、板凳（到場未先發）與替補紀錄；全部留空＝這場沒有登錄名單。' : '局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。'}</span>
         </div>
-        {tab === 'bat' && <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />}
-        {tab === 'pit' && <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />}
+        {(tab === 'bat' || tab === 'pit') && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tabs size="sm" aria-label="打席編輯方式" value={paView} onChange={(v) => { setPaView(v); setSel(null) }} items={[{ value: 'tap', label: '逐打席' }, { value: 'table', label: '表格' }]} />
+            <span className="text-xs text-muted">{paView === 'tap' ? '點一個打席，用紀錄比賽的按鈕修改；改完按最下方「儲存修改」。' : '一次看全部欄位，適合大量修改。'}</span>
+          </div>
+        )}
+        {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
+          : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} />)}
+        {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />
+          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} />)}
         {tab === 'fld' && <EditableTable rows={fld} cols={fldCols} onChange={setFld} blank={blankFld} listId="game-editor-names" names={names} />}
         {tab === 'roster' && (
           <div className="flex flex-col gap-5">

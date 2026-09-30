@@ -19,14 +19,14 @@ import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../compo
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, CountLights, PlateBadge } from '../components/ui/Scoreboard'
-import { LOC_HOLES, POSITIONS, type Game, type Registration } from '../data/types'
+import { POSITIONS, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { cx } from '../lib/format'
 import {
-  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, OUT_RESULTS, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, runnerEvent, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
@@ -34,25 +34,13 @@ import { readDraft, writeDraft } from '../record/draft'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
 import { Diamond } from '../record/Diamond'
+import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../record/widgets'
 
-const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
-  { code: 'B', label: '壞球', hint: 'B' }, { code: 'CS', label: '好球・未揮', hint: 'CS' }, { code: 'SS', label: '揮空', hint: 'SS' }, { code: 'F', label: '界外', hint: 'F' }, { code: 'IP', label: '擊進場內', hint: 'IP' },
-]
-const RESULT_GROUPS: Array<{ label: string; items: string[] }> = [
-  { label: '安打', items: ['一安', '二安', '三安', '全壘打'] },
-  { label: '上壘', items: ['保送', '故四', '觸身', '失誤', '野選', '妨礙'] },
-  { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'] },
-]
-/** Gap codes for a ball nobody touched (三游穿越安打 → 56), shown under the nine fielder buttons. */
-const LOC_HOLE_KEYS = [56, 46, 34, 78, 89]
-const LOC_GRID: Array<Array<number | null>> = [[7, 8, 9], [5, 6, 4], [null, 1, 3], [null, 2, null]]
-const LOC_LABEL: Record<number, string> = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF' }
 const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: 'us' | 'opp' }> = [
   { ev: 'sb', label: '盜壘' }, { ev: 'cs', label: '盜壘失敗' }, { ev: 'wp', label: '暴投進壘', side: 'opp' }, { ev: 'pb', label: '捕逸進壘', side: 'opp' }, { ev: 'err', label: '失誤進壘', side: 'us' },
   { ev: 'advance', label: '進一個壘' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'pk', label: '牽制出局' }, { ev: 'score', label: '得分' }, { ev: 'out', label: '壘死' },
 ]
-const big = 'h-12 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors motion-reduce:transition-none'
-const chip = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
+const chip = chipBtn
 
 /* ------------------------------------------------------------------ setup */
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
@@ -383,13 +371,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             <PitchChips pitches={state.pitches} />
             {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
           </div>
-          <div className="mt-2 grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {PITCH_BUTTONS.map((b) => (
-              <button key={b.code} type="button" onClick={() => apply((s) => addPitch(s, b.code))} disabled={!!plan} className={cx(big, 'flex flex-col items-center justify-center leading-tight disabled:opacity-40')}>
-                <span>{b.label}</span><span className="text-[10px] text-muted tnum">{b.hint}</span>
-              </button>
-            ))}
-          </div>
+          <div className="mt-2"><PitchPad onPitch={(code) => apply((s) => addPitch(s, code))} disabled={!!plan} /></div>
           {side === 'opp' && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {([['wp', '暴投'], ['pb', '捕逸'], ['pk', '牽制出局']] as const).map(([k, label]) => (
@@ -404,44 +386,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
           )}
 
           {!plan ? (
-            <div className="mt-4 flex flex-col gap-2.5">
-              {RESULT_GROUPS.map((g) => (
-                <div key={g.label} className="flex items-start gap-2">
-                  <span className="text-[12px] text-muted w-8 shrink-0 h-9 inline-flex items-center">{g.label}</span>
-                  <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" onClick={() => choose(r)} className={chip(false)}>{r}</button>)}</div>
-                </div>
-              ))}
-            </div>
+            <div className="mt-4"><ResultChips onPick={choose} /></div>
           ) : (
             <div className="mt-4 rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[14px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">{plan.result === '界外飛' ? '接殺的界外球記為 IP，落點填接球的守備員' : '確認細節後送出'}</span></div>
                 <button type="button" onClick={() => setPlan(null)} className="text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
               </div>
-              {plan.result !== '三振' && plan.result !== '保送' && plan.result !== '故四' && plan.result !== '觸身' && plan.result !== '妨礙' && (
-                <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
-                  <div>
-                    <div className="text-[12px] text-ink-2 mb-1">落點</div>
-                    <div className="grid grid-cols-3 gap-1 w-[150px]">
-                      {LOC_GRID.flat().map((n, i) => n === null ? <span key={i} /> : (
-                        <button key={i} type="button" onClick={() => setPlan({ ...plan, loc: plan.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', plan.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
-                      ))}
-                    </div>
-                    {!OUT_RESULTS.has(plan.result) && plan.result !== '野選' && (
-                      <div className="mt-2 w-[150px]">
-                        <div className="text-[11px] text-muted mb-1">穿越／落地的縫隙</div>
-                        <div className="flex flex-wrap gap-1">
-                          {LOC_HOLE_KEYS.map((n) => <button key={n} type="button" onClick={() => setPlan({ ...plan, loc: plan.loc === n ? undefined : n })} className={cx('h-7 px-2 rounded-[6px] border text-[11px] font-medium cursor-pointer', plan.loc === n ? 'border-ink bg-ink text-bg' : 'border-dashed border-border bg-surface hover:bg-surface-2')}>{LOC_HOLES[n]}</button>)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <div><div className="text-[12px] text-ink-2 mb-1">軌跡</div><div className="flex gap-1.5">{(['G', 'F', 'L'] as const).map((t) => <button key={t} type="button" onClick={() => setPlan({ ...plan, traj: plan.traj === t ? undefined : t })} className={chip(plan.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : '平飛 L'}</button>)}</div></div>
-                    <div><div className="text-[12px] text-ink-2 mb-1">強度</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" onClick={() => setPlan({ ...plan, quality: plan.quality === q ? undefined : q })} className={chip(plan.quality === q)}>{q}</button>)}</div></div>
-                  </div>
-                </div>
-              )}
+              {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} />}
               <div>
                 <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
                 <div className="flex flex-col gap-1.5">
