@@ -70,3 +70,19 @@ describe('a new result for the batter moves him (and forces runners), never his 
     expect(stepProblems(h.steps[5], (r) => inning[r].batter)).toEqual([])
   })
 })
+
+describe('rebuilding an inning whose saved bases do not add up', () => {
+  it('lays the runners out from the results and can then be followed', async () => {
+    const { rebuildHalf } = await import('./timeline')
+    // two runners "on second" (written before that bug was fixed)
+    const broken = inning.map((r, i) => (i === 3 ? { ...r, basesBefore: '22' } : r))
+    expect(inferHalf(broken, idx, 'bat')).toBeNull()
+    const rb = rebuildHalf(broken, idx, 'bat')
+    for (const st of rb.steps) expect(stepProblems(st, String)).toEqual([])
+    const fixed = deriveHalf(broken, rb, 'bat')
+    expect(inferHalf(fixed, idx, 'bat')).not.toBeNull()
+    // 甲 (saved as scoring) still scores; the outs stay I, II, III
+    expect(fixed[0]).toMatchObject({ run: 1, code: 'R' })
+    expect(fixed.slice(3).map((r) => r.code)).toEqual(['I', 'II', 'III'])
+  })
+})
