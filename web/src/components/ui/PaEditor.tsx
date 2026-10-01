@@ -2,7 +2,7 @@
  * Post-game editing that looks like 紀錄比賽: every plate appearance is a row; tapping one opens it with the same
  * pitch pad, result chips and batted-ball picker used while recording. Changes stay in the editor until 儲存修改.
  */
-import { Fragment, useEffect, useRef, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, List, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Input } from './Input'
@@ -13,7 +13,7 @@ import { cx } from '../../lib/format'
 import { POSITIONS, type BattingPA, type PitchingPA } from '../../data/types'
 import { count } from '../../record/model'
 import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../../record/widgets'
-import { applyRunEvent, basePath, RUN_EVENTS, runEnding, startBase, toggleBase, undoRunStep, withResult, withRun, type RunEvent } from '../../record/paEdit'
+import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { FIELD_POSITIONS } from '../../data/errors'
 import { RunnerDiamond } from '../../record/RunnerDiamond'
 import type { End, Step } from '../../record/timeline'
@@ -152,11 +152,18 @@ function CountButton({ label, value, onChange }: { label: string; value: number;
 
 export type TlEvent = 'sb' | 'err' | 'wp' | 'pb' | 'cs' | 'pk'
 const TL_EVENTS: Record<PaSide, Array<{ ev: TlEvent; label: string; out?: boolean }>> = {
-  bat: [{ ev: 'sb', label: '盜壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }],
+  bat: [{ ev: 'sb', label: '盜壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }],
   pit: [{ ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投' }, { ev: 'pb', label: '捕逸' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }],
 }
 export interface TimelineProps {
   step: Step
+  /** 代跑 for one of our runners (from this plate appearance on); absent for the opponent */
+  onPinchRunner?: (row: number, name: string) => void
+  pinchNames?: string[]
+  /** current 代跑 of a runner's row */
+  runnerOf?: (row: number) => string | undefined
+  /** a new result moves the batter (and forces runners) through the timeline */
+  onResult: (result: string) => void
   nameOf: (row: number) => string
   onEnd: (who: number | 'batter', end: End) => void
   onEvent: (row: number, ev: TlEvent) => void
@@ -178,15 +185,21 @@ function EndPicker({ value, from, onPick, label }: { value: End; from: number; o
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */
 function TimelineRunners({ side, pa, tl }: { side: PaSide; pa: AnyPA; tl: TimelineProps }) {
   const { step, nameOf } = tl
+  // like 紀錄比賽: tap a runner on the diamond to jump to his row
+  const [picked, setPicked] = useState<number | null>(null)
+  const pick = (row: number) => {
+    setPicked(row)
+    document.getElementById(`tl-runner-${row}`)?.scrollIntoView?.({ block: 'nearest', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }
   const batterName = side === 'bat' ? (pa as BattingPA).batter || '打者' : nameOf(step.index)
   return (
     <div className="flex flex-col gap-3">
-      <RunnerDiamond runners={step.before.map((o) => ({ key: String(o.row), base: o.base, name: nameOf(o.row) }))} batter={batterName} />
+      <RunnerDiamond runners={step.before.map((o) => ({ key: String(o.row), base: o.base, name: nameOf(o.row) }))} batter={batterName} onPick={(k) => pick(Number(k))} picked={picked === null ? null : String(picked)} />
       <ul className="flex flex-col gap-2">
         {step.before.map((o) => {
           const name = nameOf(o.row)
           return (
-            <li key={o.row} className="rounded-[var(--radius-sm)] border border-border bg-surface px-3 py-2 flex flex-col gap-2">
+            <li key={o.row} id={`tl-runner-${o.row}`} className={cx('rounded-[var(--radius-sm)] border bg-surface px-3 py-2 flex flex-col gap-2 scroll-mt-28 transition-colors motion-reduce:transition-none', picked === o.row ? 'border-ink ring-2 ring-ink/15' : 'border-border')}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[13px] font-medium text-ink min-w-[7rem]"><span className="text-muted tnum mr-1">{o.base}B</span>{name}</span>
                 <EndPicker value={tl.step.dest[o.row] ?? o.base} from={o.base} onPick={(e) => tl.onEnd(o.row, e)} label={name} />
@@ -194,12 +207,15 @@ function TimelineRunners({ side, pa, tl }: { side: PaSide; pa: AnyPA; tl: Timeli
               <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${name} 發生了什麼`}>
                 {TL_EVENTS[side].map((e) => <button key={e.ev} type="button" onClick={() => tl.onEvent(o.row, e.ev)} className={runBtn(e.out)}>{e.label}</button>)}
               </div>
+              {tl.onPinchRunner && <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>}
             </li>
           )
         })}
-        <li className="rounded-[var(--radius-sm)] border border-ink/25 bg-surface px-3 py-2 flex items-center gap-2 flex-wrap">
-          <span className="text-[13px] font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
-          <EndPicker value={step.batter} from={1} onPick={(e) => tl.onEnd('batter', e)} label={batterName} />
+        {/* the batter: where his result put him; what he does next is recorded on the following plate appearances */}
+        <li className="rounded-[var(--radius-sm)] border border-ink/25 bg-surface px-3 py-2 flex items-center gap-2 flex-wrap text-[13px]">
+          <span className="font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
+          <span className="text-ink-2">{step.batter === 'out' ? '出局' : step.batter === 'home' ? '得分' : `上 ${step.batter}B`}</span>
+          {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">之後的跑壘在下一個打席記</span>}
         </li>
       </ul>
       {tl.notice && <p role="alert" className="text-[12px] text-critical">{tl.notice}</p>}
@@ -301,7 +317,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
 
       {/* result */}
       <Section title="結果">
-        <ResultChips value={pa.result} onPick={(r) => onChange(withResult(pa, r))} />
+        <ResultChips value={pa.result} onPick={(r) => (timeline ? timeline.onResult(r) : onChange(withResult(pa, r)))} />
       </Section>
       {pa.result && !NO_BATTED_BALL.has(pa.result) && (
         <BattedBallPicker result={pa.result} value={pa} onChange={(v) => set({ loc: v.loc, traj: v.traj, quality: v.quality })} />
@@ -311,12 +327,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
       {timeline ? (
         <Section title="壘上跑者" aside={<span className="text-[11px] text-muted">這個打席時誰在壘上、打完各自到哪；改了之後後面的打席自動跟著變</span>}>
           <TimelineRunners side={side} pa={pa} tl={timeline} />
-          {bat && (
-            <div className="flex items-center gap-x-5 gap-y-2 flex-wrap mt-1">
-              <Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} />
-              <label className="flex items-center gap-2 text-[13px] text-ink-2">代跑<PlayerSelect aria-label="代跑" size="sm" value={bat.runner ?? ''} onChange={(v) => set({ runner: v || undefined })} names={names.filter((n) => n !== bat.batter)} placeholder="沒有代跑" className="w-[150px]" /></label>
-            </div>
-          )}
+          {bat && <div className="mt-1"><Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} /></div>}
         </Section>
       ) : null}
       {timeline && pit ? (
@@ -330,17 +341,6 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
           </div>
         </Section>
       ) : null}
-      {timeline && bat ? (
-        <details className="text-[12px] text-ink-2">
-          <summary className="cursor-pointer min-h-9 pointer-fine:min-h-7 inline-flex items-center hover:text-ink">這位打者整場的跑壘數字</summary>
-          <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2">
-            <Stepper label="盜壘" value={bat.sb} onChange={(v) => set({ sb: v })} />
-            <Stepper label="盜壘失敗" value={bat.cs} onChange={(v) => set({ cs: v })} />
-            <Stepper label="失誤進壘" value={bat.advOnError} onChange={(v) => set({ advOnError: v })} />
-            <Stepper label="壘死" value={bat.outOnBase} onChange={(v) => set({ outOnBase: v })} />
-          </div>
-        </details>
-      ) : null}
       {timeline ? (pit && (
         <Section title="我隊守備失誤" aside={<span className="text-[11px] text-muted">例如一安＋左外野漏接 → 點 LF；失誤兩次就點兩下</span>}>
           <div className="flex flex-wrap gap-1.5">
@@ -352,28 +352,8 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
         </Section>
       )) : bat ? (
         <>
-          <Section title="打者上壘後" aside={<span className="text-[11px] text-muted">安打＋對方失誤多跑一個壘：按「失誤進壘」</span>}>
-            {startBase(bat) === null ? <p className="text-[12px] text-muted">打者在本壘出局，沒有跑壘。</p> : (
-              <div className="flex flex-col gap-2">
-                <RunPath pa={bat} />
-                <RunButtons pa={bat} onChange={(n) => onChange(n)} label={bat.batter} />
-                {basePath(bat).at(-1)?.end === 'out' && !['I', 'II', 'III'].includes(bat.code ?? '') && <p className="text-[12px] text-warning">在下方「結果代碼」選這是這局第幾個出局。</p>}
-              </div>
-            )}
-            <div className="flex items-center gap-x-5 gap-y-2 flex-wrap mt-1">
-              <label className="flex items-center gap-2 text-[13px] text-ink-2">代跑<PlayerSelect aria-label="代跑" size="sm" value={bat.runner ?? ''} onChange={(v) => set({ runner: v || undefined })} names={names.filter((n) => n !== bat.batter)} placeholder="沒有代跑" className="w-[150px]" /></label>
-              <Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: v })} />
-            </div>
-            <details className="text-[12px] text-ink-2">
-              <summary className="cursor-pointer min-h-9 pointer-fine:min-h-7 inline-flex items-center hover:text-ink">直接調整數字</summary>
-              <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2">
-                <Stepper label="得分" value={bat.run} max={1} onChange={(v) => onChange(withRun(bat, v))} />
-                <Stepper label="盜壘" value={bat.sb} onChange={(v) => set({ sb: v })} />
-                <Stepper label="盜壘失敗" value={bat.cs} onChange={(v) => set({ cs: v })} />
-                <Stepper label="失誤進壘" value={bat.advOnError} onChange={(v) => set({ advOnError: v })} />
-                <Stepper label="壘死" value={bat.outOnBase} onChange={(v) => set({ outOnBase: v })} />
-              </div>
-            </details>
+          <Section title="打點">
+            <Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} />
           </Section>
           {others.length > 0 && onChangeOther && (
             <Section title="壘上其他跑者" aside={<span className="text-[11px] text-muted">這局在這個打席之前上壘的人；他們在這個打席期間盜壘、失誤進壘、得分，在這裡記</span>}>
@@ -387,6 +367,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
                       <RunPath pa={o} />
                     </div>
                     <RunButtons pa={o} onChange={(n) => onChangeOther(k, n)} label={o.runner || o.batter} />
+                    <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${o.batter} 的代跑`} size="sm" value={o.runner ?? ''} onChange={(v) => { const n = { ...o, runner: v || undefined }; if (!v) delete n.runner; onChangeOther(k, n) }} names={names.filter((n) => n !== o.batter)} placeholder="沒有代跑" className="w-[150px]" /></label>
                   </li>
                 ))}
               </ul>
