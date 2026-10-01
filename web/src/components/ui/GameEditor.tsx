@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Checkbox, Field, Input, inputCls } from './Input'
@@ -12,7 +12,9 @@ import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameR
 import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { blankBattingAt, blankPitchingAt, startBase, stillOn } from '../../record/paEdit'
+import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
+import { deriveHalf, inferAll, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import type { TimelineProps, TlEvent } from './PaEditor'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -173,6 +175,63 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     else setPit((p) => [...p.slice(0, at), toPitDraft(blankPitchingAt(p.map(fromPitDraft), at, game.id)), ...p.slice(at)])
     setSel({ side, index: at })
   }
+  // the runner timeline of every inning that can be followed (rows with 壘上(前) / 出局(前) throughout)
+  const halves = useMemo(() => ({ bat: inferAll(batRows, 'bat'), pit: inferAll(pitRows, 'pit') }), [batRows, pitRows])
+  const [tlNotice, setTlNotice] = useState<string | null>(null)
+  useEffect(() => setTlNotice(null), [sel])
+  const nameOf = (side: PaSide) => (row: number) => {
+    if (side === 'bat') { const r = batRows[row]; return r ? r.runner || r.batter || '（未填）' : '' }
+    const r = pitRows[row]
+    return r ? `對方${r.oppBatter ? ` ${r.oppBatter}` : r.oppOrder ? ` ${r.oppOrder} 棒` : ''}` : ''
+  }
+  /** Check an edited inning, then write it onto the rows (or say why not). */
+  const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half) => {
+    const name = nameOf(side)
+    let outs = 0
+    for (let j = 0; j < half.steps.length; j++) {
+      const st = half.steps[j]
+      const p = stepProblems(st, name)
+      if (p.length) { setTlNotice(`${p[0]}，這個改法沒有套用`); return }
+      outs += st.outs.length
+      if (outs > 3) { setTlNotice('這局會超過 3 個出局，請先把另一個出局改掉'); return }
+      if (outs === 3 && j < half.steps.length - 1) { setTlNotice('第三個出局之後這局還有打席，請先刪除或移動後面的打席'); return }
+    }
+    setTlNotice(null)
+    if (side === 'bat') setBat(deriveHalf(rows as BattingPA[], half, 'bat').map(toBatDraft))
+    else setPit(deriveHalf(rows as PitchingPA[], half, 'pit').map(toPitDraft))
+  }
+  const timelineFor = (side: PaSide, i: number): TimelineProps | undefined => {
+    const rows = side === 'bat' ? batRows : pitRows
+    const half = rows[i] ? (side === 'bat' ? halves.bat : halves.pit).get(rows[i].inning) : null
+    const step = half?.steps.find((st) => st.index === i)
+    if (!half || !step) return undefined
+    // no RBI on an error, a double play or a strikeout (a run then scored on a wild pitch, a steal…)
+    const noRbi = rows[i].result === '失誤' || rows[i].result === '雙殺' || rows[i].result === '三振'
+    const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
+      let next = base
+      // a run brought home by this batter's play is his RBI (not on an error or a double play)
+      if (side === 'bat' && !noRbi) {
+        const old = who === 'batter' ? step.batter : step.dest[who]
+        const d = end === 'home' && old !== 'home' ? 1 : old === 'home' && end !== 'home' ? -1 : 0
+        if (d) next = next.map((r, k) => (k === i ? { ...r, rbi: Math.max(0, Math.min(4, (r as BattingPA).rbi + d)) } : r))
+      }
+      commitHalf(side, next, setEnd(half, i, who, end))
+    }
+    const onEvent = (row: number, ev: TlEvent) => {
+      const from = step.before.find((o) => o.row === row)?.base ?? 1
+      const cur = step.dest[row] ?? from
+      const up = (d: End): End => (d === 'out' ? (from >= 3 ? 'home' : ((from + 1) as End)) : d === 'home' || d === 3 ? 'home' : ((d + 1) as End))
+      const end: End = ev === 'cs' || ev === 'pk' ? 'out' : up(cur)
+      // the count goes on the runner's own row for us, on this plate appearance for the opponent
+      const next = rows.map((r, k) => {
+        if (side === 'bat' && k === row) { const b = { ...(r as BattingPA) }; if (ev === 'sb') b.sb += 1; if (ev === 'err') b.advOnError += 1; if (ev === 'cs') b.cs += 1; if (ev === 'pk') b.outOnBase += 1; return b }
+        if (side === 'pit' && k === i) { const q = { ...(r as PitchingPA) }; if (ev === 'sb') q.sba += 1; if (ev === 'wp') q.wp += 1; if (ev === 'pb') q.pb += 1; if (ev === 'cs') q.cs += 1; if (ev === 'pk') q.pk += 1; return q }
+        return r
+      })
+      commitHalf(side, next, setEnd(half, i, row, end))
+    }
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onEvent, notice: tlNotice }
+  }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
     if (!sel || sel.side !== side || !rows[sel.index]) return null
@@ -185,7 +244,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onInsert={(at) => insertPa(side, at)}
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
-        others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && (stillOn(o.pa) || (startBase(o.pa) ?? 4) < 4)) : []}
+        timeline={timelineFor(side, i)}
+        others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && stillOn(o.pa)) : []}
         onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} />
     )
   }
