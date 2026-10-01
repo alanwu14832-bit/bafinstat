@@ -379,14 +379,21 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   return outs >= 3 ? endHalf(next) : next
 }
 
-/** 暴投 / 捕逸 from the pitch row: every runner moves up one (lead runner first), counted once for the pitch. */
-export function wildPitch(s: RecordState, kind: 'wp' | 'pb'): RecordState {
+/** 暴投 / 捕逸 from the pitch row: the runners in `rows` (default: all) move up one, lead runner first, and the
+ *  pitch is counted once. A runner left out stays put unless the one behind him has to take his base. */
+export function wildPitch(s: RecordState, kind: 'wp' | 'pb', rows?: number[]): RecordState {
   const side = offense(s)
-  const rows = s.runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base).map((r) => r.row)
-  if (!rows.length) return addExtra(s, kind)
-  // lead runner first so nobody runs into an occupied base; the pitch is counted once, on the last (trailing) runner
-  rows.forEach((row, i) => { s = runnerEvent(s, row, side, i === rows.length - 1 ? kind : 'advance') })
+  const moving = s.runners.filter((r) => r.side === side && (!rows || rows.includes(r.row))).sort((a, b) => b.base - a.base).map((r) => r.row)
+  if (!moving.length) return addExtra(s, kind)
+  // the pitch is counted on the last (trailing) runner's move; the others just advance
+  moving.forEach((row, i) => { s = runnerEvent(s, row, side, i === moving.length - 1 ? kind : 'advance') })
   return s
+}
+
+/** Correct the RBI of one of our plate appearances after it was sent (a run scored on it was entered later). */
+export function setRbi(s: RecordState, index: number, rbi: number): RecordState {
+  if (!s.batting[index]) return s
+  return { ...s, batting: s.batting.map((p, i) => (i === index ? { ...p, rbi: Math.max(0, Math.min(4, rbi)) } : p)) }
 }
 
 /** Flip an opponent run between earned (ER) and unearned (R). */
