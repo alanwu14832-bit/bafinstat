@@ -245,3 +245,51 @@ export function setBatterResult(half: Half, at: number, result: string): Half {
 
 /** Runs that came home in one step (runners and the batter). */
 export const homesIn = (s: Step) => Object.values(s.dest).filter((d) => d === 'home').length + (s.batter === 'home' ? 1 : 0)
+
+/**
+ * An inning whose saved bases do not add up (older imports, or rows written before a bug was fixed): lay the
+ * runners out again from the results alone, the way 紀錄比賽 suggests them — hits move everyone up as many bases,
+ * walks force, a sacrifice fly scores the man on third, a double play gets the forced runner — so the recorder can
+ * correct it from there on the diamond. A runner the rows say scored comes home once he reaches third, so the
+ * inning's runs mostly stay what they were; runs and out codes then follow these steps.
+ */
+export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
+  const steps: Step[] = []
+  let on: OnBase[] = []
+  let outs = 0
+  for (const k of idx) {
+    const r = rows[k]
+    const before = on.slice().sort((a, z) => z.base - a.base)
+    const dest: Record<number, End> = {}
+    const has = (b: number) => before.some((o) => o.base === b)
+    const up = (o: OnBase, n: number): End => (o.base + n >= 4 ? 'home' : ((o.base + n) as Base))
+    const reachedOnK = r.result === '三振' && (r.code === 'R' || r.code === 'ER' || r.code === 'L')
+    let batter: End = reachedOnK ? 1 : batterEndFor(r.result)
+    const n = r.result === '一安' ? 1 : r.result === '二安' ? 2 : r.result === '三安' ? 3 : r.result === '全壘打' ? 4 : 0
+    const forcedWalk = ['保送', '故四', '觸身', '妨礙'].includes(r.result) || reachedOnK
+    const outsHere: number[] = []
+    for (const o of before) {
+      if (n) dest[o.row] = up(o, n)
+      else if (forcedWalk) dest[o.row] = o.base === 1 || (o.base === 2 && has(1)) || (o.base === 3 && has(1) && has(2)) ? up(o, 1) : o.base
+      else if (r.result === '失誤' || r.result === '犧觸') dest[o.row] = up(o, 1)
+      else if (r.result === '犧飛') dest[o.row] = o.base === 3 ? 'home' : o.base
+      else dest[o.row] = o.base
+    }
+    // the forced runner is the other out of a double play / the one thrown out on a fielder's choice
+    if ((r.result === '雙殺' || r.result === '野選') && before.length && outs < 2) {
+      const lead = before.find((o) => o.base === 1) ?? before[before.length - 1]
+      dest[lead.row] = 'out'
+      outsHere.push(lead.row)
+      outs++
+      if (r.result === '野選') for (const o of before) if (o !== lead && typeof dest[o.row] === 'number') dest[o.row] = up(o, 1)
+    }
+    for (const o of before) if (dest[o.row] === 3 && scored(rows[o.row], side)) dest[o.row] = 'home'
+    if (batter === 'out') { outsHere.push(k); outs++ }
+    if (r.result === '全壘打') batter = 'home'
+    const step: Step = { index: k, before, dest, batter, outs: outsHere }
+    steps.push(step)
+    on = stepAfter(step)
+    if (outs >= 3) { outs = 0; on = [] }
+  }
+  return { inning: rows[idx[0]].inning, steps }
+}

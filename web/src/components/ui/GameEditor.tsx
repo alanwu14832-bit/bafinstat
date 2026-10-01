@@ -13,7 +13,7 @@ import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
-import { deriveHalf, homesIn, inferAll, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { deriveHalf, homesIn, inferAll, inningsOf, rebuildHalf, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps, TlEvent } from './PaEditor'
 
@@ -189,20 +189,21 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     return r ? `對方${r.oppBatter ? ` ${r.oppBatter}` : r.oppOrder ? ` ${r.oppOrder} 棒` : ''}` : ''
   }
   /** Check an edited inning, then write it onto the rows (or say why not). */
-  const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half) => {
+  const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half): string | null => {
     const name = nameOf(side)
     let outs = 0
     for (let j = 0; j < half.steps.length; j++) {
       const st = half.steps[j]
       const p = stepProblems(st, name)
-      if (p.length) { setTlNotice(`${p[0]}，這個改法沒有套用`); return }
+      if (p.length) { const m = `${p[0]}，這個改法沒有套用`; setTlNotice(m); return m }
       outs += st.outs.length
-      if (outs > 3) { setTlNotice('這局會超過 3 個出局，請先把另一個出局改掉'); return }
-      if (outs === 3 && j < half.steps.length - 1) { setTlNotice('第三個出局之後這局還有打席，請先刪除或移動後面的打席'); return }
+      if (outs > 3) { const m = '這局會超過 3 個出局，請先把另一個出局改掉'; setTlNotice(m); return m }
+      if (outs === 3 && j < half.steps.length - 1) { const m = '第三個出局之後這局還有打席，請先刪除或移動後面的打席'; setTlNotice(m); return m }
     }
     setTlNotice(null)
     if (side === 'bat') setBat(deriveHalf(rows as BattingPA[], half, 'bat').map(toBatDraft))
     else setPit(deriveHalf(rows as PitchingPA[], half, 'pit').map(toPitDraft))
+    return null
   }
   const timelineFor = (side: PaSide, i: number): TimelineProps | undefined => {
     const rows = side === 'bat' ? batRows : pitRows
@@ -287,6 +288,14 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
         timeline={timelineFor(side, i)}
+        onRebuild={() => {
+          const rows = side === 'bat' ? batRows : pitRows
+          const idx = inningsOf(rows).get(rows[i].inning) ?? []
+          const rb = rebuildHalf(rows, idx, side)
+          const before = idx.filter((k) => scored(rows[k], side)).length
+          const after = rb.steps.reduce((a, st) => a + homesIn(st), 0)
+          if (window.confirm(`依打擊結果重建第 ${rows[i].inning} 局的跑者：安打依壘數推進、保送擠壘、犧飛回本壘、雙殺與野選讓被封殺的跑者出局。\n這局原本記 ${before} 分，重建後是 ${after} 分；之後可以在壘包圖上逐一修正。按「儲存修改」才會生效。`)) { const why = commitHalf(side, rows, rb); if (why) window.alert(`沒辦法重建：${why}`) }
+        }}
         others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && stillOn(o.pa)) : []}
         onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} />
     )

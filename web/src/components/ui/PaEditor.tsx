@@ -183,18 +183,11 @@ function EndPicker({ value, from, onPick, label }: { value: End; from: number; o
   )
 }
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */
-function TimelineRunners({ side, pa, tl }: { side: PaSide; pa: AnyPA; tl: TimelineProps }) {
+function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl: TimelineProps; picked: number | null }) {
   const { step, nameOf } = tl
-  // like 紀錄比賽: tap a runner on the diamond to jump to his row
-  const [picked, setPicked] = useState<number | null>(null)
-  const pick = (row: number) => {
-    setPicked(row)
-    document.getElementById(`tl-runner-${row}`)?.scrollIntoView?.({ block: 'nearest', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
-  }
   const batterName = side === 'bat' ? (pa as BattingPA).batter || '打者' : nameOf(step.index)
   return (
     <div className="flex flex-col gap-3">
-      <RunnerDiamond runners={step.before.map((o) => ({ key: String(o.row), base: o.base, name: nameOf(o.row) }))} batter={batterName} onPick={(k) => pick(Number(k))} picked={picked === null ? null : String(picked)} />
       <ul className="flex flex-col gap-2">
         {step.before.map((o) => {
           const name = nameOf(o.row)
@@ -242,15 +235,24 @@ export interface PaPanelProps {
   onChangeOther?: (index: number, pa: BattingPA) => void
   /** the inning could be followed: runners shown as they were for this plate appearance */
   timeline?: TimelineProps
+  /** the inning's saved bases do not add up: lay its runners out again from the results */
+  onRebuild?: () => void
 }
 
-export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline }: PaPanelProps) {
+export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   const c = count(pa.pitches)
   const bases = new Set((pa.basesBefore ?? '').split(''))
   const codes = side === 'bat' ? ['I', 'II', 'III', 'L', 'R'] : ['I', 'II', 'III', 'L', 'R', 'ER']
   const bat = isBat(side, pa) ? pa : null
   const pit = !bat ? (pa as PitchingPA) : null
+  // like 紀錄比賽: tap a runner on the diamond to jump to his row below
+  const [picked, setPicked] = useState<number | null>(null)
+  useEffect(() => setPicked(null), [index])
+  const pickRunner = (row: number) => {
+    setPicked(row)
+    document.getElementById(`tl-runner-${row}`)?.scrollIntoView?.({ block: 'center', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }
   // opening a plate appearance (or moving to the next) brings it into view
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => { if (ref.current) scrollBelowHeader(ref.current) }, [index])
@@ -270,7 +272,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
           <Stepper label="局" value={pa.inning} onChange={(v) => set({ inning: Math.max(1, v) })} />
           {timeline ? (
             // worked out from the plate appearances before it (change the runners below instead)
-            <span className="text-[13px] text-ink tnum">{pa.outsBefore ?? 0} 出局・{timeline.step.before.length ? `壘上 ${timeline.step.before.map((o) => `${o.base}B`).reverse().join('、')}` : '壘上無人'}<span className="text-[11px] text-muted ml-2">由前面的打席推算</span></span>
+            <span className="text-[13px] text-ink tnum">{pa.outsBefore ?? 0} 出局<span className="text-[11px] text-muted ml-2">壘上與出局由前面的打席推算</span></span>
           ) : (
             <>
               <div className="inline-flex items-center gap-1.5 text-[13px]">
@@ -285,6 +287,16 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
             </>
           )}
         </div>
+        {timeline && (
+          <RunnerDiamond runners={timeline.step.before.map((o) => ({ key: String(o.row), base: o.base, name: timeline.nameOf(o.row) }))}
+            batter={side === 'bat' ? (pa as BattingPA).batter || '打者' : timeline.nameOf(index)} onPick={(k) => pickRunner(Number(k))} picked={picked === null ? null : String(picked)} />
+        )}
+        {!timeline && onRebuild && (
+          <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[12px] text-ink flex flex-col gap-2">
+            <span>這局記下的壘上狀況前後對不起來（舊的匯入資料，或之前的錯誤留下的），所以沒辦法顯示壘包圖。</span>
+            <Button size="sm" variant="outline" className="self-start" onClick={onRebuild}>依打擊結果重建這局的跑者</Button>
+          </div>
+        )}
       </Section>
 
       {/* who */}
@@ -326,7 +338,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
       {/* running and scoring: the same moves as tapping a runner while recording */}
       {timeline ? (
         <Section title="壘上跑者" aside={<span className="text-[11px] text-muted">這個打席時誰在壘上、打完各自到哪；改了之後後面的打席自動跟著變</span>}>
-          <TimelineRunners side={side} pa={pa} tl={timeline} />
+          <TimelineRunners side={side} pa={pa} tl={timeline} picked={picked} />
           {bat && <div className="mt-1"><Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} /></div>}
         </Section>
       ) : null}
