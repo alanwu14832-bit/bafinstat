@@ -51,3 +51,22 @@ describe('runner timeline', () => {
     expect(inferHalf(inning.map((r) => ({ ...r, basesBefore: undefined })), idx, 'bat')).toBeNull()
   })
 })
+
+describe('a new result for the batter moves him (and forces runners), never his later running', () => {
+  it('walk with the bases loaded forces a run; a home run clears the bases; an out leaves runners alone', async () => {
+    const { setBatterResult, homesIn } = await import('./timeline')
+    // 丁 walks instead of striking out: 1B 丙 → 2B, 3B 乙 stays (not forced)
+    let h = setBatterResult(inferHalf(inning, idx, 'bat')!, 3, '保送')
+    expect(h.steps[3].dest).toEqual({ 1: 3, 2: 2 })
+    expect(h.steps[3].batter).toBe(1)
+    expect(h.steps[4].before.map((o) => o.base)).toEqual([3, 2, 1])
+    // and then 戊 walks too: bases loaded → 乙 forced home
+    h = setBatterResult(h, 4, '保送')
+    expect(h.steps[4].dest).toMatchObject({ 1: 'home', 2: 3, 3: 2 })
+    expect(homesIn(h.steps[4])).toBe(1)
+    // a home run by 己: everyone scores
+    h = setBatterResult(h, 5, '全壘打')
+    expect(homesIn(h.steps[5])).toBe(4)
+    expect(stepProblems(h.steps[5], (r) => inning[r].batter)).toEqual([])
+  })
+})

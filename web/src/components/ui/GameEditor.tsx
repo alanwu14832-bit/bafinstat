@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Checkbox, Field, Input, inputCls } from './Input'
@@ -13,7 +13,8 @@ import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
-import { deriveHalf, inferAll, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { deriveHalf, homesIn, inferAll, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { withResult } from '../../record/paEdit'
 import type { TimelineProps, TlEvent } from './PaEditor'
 
 /* ------------------------------------------------------------------ generic editable table */
@@ -178,7 +179,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   // the runner timeline of every inning that can be followed (rows with 壘上(前) / 出局(前) throughout)
   const halves = useMemo(() => ({ bat: inferAll(batRows, 'bat'), pit: inferAll(pitRows, 'pit') }), [batRows, pitRows])
   const [tlNotice, setTlNotice] = useState<string | null>(null)
-  useEffect(() => setTlNotice(null), [sel])
+  // where the runners were going when this plate appearance was opened: changing the result starts from there,
+  // so trying 保送 and going back to 三振 undoes the runners it forced
+  const baseline = useRef(new Map<string, Record<number, End>>())
+  useEffect(() => { setTlNotice(null); baseline.current.clear() }, [sel])
   const nameOf = (side: PaSide) => (row: number) => {
     if (side === 'bat') { const r = batRows[row]; return r ? r.runner || r.batter || '（未填）' : '' }
     const r = pitRows[row]
@@ -205,6 +209,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const half = rows[i] ? (side === 'bat' ? halves.bat : halves.pit).get(rows[i].inning) : null
     const step = half?.steps.find((st) => st.index === i)
     if (!half || !step) return undefined
+    if (!baseline.current.has(`${side}-${i}`)) baseline.current.set(`${side}-${i}`, { ...step.dest })
     // no RBI on an error, a double play or a strikeout (a run then scored on a wild pitch, a steal…)
     const noRbi = rows[i].result === '失誤' || rows[i].result === '雙殺' || rows[i].result === '三振'
     const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
@@ -220,17 +225,54 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const onEvent = (row: number, ev: TlEvent) => {
       const from = step.before.find((o) => o.row === row)?.base ?? 1
       const cur = step.dest[row] ?? from
-      const up = (d: End): End => (d === 'out' ? (from >= 3 ? 'home' : ((from + 1) as End)) : d === 'home' || d === 3 ? 'home' : ((d + 1) as End))
-      const end: End = ev === 'cs' || ev === 'pk' ? 'out' : up(cur)
-      // the count goes on the runner's own row for us, on this plate appearance for the opponent
-      const next = rows.map((r, k) => {
-        if (side === 'bat' && k === row) { const b = { ...(r as BattingPA) }; if (ev === 'sb') b.sb += 1; if (ev === 'err') b.advOnError += 1; if (ev === 'cs') b.cs += 1; if (ev === 'pk') b.outOnBase += 1; return b }
-        if (side === 'pit' && k === i) { const q = { ...(r as PitchingPA) }; if (ev === 'sb') q.sba += 1; if (ev === 'wp') q.wp += 1; if (ev === 'pb') q.pb += 1; if (ev === 'cs') q.cs += 1; if (ev === 'pk') q.pk += 1; return q }
+      const up = (d: End, base: number): End => (d === 'out' ? (base >= 3 ? 'home' : ((base + 1) as End)) : d === 'home' || d === 3 ? 'home' : ((d + 1) as End))
+      const end: End = ev === 'cs' || ev === 'pk' ? 'out' : up(cur, from)
+      // the count goes on the runner's own row for us, on this plate appearance for the opponent (a wild pitch or a
+      // passed ball while we bat is the other team's: our runner just moves)
+      const count = (next: Array<BattingPA | PitchingPA>, r0: number, e: TlEvent) => next.map((r, k) => {
+        if (side === 'bat' && k === r0) { const b = { ...(r as BattingPA) }; if (e === 'sb') b.sb += 1; if (e === 'err') b.advOnError += 1; if (e === 'cs') b.cs += 1; if (e === 'pk') b.outOnBase += 1; return b }
+        if (side === 'pit' && k === i) { const q = { ...(r as PitchingPA) }; if (e === 'sb') q.sba += 1; if (e === 'wp') q.wp += 1; if (e === 'pb') q.pb += 1; if (e === 'cs') q.cs += 1; if (e === 'pk') q.pk += 1; return q }
         return r
       })
-      commitHalf(side, next, setEnd(half, i, row, end))
+      let next = count(rows, row, ev)
+      let h = setEnd(half, i, row, end)
+      // a runner moving up into a base someone ahead still holds pushes him on (a double steal credits both;
+      // a wild pitch or an error just moves him, counted once)
+      if (typeof end === 'number' || end === 'home') {
+        let behind = end === 'home' ? 4 : end
+        const ahead = step.before.filter((o) => o.base > from).sort((a, z) => a.base - z.base)
+        for (const o of ahead) {
+          const d = h.steps.find((x) => x.index === i)!.dest[o.row]
+          if (d === 'out' || d === 'home') { if (d === 'home') behind = 4; continue }
+          if (d > behind) { behind = d; continue }
+          const to = behind + 1
+          h = setEnd(h, i, o.row, to >= 4 ? 'home' : (to as End))
+          if (ev === 'sb') next = side === 'bat' ? count(next, o.row, 'sb') : next.map((r, k) => (k === i ? { ...(r as PitchingPA), sba: (r as PitchingPA).sba + 1 } : r))
+          behind = Math.min(4, to)
+        }
+      }
+      commitHalf(side, next, h)
     }
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onEvent, notice: tlNotice }
+    // a new result: the batter goes where it puts him, runners in his way are forced ahead (and those runs are his RBI)
+    const onResult = (result: string) => {
+      let h = half
+      for (const [row, d] of Object.entries(baseline.current.get(`${side}-${i}`) ?? {})) if (step.before.some((o) => o.row === Number(row))) h = setEnd(h, i, Number(row), d)
+      h = setBatterResult(h, i, result)
+      const st = h.steps.find((x) => x.index === i)!
+      const next = rows.map((r, k) => {
+        if (k !== i) return r
+        const n = withResult(r, result)
+        if (side !== 'bat' || ['失誤', '雙殺', '三振'].includes(result)) return n
+        return { ...n, rbi: Math.max(0, Math.min(4, (n as BattingPA).rbi + homesIn(st) - homesIn(step))) }
+      })
+      commitHalf(side, next, h)
+    }
+    const pinch = side === 'bat' ? {
+      onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
+      pinchNames: names,
+      runnerOf: (row: number) => batRows[row]?.runner,
+    } : {}
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onEvent, onResult, notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows

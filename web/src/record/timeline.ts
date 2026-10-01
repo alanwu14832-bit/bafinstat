@@ -212,3 +212,36 @@ export function inferAll(rows: Row[], side: Side): Map<number, Half | null> {
   for (const [inning, idx] of inningsOf(rows)) m.set(inning, inferHalf(rows, idx, side))
   return m
 }
+
+const OUT_AT_PLATE = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+/** Where a batter stands right after his result (nobody records where he goes later on his own row). */
+export function batterEndFor(result: string): End {
+  if (OUT_AT_PLATE.has(result)) return 'out'
+  return hitBase(result)
+}
+
+/**
+ * A new result for the batter of `at`: he goes where the result puts him, and runners he would run into are pushed
+ * ahead (a bases-loaded walk forces the run in; on a home run everyone scores).
+ */
+export function setBatterResult(half: Half, at: number, result: string): Half {
+  let h = setEnd(half, at, 'batter', batterEndFor(result))
+  const s = h.steps.find((x) => x.index === at)
+  if (!s) return h
+  // trailing person first: each runner must end at least one base ahead of the person behind him
+  let behind = typeof s.batter === 'number' ? s.batter : s.batter === 'home' ? 4 : 0
+  for (const o of [...s.before].sort((a, z) => a.base - z.base)) {
+    const d = s.dest[o.row]
+    if (d === 'out') continue
+    if (d === 'home') { behind = 4; continue }
+    if (behind && d <= behind) {
+      const to = behind + 1
+      h = setEnd(h, at, o.row, to >= 4 ? 'home' : (to as Base))
+      behind = Math.min(4, to)
+    } else behind = d
+  }
+  return h
+}
+
+/** Runs that came home in one step (runners and the batter). */
+export const homesIn = (s: Step) => Object.values(s.dest).filter((d) => d === 'home').length + (s.batter === 'home' ? 1 : 0)
