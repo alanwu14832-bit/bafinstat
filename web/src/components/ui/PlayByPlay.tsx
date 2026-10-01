@@ -55,7 +55,8 @@ const th = 'px-3 first:pl-4 last:pr-4 h-9 text-left text-[12px] font-medium text
 const td = 'px-3 first:pl-4 last:pr-4 py-2 align-top'
 
 /** Pitch-by-pitch log of our batters for one game. */
-export function BattingPlayByPlay({ pas, flags }: { pas: BattingPA[]; flags?: Map<number, string[]> }) {
+/** `onRbi` (紀錄比賽) adds 打點 −／＋ on every row, for a run that was entered after the plate appearance was sent. */
+export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   let lastInning = 0
   return (
@@ -69,7 +70,7 @@ export function BattingPlayByPlay({ pas, flags }: { pas: BattingPA[]; flags?: Ma
             const pt = pitchTotals(p.pitches)
             const header = p.inning !== lastInning
             lastInning = p.inning
-            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.outOnBase ? `壘死 ${p.outOnBase}` : '', p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
+            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.outOnBase ? `壘死 ${p.outOnBase}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" />}
@@ -79,9 +80,19 @@ export function BattingPlayByPlay({ pas, flags }: { pas: BattingPA[]; flags?: Ma
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}</td>
                   <td className={td}><PitchChips pitches={p.pitches} /></td>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
-                  <td className={cx(td, resultCls(p.result))}>{p.result || '—'}</td>
+                  <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
-                  <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{running || '—'}</td>
+                  <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>
+                    {onRbi && (
+                      <span className="inline-flex items-center gap-1 mr-2 align-middle">
+                        打點
+                        <button type="button" aria-label={`第 ${i + 1} 個打席 ${p.batter} 打點減一`} disabled={!p.rbi} onClick={() => onRbi(i, p.rbi - 1)} className="size-8 pointer-fine:size-6 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer disabled:opacity-35 disabled:cursor-default">−</button>
+                        <span className="w-4 text-center font-medium text-ink">{p.rbi}</span>
+                        <button type="button" aria-label={`第 ${i + 1} 個打席 ${p.batter} 打點加一`} disabled={p.rbi >= 4} onClick={() => onRbi(i, p.rbi + 1)} className="size-8 pointer-fine:size-6 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer disabled:opacity-35 disabled:cursor-default">＋</button>
+                      </span>
+                    )}
+                    {running || (onRbi ? '' : '—')}
+                  </td>
                   <td className={td}>{codeBadge(p.code)}{p.note && <div className="text-[11px] text-muted mt-1">{p.note}</div>}</td>
                 </tr>
               </Fragment>
@@ -120,7 +131,7 @@ export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: 
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchChips pitches={p.pitches} /></td>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
-                  <td className={cx(td, resultCls(p.result))}>{p.result || '—'}</td>
+                  <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{extras || '—'}</td>
                   <td className={td}>{codeBadge(p.code)}{p.note && <div className="text-[11px] text-muted mt-1">{p.note}</div>}</td>

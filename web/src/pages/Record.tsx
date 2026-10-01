@@ -27,7 +27,7 @@ import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState, type RunnerEvent,
 } from '../record/model'
 
@@ -38,7 +38,7 @@ import { Diamond } from '../record/Diamond'
 import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../record/widgets'
 
 const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: 'us' | 'opp' }> = [
-  { ev: 'sb', label: '盜壘' }, { ev: 'cs', label: '盜壘失敗' }, { ev: 'wp', label: '暴投進壘', side: 'opp' }, { ev: 'pb', label: '捕逸進壘', side: 'opp' }, { ev: 'err', label: '失誤進壘', side: 'us' },
+  { ev: 'sb', label: '盜壘' }, { ev: 'cs', label: '盜壘失敗' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘', side: 'us' },
   { ev: 'advance', label: '進一個壘' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'pk', label: '牽制出局' }, { ev: 'score', label: '得分' }, { ev: 'out', label: '壘死' },
 ]
 const chip = chipBtn
@@ -195,7 +195,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const [tool, setTool] = useState<'none' | 'pitcher' | 'lineup'>('none')
   const [errOpen, setErrOpen] = useState(false)
   const [pkHint, setPkHint] = useState(false)
-  useEffect(() => setPkHint(false), [state.runners.length, state.inning, state.half])
+  const [wpPick, setWpPick] = useState<{ kind: 'wp' | 'pb'; rows: number[] } | null>(null)
+  useEffect(() => { setPkHint(false); setWpPick(null) }, [state.runners.length, state.inning, state.half])
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerMenu(null) }, [side, state.inning])
   const implied = impliedResult(state.pitches)
@@ -383,7 +384,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 const oppRunners = state.runners.filter((r) => r.side === 'opp')
                 // 暴投／捕逸 move every runner up; 牽制出局 needs to know who: the only runner, or tap him above
                 const act = () => {
-                  if (k !== 'pk') apply((s) => wildPitch(s, k))
+                  // with several runners on, ask which of them moved (all ticked to start with)
+                  if (k !== 'pk' && oppRunners.length > 1) setWpPick({ kind: k, rows: oppRunners.map((r) => r.row) })
+                  else if (k !== 'pk') apply((s) => wildPitch(s, k))
                   else if (oppRunners.length === 1) apply((s) => runnerEvent(s, oppRunners[0].row, 'opp', 'pk'))
                   else setPkHint(true)
                 }
@@ -395,6 +398,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 )
               })}
               {pkHint && state.runners.filter((r) => r.side === 'opp').length > 1 && <span role="status" className="basis-full text-[12px] text-warning">壘上不只一名跑者：請點上方被牽制出局的那位，選「牽制出局」</span>}
+              {wpPick && (
+                <div className="basis-full flex flex-wrap items-center gap-1.5 pt-1" role="group" aria-label={`${wpPick.kind === 'wp' ? '暴投' : '捕逸'}：哪些跑者進壘`}>
+                  <span className="text-[12px] text-ink-2">{wpPick.kind === 'wp' ? '暴投' : '捕逸'}：哪些跑者進壘？</span>
+                  {[...state.runners].filter((r) => r.side === 'opp').sort((a, b) => b.base - a.base).map((r) => {
+                    const on = wpPick.rows.includes(r.row)
+                    return <button key={r.row} type="button" aria-pressed={on} onClick={() => setWpPick({ ...wpPick, rows: on ? wpPick.rows.filter((x) => x !== r.row) : [...wpPick.rows, r.row] })} className={cx('h-8 px-2.5 rounded-[6px] border text-[12px] font-medium cursor-pointer', on ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink-2 hover:bg-surface-2')}>{r.base}B {r.name}{on ? ` → ${r.base === 3 ? '得分' : `${r.base + 1}B`}` : '（不動）'}</button>
+                  })}
+                  <button type="button" onClick={() => { const pick = wpPick; apply((s) => wildPitch(s, pick.kind, pick.rows)); setWpPick(null) }} className="h-8 px-3 rounded-[6px] bg-ink text-bg text-[12px] font-medium cursor-pointer">確定</button>
+                  <button type="button" onClick={() => setWpPick(null)} className="h-8 px-2 text-[12px] text-ink-2 hover:text-ink cursor-pointer">取消</button>
+                </div>
+              )}
               {state.extras.pka > 0 && <span className="inline-flex items-center text-[12px] text-ink-2 h-7 px-2 rounded-[6px] bg-surface-2">牽制 <span className="tnum text-ink font-medium ml-1">×{state.extras.pka}</span></span>}
               <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={cx('h-7 px-2 rounded-[6px] border text-[12px] cursor-pointer', errOpen ? 'border-ink bg-ink text-bg' : 'border-border text-ink-2 hover:bg-surface-2')}>我隊失誤{state.extras.errors?.length ? <span className="tnum font-medium ml-1">×{state.extras.errors.length}</span> : null}</button>
               <span className="text-[11px] text-muted self-center ml-1">盜壘、牽制、進壘請點上方壘上的跑者</span>
@@ -474,7 +488,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
         </Card>
         <Card still title="逐打席" action={<div className="flex items-center gap-2"><Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} /><Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) apply(endHalf) }}>結束半局</Button></div>} flush>
           <div className="max-h-[420px] overflow-y-auto">
-            {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} /> : <PitchingPlayByPlay pas={state.pitching} />}
+            {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onRbi={(i, rbi) => apply((s) => setRbi(s, i, rbi))} /> : <PitchingPlayByPlay pas={state.pitching} />}
           </div>
           {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
             <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">

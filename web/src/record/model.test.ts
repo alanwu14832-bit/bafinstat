@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
-  substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
+  setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
 } from './model'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
@@ -295,5 +295,30 @@ describe('runners never share a base', () => {
     expect(planProblems(s, plan)).toEqual([])
     expect(planProblems(s, { ...plan, batter: 2 }).join()).toContain('都停在 2B')
     expect(planProblems(s, { ...plan, runners: { ...plan.runners, 1: 'home', 0: 3 } }).join()).toContain('超過了前面的')
+  })
+})
+
+describe('one runner moves on a wild pitch / passed ball; RBI corrected afterwards', () => {
+  it('only the runners picked move, the pitch counts once', () => {
+    let s = newGame(game, lineup, '壬') // they bat
+    s = commitPA(s, defaultPlan(s, '二安'))
+    s = commitPA(s, defaultPlan(s, '保送')) // 2B and 1B (walk does not force the runner on second)
+    expect(s.runners.map((r) => r.base)).toEqual([2, 1])
+    const lead = wildPitch(s, 'pb', [s.runners[0].row])
+    expect(lead.runners.map((r) => r.base)).toEqual([3, 1])
+    expect(lead.extras.pb).toBe(1)
+    // the trailing runner alone has to push the one right ahead of him
+    const trail = wildPitch(lead, 'wp', [lead.runners[1].row])
+    expect(trail.runners.map((r) => r.base)).toEqual([3, 2])
+    expect(trail.extras.wp).toBe(1)
+    expect(wildPitch(s, 'wp', []).runners.map((r) => r.base)).toEqual([2, 1])
+  })
+  it('RBI of a sent plate appearance can be changed, within 0–4', () => {
+    let s = endHalf(newGame(game, lineup, '壬'))
+    s = commitPA(s, defaultPlan(s, '一安'))
+    expect(setRbi(s, 0, 1).batting[0].rbi).toBe(1)
+    expect(setRbi(s, 0, 9).batting[0].rbi).toBe(4)
+    expect(setRbi(s, 0, -1).batting[0].rbi).toBe(0)
+    expect(setRbi(s, 5, 1)).toBe(s)
   })
 })
