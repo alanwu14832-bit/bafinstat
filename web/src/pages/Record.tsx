@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, ChevronDown, CloudDownload, Flag, Flame, Maximize2, Minimize2, RefreshCw, Save, Target, Undo2, X } from 'lucide-react'
+import { ArrowRightLeft, CloudDownload, Flag, Flame, Maximize2, Minimize2, RefreshCw, Save, Target, Undo2, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -35,13 +35,13 @@ import { readDraft, writeDraft } from '../record/draft'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
 import { Diamond } from '../record/Diamond'
-import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../record/widgets'
+import { RunnerDiamond } from '../record/RunnerDiamond'
+import { BattedBallPicker, NO_BATTED_BALL, PitchPad, ResultChips } from '../record/widgets'
 
 const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: 'us' | 'opp' }> = [
   { ev: 'sb', label: '盜壘' }, { ev: 'cs', label: '盜壘失敗' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘', side: 'us' },
   { ev: 'advance', label: '進一個壘' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'pk', label: '牽制出局' }, { ev: 'score', label: '得分' }, { ev: 'out', label: '壘死' },
 ]
-const chip = chipBtn
 
 /* ------------------------------------------------------------------ setup */
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
@@ -286,27 +286,27 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
               <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish}>結束比賽</Button>
             </div>
           </div>
-          {state.runners.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-border flex flex-wrap gap-2 items-start">
-              <span className="text-[12px] text-muted h-8 inline-flex items-center">壘上</span>
-              {state.runners.map((r) => (
-                <div key={`${r.side}-${r.row}`} className="relative">
-                  <button type="button" onClick={() => setRunnerMenu(runnerMenu === r.row ? null : r.row)} className={cx(chip(runnerMenu === r.row), 'h-8 inline-flex items-center gap-1.5')}>
-                    <span className="text-muted tnum">{r.base}B</span>{r.name}<ChevronDown className="size-3.5 text-muted" />
-                  </button>
-                  {runnerMenu === r.row && (
-                    <div className="absolute left-0 top-9 z-20 bg-surface border border-border rounded-[var(--radius-sm)] shadow-[var(--shadow-hover)] p-1.5 grid grid-cols-2 gap-1 w-[220px]">
-                      {RUNNER_EVENTS.filter((e) => !e.side || e.side === r.side).map((e) => (
-                        <button key={e.ev} type="button" onClick={() => { apply((s) => runnerEvent(s, r.row, r.side, e.ev)); setRunnerMenu(null) }}
-                          className={cx('h-8 px-2 rounded-[6px] text-[12px] font-medium text-left hover:bg-surface-2 cursor-pointer', (e.ev === 'cs' || e.ev === 'pk' || e.ev === 'out') && 'text-critical')}>{e.label}</button>
+          {state.runners.length > 0 && (() => {
+            const picked = state.runners.find((r) => r.row === runnerMenu && r.side === side) ?? null
+            return (
+              <div className="mt-3 pt-3 border-t border-border flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2 text-[12px] text-muted"><span>壘上跑者：點名字選他發生的事</span>{picked && <button type="button" onClick={() => setRunnerMenu(null)} className="h-8 px-2 text-ink-2 hover:text-ink cursor-pointer">收起</button>}</div>
+                <RunnerDiamond runners={state.runners.map((r) => ({ key: String(r.row), base: r.base, name: r.name }))} picked={picked ? String(picked.row) : null} onPick={(k) => setRunnerMenu(runnerMenu === Number(k) ? null : Number(k))} className="max-w-[320px]" />
+                {picked && (
+                  <div className="rounded-[var(--radius-sm)] border border-border bg-surface-2/50 p-2 flex flex-col gap-1.5" role="group" aria-label={`${picked.base}B ${picked.name} 的動作`}>
+                    <div className="text-[12px] text-ink-2 px-1"><span className="tnum text-muted mr-1">{picked.base}B</span><span className="font-medium text-ink">{picked.name}</span></div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                      {RUNNER_EVENTS.filter((e) => !e.side || e.side === picked.side).map((e) => (
+                        <button key={e.ev} type="button" onClick={() => { apply((s) => runnerEvent(s, picked.row, picked.side, e.ev)); setRunnerMenu(null) }}
+                          className={cx('h-10 pointer-fine:h-9 px-2 rounded-[6px] border border-border bg-surface text-[12px] font-medium hover:bg-surface-2 cursor-pointer', (e.ev === 'cs' || e.ev === 'pk' || e.ev === 'out') && 'text-critical')}>{e.label}</button>
                       ))}
-                      {r.side === 'us' && slotOfRunner(r) >= 0 && <button type="button" onClick={() => openSub(slotOfRunner(r), 'PR')} className="col-span-2 h-8 px-2 rounded-[6px] text-[12px] font-medium text-left hover:bg-surface-2 cursor-pointer border-t border-border">代跑…</button>}
+                      {picked.side === 'us' && slotOfRunner(picked) >= 0 && <button type="button" onClick={() => openSub(slotOfRunner(picked), 'PR')} className="h-10 pointer-fine:h-9 px-2 rounded-[6px] border border-border bg-surface text-[12px] font-medium hover:bg-surface-2 cursor-pointer">代跑…</button>}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </Card>
 
         {/* what is being recorded right now: our hitters, or our pitcher against theirs */}

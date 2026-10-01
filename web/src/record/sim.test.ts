@@ -12,6 +12,7 @@ import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
 import { summarizeGame } from '../data/stats'
 import type { Game, Player } from '../data/types'
+import { deriveHalf, inferHalf, inningsOf, type OnBase } from './timeline'
 
 function rng(seed: number) {
   let a = seed >>> 0
@@ -28,6 +29,8 @@ function playGame(seed: number) {
   const game: Game = { id: `G2026010${seed % 9 + 1}-01`, date: '2026-01-01', tournament: '模擬', opponent: '對手', homeAway: r() < 0.5 ? '主' : '客', innings: 7 }
   let s: RecordState = newGame(game, NAMES.slice(0, 9).map((name, i) => ({ name, pos: POS[i] })), '壬', { bench: NAMES.slice(9) })
   let guard = 0
+  // ground truth for the timeline: who was on base (row, base) when each plate appearance was sent
+  const truth = { bat: new Map<number, OnBase[]>(), pit: new Map<number, OnBase[]>() }
   while (s.inning <= 7 && guard++ < 400) {
     const side = offense(s)
     // between pitches: runners move
@@ -64,12 +67,14 @@ function playGame(seed: number) {
     plan.traj = result === '內滾' || result === '雙殺' || result === '野選' || result === '犧觸' ? 'G' : ['外飛', '犧飛', '界外飛', '內飛', '全壘打'].includes(result) ? 'F' : ['一安', '二安', '三安', '失誤'].includes(result) ? pick(['G', 'L', 'F']) : undefined
     // 不死三振: sometimes the batter reaches
     if (result === '三振' && count(s.pitches).strikes >= 3 && !s.runners.some((x) => x.base === 1) && r() < 0.1) plan.batter = 1 as Dest
+    const sideKey = offense(s) === 'us' ? 'bat' : 'pit'
+    truth[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, s.runners.map((x) => ({ row: x.row, base: x.base })).sort((a, b) => b.base - a.base))
     s = commitPA(s, plan)
     const bases = s.runners.map((x) => x.base)
     if (new Set(bases).size !== bases.length) throw new Error(`two runners on one base after ${result}: ${bases.join(',')}`)
   }
   if (s.outs || s.runners.length) s = endHalf(s)
-  return { ...s, finished: true }
+  return { ...s, finished: true, truth }
 }
 
 describe('random games through the recording model', () => {
@@ -85,5 +90,24 @@ describe('random games through the recording model', () => {
     const sum = summarizeGame(fragment, fragment.games[0])
     const live = score(s)
     expect([sum.runsUs, sum.runsOpp]).toEqual([live.us, live.opp])
+  })
+})
+
+describe('the runner timeline rebuilt from saved rows', () => {
+  const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
+  it.each(seeds)('game %i: who was on base each plate appearance, and writing it back changes nothing', (seed) => {
+    const g = playGame(seed)
+    for (const side of ['bat', 'pit'] as const) {
+      const rows = side === 'bat' ? g.batting : g.pitching
+      let derived: Array<(typeof rows)[number]> = rows.slice()
+      for (const [inning, idx] of inningsOf(rows)) {
+        const half = inferHalf(rows, idx, side)
+        expect(half, `${side} inning ${inning}`).not.toBeNull()
+        for (const st of half!.steps) expect(st.before, `${side} PA ${st.index}`).toEqual(g.truth[side].get(st.index))
+        derived = deriveHalf(derived as never[], half!, side)
+      }
+      const pick = (r: (typeof rows)[number]) => JSON.stringify(r, ['basesBefore', 'outsBefore', 'run', 'code', 'outOnBase', 'cs'])
+      expect(derived.map(pick)).toEqual(rows.map(pick))
+    }
   })
 })
