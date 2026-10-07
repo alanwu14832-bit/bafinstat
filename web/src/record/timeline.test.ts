@@ -86,3 +86,40 @@ describe('rebuilding an inning whose saved bases do not add up', () => {
     expect(fixed.slice(3).map((r) => r.code)).toEqual(['I', 'II', 'III'])
   })
 })
+
+describe('逐球跑壘: runner plays between pitches', () => {
+  it('a wild pitch moves everyone on that pitch, is saved on that plate appearance, and reads back the same', async () => {
+    const { addPlay, removePlay, midOf } = await import('./timeline')
+    const h0 = inferHalf(inning, idx, 'bat')!
+    // 丁 at bat with 乙 on 3B and 丙 on 1B: the first pitch gets away, both move up
+    const { half: h, added } = addPlay(h0, 3, 1, 'wp', [1, 2])
+    expect(added.map((m) => `${m.from}>${m.to}`)).toEqual(['3>home', '1>2'])
+    expect(midOf(h.steps[3]).map((o) => `${o.base}${inning[o.row].batter}`)).toEqual(['2丙'])
+    const rows = deriveHalf(inning, h, 'bat')
+    expect(rows[1]).toMatchObject({ run: 1, code: 'R' })
+    expect(rows[3]).toMatchObject({ basesBefore: '2', outsBefore: 0, events: [{ at: 1, kind: 'wp', from: 3, to: 'home' }, { at: 1, kind: 'wp', from: 1, to: 2 }] })
+    // read back from the saved rows: the batter came up with 乙 and 丙 on, the plays happened during his pitches
+    const again = inferHalf(rows, idx, 'bat')!
+    expect(again.steps[3].before.map((o) => o.base)).toEqual([3, 1])
+    expect(deriveHalf(rows, again, 'bat')).toEqual(rows)
+    // taking both plays back restores the inning
+    const back = removePlay(removePlay(h, 3, 1).half, 3, 0).half
+    expect(deriveHalf(inning, back, 'bat').map((r) => r.basesBefore)).toEqual(inning.map((r) => r.basesBefore))
+  })
+  it('a steal into an occupied base pushes the runner ahead; a caught stealing is the next out', async () => {
+    const { addPlay, outsIn } = await import('./timeline')
+    const h0 = inferHalf(inning, idx, 'bat')!
+    // 丙 steals second on 戊's first pitch (乙 on third stays), then home on the next, then is caught stealing
+    let h = addPlay(h0, 4, 1, 'sb', [2]).half
+    expect(h.steps[4].moves.map((m) => `${m.kind}${m.from}>${m.to}`)).toEqual(['sb1>2'])
+    // and a second steal pushes 乙 on third home on the same steal
+    h = addPlay(h, 4, 2, 'sb', [2]).half
+    expect(h.steps[4].moves.map((m) => `${m.kind}${m.from}>${m.to}`)).toEqual(['sb1>2', 'sb3>home', 'sb2>3'])
+    h = addPlay(h, 4, 3, 'cs', [2]).half
+    expect(outsIn(h.steps[4])).toBe(2)
+    const rows = deriveHalf(inning, h, 'bat')
+    expect(rows[1]).toMatchObject({ run: 1, code: 'R' })
+    expect(rows[2]).toMatchObject({ code: 'II', outOnBase: 1 })
+    expect(rows[4]).toMatchObject({ outsBefore: 2, basesBefore: '無', code: 'III' })
+  })
+})

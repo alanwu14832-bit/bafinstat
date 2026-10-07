@@ -6,7 +6,7 @@ import { DEFAULT_PARAMS, LOC_CODES, type BattingPA, type Dataset, type FieldingL
 
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(['一安', '二安', '三安', '全壘打'])
-const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
+export const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
 const SWING_CODES = new Set(['SS', 'F', 'IP'])
 const STRIKE_CODES = new Set(['S', 'SS', 'CS', 'F', 'IP'])
 

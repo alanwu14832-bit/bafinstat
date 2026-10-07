@@ -87,6 +87,16 @@ export interface GameDayRoster { starters: Array<{ name: string; pos: string; or
 /** A tournament registration list (報名名單) for one year. Not part of Dataset: it lives in its own store slice (like albums). */
 export interface Registration { season: number; tournament: string; players: string[]; updatedAt?: string }
 
+/**
+ * Something that happened to a runner between pitches of a plate appearance (盜壘, 暴投進壘, 牽制出局…), in order.
+ * `at` = how many pitches had been thrown when it happened; `from` = the base he was on; `to` = where he ended up
+ * ('out', a base, or 'home'). Kept on the plate appearance it happened during, so the editor can replay it pitch by pitch.
+ */
+export interface PlayEvent { at: number; kind: string; from: 1 | 2 | 3; to: 'out' | 1 | 2 | 3 | 'home' }
+export const PLAY_EVENT_LABELS: Record<string, string> = {
+  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死',
+}
+
 export interface BattingPA {
   gameId: string
   inning: number
@@ -113,6 +123,8 @@ export interface BattingPA {
   rbi: number
   code?: string
   note?: string
+  /** runner moves between this plate appearance's pitches, in order */
+  events?: PlayEvent[]
 }
 
 export interface PitchingPA {
@@ -140,6 +152,8 @@ export interface PitchingPA {
   errors?: string[]
   code?: string
   note?: string
+  /** runner moves between this plate appearance's pitches, in order */
+  events?: PlayEvent[]
 }
 
 export interface FieldingLine {

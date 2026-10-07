@@ -13,9 +13,9 @@ import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
-import { deriveHalf, homesIn, inferAll, inningsOf, rebuildHalf, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { addPlay, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half, type Move } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
-import type { TimelineProps, TlEvent } from './PaEditor'
+import type { TimelineProps } from './PaEditor'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -196,6 +196,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const st = half.steps[j]
       const p = stepProblems(st, name)
       if (p.length) { const m = `${p[0]}，這個改法沒有套用`; setTlNotice(m); return m }
+      outs += st.moves.filter((m) => m.to === 'out').length
+      if (outs >= 3) { const m = '跑壘出局已經是這局第三個出局，這個打席不會有結果；請改在上一個打席把這位跑者設為出局'; setTlNotice(m); return m }
       outs += st.outs.length
       if (outs > 3) { const m = '這局會超過 3 個出局，請先把另一個出局改掉'; setTlNotice(m); return m }
       if (outs === 3 && j < half.steps.length - 1) { const m = '第三個出局之後這局還有打席，請先刪除或移動後面的打席'; setTlNotice(m); return m }
@@ -223,41 +225,41 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       }
       commitHalf(side, next, setEnd(half, i, who, end))
     }
-    const onEvent = (row: number, ev: TlEvent) => {
-      const from = step.before.find((o) => o.row === row)?.base ?? 1
-      const cur = step.dest[row] ?? from
-      const up = (d: End, base: number): End => (d === 'out' ? (base >= 3 ? 'home' : ((base + 1) as End)) : d === 'home' || d === 3 ? 'home' : ((d + 1) as End))
-      const end: End = ev === 'cs' || ev === 'pk' ? 'out' : up(cur, from)
-      // the count goes on the runner's own row for us, on this plate appearance for the opponent (a wild pitch or a
-      // passed ball while we bat is the other team's: our runner just moves)
-      const count = (next: Array<BattingPA | PitchingPA>, r0: number, e: TlEvent) => next.map((r, k) => {
-        if (side === 'bat' && k === r0) { const b = { ...(r as BattingPA) }; if (e === 'sb') b.sb += 1; if (e === 'err') b.advOnError += 1; if (e === 'cs') b.cs += 1; if (e === 'pk') b.outOnBase += 1; return b }
-        if (side === 'pit' && k === i) { const q = { ...(r as PitchingPA) }; if (e === 'sb') q.sba += 1; if (e === 'wp') q.wp += 1; if (e === 'pb') q.pb += 1; if (e === 'cs') q.cs += 1; if (e === 'pk') q.pk += 1; return q }
-        return r
-      })
-      let next = count(rows, row, ev)
-      let h = setEnd(half, i, row, end)
-      // a runner moving up into a base someone ahead still holds pushes him on (a double steal credits both;
-      // a wild pitch or an error just moves him, counted once)
-      if (typeof end === 'number' || end === 'home') {
-        let behind = end === 'home' ? 4 : end
-        const ahead = step.before.filter((o) => o.base > from).sort((a, z) => a.base - z.base)
-        for (const o of ahead) {
-          const d = h.steps.find((x) => x.index === i)!.dest[o.row]
-          if (d === 'out' || d === 'home') { if (d === 'home') behind = 4; continue }
-          if (d > behind) { behind = d; continue }
-          const to = behind + 1
-          h = setEnd(h, i, o.row, to >= 4 ? 'home' : (to as End))
-          if (ev === 'sb') next = side === 'bat' ? count(next, o.row, 'sb') : next.map((r, k) => (k === i ? { ...(r as PitchingPA), sba: (r as PitchingPA).sba + 1 } : r))
-          behind = Math.min(4, to)
-        }
+    // a runner play between pitches; the counts follow it: on the runner's own row for us (盜壘, 盜壘失敗, 失誤進壘,
+    // 壘死), on this plate appearance for the opponent (被盜壘, 阻殺, 牽制出局; a wild pitch or passed ball once per pitch,
+    // however many runners moved on it). A wild pitch while we bat is the other team's: our runner just moves.
+    const count = (next: Array<BattingPA | PitchingPA>, m: Move, d: 1 | -1, again: boolean) => next.map((r, k) => {
+      const add = (v: number) => Math.max(0, v + d)
+      if (side === 'bat' && k === m.row) {
+        const b = { ...(r as BattingPA) }
+        if (m.kind === 'sb') b.sb = add(b.sb); if (m.kind === 'cs') b.cs = add(b.cs); if (m.kind === 'err') b.advOnError = add(b.advOnError); if (m.kind === 'pk' || m.kind === 'out') b.outOnBase = add(b.outOnBase)
+        return b
       }
+      if (side === 'pit' && k === i) {
+        const q = { ...(r as PitchingPA) }
+        if (m.kind === 'sb') q.sba = add(q.sba); if (m.kind === 'cs') q.cs = add(q.cs); if (m.kind === 'pk') q.pk = add(q.pk)
+        if (m.kind === 'wp' && !again) q.wp = add(q.wp); if (m.kind === 'pb' && !again) q.pb = add(q.pb)
+        return q
+      }
+      return r
+    })
+    const onPlay = (pitch: number, kind: string, who: number[]) => {
+      const { half: h, added } = addPlay(half, i, pitch, kind, who)
+      if (!added.length) return
+      let next: Array<BattingPA | PitchingPA> = rows
+      added.forEach((m, n) => { next = count(next, m, 1, step.moves.some((x) => x.at === m.at && x.kind === m.kind) || added.slice(0, n).some((x) => x.kind === m.kind)) })
       commitHalf(side, next, h)
+    }
+    const onRemovePlay = (n: number) => {
+      const { half: h, removed } = removePlay(half, i, n)
+      if (!removed) return
+      const left = h.steps.find((x) => x.index === i)!.moves
+      commitHalf(side, count(rows, removed, -1, left.some((x) => x.at === removed.at && x.kind === removed.kind)), h)
     }
     // a new result: the batter goes where it puts him, runners in his way are forced ahead (and those runs are his RBI)
     const onResult = (result: string) => {
       let h = half
-      for (const [row, d] of Object.entries(baseline.current.get(`${side}-${i}`) ?? {})) if (step.before.some((o) => o.row === Number(row))) h = setEnd(h, i, Number(row), d)
+      for (const [row, d] of Object.entries(baseline.current.get(`${side}-${i}`) ?? {})) if (midOf(step).some((o) => o.row === Number(row))) h = setEnd(h, i, Number(row), d)
       h = setBatterResult(h, i, result)
       const st = h.steps.find((x) => x.index === i)!
       const next = rows.map((r, k) => {
@@ -273,7 +275,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onEvent, onResult, notice: tlNotice, ...pinch }
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, onResult, notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows

@@ -12,14 +12,14 @@ import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, ERRORS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
+import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
   deleteCloudRegistration, loadCloudRegistrations, parseRegistration, readLocalRegistrations, removeFromRegistrations, renameInRegistrations, saveCloudRegistration,
   withoutRegistration, withRegistration, writeLocalRegistrations, REGISTRATIONS_UNSUPPORTED,
 } from '../data/registrations'
-import { DAY_ROSTER_UNSUPPORTED, ERRORS_UNSUPPORTED, RUNNER_UNSUPPORTED } from '../data/gameRoster'
+import { DAY_ROSTER_UNSUPPORTED, ERRORS_UNSUPPORTED, EVENTS_UNSUPPORTED, RUNNER_UNSUPPORTED } from '../data/gameRoster'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
@@ -99,6 +99,7 @@ const droppedWarnings = (dropped: string[], gameId = ''): GameWarning[] => [
   ...(dropped.includes('day_roster') ? [{ gameId, message: DAY_ROSTER_UNSUPPORTED }] : []),
   ...(dropped.includes(RUNNER_COLUMN) ? [{ gameId, message: RUNNER_UNSUPPORTED }] : []),
   ...(dropped.includes(ERRORS_COLUMN) ? [{ gameId, message: ERRORS_UNSUPPORTED }] : []),
+  ...(dropped.includes(EVENTS_COLUMN) ? [{ gameId, message: EVENTS_UNSUPPORTED }] : []),
 ]
 let registrationsLive = false
 

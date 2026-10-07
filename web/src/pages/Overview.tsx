@@ -18,6 +18,10 @@ import { sprayCounts, teamBatting } from '../data/stats'
 import { f2, f3, pct, pct0, shortDate, signedInt } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
 import { useDataStore } from '../store/data'
+import { SeasonHero } from '../components/ui/SeasonHero'
+import { teamStories } from '../data/stories'
+import { scheduledGames } from '../data/schedule'
+import { TEAM } from '../config/team'
 
 interface RecentRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; result: 'W' | 'L' | 'T'; score: string; hits: number; errors: number; isDemo: boolean }
 
@@ -29,6 +33,10 @@ export function OverviewPage() {
   const openGame = useOpenGame()
   const { summary, team, teamPitch, summaries } = s
   const opponentFilter = useDataStore((st) => st.filters.opponent)
+  const tournamentFilter = useDataStore((st) => st.filters.tournament)
+  const params = useDataStore((st) => st.params)
+  const stories = useMemo(() => teamStories({ dataset: s.dataset, summaries, batting: s.batting, pitching: s.pitching, params }), [s.dataset, summaries, s.batting, s.pitching, params])
+  const next = useMemo(() => { const today = new Date().toISOString().slice(0, 10); return scheduledGames(s.dataset.games).find((g) => g.date >= today) }, [s.dataset.games])
   const resetFilters = useDataStore((st) => st.resetFilters)
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
   const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
@@ -80,13 +88,14 @@ export function OverviewPage() {
     <>
       <PageHeader title="總覽" description={`${TEAM_NAME}・${summary.games} 場比賽，依上方篩選即時計算。`} />
       <DemoBanner />
+      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={tournamentFilter !== 'all' ? `${TEAM.org}・${tournamentFilter}` : TEAM.org} />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="戰績（勝-敗-和）" to="/games?view=results" value={summary.w} display={`${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`} note={`勝率 ${f3(summary.winPct)}`} />
         <StatTile label="每場得失分" to="/games?view=results" value={summary.runsPerGame ?? 0} display={`${f2(summary.runsPerGame)}/${f2(summary.runsAllowedPerGame)}`} note={`${summary.rs} 得・${summary.ra} 失`} />
         <StatTile label="團隊打擊率" to="/batting?view=basic&sort=avg" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
         <StatTile label="團隊 OPS" to="/batting?view=basic&sort=ops" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
         <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
         <StatTile label="BB% / K%" to="/batting?view=advanced&sort=bbPct" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)}/${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} />
+        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
       </StatGroup>
       <div className="hidden md:block">
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
@@ -95,7 +104,7 @@ export function OverviewPage() {
         <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
         <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
         <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
-        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+        <StatTile label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
       </StatGroup>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
@@ -112,7 +121,7 @@ export function OverviewPage() {
         <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
         <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
         <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
-        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+        <StatTile label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
       </StatGroup>
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">

@@ -23,6 +23,12 @@ export const TEAM_DEFAULTS = {
   seed: true,
   /** VITE_TEAM_FILE_PREFIX: start of downloaded backup file names. */
   filePrefix: 'BAFIN',
+  /** VITE_TEAM_ACCENT / _DARK: the team colour used for emphasis (titles' stitching, the team's own bars and buttons),
+   *  in light and dark mode. Text drawn on it uses VITE_TEAM_ACCENT_INK / _INK_DARK. */
+  accent: '#c8811a',
+  accentDark: '#e2a03a',
+  accentInk: '#1a1207',
+  accentInkDark: '#1a1207',
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
@@ -33,6 +39,8 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     const v = env[key]
     return typeof v === 'string' && v.trim() ? v.trim() : fallback
   }
+  // only #rgb / #rrggbb: the value is written into a <style> tag
+  const color = (key: string, fallback: string) => { const v = str(key, ''); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v : fallback }
   const innings = Number(env.VITE_TEAM_INNINGS)
   const seed = str('VITE_TEAM_SEED', '')
   return {
@@ -45,7 +53,19 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     innings: Number.isInteger(innings) && innings >= 1 && innings <= 12 ? innings : TEAM_DEFAULTS.innings,
     seed: seed ? !['0', 'false', 'no', 'off'].includes(seed.toLowerCase()) : TEAM_DEFAULTS.seed,
     filePrefix: str('VITE_TEAM_FILE_PREFIX', TEAM_DEFAULTS.filePrefix),
+    accent: color('VITE_TEAM_ACCENT', TEAM_DEFAULTS.accent),
+    accentDark: color('VITE_TEAM_ACCENT_DARK', TEAM_DEFAULTS.accentDark),
+    accentInk: color('VITE_TEAM_ACCENT_INK', TEAM_DEFAULTS.accentInk),
+    accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
   }
+}
+
+/** The team colour as CSS variables: :root for light mode, dark mode the same way tokens.css switches. `html:root` outranks
+ *  tokens.css's `:root`, whichever stylesheet loads last. */
+export function accentCss(t: TeamConfig): string {
+  const vars = (accent: string, ink: string) => `--accent:${accent};--accent-ink:${ink};`
+  const dark = vars(t.accentDark, t.accentInkDark)
+  return `html:root{${vars(t.accent, t.accentInk)}}@media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${dark}}}html:root[data-theme="dark"]{${dark}}`
 }
 
 /** A file in web/public (resolved against the site's base path) or an absolute URL, as is. */

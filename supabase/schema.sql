@@ -58,6 +58,7 @@ create table if not exists batting_pa (
   rbi           int not null default 0,
   code          text,
   note          text,
+  events        jsonb,          -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
   primary key (game_id, seq)
 );
 
@@ -83,6 +84,7 @@ create table if not exists pitching_pa (
   errors       text[],        -- 守備失誤: positions of our fielders who erred during this plate appearance
   code         text,
   note         text,
+  events       jsonb,         -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
   primary key (game_id, seq)
 );
 

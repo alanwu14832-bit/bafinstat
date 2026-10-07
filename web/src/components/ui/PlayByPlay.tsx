@@ -1,10 +1,11 @@
 import { Fragment } from 'react'
-import type { BattingPA, PitchingPA } from '../../data/types'
+import type { BattingPA, PitchingPA, PlayEvent } from '../../data/types'
+import { playText, playWhen } from '../../data/plays'
 import { pitchTotals, isHitResult } from '../../data/stats'
 import { POSITION_BY_NUMBER } from '../../data/types'
 import { cx } from '../../lib/format'
 import { Badge } from './Badge'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 
 /** Pitch code → chip. 好球類：S/SS/CS/IP；界外 F；壞球 B */
 const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }> = {
@@ -28,6 +29,39 @@ export function PitchChips({ pitches, onRemove }: { pitches: string[]; onRemove?
           ? <button key={i} type="button" onClick={() => onRemove(i)} title={`刪除第 ${i + 1} 球（${s.title}）`} aria-label={`刪除第 ${i + 1} 球 ${s.title}`} className={cx(cls, 'h-8 min-w-8 text-[12px] cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/50')}>{s.label}</button>
           : <span key={i} title={`第 ${i + 1} 球：${s.title}`} className={cx(cls, 'h-5 min-w-5 text-[11px]')}>{s.label}</span>
       })}
+    </span>
+  )
+}
+
+/** A runner play between pitches, as a pill (with `onRemove`, a button that takes it back). */
+function PlayPill({ e, who, big, onRemove }: { e: PlayEvent; who?: string; big?: boolean; onRemove?: () => void }) {
+  const text = `${who ? `${who} ` : ''}${playText(e)}`
+  const cls = cx('inline-flex items-center gap-1 rounded-full border font-medium whitespace-nowrap',
+    big ? 'h-8 px-2.5 text-[12px]' : 'h-5 px-1.5 text-[11px]',
+    e.to === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_45%,transparent)] text-critical' : e.to === 'home' ? 'border-[color-mix(in_srgb,var(--good)_50%,transparent)] text-ink' : 'border-[color-mix(in_srgb,var(--accent)_55%,transparent)] text-ink')
+  return onRemove
+    ? <button type="button" onClick={onRemove} title={`刪除：${playWhen(e.at)} ${text}`} aria-label={`刪除跑壘事件：${playWhen(e.at)} ${text}`} className={cx(cls, 'cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/40')}>{text}<X className="size-3 opacity-60" /></button>
+    : <span title={`${playWhen(e.at)}：${text}`} className={cls}>{text}</span>
+}
+
+/**
+ * 逐球 with the runner plays between them: 「B  CS  [暴投 1B→2B]  B  [盜壘 2B→3B]  IP」. With the remove handlers each
+ * pitch and play is a button that deletes it (the plate-appearance editor).
+ */
+export function PitchPlays({ pitches, events, whoOf, onRemovePitch, onRemovePlay }: { pitches: string[]; events?: PlayEvent[]; whoOf?: (n: number) => string | undefined; onRemovePitch?: (index: number) => void; onRemovePlay?: (n: number) => void }) {
+  const plays = (events ?? []).map((e, n) => ({ e, n }))
+  if (!plays.length) return <PitchChips pitches={pitches} onRemove={onRemovePitch} />
+  const at = (k: number) => plays.filter(({ e }) => (k < pitches.length ? e.at === k : e.at >= k))
+  const pill = ({ e, n }: { e: PlayEvent; n: number }) => <PlayPill key={`p${n}`} e={e} who={whoOf?.(n)} big={!!onRemovePlay} onRemove={onRemovePlay && (() => onRemovePlay(n))} />
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {at(0).map(pill)}
+      {pitches.map((p, i) => (
+        <Fragment key={i}>
+          <PitchChips pitches={[p]} onRemove={onRemovePitch && (() => onRemovePitch(i))} />
+          {at(i + 1).map(pill)}
+        </Fragment>
+      ))}
     </span>
   )
 }
@@ -78,7 +112,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; fla
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}</td>
-                  <td className={td}><PitchChips pitches={p.pitches} /></td>
+                  <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
                   <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
@@ -129,7 +163,7 @@ export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: 
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
-                  <td className={td}><PitchChips pitches={p.pitches} /></td>
+                  <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
                   <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
