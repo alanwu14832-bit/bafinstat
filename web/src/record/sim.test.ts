@@ -38,7 +38,7 @@ function playGame(seed: number) {
   const runnerPlay = () => {
     const side = offense(s)
     const run = pick(s.runners)
-    const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'pk', 'advance'] as const)
+    const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'throw', 'pk', 'advance'] as const)
     const before = s.half
     if (!(ev === 'err' && side === 'opp') && !((ev === 'wp' || ev === 'pb') && side === 'us')) s = runnerEvent(s, run.row, run.side, ev)
     if (ev === 'err' && side === 'opp') s = addError(s, pick(['SS', 'LF', '2B']))

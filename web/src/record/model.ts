@@ -340,7 +340,8 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   return outs >= 3 ? endHalf(next) : next
 }
 
-export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
+/** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances */
+export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
 
 /** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
  *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
@@ -349,7 +350,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   if (!runner) return s
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
   // error just moves him along (counted once), so two runners never share a base
-  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'err' || ev === 'advance') {
+  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'err' || ev === 'throw' || ev === 'advance') {
     const ahead = runner.base < 3 ? s.runners.find((x) => x.side === side && x.base === runner!.base + 1) : undefined
     if (ahead) {
       s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance', ev === 'wp' || ev === 'pb' ? ev : undefined)
@@ -374,7 +375,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
     case 'err': dest = advance(1); if (side === 'us') (r as BattingPA).advOnError += 1; break
     case 'pk': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; else extras.pk += 1; break
     case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
-    case 'advance': dest = advance(1); break
+    case 'throw': case 'advance': dest = advance(1); break
     case 'score': dest = 'home'; break
     case 'out': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; break
   }

@@ -94,7 +94,7 @@ export interface Registration { season: number; tournament: string; players: str
  */
 export interface PlayEvent { at: number; kind: string; from: 1 | 2 | 3; to: 'out' | 1 | 2 | 3 | 'home' }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
-  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死',
+  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死',
 }
 
 export interface BattingPA {
