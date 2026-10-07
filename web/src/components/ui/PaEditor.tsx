@@ -395,7 +395,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
             : <PitchChips pitches={pa.pitches} onRemove={removePitch} />}
           {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [], ...(pa.events ? { events: pa.events.map((e) => ({ ...e, at: 0 })) } : {}) })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
         </div>
-        <PitchPad onPitch={(code) => set({ pitches: [...pa.pitches, code] })} />
+        <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code] }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} />
         {timeline && <PlayBuilder side={side} pitches={pa.pitches.length} tl={timeline} />}
       </Section>
 

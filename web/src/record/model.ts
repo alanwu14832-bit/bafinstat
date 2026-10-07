@@ -111,7 +111,8 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
   }
 }
 
-export const addPitch = (s: RecordState, code: string): RecordState => ({ ...s, pitches: [...s.pitches, code] })
+/** A ball in play (IP) is the last pitch of the plate appearance: nothing is added after it (a double tap stays one IP). */
+export const addPitch = (s: RecordState, code: string): RecordState => (s.pitches[s.pitches.length - 1] === 'IP' ? s : { ...s, pitches: [...s.pitches, code] })
 export const undoPitch = (s: RecordState): RecordState => ({ ...s, pitches: s.pitches.slice(0, -1) })
 export const addExtra = (s: RecordState, key: Exclude<keyof Extras, 'errors'>): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
 /** One error by our fielder at `pos` during the opponent plate appearance in progress (a hit plus an error, a bad throw…). */
