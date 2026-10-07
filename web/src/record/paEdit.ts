@@ -76,7 +76,7 @@ export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string):
 }
 
 /* ------------------------------------------------ base running of our batter after he reached */
-const ON_FIRST = new Set(['一安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+const ON_FIRST = new Set(['一安', '內安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 /** Base the batter reached on his result: 1–3, 4 for a home run, null when he was out at the plate. */
 export function startBase(pa: Pick<BattingPA, 'result' | 'code'>): number | null {
   if (isDouble(pa.result)) return 2

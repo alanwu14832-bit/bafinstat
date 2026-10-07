@@ -57,6 +57,62 @@ function hitBase(result: string): End {
   return 1
 }
 
+/**
+ * The inning's last plate appearance has no next one to tell where the runners left on base ended. They end where
+ * the marks on the batted ball say (進壘, or 趁傳／失誤進壘), else where they stood — pushed on only by the person
+ * behind them (the batter reaching first moves the man on first to second). `left` is lead runner first.
+ */
+export function leftEnds(left: Array<{ row: number; base: number }>, batter: { row: number; base: number } | null, plays: PlayEvent[]): Map<number, number> {
+  const end = new Map<number, number>()
+  const marks = plays.filter((e) => e.play && typeof e.to === 'number')
+  if (batter) {
+    const m = marks.find((e) => e.batter)
+    end.set(batter.row, m && (m.to as number) > batter.base ? (m.to as number) : batter.base)
+  }
+  const pool = marks.filter((e) => !e.batter)
+  let ahead = 4
+  for (const g of left) {
+    // 進壘 marks start where he stood; 趁傳／失誤進壘 marks where the hit alone put him
+    const fits = (e: PlayEvent) => (e.to as number) > g.base && (e.to as number) < ahead
+    const m = pool.find((e) => e.kind === 'advance' && e.from === g.base && fits(e)) ?? pool.filter((e) => e.kind !== 'advance' && e.from >= g.base && fits(e)).sort((a, z) => (z.to as number) - (a.to as number))[0]
+    if (m) pool.splice(pool.indexOf(m), 1)
+    const b = m ? (m.to as number) : g.base
+    end.set(g.row, b)
+    ahead = b
+  }
+  // nobody shares a base with the person behind him
+  let behind = batter ? end.get(batter.row)! : 0
+  for (const g of [...left].reverse()) {
+    const b = end.get(g.row)!
+    if (b <= behind) end.set(g.row, Math.min(3, behind + 1))
+    behind = end.get(g.row)!
+  }
+  return end
+}
+
+/**
+ * 進壘 marks for the inning's last plate appearance: whoever was left on base somewhere `leftEnds` would not work out
+ * by itself gets one (from where he stood, or for the batter from where his hit put him), so the next look at the
+ * game finds him there again.
+ */
+export function leftMarks(mid: Array<{ row: number; base: number }>, dest: Record<number, End>, batter: { row: number; result: string; end: End }, plays: PlayEvent[], at: number): PlayEvent[] {
+  const left = mid.filter((o) => typeof dest[o.row] === 'number').sort((a, z) => z.base - a.base)
+  const start = hitBase(batter.result)
+  const bat = typeof batter.end === 'number' ? { row: batter.row, base: typeof start === 'number' ? start : 1 } : null
+  const kept = plays.slice()
+  const out: PlayEvent[] = []
+  if (bat && batter.end !== leftEnds([], bat, kept).get(bat.row) && (batter.end as number) > bat.base) {
+    const m: PlayEvent = { at, kind: 'advance', from: bat.base as Base, to: batter.end as Base, play: true, batter: true }
+    out.push(m); kept.push(m)
+  }
+  for (const o of left) {
+    const ends = leftEnds(left, bat, kept)
+    const want = dest[o.row] as number
+    if (ends.get(o.row) !== want && want > o.base) { const m: PlayEvent = { at, kind: 'advance', from: o.base as Base, to: want as Base, play: true }; out.push(m); kept.push(m) }
+  }
+  return out
+}
+
 /** Rows of each inning, in order (indexes into `rows`). */
 export function inningsOf(rows: Row[]): Map<number, number[]> {
   const m = new Map<number, number[]>()
@@ -142,11 +198,18 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
       steps.push({ index: k, before: on, moves, dest, batter, outs: [] })
       on = after
     } else {
-      // the inning's last plate appearance: whoever scored did, the rest were left on base where they stood
-      const after: OnBase[] = []
+      // the inning's last plate appearance: whoever scored did, the rest were left on base (see leftEnds)
+      const left: Array<{ row: number; base: number }> = []
+      let bat: { row: number; base: number } | null = null
       for (const g of going) {
         if (scored(rows[g.row], side)) { if (g.row === k) batter = 'home'; else dest[g.row] = 'home'; continue }
-        const b = (g.row === k ? (typeof batter === 'number' ? batter : 1) : g.base) as Base
+        if (g.row === k) bat = { row: k, base: typeof batter === 'number' ? batter : 1 }
+        else left.push(g)
+      }
+      const ends = leftEnds(left, bat, r.events ?? [])
+      const after: OnBase[] = []
+      for (const g of [...left, ...(bat ? [bat] : [])]) {
+        const b = ends.get(g.row)! as Base
         if (g.row === k) batter = b; else dest[g.row] = b
         after.push({ row: g.row, base: b })
       }
@@ -363,6 +426,8 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     r.outsBefore = outs
     // 趁傳進壘 on the play stays while that person still ends where it says
     const onPlay = (r.events ?? []).filter((e) => e.play && (e.batter ? s.batter === e.to : mid.some((o) => s.dest[o.row] === e.to)))
+    // the inning's last one: where the runners left on base ended has to be written down (no next 壘上(前) says it)
+    if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter }, onPlay, r.pitches.length))
     const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
     if (events.length) r.events = events
     else delete r.events
@@ -436,8 +501,9 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
     const up = (o: OnBase, n: number): End => (o.base + n >= 4 ? 'home' : ((o.base + n) as Base))
     const reachedOnK = r.result === '三振' && (r.code === 'R' || r.code === 'ER' || r.code === 'L')
     let batter: End = reachedOnK ? 1 : batterEndFor(r.result)
-    const n = HIT_BASE_COUNT[r.result] ?? 0
-    const forcedWalk = ['保送', '故四', '觸身', '妨礙'].includes(r.result) || reachedOnK
+    // an infield single (內安) moves only the runners it forces, like a walk
+    const n = r.result === '內安' ? 0 : HIT_BASE_COUNT[r.result] ?? 0
+    const forcedWalk = ['內安', '保送', '故四', '觸身', '妨礙'].includes(r.result) || reachedOnK
     const outsHere: number[] = []
     for (const o of before) {
       if (n) dest[o.row] = up(o, n)

@@ -16,13 +16,15 @@ export type PitchCode = 'S' | 'SS' | 'CS' | 'F' | 'IP' | 'B'
 export const PITCH_CODES: PitchCode[] = ['S', 'SS', 'CS', 'F', 'IP', 'B']
 
 export const PA_RESULTS = [
-  '一安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
+  '一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
 ] as const
 export type PAResult = (typeof PA_RESULTS)[number] | '犧牲'
-/** Bases of each hit. 場地二安 (ground-rule double: over the fence on a bounce, or stuck in it) is a double in every
+/** Bases of each hit (內安 = 內野安打 is a single). 場地二安 (ground-rule double: over the fence on a bounce, or stuck in it) is a double in every
  * stat; the batter gets second and every runner exactly two bases. */
-export const HIT_BASE_COUNT: Record<string, 1 | 2 | 3 | 4> = { 一安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 4 }
+export const HIT_BASE_COUNT: Record<string, 1 | 2 | 3 | 4> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 4 }
 export const isDouble = (r: string) => r === '二安' || r === '場地二安'
+/** 內安 (infield single: the ball never left the infield) is a single in every stat; only forced runners move up. */
+export const isSingle = (r: string) => r === '一安' || r === '內安'
 
 /** I/II/III = this PA produced the Nth out · L 殘壘 · R 得分（非自責） · ER 自責分 */
 export type OutcomeCode = 'I' | 'II' | 'III' | 'L' | 'R' | 'ER'

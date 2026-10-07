@@ -15,6 +15,7 @@
  */
 import { HIT_BASE_COUNT, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
+import { leftMarks } from './timeline'
 
 export type Half = 'top' | 'bottom'
 export type Side = 'us' | 'opp'
@@ -64,9 +65,9 @@ export interface RecordState {
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
 /** Results where the ball was put in play (the PA's last pitch is IP). */
-export const BIP_RESULTS = new Set(['一安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
-export const REACH_RESULTS = new Set(['一安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
-const HIT_BASES: Record<string, Dest> = { 一安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
+export const BIP_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
+export const REACH_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+const HIT_BASES: Record<string, Dest> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
 /** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
 export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'F', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 const ROMAN = ['I', 'II', 'III'] as const
@@ -249,11 +250,12 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   const runners: Record<number, Dest> = {}
   const adv = (r: Runner, n: number): Dest => { const b = r.base + n; return b >= 4 ? 'home' : (b as Base) }
   let batter: Dest = 'out'
-  if (result in HIT_BASES) {
+  if (result in HIT_BASES && result !== '內安') {
     batter = HIT_BASES[result]
     const n = HIT_BASE_COUNT[result]
     for (const r of s.runners) runners[r.row] = adv(r, n)
-  } else if (result === '保送' || result === '故四' || result === '觸身' || result === '妨礙') {
+  } else if (result === '內安' || result === '保送' || result === '故四' || result === '觸身' || result === '妨礙') {
+    // (an infield single moves only the runners it forces, like a walk)
     batter = 1
     // forced runners only
     const on = new Set(s.runners.map((r) => r.base))
@@ -347,6 +349,9 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     ...(plan.throws ?? []).filter((w) => !errAdv.has(w)).flatMap((w) => onPlay(w, 'throw')),
     ...[...errAdv].flatMap((w) => onPlay(w, 'err')),
   ]
+  // the third out on the play: where the runners left on base stopped is written down too (the editor reads it back)
+  const outsAfter = s.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length
+  if (outsAfter >= 3) thrown.push(...leftMarks(s.runners.map((r) => ({ row: r.row, base: r.base })), plan.runners, { row: rowIndex, result: plan.result, end: plan.batter }, thrown, base.pitches.length))
   const events = [...(s.plays ?? []).map((e) => ({ ...e })), ...thrown]
   if (events.length) (side === 'us' ? batting : pitching)[rowIndex].events = events
   const next: RecordState = { ...s, batting, pitching }
