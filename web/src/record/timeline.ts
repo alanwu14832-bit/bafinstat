@@ -10,20 +10,29 @@
  * and `deriveHalf` writes edited steps back: 壘上(前), 出局(前), runs, and the R / L / out codes, recomputed.
  * An inning that cannot be followed (older imports without 壘上(前), inconsistent rows) gives null, and the
  * editor falls back to the per-row totals.
+ *
+ * 逐球跑壘: a row may also carry `events`, the runner plays during its own pitches (第 2 球暴投 1B→2B, 第 3 球盜壘
+ * 2B→3B), in order. Its 壘上(前) / 出局(前) are taken when the ball was put in play, i.e. after those plays, so the
+ * step keeps them as `moves` between the runners the batter came up with (`before`) and the ones still there for
+ * his result (`midOf`). Rows without events fold any such play into the plate appearance before, as before.
  */
-import type { BattingPA, PitchingPA } from '../data/types'
+import type { BattingPA, PitchingPA, PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
 /** Where someone was when the plate appearance ended. */
 export type End = Base | 'home' | 'out'
 export interface OnBase { row: number; base: Base }
+/** A runner play between pitches: after `at` pitches of this plate appearance (0 = before the first one). */
+export interface Move { at: number; kind: string; row: number; from: Base; to: End }
 export interface Step {
   /** index of the plate appearance in the side's rows */
   index: number
   /** runners on base when this batter came up, lead runner first */
   before: OnBase[]
-  /** where each of them was at the end of this plate appearance (by row) */
+  /** runner plays during his pitches, in order (steals, wild pitches, pickoffs…) */
+  moves: Move[]
+  /** where each runner still on base for the result (midOf) was at the end of this plate appearance (by row) */
   dest: Record<number, End>
   /** the batter at the end of his plate appearance */
   batter: End
@@ -55,6 +64,20 @@ export function inningsOf(rows: Row[]): Map<number, number[]> {
   return m
 }
 
+const eventsOf = (r: Row): PlayEvent[] => (r.events ?? []).filter((e) => e && [1, 2, 3].includes(e.from))
+const moveOuts = (r: Row) => eventsOf(r).filter((e) => e.to === 'out').length
+/** Bases when the batter came up: his 壘上(前) (taken at the result) with his own runner plays undone; null if they do not fit. */
+function startBases(r: Row): Base[] | null {
+  const set = new Set<number>(parseBases(r.basesBefore))
+  for (const e of [...eventsOf(r)].reverse()) {
+    if (typeof e.to === 'number') { if (!set.has(e.to)) return null; set.delete(e.to) }
+    if (set.has(e.from)) return null
+    set.add(e.from)
+  }
+  return ([...set] as Base[]).sort((a, z) => z - a)
+}
+const startOuts = (r: Row) => r.outsBefore! - moveOuts(r)
+
 /** Rebuild one inning; null when its rows do not say enough (or do not add up). */
 export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
   if (!idx.length || idx.some((i) => !rows[i].basesBefore || rows[i].outsBefore === undefined)) return null
@@ -62,18 +85,34 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
   let on: OnBase[] = []
   for (let n = 0; n < idx.length; n++) {
     const k = idx[n], r = rows[k]
-    const have = parseBases(r.basesBefore)
-    if (have.join() !== on.map((o) => o.base).join()) return null
+    const start = startBases(r)
+    if (!start || start.join() !== on.map((o) => o.base).join()) return null
+    // this batter's runner plays, one by one; an out on one is the next out of the inning
+    let o = startOuts(r)
+    if (o < 0) return null
+    const moves: Move[] = []
+    let mid = on.slice()
+    for (const e of eventsOf(r)) {
+      const who = mid.find((x) => x.base === e.from)
+      if (!who) return null
+      mid = mid.filter((x) => x !== who)
+      if (e.to === 'out') { o++; if (outNo(rows[who.row]) !== o) return null }
+      else if (e.to === 'home') { if (!scored(rows[who.row], side)) return null }
+      else { if (e.to <= e.from || mid.some((x) => x.base === e.to)) return null; mid.push({ row: who.row, base: e.to }) }
+      moves.push({ at: e.at, kind: e.kind, row: who.row, from: e.from, to: e.to })
+    }
+    mid.sort((a, z) => z.base - a.base)
     const lo = r.outsBefore!
+    if (o !== lo) return null
     const last = n === idx.length - 1
-    const hi = last ? Math.max(lo, ...idx.map((i) => outNo(rows[i]))) : rows[idx[n + 1]].outsBefore!
+    const hi = last ? Math.max(lo, ...idx.map((i) => outNo(rows[i]))) : startOuts(rows[idx[n + 1]])
     if (hi < lo) return null
-    const outHere = (x: Row) => { const o = outNo(x); return o > lo && o <= hi }
+    const outHere = (x: Row) => { const v = outNo(x); return v > lo && v <= hi }
     const dest: Record<number, End> = {}
     let batter: End
     // who is still running after this plate appearance: runners lead first, then the batter
     const going: Array<{ row: number; base: number }> = []
-    for (const o of on) { if (outHere(rows[o.row])) dest[o.row] = 'out'; else going.push({ row: o.row, base: o.base }) }
+    for (const m of mid) { if (outHere(rows[m.row])) dest[m.row] = 'out'; else going.push({ row: m.row, base: m.base }) }
     if (outHere(r)) batter = 'out'
     else {
       batter = hitBase(r.result)
@@ -82,7 +121,8 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
     // outs in this window must be exactly the people marked out here
     const outCount = Object.values(dest).filter((d) => d === 'out').length + (batter === 'out' ? 1 : 0)
     if (outCount !== hi - lo) return null
-    const next = last ? null : parseBases(rows[idx[n + 1]].basesBefore)
+    const next = last ? null : startBases(rows[idx[n + 1]])
+    if (!last && !next) return null
     let stay: Array<{ row: number; base: number }>
     if (next) {
       const nScore = going.length - next.length
@@ -98,6 +138,7 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
         if (stay[i].row === k) batter = b; else dest[stay[i].row] = b
         after.push({ row: stay[i].row, base: b })
       }
+      steps.push({ index: k, before: on, moves, dest, batter, outs: [] })
       on = after
     } else {
       // the inning's last plate appearance: whoever scored did, the rest were left on base where they stood
@@ -108,20 +149,71 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
         if (g.row === k) batter = b; else dest[g.row] = b
         after.push({ row: g.row, base: b })
       }
+      steps.push({ index: k, before: on, moves, dest, batter, outs: [] })
       on = after
     }
-    const outs = [...Object.entries(dest).filter(([, d]) => d === 'out').map(([row]) => Number(row)), ...(batter === 'out' ? [k] : [])].sort((a, z) => outNo(rows[a]) - outNo(rows[z]))
-    steps.push({ index: k, before: steps.length ? stepAfter(steps[steps.length - 1]) : [], dest, batter, outs })
+    const st = steps[steps.length - 1]
+    st.outs = [...Object.entries(dest).filter(([, d]) => d === 'out').map(([row]) => Number(row)), ...(batter === 'out' ? [k] : [])].sort((a, z) => outNo(rows[a]) - outNo(rows[z]))
+    st.dest = dest
+    st.batter = batter
   }
   return { inning: rows[idx[0]].inning, steps }
 }
 
+/** Runners on base for the result: the ones the batter came up with, after this plate appearance's runner plays. */
+export function midOf(s: Pick<Step, 'before' | 'moves'>): OnBase[] {
+  let on = s.before.slice()
+  for (const m of s.moves ?? []) {
+    if (!on.some((o) => o.row === m.row)) continue
+    on = on.filter((o) => o.row !== m.row)
+    if (typeof m.to === 'number') on.push({ row: m.row, base: m.to })
+  }
+  return on.sort((a, z) => z.base - a.base)
+}
+/** Outs in a step: the ones on runner plays during the plate appearance and the ones on its result. */
+export const outsIn = (s: Step) => s.moves.filter((m) => m.to === 'out').length + s.outs.length
+
 /** Runners on base when the plate appearance ended (lead first). */
 export function stepAfter(s: Step): OnBase[] {
   const out: OnBase[] = []
-  for (const o of s.before) { const d = s.dest[o.row]; if (typeof d === 'number') out.push({ row: o.row, base: d }) }
+  for (const o of midOf(s)) { const d = s.dest[o.row]; if (typeof d === 'number') out.push({ row: o.row, base: d }) }
   if (typeof s.batter === 'number') out.push({ row: s.index, base: s.batter })
   return out.sort((a, z) => z.base - a.base)
+}
+
+/** Runner plays replayed over the runners actually on base: `from` follows earlier edits, plays of a runner who is
+ *  no longer there (or would not move forward any more) are dropped. */
+function replay(before: OnBase[], moves: Move[]): Move[] {
+  let on = before.slice()
+  const out: Move[] = []
+  for (const m of moves) {
+    const r = on.find((o) => o.row === m.row)
+    if (!r || (typeof m.to === 'number' && m.to <= r.base)) continue
+    on = on.filter((o) => o !== r)
+    if (typeof m.to === 'number') on.push({ row: m.row, base: m.to })
+    out.push({ ...m, from: r.base })
+  }
+  return out
+}
+
+/** Make steps i… agree again after a change in step i: its plays and destinations follow the runners it has, and
+ *  every later step gets the runners the one before it left (someone who now scores is gone; someone who now stays
+ *  is kept where he stood until the recorder moves him). */
+function carry(steps: Step[], i: number, was0?: OnBase[]) {
+  for (let j = i; j < steps.length; j++) {
+    const before = j === i ? steps[j].before : stepAfter(steps[j - 1])
+    const moves = replay(before, steps[j].moves)
+    const mid = midOf({ before, moves })
+    // someone who stood still on the result keeps standing still from wherever he now is
+    const was = new Map((j === i && was0 ? was0 : midOf(steps[j])).map((o) => [o.row, o.base]))
+    const dest: Record<number, End> = {}
+    for (const o of mid) { const d = steps[j].dest[o.row]; dest[o.row] = d === undefined || d === was.get(o.row) ? o.base : d }
+    // a destination behind where he now stands is moved up to where he is
+    for (const o of mid) { const d = dest[o.row]; if (typeof d === 'number' && d < o.base) dest[o.row] = o.base }
+    const outsJ = steps[j].outs.filter((r) => r === steps[j].index ? steps[j].batter === 'out' : dest[r] === 'out')
+    for (const o of mid) if (dest[o.row] === 'out' && !outsJ.includes(o.row)) outsJ.unshift(o.row)
+    steps[j] = { ...steps[j], before, moves, dest, outs: outsJ }
+  }
 }
 
 /**
@@ -139,23 +231,67 @@ export function setEnd(half: Half, at: number, who: number | 'batter', end: End)
   let outs = steps[i].outs.filter((r) => r !== row)
   if (end === 'out') { const b = outs.indexOf(at); outs = who !== 'batter' && b >= 0 ? [...outs.slice(0, b), row, ...outs.slice(b)] : [...outs, row] }
   steps[i].outs = outs
-  for (let j = i + 1; j < steps.length; j++) {
-    const before = stepAfter(steps[j - 1])
-    const dest: Record<number, End> = {}
-    for (const o of before) dest[o.row] = steps[j].dest[o.row] ?? o.base
-    // a destination behind where he now stands is moved up to where he is
-    for (const o of before) { const d = dest[o.row]; if (typeof d === 'number' && d < o.base) dest[o.row] = o.base }
-    const outsJ = steps[j].outs.filter((r) => r === steps[j].index ? steps[j].batter === 'out' : dest[r] === 'out')
-    for (const o of before) if (dest[o.row] === 'out' && !outsJ.includes(o.row)) outsJ.unshift(o.row)
-    steps[j] = { ...steps[j], before, dest, outs: outsJ }
-  }
+  carry(steps, i)
   return { ...half, steps }
+}
+
+/** Plays that put the runner out, and the ones that send him home from wherever he is. */
+export const OUT_PLAYS = new Set(['cs', 'pk', 'out'])
+/**
+ * Runner play(s) during plate appearance `at`, after `pitch` of its pitches: each runner in `rows` (lead runner first)
+ * moves up one base (from third: scores) or is put out. Moving into a base someone still holds pushes him on first —
+ * a double steal is two steals, a wild pitch moves him on the same wild pitch, anything else just advances him.
+ * Returns the plays added, so the caller can count them (盜壘, 暴投…).
+ */
+export function addPlay(half: Half, at: number, pitch: number, kind: string, rows: number[]): { half: Half; added: Move[] } {
+  const steps = half.steps.map((s) => ({ ...s, moves: s.moves.slice(), dest: { ...s.dest } }))
+  const i = steps.findIndex((s) => s.index === at)
+  if (i < 0) return { half, added: [] }
+  const st = steps[i]
+  const pos = st.moves.filter((m) => m.at <= pitch).length
+  let on = midOf({ before: st.before, moves: st.moves.slice(0, pos) })
+  const added: Move[] = []
+  const move = (row: number, k: string) => {
+    const r = on.find((o) => o.row === row)
+    if (!r) return
+    const to: End = OUT_PLAYS.has(k) ? 'out' : k === 'score' || r.base >= 3 ? 'home' : ((r.base + 1) as Base)
+    if (typeof to === 'number') { const ahead = on.find((o) => o.base === to); if (ahead) move(ahead.row, k === 'sb' || k === 'wp' || k === 'pb' ? k : 'advance') }
+    on = on.filter((o) => o.row !== row)
+    if (typeof to === 'number') on.push({ row, base: to })
+    added.push({ at: pitch, kind: k, row, from: r.base, to })
+  }
+  for (const row of [...rows].sort((a, z) => (on.find((o) => o.row === z)?.base ?? 0) - (on.find((o) => o.row === a)?.base ?? 0))) move(row, kind)
+  const was = midOf(st)
+  st.moves = [...st.moves.slice(0, pos), ...added, ...st.moves.slice(pos)]
+  carry(steps, i, was)
+  return { half: { ...half, steps }, added }
+}
+
+/** Take back one runner play of plate appearance `at` (by its place in that step's moves). */
+export function removePlay(half: Half, at: number, n: number): { half: Half; removed?: Move } {
+  const steps = half.steps.map((s) => ({ ...s, moves: s.moves.slice(), dest: { ...s.dest } }))
+  const i = steps.findIndex((s) => s.index === at)
+  if (i < 0 || !steps[i].moves[n]) return { half }
+  const was = midOf(steps[i])
+  const [removed] = steps[i].moves.splice(n, 1)
+  carry(steps, i, was)
+  return { half: { ...half, steps }, removed }
 }
 
 /** Impossible positions in one step: two people on one base, or a runner passing the one ahead. */
 export function stepProblems(s: Step, name: (row: number) => string): string[] {
-  const people = [...s.before.map((o) => ({ row: o.row, from: o.base as number, to: s.dest[o.row] })), { row: s.index, from: 0, to: s.batter }]
   const out: string[] = []
+  // a runner play into a base someone still holds
+  let on = s.before.slice()
+  for (const m of s.moves ?? []) {
+    on = on.filter((o) => o.row !== m.row)
+    if (typeof m.to === 'number') {
+      const there = on.find((o) => o.base === m.to)
+      if (there) out.push(`${name(m.row)} 到 ${m.to}B 時 ${name(there.row)} 還在那裡`)
+      on.push({ row: m.row, base: m.to })
+    }
+  }
+  const people = [...midOf(s).map((o) => ({ row: o.row, from: o.base as number, to: s.dest[o.row] })), { row: s.index, from: 0, to: s.batter }]
   let ahead: { row: number; to: number } | null = null
   const label = (b: number) => (b === 4 ? '本壘' : `${b}B`)
   for (const p of people) {
@@ -192,12 +328,17 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     }
   }
   for (const s of half.steps) {
+    // the runner plays during his pitches come first; 壘上(前) / 出局(前) are what was left for his result
+    for (const m of s.moves) if (m.to === 'out' || m.to === 'home') end(m.row, m.to, false)
     const r = touch(s.index) as Row
-    r.basesBefore = basesText(s.before)
+    const mid = midOf(s)
+    r.basesBefore = basesText(mid)
     r.outsBefore = outs
+    if (s.moves.length) r.events = s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to }))
+    else delete r.events
     // outs in the order they happened, then the runs
     for (const row of s.outs) end(row, 'out', row === s.index)
-    for (const o of s.before) if (s.dest[o.row] === 'home') end(o.row, 'home', false)
+    for (const o of mid) if (s.dest[o.row] === 'home') end(o.row, 'home', false)
     if (s.batter === 'home') end(s.index, 'home', true)
   }
   // left on base when the inning ended
@@ -230,7 +371,7 @@ export function setBatterResult(half: Half, at: number, result: string): Half {
   if (!s) return h
   // trailing person first: each runner must end at least one base ahead of the person behind him
   let behind = typeof s.batter === 'number' ? s.batter : s.batter === 'home' ? 4 : 0
-  for (const o of [...s.before].sort((a, z) => a.base - z.base)) {
+  for (const o of [...midOf(s)].sort((a, z) => a.base - z.base)) {
     const d = s.dest[o.row]
     if (d === 'out') continue
     if (d === 'home') { behind = 4; continue }
@@ -286,7 +427,7 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
     for (const o of before) if (dest[o.row] === 3 && scored(rows[o.row], side)) dest[o.row] = 'home'
     if (batter === 'out') { outsHere.push(k); outs++ }
     if (r.result === '全壘打') batter = 'home'
-    const step: Step = { index: k, before, dest, batter, outs: outsHere }
+    const step: Step = { index: k, before, moves: [], dest, batter, outs: outsHere }
     steps.push(step)
     on = stepAfter(step)
     if (outs >= 3) { outs = 0; on = [] }

@@ -12,7 +12,7 @@ import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
 import { summarizeGame } from '../data/stats'
 import type { Game, Player } from '../data/types'
-import { deriveHalf, inferHalf, inningsOf, type OnBase } from './timeline'
+import { deriveHalf, inferHalf, inningsOf, midOf, type OnBase } from './timeline'
 
 function rng(seed: number) {
   let a = seed >>> 0
@@ -29,31 +29,42 @@ function playGame(seed: number) {
   const game: Game = { id: `G2026010${seed % 9 + 1}-01`, date: '2026-01-01', tournament: '模擬', opponent: '對手', homeAway: r() < 0.5 ? '主' : '客', innings: 7 }
   let s: RecordState = newGame(game, NAMES.slice(0, 9).map((name, i) => ({ name, pos: POS[i] })), '壬', { bench: NAMES.slice(9) })
   let guard = 0
-  // ground truth for the timeline: who was on base (row, base) when each plate appearance was sent
+  // ground truth for the timeline: who was on base (row, base) when each plate appearance was sent, and when its
+  // batter came up (before the runner plays during his pitches)
   const truth = { bat: new Map<number, OnBase[]>(), pit: new Map<number, OnBase[]>() }
+  const start = { bat: new Map<number, OnBase[]>(), pit: new Map<number, OnBase[]>() }
+  const snap = (st: RecordState) => st.runners.map((x) => ({ row: x.row, base: x.base })).sort((a, b) => b.base - a.base)
+  let upNow = snap(s)
+  const runnerPlay = () => {
+    const side = offense(s)
+    const run = pick(s.runners)
+    const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'pk', 'advance'] as const)
+    const before = s.half
+    if (!(ev === 'err' && side === 'opp') && !((ev === 'wp' || ev === 'pb') && side === 'us')) s = runnerEvent(s, run.row, run.side, ev)
+    if (ev === 'err' && side === 'opp') s = addError(s, pick(['SS', 'LF', '2B']))
+    { const bases = s.runners.map((x) => x.base); if (new Set(bases).size !== bases.length) throw new Error(`two runners on one base after ${ev}: ${bases.join(',')}`) }
+    if (s.half !== before) upNow = snap(s)
+  }
   while (s.inning <= 7 && guard++ < 400) {
     const side = offense(s)
-    // between pitches: runners move
-    if (s.runners.length && r() < 0.15) {
-      const run = pick(s.runners)
-      const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'pk', 'advance'] as const)
-      if (!(ev === 'err' && side === 'opp') && !((ev === 'wp' || ev === 'pb') && side === 'us')) s = runnerEvent(s, run.row, run.side, ev)
-      if (ev === 'err' && side === 'opp') s = addError(s, pick(['SS', 'LF', '2B']))
-      { const bases = s.runners.map((x) => x.base); if (new Set(bases).size !== bases.length) throw new Error(`two runners on one base after ${ev}: ${bases.join(',')}`) }
-      continue
-    }
+    // before the first pitch: runners move
+    if (s.runners.length && r() < 0.15) { runnerPlay(); continue }
     if (side === 'opp' && r() < 0.03) s = addExtra(s, 'wp')
     if (side === 'opp' && r() < 0.03 && s.pitching.length > 10) s = changePitcher(s, pick(['子', '丑']))
     if (side === 'us' && r() < 0.04) s = substitute(s, s.slot, pick(['癸', '寅', '卯']), 'PH')
     // one plate appearance, pitch by pitch
     let result: string | null = null
+    const half = s.half
     for (let k = 0; k < 15 && !result; k++) {
+      // between pitches: a steal, a wild pitch… (the half may end on it, and this batter never finishes)
+      if (s.pitches.length && s.runners.length && r() < 0.08) { runnerPlay(); if (s.half !== half) break }
       const x = r()
       const code = x < 0.35 ? 'B' : x < 0.55 ? 'CS' : x < 0.68 ? 'SS' : x < 0.8 ? 'F' : 'IP'
       if (code === 'IP') { result = pick(['一安', '一安', '二安', '三安', '全壘打', '內滾', '內滾', '內飛', '外飛', '外飛', '界外飛', '犧飛', '犧觸', '雙殺', '野選', '失誤']); break }
       s = addPitch(s, code)
       result = impliedResult(s.pitches)
     }
+    if (s.half !== half) continue
     if (!result) result = r() < 0.5 ? '觸身' : '故四'
     // results that need runners / outs to make sense
     if ((result === '犧飛' && !s.runners.some((x) => x.base === 3)) || (result === '犧觸' && !s.runners.length) || (result === '雙殺' && (s.outs >= 2 || !s.runners.some((x) => x.base === 1))) || (result === '野選' && !s.runners.length)) result = '內滾'
@@ -68,13 +79,15 @@ function playGame(seed: number) {
     // 不死三振: sometimes the batter reaches
     if (result === '三振' && count(s.pitches).strikes >= 3 && !s.runners.some((x) => x.base === 1) && r() < 0.1) plan.batter = 1 as Dest
     const sideKey = offense(s) === 'us' ? 'bat' : 'pit'
-    truth[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, s.runners.map((x) => ({ row: x.row, base: x.base })).sort((a, b) => b.base - a.base))
+    truth[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, snap(s))
+    start[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, upNow)
     s = commitPA(s, plan)
+    upNow = snap(s)
     const bases = s.runners.map((x) => x.base)
     if (new Set(bases).size !== bases.length) throw new Error(`two runners on one base after ${result}: ${bases.join(',')}`)
   }
   if (s.outs || s.runners.length) s = endHalf(s)
-  return { ...s, finished: true, truth }
+  return { ...s, finished: true, truth, start }
 }
 
 describe('random games through the recording model', () => {
@@ -103,11 +116,25 @@ describe('the runner timeline rebuilt from saved rows', () => {
       for (const [inning, idx] of inningsOf(rows)) {
         const half = inferHalf(rows, idx, side)
         expect(half, `${side} inning ${inning}`).not.toBeNull()
-        for (const st of half!.steps) expect(st.before, `${side} PA ${st.index}`).toEqual(g.truth[side].get(st.index))
+        for (const st of half!.steps) {
+          expect(midOf(st), `${side} PA ${st.index}`).toEqual(g.truth[side].get(st.index))
+          expect(st.before, `${side} PA ${st.index} (batter came up)`).toEqual(g.start[side].get(st.index))
+        }
         derived = deriveHalf(derived as never[], half!, side)
       }
-      const pick = (r: (typeof rows)[number]) => JSON.stringify(r, ['basesBefore', 'outsBefore', 'run', 'code', 'outOnBase', 'cs'])
+      const pick = (r: (typeof rows)[number]) => JSON.stringify(r, ['basesBefore', 'outsBefore', 'run', 'code', 'outOnBase', 'cs', 'events', 'at', 'kind', 'from', 'to'])
       expect(derived.map(pick)).toEqual(rows.map(pick))
     }
+  })
+})
+
+describe('runner plays between pitches', () => {
+  it('are saved on the plate appearance they happened in, after the pitch they followed', () => {
+    const games = Array.from({ length: 40 }, (_, i) => playGame(i + 1))
+    const rows = games.flatMap((g) => [...g.batting, ...g.pitching])
+    const events = rows.flatMap((p) => (p.events ?? []).map((e) => ({ e, n: p.pitches.length })))
+    expect(events.some(({ e }) => e.at > 0)).toBe(true)
+    expect(events.some(({ e }) => e.kind === 'wp')).toBe(true)
+    for (const { e, n } of events) expect(e.at).toBeLessThanOrEqual(n)
   })
 })

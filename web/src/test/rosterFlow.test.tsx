@@ -72,12 +72,12 @@ describe('roster feature end to end (local mode)', () => {
     expect(s.startingPitcher).toBe('林昱丞')
 
     // 4) live: pinch hitter for the first batter, bench first
-    fireEvent.click(screen.getByRole('button', { name: /代打／換人/ }))
-    const who = screen.getByDisplayValue('不換人，只改守位')
-    const opts = optionTexts(who)
-    expect(opts.slice(1, 4)).toEqual(['許振謙（板凳）', '謝昊瑾（板凳）', '嚴敬翔（板凳）'])
+    fireEvent.click(screen.getByRole('button', { name: '代打' }))
+    const who = within(await screen.findByRole('group', { name: '換成誰' }))
+    const opts = who.getAllByRole('button').map((b) => b.textContent)
+    expect(opts.slice(0, 3)).toEqual(['許振謙（板凳）', '謝昊瑾（板凳）', '嚴敬翔（板凳）'])
     expect(opts).not.toContain('梁睿至')
-    fireEvent.change(who, { target: { value: '謝昊瑾' } })
+    fireEvent.click(who.getByRole('button', { name: /謝昊瑾/ }))
     fireEvent.click(screen.getByRole('button', { name: '確定' }))
     s = readDraft()!
     expect(s.subs).toEqual([expect.objectContaining({ kind: 'PH', in: '謝昊瑾', out: s.starters![0].name, inning: 1, half: 'top', slot: 0 })])

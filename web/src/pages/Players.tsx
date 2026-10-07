@@ -6,6 +6,9 @@ import { median, previousSeason, sameGroup } from '../data/radar'
 import { filterGames } from '../data/filters'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { StoryRow } from '../components/ui/SeasonHero'
+import { Stitches } from '../components/ui/Scoreboard'
+import { playerStories } from '../data/stories'
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { StatHint } from '../components/ui/StatHint'
 import { Card } from '../components/ui/Card'
@@ -201,6 +204,7 @@ export function PlayersPage() {
     })
   }, [gameLog, s.batting, s.dataset, selected])
   const spray = useMemo(() => sprayCounts(s.batting.filter((p) => p.batter === selected)), [s.batting, selected])
+  const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams])
 
   const logCols: Column<GameLogRow>[] = [
     { key: 'date', header: '日期', format: (v) => shortDate(String(v)) },
@@ -321,6 +325,13 @@ export function PlayersPage() {
         <Card><EmptyState title="請選擇球員" /></Card>
       ) : (
         <>
+          {stories.length > 0 && (
+            <section aria-label={`${player.name} 的看點`} className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-5">
+              <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%)' }} />
+              <div className="relative flex items-center gap-3 text-[11px] text-muted mb-3"><Stitches width={40} /><span className="tracking-[0.08em]">{player.name} 的看點</span></div>
+              <StoryRow stories={stories} link={false} className="relative" />
+            </section>
+          )}
           {bat ? (
             <StatGroup>
               <StatTile label="打擊率 AVG" to="/batting?sort=avg" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />

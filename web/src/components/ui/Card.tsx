@@ -26,7 +26,7 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
       {hasHeader && (
         <header className={cx('flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 px-5 pt-5', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
           <div className="min-w-0">
-            {title && <h3 className="text-[15px] font-semibold text-ink leading-5 truncate">{title}</h3>}
+            {title && <h3 className="text-[16px] text-ink leading-6 truncate">{title}</h3>}
             {subtitle && <p className="text-xs text-muted leading-4 mt-0.5">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 flex items-center gap-2 flex-wrap sm:-my-1">{action}</div>}
@@ -44,7 +44,7 @@ export function SectionHeading({ title, description, action, className }: { titl
   return (
     <div className={cx('flex items-end justify-between gap-4', className)}>
       <div className="min-w-0">
-        <h2 className="text-[15px] font-semibold text-ink leading-5">{title}</h2>
+        <h2 className="text-[17px] text-ink leading-6">{title}</h2>
         {description && <p className="text-xs text-muted mt-0.5">{description}</p>}
       </div>
       {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}

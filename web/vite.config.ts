@@ -2,7 +2,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { assetUrl, resolveTeam, type TeamConfig } from './src/config/teamDefaults'
+import { accentCss, assetUrl, resolveTeam, type TeamConfig } from './src/config/teamDefaults'
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
@@ -34,7 +34,8 @@ function teamSite(): Plugin {
       .replaceAll('%TEAM_ORG%', escapeHtml(team.org))
       .replaceAll('%TEAM_SHORT%', escapeHtml(team.short))
       .replaceAll('%TEAM_MARK%', escapeHtml(assetUrl(team.mark, base)))
-      .replaceAll('%BASE%', escapeHtml(base)),
+      .replaceAll('%BASE%', escapeHtml(base))
+      .replace('</head>', `<style id="team-accent">${accentCss(team)}</style>\n  </head>`),
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url?.endsWith('/manifest.webmanifest')) return next()

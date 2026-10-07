@@ -8,7 +8,7 @@ import { Button } from './Button'
 import { Input } from './Input'
 import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
-import { PitchChips } from './PlayByPlay'
+import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
 import { POSITIONS, type BattingPA, type PitchingPA } from '../../data/types'
 import { count } from '../../record/model'
@@ -16,7 +16,8 @@ import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { FIELD_POSITIONS } from '../../data/errors'
 import { RunnerDiamond } from '../../record/RunnerDiamond'
-import type { End, Step } from '../../record/timeline'
+import { midOf, OUT_PLAYS, type End, type Step } from '../../record/timeline'
+import { playLabel } from '../../data/plays'
 
 export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
@@ -150,10 +151,10 @@ function CountButton({ label, value, onChange }: { label: string; value: number;
   )
 }
 
-export type TlEvent = 'sb' | 'err' | 'wp' | 'pb' | 'cs' | 'pk'
-const TL_EVENTS: Record<PaSide, Array<{ ev: TlEvent; label: string; out?: boolean }>> = {
-  bat: [{ ev: 'sb', label: '盜壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }],
-  pit: [{ ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投' }, { ev: 'pb', label: '捕逸' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }],
+/** Runner plays between pitches, as 紀錄比賽 offers them (a wild pitch while we bat is the other team's). */
+const PLAY_KINDS: Record<PaSide, string[]> = {
+  bat: ['sb', 'wp', 'pb', 'err', 'advance', 'cs', 'pk', 'out'],
+  pit: ['sb', 'wp', 'pb', 'advance', 'cs', 'pk', 'out'],
 }
 export interface TimelineProps {
   step: Step
@@ -166,7 +167,10 @@ export interface TimelineProps {
   onResult: (result: string) => void
   nameOf: (row: number) => string
   onEnd: (who: number | 'batter', end: End) => void
-  onEvent: (row: number, ev: TlEvent) => void
+  /** runner play(s) after `pitch` pitches (0 = before the first): each runner in `rows` moves up one or is out */
+  onPlay: (pitch: number, kind: string, rows: number[]) => void
+  /** take back the n-th play of this plate appearance */
+  onRemovePlay: (n: number) => void
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
@@ -182,6 +186,55 @@ function EndPicker({ value, from, onPick, label }: { value: End; from: number; o
     </div>
   )
 }
+/**
+ * 跑壘（逐球）: pick when (after which pitch), who, and what happened — 第 2 球暴投, everyone moves up; 第 3 球盜壘.
+ * The play lands between those pitches; the runners on base are the ones there at that moment.
+ */
+function PlayBuilder({ side, pitches, tl }: { side: PaSide; pitches: number; tl: TimelineProps }) {
+  const { step, nameOf } = tl
+  const [when, setWhen] = useState<number | null>(null)
+  const [who, setWho] = useState<number[]>([])
+  const t = Math.min(when ?? pitches, pitches)
+  const on = midOf({ before: step.before, moves: step.moves.filter((m) => m.at <= t) })
+  const picked = who.filter((r) => on.some((o) => o.row === r))
+  const [hint, setHint] = useState<string | null>(null)
+  useEffect(() => { setWho([]); setHint(null) }, [step.index, t])
+  if (!step.before.length && !step.moves.length) return null
+  const play = (kind: string) => {
+    // nobody picked: the only runner, or everyone on a wild pitch / passed ball
+    const rows = picked.length ? picked : on.length === 1 || kind === 'wp' || kind === 'pb' ? on.map((o) => o.row) : []
+    if (!rows.length) { setHint('先點一位跑者'); return }
+    setHint(null)
+    tl.onPlay(t, kind, rows)
+    setWho([])
+  }
+  const whenOpts = Array.from({ length: pitches + 1 }, (_, k) => k)
+  return (
+    <div className="rounded-[var(--radius-sm)] border border-border bg-surface px-3 py-2.5 flex flex-col gap-2.5">
+      <div className="flex items-center gap-1.5 flex-wrap text-[12px]">
+        <span className="text-ink-2 font-medium mr-1">什麼時候</span>
+        {whenOpts.map((k) => <button key={k} type="button" aria-pressed={t === k} onClick={() => setWhen(k === pitches ? null : k)} className={cx(chipBtn(t === k), 'h-8 px-2.5 text-[12px]')}>{k === 0 ? '第一球前' : `第 ${k} 球後`}</button>)}
+      </div>
+      {on.length ? (
+        <>
+          <div className="flex items-center gap-1.5 flex-wrap text-[12px]" role="group" aria-label="哪位跑者">
+            <span className="text-ink-2 font-medium mr-1">誰</span>
+            {on.map((o) => {
+              const sel = picked.includes(o.row)
+              return <button key={o.row} type="button" aria-pressed={sel} onClick={() => setWho(sel ? picked.filter((r) => r !== o.row) : [...picked, o.row])} className={cx(chipBtn(sel), 'h-8 px-2.5 text-[12px]')}><span className="opacity-70 tnum mr-1">{o.base}B</span>{nameOf(o.row)}</button>
+            })}
+            {on.length > 1 && <span className="text-[11px] text-muted">可以點多位；暴投、捕逸不點就是全部跑者</span>}
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="發生了什麼">
+            {PLAY_KINDS[side].map((k) => <button key={k} type="button" onClick={() => play(k)} className={runBtn(OUT_PLAYS.has(k))}>{playLabel(k)}</button>)}
+          </div>
+          {hint && <p role="alert" className="text-[12px] text-critical">{hint}</p>}
+        </>
+      ) : <p className="text-[12px] text-muted">{t ? `第 ${t} 球後` : '第一球前'}壘上沒有跑者</p>}
+    </div>
+  )
+}
+
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */
 function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl: TimelineProps; picked: number | null }) {
   const { step, nameOf } = tl
@@ -189,16 +242,13 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2">
-        {step.before.map((o) => {
+        {midOf(step).map((o) => {
           const name = nameOf(o.row)
           return (
             <li key={o.row} id={`tl-runner-${o.row}`} className={cx('rounded-[var(--radius-sm)] border bg-surface px-3 py-2 flex flex-col gap-2 scroll-mt-28 transition-colors motion-reduce:transition-none', picked === o.row ? 'border-ink ring-2 ring-ink/15' : 'border-border')}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[13px] font-medium text-ink min-w-[7rem]"><span className="text-muted tnum mr-1">{o.base}B</span>{name}</span>
                 <EndPicker value={tl.step.dest[o.row] ?? o.base} from={o.base} onPick={(e) => tl.onEnd(o.row, e)} label={name} />
-              </div>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${name} 發生了什麼`}>
-                {TL_EVENTS[side].map((e) => <button key={e.ev} type="button" onClick={() => tl.onEvent(o.row, e.ev)} className={runBtn(e.out)}>{e.label}</button>)}
               </div>
               {tl.onPinchRunner && <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>}
             </li>
@@ -241,6 +291,8 @@ export interface PaPanelProps {
 
 export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
+  // a play after a later pitch now follows the one before it
+  const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
   const c = count(pa.pitches)
   const bases = new Set((pa.basesBefore ?? '').split(''))
   const codes = side === 'bat' ? ['I', 'II', 'III', 'L', 'R'] : ['I', 'II', 'III', 'L', 'R', 'ER']
@@ -319,12 +371,15 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
       )}
 
       {/* pitches */}
-      <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球可刪除</span>}>
+      <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球或一個跑壘事件可刪除</span>}>
         <div className="flex items-center gap-2 min-h-8 flex-wrap">
-          <PitchChips pitches={pa.pitches} onRemove={(i) => set({ pitches: pa.pitches.filter((_, k) => k !== i) })} />
-          {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [] })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
+          {timeline
+            ? <PitchPlays pitches={pa.pitches} events={timeline.step.moves} whoOf={(n) => timeline.nameOf(timeline.step.moves[n]?.row)} onRemovePitch={removePitch} onRemovePlay={timeline.onRemovePlay} />
+            : <PitchChips pitches={pa.pitches} onRemove={removePitch} />}
+          {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [], ...(pa.events ? { events: pa.events.map((e) => ({ ...e, at: 0 })) } : {}) })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
         </div>
         <PitchPad onPitch={(code) => set({ pitches: [...pa.pitches, code] })} />
+        {timeline && <PlayBuilder side={side} pitches={pa.pitches.length} tl={timeline} />}
       </Section>
 
       {/* result */}
@@ -337,7 +392,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
 
       {/* running and scoring: the same moves as tapping a runner while recording */}
       {timeline ? (
-        <Section title="壘上跑者" aside={<span className="text-[11px] text-muted">這個打席時誰在壘上、打完各自到哪；改了之後後面的打席自動跟著變</span>}>
+        <Section title="壘上跑者" aside={<span className="text-[11px] text-muted">打擊結果發生時誰在壘上（逐球跑壘之後）、打完各自到哪；改了之後後面的打席自動跟著變</span>}>
           <TimelineRunners side={side} pa={pa} tl={timeline} picked={picked} />
           {bat && <div className="mt-1"><Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} /></div>}
         </Section>

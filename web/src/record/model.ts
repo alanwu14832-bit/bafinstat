@@ -10,8 +10,10 @@
  *   - a pickoff throw that does not get the runner (牽制・安全) has no column in the template, so it is written
  *     into the row's 備註 as「牽制 N 次」
  *   - a ball in play always ends with an IP pitch: 界外飛 recorded as F becomes IP, a missing IP is appended
+ *   - every runner move between pitches is also logged in order (第 2 球暴投 1B→2B) and saved on the plate appearance
+ *     it happened in as `events`; one that ends the half-inning before that batter's result is not (there is no row)
  */
-import type { BattingPA, DayRosterSub, Game, GameDayRoster, PitchingPA } from '../data/types'
+import type { BattingPA, DayRosterSub, Game, GameDayRoster, PitchingPA, PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
 
 export type Half = 'top' | 'bottom'
@@ -41,6 +43,8 @@ export interface RecordState {
   pitches: string[]
   /** opponent-offense events during the PA in progress */
   extras: Extras
+  /** runner moves during the PA in progress, in order (saved on its row as `events`) */
+  plays?: PlayEvent[]
   finished: boolean
   startedAt: string
   /** last local change (ISO); used to pick the newer of a local vs cloud draft */
@@ -302,6 +306,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, ...(s.extras.errors?.length ? { errors: [...s.extras.errors] } : {}), note })
     rowIndex = pitching.length - 1
   }
+  if (s.plays?.length) (side === 'us' ? batting : pitching)[rowIndex].events = s.plays.map((e) => ({ ...e }))
   const next: RecordState = { ...s, batting, pitching }
   const markOut = (row: number, rside: Side, isBatter: boolean) => {
     outs = Math.min(3, outs + 1)
@@ -329,6 +334,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   next.runners = runners.sort((a, b) => b.base - a.base)
   next.pitches = []
   next.extras = { ...EXTRAS0 }
+  next.plays = []
   if (side === 'us') next.slot = (s.slot + 1) % s.lineup.length
   else { next.oppOrder = (s.oppOrder % 9) + 1; next.oppBatter = '' }
   return outs >= 3 ? endHalf(next) : next
@@ -336,8 +342,9 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
 
 export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
 
-/** Something happened to a runner between pitches. */
-export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent): RecordState {
+/** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
+ *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
+export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent, logAs?: RunnerEvent): RecordState {
   let runner = s.runners.find((r) => r.row === row && r.side === side)
   if (!runner) return s
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
@@ -345,7 +352,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'err' || ev === 'advance') {
     const ahead = runner.base < 3 ? s.runners.find((x) => x.side === side && x.base === runner!.base + 1) : undefined
     if (ahead) {
-      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance')
+      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance', ev === 'wp' || ev === 'pb' ? ev : undefined)
       if (s.outs >= 3 || offense(s) !== side) return s
       runner = s.runners.find((r) => r.row === row && r.side === side)
       if (!runner) return s
@@ -375,7 +382,8 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   if (dest === 'out') { outs = Math.min(3, outs + 1); r.code = ROMAN[outs - 1] }
   else if (dest === 'home') { if (side === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = 'ER' }
   else runners = [...runners, { ...runner, base: dest }]
-  const next: RecordState = { ...s, batting, pitching, extras, outs, runners: runners.sort((a, b) => b.base - a.base) }
+  const plays = dest === at ? s.plays : [...(s.plays ?? []), { at: s.pitches.length, kind: logAs ?? ev, from: at, to: dest }]
+  const next: RecordState = { ...s, batting, pitching, extras, outs, plays, runners: runners.sort((a, b) => b.base - a.base) }
   return outs >= 3 ? endHalf(next) : next
 }
 
@@ -386,7 +394,7 @@ export function wildPitch(s: RecordState, kind: 'wp' | 'pb', rows?: number[]): R
   const moving = s.runners.filter((r) => r.side === side && (!rows || rows.includes(r.row))).sort((a, b) => b.base - a.base).map((r) => r.row)
   if (!moving.length) return addExtra(s, kind)
   // the pitch is counted on the last (trailing) runner's move; the others just advance
-  moving.forEach((row, i) => { s = runnerEvent(s, row, side, i === moving.length - 1 ? kind : 'advance') })
+  moving.forEach((row, i) => { s = runnerEvent(s, row, side, i === moving.length - 1 ? kind : 'advance', kind) })
   return s
 }
 
@@ -407,7 +415,7 @@ export function endHalf(s: RecordState): RecordState {
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   for (const r of s.runners) { const row = r.side === 'us' ? batting[r.row] : pitching[r.row]; if (!row.code) row.code = 'L' }
-  return { ...s, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
+  return { ...s, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
 }
 
 export interface Score { us: number; opp: number; lineUs: number[]; lineOpp: number[] }

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { PitchChips } from '../components/ui/PlayByPlay'
+import { PitchPlays } from '../components/ui/PlayByPlay'
 import { Badge } from '../components/ui/Badge'
 import { Diamond } from '../record/Diamond'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -98,7 +98,7 @@ export function LivePage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[13px]">
           <div><div className="text-[12px] text-muted">現在{side === 'us' ? '打擊' : '對方打者'}</div><div className="text-[15px] font-semibold text-ink mt-0.5">{batter}</div></div>
           <div><div className="text-[12px] text-muted">{side === 'us' ? '壘上' : '我隊投手'}</div><div className="text-[15px] font-semibold text-ink mt-0.5">{side === 'us' ? (s.runners.length ? s.runners.map((r) => `${r.base}B ${r.name}`).join('・') : '無人') : s.pitcher}</div></div>
-          <div><div className="text-[12px] text-muted">球數</div><div className="text-[15px] font-semibold text-ink mt-0.5 tnum">B {c.balls} – S {c.strikes} <span className="ml-2 font-normal"><PitchChips pitches={s.pitches} /></span></div></div>
+          <div><div className="text-[12px] text-muted">球數</div><div className="text-[15px] font-semibold text-ink mt-0.5 tnum">B {c.balls} – S {c.strikes} <span className="ml-2 font-normal"><PitchPlays pitches={s.pitches} events={s.plays} /></span></div></div>
         </div>
       </Card>
       <div className="grid grid-cols-1 gap-4 md:gap-5">

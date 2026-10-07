@@ -14,7 +14,7 @@
   --muted: #86868b;
   --accent: #c8811a;
   --accent-ink: #1a1207;
-  --accent-soft: rgba(200, 129, 26, 0.12);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
   --grid: #ececef;
   --axis: #d2d2d7;
 
@@ -56,14 +56,16 @@
   --shadow-modal: 0 32px 80px rgba(20, 24, 40, 0.22), 0 2px 8px rgba(20, 24, 40, 0.08);
   --scrim: rgba(20, 24, 40, 0.30);
 
-  /* Type: the system face (SF Pro on Apple devices, otherwise Inter) with 蘋方／思源黑體 for CJK.
-     data-font="serif" on <html> switches to the editorial serif pairing. */
+  /* Type, three voices: titles in an editorial serif (思源宋體), figures in a condensed athletic face (Barlow, like a
+     scoreboard or a jersey number), reading text in the system face (SF Pro / Inter with 蘋方／思源黑體 for CJK).
+     data-font="serif" on <html> (the 宋 toggle) sets the reading text in the serif too. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
   --font-serif: "Source Serif 4", "Noto Serif TC", "Songti TC", "PMingLiU", "Noto Serif CJK TC", Georgia, serif;
-  --font-display: var(--font-sans);
+  --font-figure: "Barlow Semi Condensed", "SF Pro Display", "Inter", var(--font-sans);
+  --font-display: var(--font-serif);
   --font-body: var(--font-sans);
-  --tracking-display: -0.028em;
-  --tracking-heading: -0.014em;
+  --tracking-display: -0.01em;
+  --tracking-heading: 0;
   --font-features: "cv11", "ss01", "calt";
 
   /* Motion: one easing family for the whole site. ease-out for anything entering or responding,
@@ -86,10 +88,7 @@
 }
 
 :root[data-font="serif"] {
-  --font-display: var(--font-serif);
   --font-body: var(--font-serif);
-  --tracking-display: 0;
-  --tracking-heading: 0;
   --font-features: "calt", "liga";
 }
 
@@ -106,7 +105,7 @@
     --muted: #98989d;
     --accent: #e2a03a;
     --accent-ink: #1a1207;
-    --accent-soft: rgba(226, 160, 58, 0.14);
+    --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
     --grid: #2a2a2d;
     --axis: #3a3a3f;
     --shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
@@ -159,7 +158,7 @@
   --muted: #98989d;
   --accent: #e2a03a;
   --accent-ink: #1a1207;
-  --accent-soft: rgba(226, 160, 58, 0.14);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
   --grid: #2a2a2d;
   --axis: #3a3a3f;
   --shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
