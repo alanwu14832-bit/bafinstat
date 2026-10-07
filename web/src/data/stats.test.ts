@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { applyFilters } from './filters'
 import { SEED_DATASET } from './seed'
-import { battingLines, pitchingLines, pitchTotals, sprayDirection, summarizeGame, teamBatting, teamSummary } from './stats'
+import { battingLines, pitchingLines, pitchTotals, sprayDirection, summarizeGame, teamBatting, teamSummary, WOBA_SCALE, wrcPlus } from './stats'
+import type { BattingPA, PitchingPA } from './types'
 import { DEFAULT_FILTERS } from './types'
 import { generateDemo, mergeDatasets } from './demo'
 
@@ -89,5 +90,30 @@ describe('helpers', () => {
       const outs = merged.pitching.filter((p) => p.gameId === g.id && ['I', 'II', 'III'].includes(p.code ?? '')).reduce((a, p) => a + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1), 0)
       expect(outs).toBe(21)
     }
+  })
+})
+
+describe('wRC+, sSeager and K/7', () => {
+  const pa = (batter: string, pitches: string[], result: string, extra: Partial<BattingPA> = {}): BattingPA =>
+    ({ gameId: game.id, inning: 1, batter, pitches, result, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...extra })
+  it('wRC+ turns the wOBA gap into runs per PA against the team (100 = team)', () => {
+    expect(wrcPlus({ woba: 0.4 }, { woba: 0.3, r: 10, pa: 100 })).toBe(Math.round((100 * (0.1 / WOBA_SCALE + 0.1)) / 0.1))
+    expect(wrcPlus({ woba: 0.3 }, { woba: 0.3, r: 10, pa: 100 })).toBe(100)
+    expect(wrcPlus({ woba: 0.3 }, { woba: 0.3, r: 0, pa: 100 })).toBeNull()
+    const t = teamBatting(ds, bat1)
+    expect(t.wrcPlus).toBe(100)
+    expect(battingLines(ds, bat1).every((l) => l.wrcPlus === null || Number.isInteger(l.wrcPlus))).toBe(true)
+  })
+  it('sSeager: balls taken ÷ (swings + balls taken) − called strikes ÷ all takes; an intentional walk does not count', () => {
+    const [l] = battingLines(ds, [pa('甲', ['B', 'CS', 'SS', 'B', 'F', 'IP'], '外飛'), pa('甲', ['B', 'B', 'B', 'B'], '故四')])
+    expect(l.sSeager).toBeCloseTo(2 / (3 + 2) - 1 / (1 + 2), 9)
+    const [none] = battingLines(ds, [pa('乙', ['SS', 'SS', 'SS'], '三振')])
+    expect(none.sSeager).toBeNull()
+  })
+  it('K/7 is strikeouts per 7 innings', () => {
+    const outs: PitchingPA[] = Array.from({ length: 21 }, (_, i) => ({ gameId: game.id, inning: 1 + Math.floor(i / 3), pitcher: '丙', pitches: ['SS', 'SS', 'SS'], result: i % 3 === 0 ? '三振' : '內滾', code: (['I', 'II', 'III'] as const)[i % 3], sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }))
+    const [p] = pitchingLines(outs, [game])
+    expect(p.outs).toBe(21); expect(p.k).toBe(7)
+    expect(p.k7).toBeCloseTo(7, 9); expect(p.k9).toBeCloseTo(9, 9)
   })
 })
