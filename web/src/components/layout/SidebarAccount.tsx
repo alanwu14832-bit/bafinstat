@@ -1,3 +1,4 @@
+import { ARCHIVE } from '../../config/archive'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { LogIn, LogOut, UserRound } from 'lucide-react'
@@ -12,7 +13,7 @@ const EASE = [0.22, 1, 0.36, 1] as const
 export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; reduced: boolean }) {
   const cloud = useDataStore((s) => s.cloud)
   const [open, setOpen] = useState(false)
-  if (!cloud.configured) return null
+  if (!cloud.configured || ARCHIVE) return null
   const label = cloud.user ? (cloud.user.email ?? '已登入') : '紀錄員登入'
   const sub = cloud.user ? (cloud.isEditor ? '紀錄員' : '瀏覽者（不在名單）') : '紀錄、上傳需要登入'
   return (

@@ -382,15 +382,17 @@ export function PlayersPage() {
           {tab === 'batting' ? (
             !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} /></Card> : (
               <>
-            <StatGroup>
+            <StatGroup columns="grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
               <StatTile label="打擊率 AVG" to="/batting?sort=avg" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
               <StatTile label="上壘率 OBP" to="/batting?sort=obp" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
               <StatTile label="長打率 SLG" to="/batting?sort=slg" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
               <StatTile label="OPS" to="/batting?sort=ops" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
-              <StatTile label="wRC+" to="/batting?view=advanced&sort=wrcPlus" value={bat.wrcPlus ?? 0} display={bat.wrcPlus === null ? '—' : String(bat.wrcPlus)} note={`wOBA ${f3(bat.woba)}・隊平均 = 100`} />
+              <StatTile label="wOBA" to="/batting?view=advanced&sort=woba" value={bat.woba ?? 0} format="decimal3" />
+              <StatTile label="wRC+" to="/batting?view=advanced&sort=wrcPlus" value={bat.wrcPlus ?? 0} display={bat.wrcPlus === null ? '—' : String(bat.wrcPlus)} note="隊平均 = 100" />
               <StatTile label="K% / BB%" to="/batting?view=advanced&sort=kPct&dir=asc" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
-              <StatTile label="sSeager" to="/batting?view=process&sort=sSeager" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note={`Whiff% ${pct0(bat.whiffPct)}・Hard% ${pct0(bat.hardPct)}`} />
               <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
+              <StatTile label="Whiff% / Hard%" to="/batting?view=process&sort=whiffPct&dir=asc" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
+              <StatTile label="sSeager" to="/batting?view=process&sort=sSeager" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note="好球敢打、壞球忍得住" />
             </StatGroup>
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以深色標示（率的門檻 PA ≥ 3）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>

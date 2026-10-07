@@ -12,6 +12,7 @@ import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
+import { ARCHIVE } from '../config/archive'
 import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
@@ -336,8 +337,11 @@ if (cloudConfigured && typeof window !== 'undefined') {
   void st.loadCloud()
   void st.loadAlbums()
   void st.loadRegistrations()
-  void currentUser().then((u) => st.setCloudUser(u))
-  onAuthChange((u) => useDataStore.getState().setCloudUser(u))
+  // a saved older version of the site (網站版本) only shows the data: nobody signs in there
+  if (!ARCHIVE) {
+    void currentUser().then((u) => st.setCloudUser(u))
+    onAuthChange((u) => useDataStore.getState().setCloudUser(u))
+  }
   subscribeCloudChanges(() => { const s = useDataStore.getState(); void s.loadCloud(); void s.loadAlbums(); void s.loadRegistrations() })
 }
 

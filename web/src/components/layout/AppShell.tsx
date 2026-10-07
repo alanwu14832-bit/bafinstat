@@ -1,3 +1,4 @@
+import { ARCHIVE, LIVE_BASE } from '../../config/archive'
 import { useEffect, type ReactNode } from 'react'
 import { MobileDrawer, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
@@ -5,7 +6,7 @@ import { useUiStore } from '../../store/ui'
 import { useLocation } from 'react-router-dom'
 import { PageTransition } from '../motion/Reveal'
 import { useDataStore } from '../../store/data'
-import { CloudOff } from 'lucide-react'
+import { CloudOff, History } from 'lucide-react'
 
 export interface AppShellProps {
   children: ReactNode
@@ -57,6 +58,15 @@ export function AppShell({ children, filters }: AppShellProps) {
       <div className="min-w-0 flex flex-col">
         {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
         <main className="flex-1 min-w-0">
+          {ARCHIVE && (
+            <div role="status" className="max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
+              <div className="flex items-center gap-2 flex-wrap rounded-[12px] bg-[color-mix(in_srgb,var(--warning)_14%,var(--surface))] px-3 py-2 text-[13px] text-ink">
+                <History className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1">你在看<span className="font-medium">舊版網站</span>（{ARCHIVE.date || ARCHIVE.id}）：只能瀏覽，資料是現在的資料。</span>
+                <a href={LIVE_BASE} className="text-[13px] font-medium underline underline-offset-2">回到最新版</a>
+              </div>
+            </div>
+          )}
           {stale && (
             <div role="status" className="max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
               <div className="flex items-center gap-2 rounded-[12px] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2 text-[13px] text-ink">

@@ -57,3 +57,35 @@ jobs:
           fi
           git push origin HEAD:main
           echo "已合併進 main，Vercel 會在約一分鐘後更新網站。" >> "$GITHUB_STEP_SUMMARY"
+
+      # 網站版本：把這一版另外建置成「只能瀏覽」的副本，放進 site-archive 分支的 v/<編號>/（保留最近 30 版）。
+      # Vercel 建置網站時會把它們一起放上去（web/scripts/archive.mjs），網站的「網站版本」頁就能打開以前的版本。
+      # 這一步失敗不影響上線。
+      - name: 保存這一版（網站版本）
+        continue-on-error: true
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::warning::這一版沒有保存：GitHub → Settings → Secrets and variables → Actions → Variables 要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY（舊版網站要讀雲端資料）"
+            exit 0
+          fi
+          SHORT=$(git rev-parse --short=7 "$GITHUB_SHA")
+          ID="$(TZ=Asia/Taipei date +%Y%m%d-%H%M)-$SHORT"
+          DATE="$(TZ=Asia/Taipei date '+%Y-%m-%d %H:%M')"
+          NOTE="$(git log -1 --format=%s "$GITHUB_SHA")"
+          A="$RUNNER_TEMP/site-archive"
+          mkdir -p "$A/v"
+          if git fetch -q --depth=1 origin site-archive; then git archive FETCH_HEAD | tar -x -C "$A"; fi
+          (cd web && VITE_BASE="/v/$ID/" VITE_ARCHIVE_ID="$ID" VITE_ARCHIVE_DATE="$DATE" VITE_ARCHIVE_NOTE="$NOTE" npx vite build --outDir "$A/v/$ID" --emptyOutDir)
+          rm -f "$A/v/$ID"/*.xlsx
+          node web/scripts/archive-index.mjs "$A" "$ID" "$DATE" "$SHORT" "$NOTE"
+          printf '# 網站版本\n\n網站每次上線時自動保存的唯讀副本（由 .github/workflows/auto-deploy.yml 產生，請勿手動修改）。\n' > "$A/README.md"
+          cd "$A"
+          git init -q && git checkout -q --orphan site-archive && git add -A
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -q -m "網站版本：保存 $ID"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site-archive
+          echo "已保存這一版：$ID（下一次網站更新後就能在「網站版本」頁打開）" >> "$GITHUB_STEP_SUMMARY"
