@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { GameEditor } from '../components/ui/GameEditor'
-import { GameCard, type GameStar } from '../components/ui/GameCard'
+import { GameCard, gameStar } from '../components/ui/GameCard'
 import { rosterNames } from '../components/ui/PlayerSelect'
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { sortNames } from '../data/rosterSort'
@@ -163,17 +163,8 @@ export function GamesPage() {
   // 卡片 (scoreboard cards, the default) or 表格 (the sortable table), kept in the address as ?layout=table
   const layout = params.get('layout') === 'table' ? 'table' : 'cards'
   const setLayout = (v: 'cards' | 'table') => { const next = new URLSearchParams(params); if (v === 'table') next.set('layout', 'table'); else next.delete('layout'); setParams(next, { replace: true }) }
-  // each game's 本場焦點: the batter with the most hits + RBI + runs (home runs count double)
-  const stars = useMemo(() => {
-    const out = new Map<string, GameStar>()
-    for (const g of s.summaries) {
-      const lines = battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === g.game.id))
-      let best: BattingLine | undefined, score = 0
-      for (const l of lines) { const v = l.h * 2 + l.hr * 2 + l.rbi * 1.5 + l.r; if (v > score) { score = v; best = l } }
-      if (best && best.h + best.rbi > 0) out.set(g.game.id, { name: best.name, text: [`${best.ab} 打數 ${best.h} 安`, best.hr && `${best.hr} 轟`, best.rbi && `${best.rbi} 打點`, best.r && `${best.r} 得分`].filter(Boolean).join('・') })
-    }
-    return out
-  }, [s.summaries, s.dataset])
+  // each game's 本場焦點
+  const stars = useMemo(() => new Map(s.summaries.map((g) => [g.game.id, gameStar(s.dataset, g.game.id)])), [s.summaries, s.dataset])
   const current = s.summaries.find((g) => g.game.id === open) ?? null
   const albums = useDataStore((st) => st.albums)
   const gameAlbums = useMemo(() => (current ? albums.filter((a) => a.gameId === current.game.id) : []), [albums, current])

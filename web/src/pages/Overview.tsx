@@ -1,11 +1,9 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { PageHeader } from '../components/layout/PageHeader'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { DataTable, type Column } from '../components/ui/DataTable'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DemoBanner } from '../components/ui/DemoBanner'
@@ -19,17 +17,15 @@ import { f2, f3, pct, pct0, shortDate, signedInt } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
 import { useDataStore } from '../store/data'
 import { SeasonHero } from '../components/ui/SeasonHero'
+import { GameCard, gameStar } from '../components/ui/GameCard'
 import { teamStories } from '../data/stories'
 import { scheduledGames } from '../data/schedule'
 import { TEAM } from '../config/team'
-
-interface RecentRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; result: 'W' | 'L' | 'T'; score: string; hits: number; errors: number; isDemo: boolean }
 
 export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 
 export function OverviewPage() {
   const s = useStats()
-  const navigate = useNavigate()
   const openGame = useOpenGame()
   const { summary, team, teamPitch, summaries } = s
   const opponentFilter = useDataStore((st) => st.filters.opponent)
@@ -59,22 +55,7 @@ export function OverviewPage() {
     const po = s.fielders.reduce((a, f) => a + f.po + f.a, 0)
     return { total, perGame: summaries.length ? total / summaries.length : 0, fpct: po + total > 0 ? po / (po + total) : null }
   }, [summaries, s.fielders])
-  const recent: RecentRow[] = useMemo(() => [...summaries].reverse().slice(0, 8).map((g) => ({
-    id: g.game.id, date: g.game.date, tournament: g.game.tournament, opponent: g.game.opponent, homeAway: g.game.homeAway, result: g.result,
-    score: `${g.runsUs}–${g.runsOpp}`, hits: g.hitsUs, errors: g.errorsUs, isDemo: !!g.game.isDemo,
-  })), [summaries])
-
-  const columns: Column<RecentRow>[] = [
-    { key: 'date', header: '日期', sortable: true, format: (v) => shortDate(String(v)) },
-    { key: 'tournament', header: '杯賽', className: 'text-ink-2' },
-    { key: 'opponent', header: '對手', className: 'font-medium', format: (v, row) => <span className="inline-flex items-center gap-1.5">{String(v)}{row.isDemo && <Badge variant="outline">示範</Badge>}</span> },
-    { key: 'homeAway', header: '主客', align: 'center', className: 'text-ink-2' },
-    { key: 'result', header: '結果', align: 'center', format: (v) => resultBadge(v as RecentRow['result']) },
-    { key: 'score', header: '比分', align: 'right', className: 'font-medium' },
-    { key: 'hits', header: '安打', align: 'right', sortable: true },
-    { key: 'errors', header: '失誤', align: 'right', sortable: true },
-  ]
-
+  const recentGames = useMemo(() => [...summaries].reverse().slice(0, 4), [summaries])
   if (summaries.length === 0) {
     return (
       <>
@@ -126,9 +107,19 @@ export function OverviewPage() {
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />
-        <Card className="xl:col-span-3" title="近期比賽" subtitle="點選任一列查看逐場攻守成績" flush>
-          <DataTable columns={columns} rows={recent} rowKey={(r) => r.id} onRowClick={(r) => navigate(`/games?game=${encodeURIComponent(r.id)}`)} dense />
-        </Card>
+        {/* 近期比賽: the newest games as the same scoreboard cards as the 比賽 page (three on a phone, four elsewhere) */}
+        <section aria-label="近期比賽" className="xl:col-span-3 flex flex-col gap-3 min-w-0">
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div className="min-w-0">
+              <h3 className="text-[16px] text-ink leading-6">近期比賽</h3>
+              <p className="text-xs text-muted leading-4 mt-0.5">新的在前；點一場看逐局比分與攻守成績</p>
+            </div>
+            <Button variant="ghost" size="sm" to="/games?view=results">全部比賽 →</Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
+            {recentGames.map((g, i) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={gameStar(s.dataset, g.game.id)} onOpen={() => openGame({ id: g.game.id })} className={i === 3 ? 'hidden sm:flex' : undefined} />)}
+          </div>
+        </section>
       </div>
     </>
   )
