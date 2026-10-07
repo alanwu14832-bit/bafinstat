@@ -2,20 +2,18 @@ import { Select, type SelectProps } from './Select'
 import { eligibleNames } from '../../data/registrations'
 import type { Player, Registration } from '../../data/types'
 import { cx } from '../../lib/format'
+import { sortRoster, type RosterSort } from '../../data/rosterSort'
 
-/** Roster names for a dropdown: active players first, then by jersey number, then name. */
-export function rosterNames(roster: Player[]): string[] {
-  const active = (p: Player) => !p.status || p.status === '現役'
-  const num = (p: Player) => { const n = Number(p.number); return Number.isFinite(n) && p.number !== '' && p.number !== undefined ? n : 999 }
-  return [...roster]
-    .sort((a, b) => Number(active(b)) - Number(active(a)) || num(a) - num(b) || a.name.localeCompare(b.name, 'zh-Hant'))
+/** Roster names for a dropdown: active players first, then in the 球員排序 chosen on the site (背號 or 姓氏). */
+export function rosterNames(roster: Player[], mode: RosterSort = 'number'): string[] {
+  return sortRoster(roster, mode)
     .map((p) => p.name)
     .filter((n, i, arr) => n && arr.indexOf(n) === i)
 }
 
 /** The one entry point for "who can be picked": the roster in dropdown order, narrowed to the game's 報名名單 when it has one. */
-export function candidateNames(roster: Player[], reg?: Registration): string[] {
-  return eligibleNames(rosterNames(roster), reg)
+export function candidateNames(roster: Player[], reg?: Registration, mode: RosterSort = 'number'): string[] {
+  return eligibleNames(rosterNames(roster, mode), reg)
 }
 
 /** Players still with the team (no status, or 現役): bench and registration chips leave the others out. */

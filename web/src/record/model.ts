@@ -206,7 +206,9 @@ export interface SubCandidates { names: string[]; disabled: Set<string>; tag: (n
  * unless re-entry is allowed.
  */
 export function subCandidates(s: RecordState, pool: string[], mode: 'batter' | 'pitcher'): SubCandidates {
-  const bench = unusedBench(s)
+  // today's bench in the pool's order (the 球員排序 chosen on the site)
+  const rank = new Map(pool.map((n, i) => [n, i]))
+  const bench = [...unusedBench(s)].sort((a, b) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity))
   const seen = appeared(s)
   const left = leftGame(s)
   const fielders = mode === 'pitcher' ? s.lineup.map((l) => l.name).filter((n) => n && n !== s.pitcher) : []

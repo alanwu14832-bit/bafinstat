@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Flame, Target, Undo2 } from 'lucide-react'
 import { Sheet } from '../components/ui/Sheet'
 import { Button } from '../components/ui/Button'
+import { RosterSortToggle } from '../components/ui/RosterSortToggle'
 import { BOARD, CountLights } from '../components/ui/Scoreboard'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { cx } from '../lib/format'
@@ -218,10 +219,13 @@ export function SubSheet(p: SubSheetProps) {
   return (
     <Sheet open={p.open} onClose={p.onClose} ariaLabel={p.mode === 'pitcher' ? '換投' : '換人'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-xl" contentClassName="max-h-[86vh] overflow-y-auto">
       <div className="p-5 flex flex-col gap-4">
-        <div className="inline-flex self-start rounded-[var(--radius-sm)] bg-surface-2 p-0.5" role="tablist" aria-label="換人或換投">
-          {(['lineup', 'pitcher'] as const).map((m) => (
-            <button key={m} role="tab" type="button" aria-selected={p.mode === m} onClick={() => p.onMode(m)} className={cx('h-9 px-4 rounded-[6px] text-[13px] font-medium cursor-pointer', p.mode === m ? 'bg-surface text-ink shadow-[var(--shadow-card)]' : 'text-ink-2 hover:text-ink')}>{m === 'lineup' ? (p.side === 'us' ? '代打／換人' : '換人') : '換投'}</button>
-          ))}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="inline-flex self-start rounded-[var(--radius-sm)] bg-surface-2 p-0.5" role="tablist" aria-label="換人或換投">
+            {(['lineup', 'pitcher'] as const).map((m) => (
+              <button key={m} role="tab" type="button" aria-selected={p.mode === m} onClick={() => p.onMode(m)} className={cx('h-9 px-4 rounded-[6px] text-[13px] font-medium cursor-pointer', p.mode === m ? 'bg-surface text-ink shadow-[var(--shadow-card)]' : 'text-ink-2 hover:text-ink')}>{m === 'lineup' ? (p.side === 'us' ? '代打／換人' : '換人') : '換投'}</button>
+            ))}
+          </div>
+          <RosterSortToggle />
         </div>
         {p.mode === 'lineup' ? (
           <>

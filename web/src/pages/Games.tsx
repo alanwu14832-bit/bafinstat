@@ -13,6 +13,9 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { GameEditor } from '../components/ui/GameEditor'
 import { GameCard, type GameStar } from '../components/ui/GameCard'
+import { rosterNames } from '../components/ui/PlayerSelect'
+import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
+import { sortNames } from '../data/rosterSort'
 import { ScheduleSection, daysToNextGame } from './Schedule'
 import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
@@ -46,7 +49,7 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
   return (
     <Card title="當日登錄名單" flush
       subtitle={!a.inferred ? '點球員看個人檔案' : hasRoster ? '登錄名單沒有填先發，先發與替補由紀錄推定' : '這場沒有登錄名單，先發與替補由紀錄推定'}
-      action={reentry && <Badge variant="outline">允許再上場</Badge>}>
+      action={<span className="flex items-center gap-2 flex-wrap justify-end">{reentry && <Badge variant="outline">允許再上場</Badge>}{a.bench.length > 1 && <RosterSortToggle />}</span>}>
       <div className={cx('grid grid-cols-1 divide-y md:divide-y-0 md:divide-x divide-[var(--border)]', showBench ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
         {group('先發', a.starters.length, a.starters.length ? (
           <ul className="flex flex-col">
@@ -113,6 +116,7 @@ export function GamesPage() {
   const [editing, setEditing] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'ok' | 'warn'; lines: string[] } | null>(null)
   const base = useDataStore((st) => st.base)
+  const sortMode = useRosterSort()
   // Open on whichever half is live: the schedule when a game is within a week, the results table otherwise.
   const [viewDecided, setViewDecided] = useState(false)
   useEffect(() => {
@@ -256,7 +260,7 @@ export function GamesPage() {
                   </div>
                 )}
                 {editing && editable ? (
-                  <GameEditor initial={editable} roster={base.roster.map((p) => p.name)} busy={cloud.pushing}
+                  <GameEditor initial={editable} roster={rosterNames(base.roster, sortMode)} busy={cloud.pushing}
                     onCancel={() => setEditing(false)}
                     onSave={async (edit) => {
                       const warnings = await saveGame(edit)
@@ -282,7 +286,7 @@ export function GamesPage() {
                   <>
                     <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
                     <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
-                    {appearances && <DayRosterCard a={appearances} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
+                    {appearances && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
                   </>
                 )}
                 {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} /></Card>}
