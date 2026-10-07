@@ -254,7 +254,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ cloud: { ...get().cloud, user, isEditor: false, access: null } })
     if (!user) return
     // the account must be the one bound to its listed email (a database without the security migration: email check)
-    const settle = (isEditor: boolean, access: EditorAccess | null) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor, access: isEditor ? null : access } }) }
+    // a check started before a 邀請碼 was used may answer after it: never take access back from the same account
+    const settle = (isEditor: boolean, access: EditorAccess | null) => { const c = get().cloud; if (c.user?.id === user.id && !(c.isEditor && !isEditor)) set({ cloud: { ...c, isEditor, access: isEditor ? null : access } }) }
     void claimEditor()
       .then(async (a) => (a === null ? settle(await fetchIsEditor(user.email), 'not_listed') : settle(a === 'ok', a)))
       .catch(() => settle(false, null))

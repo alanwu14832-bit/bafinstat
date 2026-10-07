@@ -18,3 +18,10 @@ A database change needs a migration in both repos, and the user must run it in b
 - `tools/build_workbook.py` builds `data/BAFIN_棒球數據總表.xlsx`, the Excel template the site hands out.
 - `record/sim.test.ts` plays 150 random games through the recording model: keep it green when touching recording or the
   runner timeline.
+
+## Security (docs/SECURITY.md)
+- Writes are allowed only for the account bound to an `editors` row (`is_editor()` checks `user_id = auth.uid()`;
+  binding by the admin's `admin_bind_editor`, a 邀請碼 or an email code — `supabase/migrations/2026-10-08_security.sql`).
+- Never write an email into a public table (`updated_by`/`created_by` are stamped by a trigger with the recorder's name).
+- Keep the Content-Security-Policy (`web/src/config/security.ts`, written into index.html at build) and the headers in
+  `web/vercel.json`; no inline scripts in index.html (put them in `web/public/boot.js`). Run `npm audit` when adding packages.
