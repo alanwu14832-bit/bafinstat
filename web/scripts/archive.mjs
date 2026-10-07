@@ -8,6 +8,8 @@ import { resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const REPO = process.env.ARCHIVE_REPO || 'alanwu14832-bit/bafinstat'
+// a private repo: a read-only GitHub token (Contents: Read) in the host's environment variables as ARCHIVE_TOKEN
+const TOKEN = process.env.ARCHIVE_TOKEN
 const skip =
   process.env.VITE_ARCHIVE_ID ? 'this build is itself a saved copy'
   : process.env.GITHUB_ACTIONS ? 'GitHub Actions build (tests / GitHub Pages)'
@@ -20,7 +22,10 @@ else if (!existsSync(dist)) console.log('[archive] no dist/; skipped')
 else {
   const tgz = resolve(tmpdir(), `site-archive-${process.pid}.tar.gz`)
   try {
-    const res = await fetch(`https://codeload.github.com/${REPO}/tar.gz/refs/heads/site-archive`)
+    const res = TOKEN
+      ? await fetch(`https://api.github.com/repos/${REPO}/tarball/site-archive`, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' } })
+      : await fetch(`https://codeload.github.com/${REPO}/tar.gz/refs/heads/site-archive`)
+    if (res.status === 404 && !TOKEN) throw new Error('HTTP 404 (a private repo needs ARCHIVE_TOKEN)')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     writeFileSync(tgz, Buffer.from(await res.arrayBuffer()))
     const out = resolve(dist, 'v')
