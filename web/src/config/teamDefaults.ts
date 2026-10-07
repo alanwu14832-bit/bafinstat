@@ -65,7 +65,9 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
 export function accentCss(t: TeamConfig): string {
   const vars = (accent: string, ink: string) => `--accent:${accent};--accent-ink:${ink};`
   const dark = vars(t.accentDark, t.accentInkDark)
-  return `html:root{${vars(t.accent, t.accentInk)}}@media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${dark}}}html:root[data-theme="dark"]{${dark}}`
+  // the scoreboard surfaces are dark in either theme: they always take the dark-mode pair
+  const board = `--accent-board:${t.accentDark};--accent-board-ink:${t.accentInkDark};`
+  return `html:root{${vars(t.accent, t.accentInk)}${board}}@media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${dark}}}html:root[data-theme="dark"]{${dark}}`
 }
 
 /** A file in web/public (resolved against the site's base path) or an absolute URL, as is. */

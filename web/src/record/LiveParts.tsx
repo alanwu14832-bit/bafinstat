@@ -66,14 +66,14 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
       <div className="relative overflow-hidden rounded-[var(--radius)] shadow-[0_10px_30px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/10" style={{ background: BOARD.bg, color: BOARD.ink }}>
         {flash > 0 && (
           <motion.div key={flash} aria-hidden className="pointer-events-none absolute inset-0" initial={{ opacity: reduced ? 0.18 : 0.42 }} animate={{ opacity: 0 }} transition={{ duration: reduced ? 0.25 : 0.9, ease: [0.2, 0.7, 0.3, 1] }}
-            style={{ background: 'radial-gradient(120% 140% at 20% 0%, var(--accent), transparent 70%)' }} />
+            style={{ background: 'radial-gradient(120% 140% at 20% 0%, var(--accent-board, var(--accent)), transparent 70%)' }} />
         )}
         <div className="relative flex items-center gap-2.5 sm:gap-5 px-3 sm:px-5 pt-2.5 pb-2">
           {/* the two teams, away on top like a broadcast bug */}
           <div className="flex flex-col gap-0.5 min-w-0 flex-1 sm:flex-none sm:w-[200px]">
             {rows.map((r) => (
               <div key={r.name} className="flex items-center gap-2 min-w-0">
-                <span className={cx('size-1.5 rounded-full shrink-0', r.bat ? 'bg-accent' : 'bg-transparent')} aria-hidden />
+                <span className={cx('size-1.5 rounded-full shrink-0', r.bat ? 'bg-[var(--accent-board,var(--accent))]' : 'bg-transparent')} aria-hidden />
                 <span className="text-[13px] font-medium truncate min-w-0 flex-1" style={{ color: r.bat ? BOARD.ink : BOARD.muted }}>{r.name}</span>
                 <Num value={r.score} className="figure text-[24px] font-bold leading-[1.05] tabular-nums min-w-5 text-right" />
               </div>
@@ -91,7 +91,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
           </button>
           {/* wide screens: what is being recorded sits in the same row */}
           <div className="hidden sm:flex flex-col gap-1 min-w-0 flex-1 pl-4 border-l text-[13px]" style={{ borderColor: BOARD.line }}>
-            <span className={cx('inline-flex self-start items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold', side === 'us' ? 'bg-accent text-accent-ink' : 'ring-1 ring-white/30')}>
+            <span className={cx('inline-flex self-start items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold', side === 'us' ? 'bg-[var(--accent-board,var(--accent))] text-[var(--accent-board-ink,var(--accent-ink))]' : 'ring-1 ring-white/30')}>
               {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
               {side === 'us' ? '我隊打擊' : '我隊守備'}
             </span>
@@ -103,7 +103,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
           </button>
         </div>
         <div className="relative sm:hidden flex items-center gap-2 px-3 py-1.5 border-t text-[12px] min-w-0" style={{ borderColor: BOARD.line }}>
-          <span role="status" aria-live="polite" className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-full font-semibold shrink-0', side === 'us' ? 'bg-accent text-accent-ink' : 'ring-1 ring-white/30')}>
+          <span role="status" aria-live="polite" className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-full font-semibold shrink-0', side === 'us' ? 'bg-[var(--accent-board,var(--accent))] text-[var(--accent-board-ink,var(--accent-ink))]' : 'ring-1 ring-white/30')}>
             {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
             {side === 'us' ? '我隊打擊' : '我隊守備'}
           </span>
