@@ -84,7 +84,7 @@ STAT_DICTIONARY = [
     dict(key="SBA", zh="被盜壘", en="Stolen Bases Allowed", group="投球", formula="被盜壘欄加總", status="新增", priority="P1", note=""),
     dict(key="ERA", zh="防禦率", en="Earned Run Average", group="投球", formula="ER × 每場局數 ÷ IP", status="現有", priority="P0", note="每場局數在『設定』調整（預設 7；MLB/CPBL 為 9）"),
     dict(key="WHIP", zh="每局被上壘率", en="Walks + Hits per IP", group="投球", formula="(BB + H) ÷ IP", status="現有", priority="P0", note=""),
-    dict(key="K/7", zh="每七局三振", en="Strikeouts per 7", group="投球", formula="K × 7 ÷ IP", status="新增", priority="P1", note="7 局一場比賽的三振數"),
+    dict(key="K/7", zh="每七局三振", en="Strikeouts per 7", group="投球", formula="K × 7 ÷ IP", status="新增", priority="P1", note="7 局制比賽的平均每場三振數"),
     dict(key="K/9", zh="每九局三振", en="Strikeouts per 9", group="投球", formula="K × 9 ÷ IP", status="新增", priority="P1", note=""),
     dict(key="BB/9", zh="每九局保送", en="Walks per 9", group="投球", formula="BB × 9 ÷ IP", status="新增", priority="P1", note=""),
     dict(key="H/9", zh="每九局被安打", en="Hits per 9", group="投球", formula="H × 9 ÷ IP", status="新增", priority="P2", note=""),
