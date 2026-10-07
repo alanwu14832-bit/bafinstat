@@ -314,7 +314,12 @@ export function teamPitching(pas: PitchingPA[], params = DEFAULT_PARAMS, games: 
 export interface FieldingStat {
   name: string; g: number; innings: number; po: number; a: number; e: number; dp: number; tc: number; pb: number; sb: number; cs: number
   fpct: number | null; rfg: number | null; csPct: number | null; positions: string[]
+  /** some of his lines were inferred from the plate appearances (no 守備紀錄 typed for that game) */
+  inferred: boolean
 }
+
+/** A fielding line the site worked out itself (from the plate appearances), not one typed into the 守備紀錄. */
+export const isInferredLine = (f: FieldingLine) => /推定/.test(f.note ?? '') || f.note === 'SP' || f.note === 'RP'
 
 export function fieldingLines(lines: FieldingLine[]): FieldingStat[] {
   const map = new Map<string, FieldingStat>()
@@ -323,9 +328,10 @@ export function fieldingLines(lines: FieldingLine[]): FieldingStat[] {
   for (const f of lines) {
     if (!f.player) continue
     let s = map.get(f.player)
-    if (!s) { s = { name: f.player, g: 0, innings: 0, po: 0, a: 0, e: 0, dp: 0, tc: 0, pb: 0, sb: 0, cs: 0, fpct: null, rfg: null, csPct: null, positions: [] }; map.set(f.player, s) }
+    if (!s) { s = { name: f.player, g: 0, innings: 0, po: 0, a: 0, e: 0, dp: 0, tc: 0, pb: 0, sb: 0, cs: 0, fpct: null, rfg: null, csPct: null, positions: [], inferred: false }; map.set(f.player, s) }
     const key = `${f.player}\u0000${f.gameId}`
     if (!games.has(key)) { games.add(key); s.g++ }
+    if (isInferredLine(f)) s.inferred = true
     s.innings += f.innings ?? 0; s.po += f.po; s.a += f.a; s.e += f.e; s.dp += f.dp; s.pb += f.pb; s.sb += f.sb; s.cs += f.cs
     if (f.pos && !s.positions.includes(f.pos)) s.positions.push(f.pos)
   }

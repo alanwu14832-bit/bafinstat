@@ -1,4 +1,10 @@
 import { useMemo } from 'react'
+import { Download } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { downloadCsv } from '../lib/csv'
+import { scopeText } from '../components/layout/FilterChips'
+import { useDataStore } from '../store/data'
+import { TEAM_NAME } from '../data/seed'
 import { useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -6,7 +12,7 @@ import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
-import { withJerseyColumn } from '../components/ui/jerseyColumn'
+import { compactColumns, Inferred, tagNameColumn, useTableView, withJerseyColumn } from '../components/ui/jerseyColumn'
 import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
@@ -58,9 +64,16 @@ export function FieldingPage() {
     { key: 'csPct', header: 'CS%', align: 'right', sortable: true, format: (v) => pct(v as number | null) },
   ]
 
+  const tableView = useTableView()
+  const inferredTag = (r: FieldingStat) => (r.inferred ? <Inferred /> : null)
+  const full = withJerseyColumn(columns)
+  const tableColumns = tableView.compact ? compactColumns(full, ['tc', 'e', 'fpct'], inferredTag) : tagNameColumn(full, inferredTag)
+  // 匯出 CSV: the full table of this tab (every column), with what it covers on top
+  const csvFilters = useDataStore((st) => st.filters)
+  const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`守備成績.csv`, full, withNumbers(s.fielders, s.dataset.roster), [`${TEAM_NAME} 守備成績`, scopeText(csvFilters, s.games), `標「推定」者有比賽未填守備紀錄，數字由打席紀錄推算`, `來源：${window.location.href}`])}>CSV</Button>
   return (
     <>
-      <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）；被盜壘、阻殺、捕逸也由投球紀錄歸給當時的捕手（看當日登錄名單的換人）。" />
+      <PageHeader scoped title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）；被盜壘、阻殺、捕逸也由投球紀錄歸給當時的捕手（看當日登錄名單的換人）。" />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；守備率需 ≥ ${minTC} 次守備機會`} />
       <StatGroup>
@@ -69,8 +82,8 @@ export function FieldingPage() {
         <StatTile label="雙殺" to="?sort=dp#stats" value={totals.dp} />
         <StatTile label="捕手阻殺率" to={catchers.length ? '#catchers' : '?sort=csPct#stats'} value={totals.sb + totals.cs ? (totals.cs / (totals.sb + totals.cs)) * 100 : 0} format="pct" note={`${totals.cs} 阻殺 / ${totals.sb} 被盜`} />
       </StatGroup>
-      <Card id="stats" title="守備成績" subtitle="點球員開啟個人檔案；PO／A 未記錄時為推定值" flush>
-        <DataTable columns={withJerseyColumn(columns)} rows={withNumbers(s.fielders, s.dataset.roster)} rowKey={(r) => r.name} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columns.some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as keyof FieldingStat, dir: linked.dir } : { key: 'tc', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
+      <Card id="stats" title="守備成績" subtitle="點球員開啟個人檔案；標「推定」的球員，有比賽沒填守備紀錄，刺殺／助殺／阻殺等由打席紀錄推算" flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}</span>}>
+        <DataTable columns={tableColumns} rows={withNumbers(s.fielders, s.dataset.roster)} rowKey={(r) => r.name} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columns.some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as keyof FieldingStat, dir: linked.dir } : { key: 'tc', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
       </Card>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="失誤分佈" subtitle="各守位失誤次數" counts={errCounts} unit="次失誤" emptyText="沒有失誤" />
@@ -80,7 +93,7 @@ export function FieldingPage() {
         <Card id="catchers" title="捕手" subtitle="被盜壘、阻殺與捕逸；點捕手看個人檔案" flush>
           <StatGroup flush columns="grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
             {catchers.map((c) => (
-              <StatTile key={c.name} label={c.name} to={`/players?player=${encodeURIComponent(c.name)}`} value={(c.csPct ?? 0) * 100} format="pct" display={pct(c.csPct)} note={`阻殺率・被盜 ${c.sb}・阻殺 ${c.cs}・捕逸 ${c.pb}`} />
+              <StatTile key={c.name} label={c.name} to={`/players?player=${encodeURIComponent(c.name)}`} value={(c.csPct ?? 0) * 100} format="pct" display={pct(c.csPct)} note={`阻殺率・被盜 ${c.sb}・阻殺 ${c.cs}・捕逸 ${c.pb}${c.inferred ? '・含推定' : ''}`} />
             ))}
           </StatGroup>
         </Card>

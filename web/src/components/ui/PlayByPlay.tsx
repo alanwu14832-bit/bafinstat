@@ -79,7 +79,7 @@ const hitLoc = (loc?: number, traj?: string, quality?: string) => [loc ? `${loc}
 
 function InningHeader({ inning, half }: { inning: number; half: string }) {
   return (
-    <tr className="bg-surface-2/60">
+    <tr id={`inning-${inning}`} className="bg-surface-2/60 scroll-mt-40">
       <td colSpan={9} className="px-4 py-1.5 text-[11px] font-medium text-ink-2">第 {inning} 局<span className="text-muted">・{half}</span></td>
     </tr>
   )

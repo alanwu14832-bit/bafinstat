@@ -28,6 +28,8 @@ export interface StatTileProps {
   compact?: boolean
   /** Where tapping the tile goes (e.g. the batting table sorted by this stat). */
   to?: string
+  /** Says where `to` goes, shown next to the arrow (e.g. 全隊排行) so the destination is never a surprise. */
+  toLabel?: string
   className?: string
 }
 
@@ -35,7 +37,7 @@ export interface StatTileProps {
  * One metric. Designed to sit inside <StatGroup>, which draws the hairlines between cells;
  * on its own it renders as a bordered card.
  */
-export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, to, className }: StatTileProps) {
+export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, to, toLabel, className }: StatTileProps) {
   const text = display ?? formatNumber(value, format)
   const good = delta !== undefined && (invertDelta ? delta < 0 : delta > 0)
   const bad = delta !== undefined && (invertDelta ? delta > 0 : delta < 0)
@@ -46,11 +48,11 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
     <div className={cx('stat-cell group relative bg-surface rounded-[var(--radius-sm)] shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-2 min-w-0', to && 'lift', className)}>
       {/* The whole tile is the link, laid over the content; the label sits above it so tapping the label
           still opens its explanation instead of leaving the page. */}
-      {to && <Link to={to} aria-label={`${label} ${text}，看詳細`} className="absolute inset-0 z-[1] rounded-[inherit] focus-visible:outline-offset-2" />}
+      {to && <Link to={to} aria-label={`${label} ${text}，${toLabel ?? '看詳細'}`} className="absolute inset-0 z-[1] rounded-[inherit] focus-visible:outline-offset-2" />}
       <div className="flex items-center justify-between gap-2">
         <span className="relative z-[2] text-xs text-muted font-medium truncate"><StatHint label={label}>{label}</StatHint></span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
-        {to && <ChevronRight aria-hidden className="size-3.5 shrink-0 text-muted opacity-60 transition-[translate,opacity] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0.5" />}
+        {to && <span className="inline-flex items-center gap-0.5 shrink-0 text-muted">{toLabel && <span className="text-[11px] opacity-80 group-hover:opacity-100">{toLabel}</span>}<ChevronRight aria-hidden className="size-3.5 shrink-0 opacity-60 transition-[translate,opacity] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0.5" /></span>}
       </div>
       <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[24px]')}><RollingNumber text={text} /></div>
       {(note || delta !== undefined) && (

@@ -17,6 +17,8 @@ export interface Column<Row> {
   width?: number | string
   /** Extra class on cells (e.g. font-medium for a name column). */
   className?: string
+  /** Plain text of the cell for 匯出 CSV, when `format` draws more than text (a rate with its fraction). */
+  text?: (value: Row[keyof Row], row: Row) => string
 }
 
 export interface DataTableProps<Row> {
@@ -33,6 +35,8 @@ export interface DataTableProps<Row> {
   dense?: boolean
   /** Scroll the sorted column into view on open (the table was reached from a link that picked it). */
   revealSort?: boolean
+  /** rowKey of a row to mark and scroll to (a player's tile linked here: 「看全隊排行」 shows where he stands) */
+  highlightKey?: string
   className?: string
 }
 
@@ -51,7 +55,7 @@ function compare(a: unknown, b: unknown): number {
  * The first column is pinned so names stay visible while wide stat tables scroll sideways.
  */
 export function DataTable<Row extends object>({
-  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, revealSort, className,
+  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, revealSort, highlightKey, className,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState(defaultSort ?? null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -65,6 +69,13 @@ export function DataTable<Row extends object>({
     if (th.offsetLeft + th.offsetWidth <= box.clientWidth) return
     box.scrollLeft = Math.max(0, th.offsetLeft - pinned - 24)
   }, [revealSort])
+
+  // bring the highlighted row into view inside the table (and the table into view on the page)
+  useLayoutEffect(() => {
+    if (!highlightKey) return
+    const row = scroller.current?.querySelector<HTMLElement>('tr[data-highlight]')
+    if (row) requestAnimationFrame(() => row.scrollIntoView({ block: 'center', behavior: 'auto' }))
+  }, [highlightKey])
 
   const sorted = useMemo(() => {
     if (!sort) return rows
@@ -125,10 +136,12 @@ export function DataTable<Row extends object>({
             sorted.map((row, i) => (
               <tr
                 key={rowKey(row, i)}
+                data-highlight={highlightKey !== undefined && rowKey(row, i) === highlightKey ? '' : undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(row) } : undefined}
-                className={cx('bg-surface border-b border-border last:border-b-0 transition-colors duration-[var(--dur-fast)] motion-reduce:transition-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70')}
+                className={cx('bg-surface border-b border-border last:border-b-0 transition-colors duration-[var(--dur-fast)] motion-reduce:transition-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70',
+                  highlightKey !== undefined && rowKey(row, i) === highlightKey && 'bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_20%,var(--surface))] [&>td]:font-semibold')}
               >
                 {columns.map((col, ci) => (
                   <td key={col.key} className={cx(cellPad, alignCls[col.align ?? 'left'], 'text-ink', pin(ci), ci === 0 && 'pl-4', ci === columns.length - 1 && 'pr-4', col.className)}>

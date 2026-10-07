@@ -2,6 +2,7 @@ import { ARCHIVE, LIVE_BASE } from '../../config/archive'
 import { useEffect, type ReactNode } from 'react'
 import { MobileDrawer, Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+import { useFilterUrlSync } from './FilterChips'
 import { useUiStore } from '../../store/ui'
 import { useLocation } from 'react-router-dom'
 import { PageTransition } from '../motion/Reveal'
@@ -18,6 +19,7 @@ export function AppShell({ children, filters }: AppShellProps) {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
   const { pathname } = useLocation()
+  useFilterUrlSync()
   const cloud = useDataStore((s) => s.cloud)
   const hasCache = useDataStore((s) => s.base.games.length > 0)
   const stale = cloud.configured && cloud.status === 'error' && hasCache
