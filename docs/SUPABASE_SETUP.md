@@ -17,13 +17,12 @@ anon key 可以放在前端，因為資料表已開啟 RLS：未登入只能讀�
 ## 3. 登入方式（紀錄員）
 建議用**密碼登入**（不寄信、沒有每小時 2 封的限制）：Authentication → Users → **Add user → Create new user**，填 email 與密碼，勾 Auto Confirm User。網站的「密碼登入」就能用。
 
-Email 連結登入為備用；Authentication → Providers → **Email** 保持開啟；建議：
-- Authentication → Settings → 關閉 **Allow new users to sign up**（避免陌生人註冊後取得寫入權）。
-- Authentication → Users → **Add user** 手動建立紀錄員帳號（填 email 即可，不用密碼）。
-- Authentication → URL Configuration → Site URL 填網站網址（例如 `https://alanwu14832-bit.github.io/bafinstat/`），Redirect URLs 也加同一個網址。
-- 可選：Authentication → Email Templates → Magic Link 內容加上 `{{ .Token }}`，網站的「6 位數驗證碼」欄位就能用，不必點信中連結。
+網站只有密碼登入（不再提供 Email 連結／驗證碼登入）。另外建議：
+- Authentication → Settings → 關閉 **Allow new users to sign up**（避免陌生人註冊）。
+- 新增紀錄員：Add user 建好帳號後，到 SQL Editor 執行 `select admin_bind_editor('對方email','名字');`。
+- Authentication → URL Configuration → Site URL 填網站網址，Redirect URLs 也加同一個網址。
 
-登入流程：資料匯入頁 → 輸入 email → 收信點連結（或輸入驗證碼）→ 上傳總表 → 寫入雲端。
+登入流程：右上角登入 → 輸入 email 與密碼 → 就能紀錄與上傳。
 
 ## 4. 部署設定
 ### GitHub Pages

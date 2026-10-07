@@ -21,7 +21,7 @@
 Authentication → URL Configuration：
 - Site URL 改成 Vercel 網址（或保留 GitHub Pages 皆可）。
 - Redirect URLs 加上 `https://<你的專案>.vercel.app/**`（若之後綁自訂網域，也加上）。
-用密碼登入的話這步不影響，但 Email 連結登入需要。
+網站只用密碼登入，這步主要是讓 Supabase 寄出的信（例如重設密碼）連回正確網址。
 
 ## 3. 自訂網域（選用）
 Vercel → Project → Settings → Domains → Add，照指示在網域商加 CNAME。Supabase Redirect URLs 也加上該網域。

@@ -11,7 +11,7 @@
 | 網站 | Vercel 靜態託管、HTTPS、安全標頭 | 沒有自己的伺服器；`vercel.json` 加了禁止被別的網站嵌入（防點擊劫持）、HSTS、nosniff、Referrer／Permissions-Policy |
 | 腳本 | Content-Security-Policy（`index.html` 的 meta，`src/config/security.ts` 產生） | 只執行本站自己的程式（禁止內嵌與注入的腳本、禁止 eval）；資料只能送往本站與自己的 Supabase 專案 |
 | 資料庫 | Supabase Postgres + Row Level Security | **任何人可讀**；**只有「已綁定的紀錄員帳號」可寫**（`is_editor()` 比對登入帳號本身，不只是 email） |
-| 帳號綁定 | `supabase/migrations/2026-10-08_security.sql` | 名單上的 email 要「綁定」到一個登入帳號才能寫：管理員綁定、一次性**邀請碼**、或以寄到該信箱的驗證碼登入。光是用某人的 email 註冊帳號，什麼都寫不了 |
+| 帳號綁定 | `supabase/migrations/2026-10-08_security.sql` | 名單上的 email 要「綁定」到一個登入帳號才能寫：管理員綁定或一次性**邀請碼**（網站已不提供 Email 驗證碼登入）。光是用某人的 email 註冊帳號，什麼都寫不了 |
 | 邀請碼 | 10 碼、7 天有效、只存雜湊值 | 輸錯 10 次鎖住；用過即失效；紀錄員自己也讀不到雜湊值 |
 | 金鑰 | 前端只有 anon（publishable）key | 權限完全由 RLS 決定；匿名角色另外被收回所有寫入權（雙重保險）；`service_role` key 永遠不放前端、不進 git（已掃過整個 git 歷史，沒有外洩） |
 | 個資 | 公開表格不存 email | `updated_by`／`created_by` 由資料庫自動填紀錄員的備註名稱（例如「管理員」），舊資料裡的 email 已被換掉 |
