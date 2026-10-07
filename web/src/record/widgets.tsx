@@ -10,7 +10,7 @@ export const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }>
   { code: 'B', label: '壞球', hint: 'B' }, { code: 'CS', label: '好球・未揮', hint: 'CS' }, { code: 'SS', label: '揮空', hint: 'SS' }, { code: 'F', label: '界外', hint: 'F' }, { code: 'IP', label: '擊進場內', hint: 'IP' },
 ]
 export const RESULT_GROUPS: Array<{ label: string; items: string[] }> = [
-  { label: '安打', items: ['一安', '二安', '場地二安', '三安', '全壘打'] },
+  { label: '安打', items: ['一安', '內安', '二安', '場地二安', '三安', '全壘打'] },
   { label: '上壘', items: ['保送', '故四', '觸身', '失誤', '野選', '妨礙'] },
   { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'] },
 ]

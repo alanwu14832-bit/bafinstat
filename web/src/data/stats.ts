@@ -2,7 +2,7 @@
  * Stats engine. Definitions mirror the helper columns of the workbook so the
  * website and the spreadsheet always agree. See data/stat_dictionary.json.
  */
-import { DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
+import { DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, isSingle, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
@@ -92,7 +92,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   if (isAB) l.ab++
   const hit = HIT_RESULTS.has(r)
   if (hit) l.h++
-  if (r === '一安') l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
+  if (isSingle(r)) l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
   if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺') l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
   l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs

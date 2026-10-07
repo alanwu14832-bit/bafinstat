@@ -277,15 +277,15 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // 趁傳進壘／失誤進壘 on the batted ball: the bases beyond where the result alone put him (a runner: where he stood for it)
     const endOf = (who: number | 'batter') => (who === 'batter' ? step.batter : step.dest[who])
     // where the result alone takes a runner (the way 紀錄比賽 suggests it): a hit moves everyone that many bases, a walk
-    // pushes the forced runners, a bunt or an error one base, a sacrifice fly scores the man on third
+    // or an infield single pushes the forced runners, a bunt or an error one base, a sacrifice fly scores the man on third
     const runnerNatural = (row: number): number | undefined => {
       const mid = midOf(step), me = mid.find((o) => o.row === row)
       if (!me) return undefined
       const res = rows[i].result
-      const hit = HIT_BASE_COUNT[res]
+      const hit = res === '內安' ? 0 : HIT_BASE_COUNT[res]
       if (hit) return Math.min(4, me.base + hit)
       const on = (b: number) => mid.some((o) => o.base === b)
-      if (['保送', '故四', '觸身', '妨礙'].includes(res)) return me.base === 1 || (me.base === 2 && on(1)) || (me.base === 3 && on(1) && on(2)) ? me.base + 1 : me.base
+      if (['內安', '保送', '故四', '觸身', '妨礙'].includes(res)) return me.base === 1 || (me.base === 2 && on(1)) || (me.base === 3 && on(1) && on(2)) ? me.base + 1 : me.base
       if (res === '犧觸' || res === '失誤') return Math.min(4, me.base + 1)
       if (res === '犧飛' && me.base === 3) return 4
       return me.base
@@ -299,7 +299,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const at = (rows[i].events ?? []).filter((e) => e.play && e.to === to && (who === 'batter' ? !!e.batter : !e.batter))
       return at.length > 1 ? at.find((e) => e.from === natural(who)) : at[0]
     }
-    const throwOf = (who: number | 'batter') => { const n = natural(who); return { can: typeof n === 'number' && num(endOf(who)) > n, kind: (playOf(who)?.kind ?? null) as ExtraBases | null } }
+    const markOf = (who: number | 'batter'): ExtraBases | null => { const k = playOf(who)?.kind; return k === 'throw' || k === 'err' ? k : null }
+    const throwOf = (who: number | 'batter') => { const n = natural(who); return { can: typeof n === 'number' && num(endOf(who)) > n, kind: markOf(who) } }
     const onThrow = (who: number | 'batter', kind: ExtraBases | null) => {
       const n = natural(who), to = endOf(who)
       if (typeof n !== 'number' || to === undefined || to === 'out') return

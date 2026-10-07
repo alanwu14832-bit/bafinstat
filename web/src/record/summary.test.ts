@@ -90,6 +90,47 @@ describe('場地二安', () => {
   })
 })
 
+describe('內安', () => {
+  it('is a single in the stats and moves only the forced runners', async () => {
+    const { battingLines } = await import('../data/stats')
+    const { normalizeGameEdit } = await import('../data/edit')
+    const { SEED_DATASET } = await import('../data/seed')
+    const { toGameEdit } = await import('./model')
+    let s = send(send(start(), '一安'), '二安')            // 甲 3B, 乙 2B
+    s = commitPA(s, defaultPlan(s, '保送'))               // 丙 walks: bases loaded
+    const plan = defaultPlan(s, '內安')                    // forced: everyone up one
+    expect(plan.batter).toBe(1)
+    expect(Object.values(plan.runners).sort()).toEqual([2, 3, 'home'].sort())
+    let t = send(start(), '一安'); t = send(t, '二安')
+    const p2 = defaultPlan(t, '內安')                      // 2B and 3B occupied, 1B empty: nobody forced
+    expect(Object.values(p2.runners).sort()).toEqual([2, 3])
+    s = commitPA(s, plan)
+    const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
+    const line = battingLines(fragment, fragment.batting).find((l) => l.name === '丁')!
+    expect(line.h).toBe(1); expect(line.h1).toBe(1); expect(line.tb).toBe(1); expect(line.rbi).toBe(1)
+  })
+})
+
+describe('the inning\'s last plate appearance', () => {
+  it('keeps where the runners left on base ended (no next 壘上(前) to tell)', async () => {
+    const { inferHalf, deriveHalf, setEnd, midOf } = await import('./timeline')
+    let s = send(send(start(), '一安'), '一安')            // 甲 2B, 乙 1B
+    s = send(send(s, '三振'), '三振')                       // two outs
+    const plan = defaultPlan(s, '一安')                    // 丁 singles: 甲 to 3B, 乙 to 2B …
+    plan.batter = 'out'                                     // … and is thrown out at second: third out
+    const t = commitPA(s, plan)
+    const rows = t.batting
+    const half = inferHalf(rows, [0, 1, 2, 3, 4], 'bat')!
+    const last = half.steps[4]
+    const at = (n: string) => midOf(last).find((o) => rows[o.row].batter === n)!.row
+    expect(last.dest[at('甲')]).toBe(3); expect(last.dest[at('乙')]).toBe(2)
+    // in the editor: 甲 scored after all and 乙 took third — still there when the game is opened again
+    let h = setEnd(half, 4, at('甲'), 'home'); h = setEnd(h, 4, at('乙'), 3)
+    const again = inferHalf(deriveHalf(rows, h, 'bat').map((r, k) => (k === at('甲') ? { ...r, run: 1, code: 'R' } : r)), [0, 1, 2, 3, 4], 'bat')!
+    expect(again.steps[4].dest[at('乙')]).toBe(3)
+  })
+})
+
 describe('擊進場內 is the last pitch', () => {
   it('ignores anything tapped after IP, so a double tap stays one IP', () => {
     const s = addPitch(addPitch(addPitch(start(), 'B'), 'IP'), 'IP')
