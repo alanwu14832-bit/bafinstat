@@ -35,7 +35,7 @@ export function BattingPage() {
   const navigate = useNavigate()
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
-  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}`)
+  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=batting`)
   const [qualifiedOnly, setQualifiedOnly] = useState(false)
   const minPA = Math.max(1, Math.ceil(s.summary.games * MIN_PA_RATIO))
   const rows = useMemo(() => (qualifiedOnly ? s.batters.filter((b) => b.pa >= minPA) : s.batters), [s.batters, qualifiedOnly, minPA])

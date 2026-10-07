@@ -105,6 +105,7 @@ export function GamesPage() {
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
   const openPlayer = (r: { name: string }) => navigate(`/players?player=${encodeURIComponent(r.name)}`)
+  const openPitcher = (r: { name: string }) => navigate(`/players?player=${encodeURIComponent(r.name)}&tab=pitching`)
   const [open, setOpen] = useState<string | null>(params.get('game'))
   const [tab, setTab] = useState<'box' | 'bat' | 'pit'>('box')
   const [view, setViewState] = useState<'schedule' | 'results'>('results')
@@ -253,7 +254,7 @@ export function GamesPage() {
                 {tab === 'box' && (
                   <>
                     <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
-                    <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                    <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
                     {appearances && <DayRosterCard a={appearances} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
                   </>
                 )}

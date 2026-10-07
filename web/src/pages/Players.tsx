@@ -31,7 +31,7 @@ import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import type { BattingPA } from '../data/types'
-import { battingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
+import { battingLines, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
 
@@ -39,6 +39,9 @@ import { cx } from '../lib/format'
 const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runner === name
 
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
+/** One game on the mound: that game's line, with the season ERA after it. */
+interface PitchLogRow { id: string; date: string; opponent: string; dec: string; outs: number; ip: string; bf: number; h: number; r: number; er: number; bb: number; k: number; pc: number; era: string; isDemo: boolean }
+type PlayerTab = 'batting' | 'pitching'
 
 const hand = (b?: string) => (b ? (b === 'L' ? '左打' : b === 'S' ? '左右開弓' : '右打') : '')
 
@@ -72,15 +75,13 @@ function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] 
   )
 }
 
-function CompareTable({ a, b, pa, pb, names }: { a?: BattingLine; b?: BattingLine; pa?: PitchingLine; pb?: PitchingLine; names: [string, string] }) {
+function CompareTable({ a, b, pa, pb, names, only }: { a?: BattingLine; b?: BattingLine; pa?: PitchingLine; pb?: PitchingLine; names: [string, string]; only: PlayerTab }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[13px] border-collapse">
         <thead><tr className="text-[12px] text-muted"><th className="px-4 h-9 text-right font-medium">{names[0]}</th><th className="px-3 h-9 font-medium" /><th className="px-4 h-9 text-left font-medium">{names[1]}</th></tr></thead>
         <tbody>
-          <tr className="bg-surface-2/60"><td colSpan={3} className="px-4 py-1.5 text-[11px] font-medium text-ink-2">打擊</td></tr>
-          <CompareRows a={a} b={b} metrics={BAT_METRICS} />
-          {(pa || pb) && (<><tr className="bg-surface-2/60"><td colSpan={3} className="px-4 py-1.5 text-[11px] font-medium text-ink-2">投球</td></tr><CompareRows a={pa} b={pb} metrics={PIT_METRICS} /></>)}
+          {only === 'batting' ? <CompareRows a={a} b={b} metrics={BAT_METRICS} /> : <CompareRows a={pa} b={pb} metrics={PIT_METRICS} />}
         </tbody>
       </table>
     </div>
@@ -204,15 +205,57 @@ export function PlayersPage() {
     })
   }, [gameLog, s.batting, s.dataset, selected])
   const spray = useMemo(() => sprayCounts(s.batting.filter((p) => p.batter === selected)), [s.batting, selected])
+
+  // 投球: his games on the mound, newest first, each with the ERA he had after it
+  const pitchLog: PitchLogRow[] = useMemo(() => {
+    const mine = s.pitching.filter((p) => p.pitcher === selected)
+    const out: PitchLogRow[] = []
+    const upTo: string[] = []
+    for (const g of s.summaries) {
+      const pas = mine.filter((p) => p.gameId === g.game.id)
+      if (!pas.length) continue
+      upTo.push(g.game.id)
+      // decisions (勝・敗・救援・中繼) come from the games passed in: just this one
+      const l = pitchingLines(pas, [g.game], statParams).find((x) => x.name === selected)
+      const season = pitchingLines(mine.filter((p) => upTo.includes(p.gameId)), [], statParams).find((x) => x.name === selected)
+      if (!l) continue
+      const dec = l.w ? '勝' : l.l ? '敗' : l.sv ? '救援' : l.hld ? '中繼' : ''
+      out.push({ id: g.game.id, date: g.game.date, opponent: g.game.opponent, dec, outs: l.outs, ip: l.ipDisplay, bf: l.bf, h: l.h, r: l.r, er: l.er, bb: l.bb, k: l.k, pc: l.pc, era: f2(season?.era ?? null), isDemo: !!g.game.isDemo })
+    }
+    return out.reverse()
+  }, [s.pitching, s.summaries, selected, statParams])
+  const pitchTrend = useMemo(() => {
+    const mine = s.pitching.filter((p) => p.pitcher === selected)
+    const rows = [...pitchLog].reverse()
+    return rows.map((_, i) => {
+      const ids = rows.slice(0, i + 1).map((r) => r.id)
+      const l = pitchingLines(mine.filter((p) => ids.includes(p.gameId)), [], statParams).find((x) => x.name === selected)
+      return { id: rows[i].id, name: shortDate(rows[i].date), ERA: Number((l?.era ?? 0).toFixed(2)), WHIP: Number((l?.whip ?? 0).toFixed(2)) }
+    })
+  }, [pitchLog, s.pitching, selected, statParams])
+  // where the batters he faced hit the ball
+  const pitchSpray = useMemo(() => sprayCounts(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
+  // 打擊／投球 tabs: from the link (?tab=pitching from the 投球 page), else what he has numbers for
+  const tabParam = params.get('tab')
+  const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' ? tabParam : !bat && pit ? 'pitching' : 'batting'
+  const setTab = (t: PlayerTab) => setParams((prev) => { const n = new URLSearchParams(prev); n.set('tab', t); if (selected) n.set('player', selected); return n }, { replace: true })
   const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams])
 
+  const pitchCols: Column<PitchLogRow>[] = [
+    { key: 'date', header: '日期', format: (v) => shortDate(String(v)) },
+    { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
+    { key: 'dec', header: '勝敗', format: (v) => (v ? <Badge variant={v === '敗' ? 'outline' : 'accent'}>{String(v)}</Badge> : '') },
+    { key: 'outs', header: 'IP', align: 'right', format: (_, r) => r.ip }, { key: 'bf', header: 'BF', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'er', header: 'ER', align: 'right' },
+    { key: 'bb', header: 'BB', align: 'right' }, { key: 'k', header: 'K', align: 'right' }, { key: 'pc', header: '用球數', align: 'right' }, { key: 'era', header: 'ERA（累計）', align: 'right' },
+  ]
   const logCols: Column<GameLogRow>[] = [
     { key: 'date', header: '日期', format: (v) => shortDate(String(v)) },
     { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
     { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' }, { key: 'rbi', header: 'RBI', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'sb', header: 'SB', align: 'right' }, { key: 'avg', header: '單場 AVG', align: 'right' },
   ]
 
-  const choose = (name: string) => { setSelected(name); setParams({ player: name }, { replace: true }); setOpen(false); setQ('') }
+  // switching players keeps the tab the reader is on
+  const choose = (name: string) => { setSelected(name); setParams(tabParam ? { player: name, tab: tabParam } : { player: name }, { replace: true }); setOpen(false); setQ('') }
   const step = (d: number) => { const n = names[(index + d + names.length) % names.length]; if (n) choose(n) }
   // 報名名單 of the tournament picked in the 杯賽 filter, for the years the filtered games are in (every year when no game
   // matches yet). null = no filter or no list, and then the panel shows nothing extra.
@@ -229,7 +272,7 @@ export function PlayersPage() {
 
   return (
     <>
-      <PageHeader title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算；雷達圖為隊內百分位（PA ≥ 3 的打者）。`} />
+      <PageHeader title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；雷達圖為隊內百分位（PA ≥ 3 的打者）。`} />
       <DemoBanner />
 
       {/* Player switcher: collapsed by default so the numbers come first; expand to pick someone else. */}
@@ -332,7 +375,13 @@ export function PlayersPage() {
               <StoryRow stories={stories} link={false} className="relative" />
             </section>
           )}
-          {bat ? (
+          {/* 打擊 and 投球 each get their own page of numbers */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }]} />
+          </div>
+          {tab === 'batting' ? (
+            !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} /></Card> : (
+              <>
             <StatGroup>
               <StatTile label="打擊率 AVG" to="/batting?sort=avg" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
               <StatTile label="上壘率 OBP" to="/batting?sort=obp" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
@@ -343,20 +392,9 @@ export function PlayersPage() {
               <StatTile label="Whiff% / Hard%" to="/batting?view=process&sort=whiffPct&dir=asc" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
               <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
             </StatGroup>
-          ) : (
-            <Card><EmptyState compact title="目前篩選條件下沒有打席" /></Card>
-          )}
-          {pit && (
-            <StatGroup>
-              <StatTile label="ERA" to="/pitching?sort=era&dir=asc" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP`} />
-              <StatTile label="FIP" to="/pitching?view=advanced&sort=fip&dir=asc" value={pit.fip ?? 0} format="era" />
-              <StatTile label="WHIP" to="/pitching?sort=whip&dir=asc" value={pit.whip ?? 0} format="ratio" />
-              <StatTile label="K / BB" to="/pitching?view=advanced&sort=kbb" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`CSW% ${pct(pit.cswPct)}`} />
-            </StatGroup>
-          )}
           {compare && cmpPlayer && (
-            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="同一篩選範圍；較佳的一方以深色標示（率的門檻 PA ≥ 3）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
-              <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} />
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以深色標示（率的門檻 PA ≥ 3）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+              <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} only="batting" />
             </Card>
           )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
@@ -374,6 +412,37 @@ export function PlayersPage() {
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
             <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
+              </>
+            )
+          ) : (
+            !pit ? <Card><EmptyState compact title="目前篩選條件下沒有投球紀錄" description={bat ? '這位球員有打擊紀錄：點上面的「打擊」看' : undefined} /></Card> : (
+              <>
+            <StatGroup>
+              <StatTile label="防禦率 ERA" to="/pitching?view=basic&sort=era&dir=asc" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP・${pit.w} 勝 ${pit.l} 敗${pit.sv ? `・${pit.sv} 救援` : ''}`} />
+              <StatTile label="FIP" to="/pitching?view=advanced&sort=fip&dir=asc" value={pit.fip ?? 0} format="era" note="只看三振、保送、全壘打" />
+              <StatTile label="WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={pit.whip ?? 0} format="ratio" note={`${pit.h} H + ${pit.bb} BB`} />
+              <StatTile label="K / BB" to="/pitching?view=advanced&sort=kbb" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`K/9 ${f2(pit.k9)}・BB/9 ${f2(pit.bb9)}`} />
+              <StatTile label="K% / BB%" to="/pitching?view=advanced&sort=kPct" value={(pit.kPct ?? 0) * 100} format="pct" display={`${pct0(pit.kPct)}/${pct0(pit.bbPct)}`} note={`面對 ${pit.bf} 位打者`} />
+              <StatTile label="被打擊率" to="/pitching?view=advanced&sort=oppAvg&dir=asc" value={pit.oppAvg ?? 0} format="decimal3" display={f3(pit.oppAvg)} note={`${pit.h} H / ${pit.ab} AB・${pit.hr} HR`} />
+              <StatTile label="好球率 / 首球好球" to="/pitching?view=process&sort=strikePct" value={(pit.strikePct ?? 0) * 100} format="pct" display={`${pct0(pit.strikePct)}/${pct0(pit.fStrikePct)}`} note={`${pit.pc} 球・每局 ${pit.pPerIP === null ? '—' : pit.pPerIP.toFixed(1)} 球`} />
+              <StatTile label="Whiff% / CSW%" to="/pitching?view=process&sort=cswPct" value={(pit.cswPct ?? 0) * 100} format="pct" display={`${pct0(pit.whiffPct)}/${pct0(pit.cswPct)}`} note="揮空率 / 好球＋揮空占比" />
+            </StatGroup>
+          {compare && cmpPlayer && (
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+              <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} only="pitching" />
+            </Card>
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+            {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
+              : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
+            <SprayChart title="被擊球落點" subtitle="面對的打者：安打 / 場內球" counts={pitchSpray.all} secondary={pitchSpray.hits} />
+          </div>
+          <Card title="逐場投球" subtitle="點一列看那一場" flush>
+            <DataTable columns={pitchCols} rows={pitchLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
+          </Card>
+              </>
+            )
+          )}
         </>
       )}
     </>

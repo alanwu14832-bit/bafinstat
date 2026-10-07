@@ -49,7 +49,7 @@
 | 頻率／情境 | 事項 |
 |---|---|
 | 每場賽後 | 比賽頁的「記錄檢查」為 0 個可疑打席再收工 |
-| 每月 | GitHub → Actions → 每日備份資料，確認是綠勾；另外「資料匯入 → 匯出備份 (.xlsx)」存一份到隊上雲端 |
+| 每月 | GitHub → Actions → 每日備份資料，確認是綠勾；另外「資料匯入 → 匯出備份（總表格式）」存一份到隊上雲端 |
 | 每學期 | 檢查 `editors` 名單、Supabase 組織成員；請 Claude 跑一次 `npm audit` 與套件更新 |
 | 有人離隊 | 從 `editors` 移除；他知道的共用密碼全部重設 |
 | **懷疑帳號被盜／資料被改** | ① 從 `editors` 刪掉可疑帳號（立即失去寫入權）② Table Editor → `audit_log` 依時間看是誰改了什麼 ③ 用每日備份還原（把備份檔交給 Claude）④ 必要時 Settings → API 重設 anon key，並更新 Vercel 與 GitHub 變數 |
