@@ -229,6 +229,10 @@ export interface PAPlan {
   earned: boolean
   /** 趁傳進壘: who took the bases beyond what the hit gave him on the throw (runner rows, or the batter) */
   throws?: Array<number | 'batter'>
+  /** 失誤進壘 on the play: who took the extra bases on a fielding (throwing) error instead — no RBI for those runs */
+  errAdv?: Array<number | 'batter'>
+  /** (we field) whose error it was: positions, counted as our errors on this plate appearance */
+  errBy?: string[]
 }
 
 const destNum = (d: Dest | undefined) => (d === 'home' ? 4 : typeof d === 'number' ? d : 0)
@@ -302,7 +306,12 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
 
 /** Runs scored on the play, minus the cases that never earn an RBI (error, double play). */
 export function scoredOn(plan: PAPlan): number { return Object.values(plan.runners).filter((d) => d === 'home').length + (plan.batter === 'home' ? 1 : 0) }
-export function defaultRbi(plan: PAPlan): number { return plan.result === '失誤' || plan.result === '雙殺' ? 0 : scoredOn(plan) }
+export function defaultRbi(plan: PAPlan): number {
+  if (plan.result === '失誤' || plan.result === '雙殺') return 0
+  // a run that only scored because of an error on the play is no RBI
+  const onError = (plan.errAdv ?? []).filter((w) => (w === 'batter' ? plan.batter : plan.runners[w]) === 'home').length
+  return Math.max(0, scoredOn(plan) - onError)
+}
 
 /** Commit the plate appearance in progress. Returns the new state (half-inning ends automatically at 3 outs). */
 export function commitPA(s: RecordState, plan: PAPlan): RecordState {
@@ -319,17 +328,25 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note })
     rowIndex = batting.length - 1
   } else {
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, ...(s.extras.errors?.length ? { errors: [...s.extras.errors] } : {}), note })
+    const errors = [...(s.extras.errors ?? []), ...(plan.errAdv?.length ? plan.errBy ?? [] : [])]
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, ...(errors.length ? { errors } : {}), note })
     rowIndex = pitching.length - 1
   }
-  // the plays between pitches, then 趁傳進壘 on the batted ball (from where the hit alone put him)
-  const def = plan.throws?.length ? defaultPlan(s, plan.result) : null
-  const thrown: PlayEvent[] = (plan.throws ?? []).flatMap((who) => {
+  // the plays between pitches, then 趁傳進壘／失誤進壘 on the batted ball (from where the hit alone put him)
+  const def = plan.throws?.length || plan.errAdv?.length ? defaultPlan(s, plan.result) : null
+  const onPlay = (who: number | 'batter', kind: 'throw' | 'err'): PlayEvent[] => {
     const was = who === 'batter' ? def!.batter : def!.runners[who]
     const now = who === 'batter' ? plan.batter : plan.runners[who]
     if (typeof was !== 'number' || now === undefined || now === 'out' || destNum(now) <= was) return []
-    return [{ at: base.pitches.length, kind: 'throw', from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
-  })
+    // 失誤進壘 while we bat: one per base on the runner's own row
+    if (kind === 'err' && side === 'us') batting[who === 'batter' ? rowIndex : who].advOnError += destNum(now) - was
+    return [{ at: base.pitches.length, kind, from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
+  }
+  const errAdv = new Set(plan.errAdv ?? [])
+  const thrown: PlayEvent[] = [
+    ...(plan.throws ?? []).filter((w) => !errAdv.has(w)).flatMap((w) => onPlay(w, 'throw')),
+    ...[...errAdv].flatMap((w) => onPlay(w, 'err')),
+  ]
   const events = [...(s.plays ?? []).map((e) => ({ ...e })), ...thrown]
   if (events.length) (side === 'us' ? batting : pitching)[rowIndex].events = events
   const next: RecordState = { ...s, batting, pitching }

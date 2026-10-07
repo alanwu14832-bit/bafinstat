@@ -80,3 +80,27 @@ export function BattedBallPicker({ result, value, onChange, requireLoc }: { resu
     </div>
   )
 }
+
+export type ExtraBases = 'throw' | 'err'
+/**
+ * Next to someone who ended further than the result alone takes him: how he got the extra bases — 趁傳進壘 (on the
+ * throw, nobody's fault) or 失誤進壘 (a fielder's error). Tap the lit one again to clear it.
+ */
+export function AdvChoice({ kind, onPick, name }: { kind: ExtraBases | null; onPick: (k: ExtraBases | null) => void; name: string }) {
+  const opts: Array<{ k: ExtraBases; l: string }> = [{ k: 'throw', l: '趁傳進壘' }, { k: 'err', l: '失誤進壘' }]
+  return (
+    <div className="inline-flex items-center gap-1" role="group" aria-label={`${name} 多跑的壘怎麼來的`}>
+      {!kind && <span className="text-[11px] text-muted mr-0.5">多跑的壘：</span>}
+      {opts.map((o) => {
+        const on = kind === o.k
+        return (
+          <button key={o.k} type="button" aria-pressed={on} aria-label={`${name} ${o.l}`} onClick={() => onPick(on ? null : o.k)}
+            className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer transition-colors motion-reduce:transition-none',
+              on ? (o.k === 'err' ? 'border-[color-mix(in_srgb,var(--warning)_60%,transparent)] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink' : 'border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-accent-soft text-ink') : 'border-dashed border-border-strong text-ink-2 hover:text-ink')}>
+            {on ? `✓ ${o.l}` : o.l}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

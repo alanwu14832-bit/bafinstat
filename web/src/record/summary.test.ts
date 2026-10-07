@@ -47,6 +47,32 @@ describe('趁傳進壘 on a hit', () => {
   })
 })
 
+describe('失誤進壘 on a hit', () => {
+  it('while we bat: counts on the runner, no RBI for that run, and says so', async () => {
+    const { defaultRbi } = await import('./model')
+    const s = send(start(), '一安')                       // 甲 on first
+    const plan = defaultPlan(s, '一安')                    // 乙 singles: 甲 to 2B
+    plan.runners[0] = 'home'; plan.errAdv = [0]            // 外野手爆傳：甲 一路跑回來
+    plan.rbi = defaultRbi(plan)
+    expect(plan.rbi).toBe(0)
+    const t = commitPA(s, plan)
+    expect(t.batting[0].advOnError).toBe(2)                // 2B→3B→本壘
+    expect(t.batting[0].run).toBe(1); expect(t.batting[1].rbi).toBe(0)
+    expect(t.batting[1].events).toEqual([{ at: 1, kind: 'err', from: 2, to: 'home', play: true }])
+    expect(describeChange(s, t)).toBe('乙 一安・失誤進壘 2B→得分・得 1 分・1：0')
+  })
+  it('while we field: our fielder gets the error and the run is unearned', () => {
+    let s = newGame({ ...game, homeAway: '主' }, ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name) => ({ name, pos: 'C' })), '壬')
+    s = commitPA(s, defaultPlan(s, '一安'))                // their leadoff on first
+    const plan = defaultPlan(s, '一安')
+    plan.runners[0] = 3; plan.batter = 2; plan.errAdv = [0, 'batter']; plan.errBy = ['RF']; plan.earned = false
+    const t = commitPA(s, plan)
+    expect(t.pitching[1].errors).toEqual(['RF'])
+    expect(t.pitching[1].events?.map((e) => e.kind)).toEqual(['err', 'err'])
+    expect(describeChange(s, t)).toBe('對方 2 棒 一安・失誤進壘 2B→3B・打者失誤進壘 1B→2B')
+  })
+})
+
 describe('擊進場內 is the last pitch', () => {
   it('ignores anything tapped after IP, so a double tap stays one IP', () => {
     const s = addPitch(addPitch(addPitch(start(), 'B'), 'IP'), 'IP')
