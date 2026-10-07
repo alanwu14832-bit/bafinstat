@@ -40,7 +40,7 @@ export function FieldingPage() {
 
   return (
     <>
-      <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）。" />
+      <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）；被盜壘、阻殺、捕逸也由投球紀錄歸給當時的捕手（看當日登錄名單的換人）。" />
       <DemoBanner />
       <StatGroup>
         <StatTile label="團隊守備率" to="?sort=fpct&dir=asc#stats" value={tc ? (totals.po + totals.as) / tc : 0} format="decimal3" note={`${tc} 次守備機會`} />
