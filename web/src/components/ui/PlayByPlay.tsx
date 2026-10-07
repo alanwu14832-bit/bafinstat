@@ -97,7 +97,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; fla
     <div className="overflow-x-auto scroll-x">
       <table className="w-full text-[13px] border-collapse min-w-[760px]">
         <thead className="sticky top-0 bg-surface z-[1]">
-          <tr className="border-b border-border"><th className={th}>局面</th><th className={th}>棒次</th><th className={th}>打者</th><th className={th}>逐球</th><th className={th}>球數</th><th className={th}>結果</th><th className={th}>擊球</th><th className={th}>跑壘</th><th className={th}>狀態</th></tr>
+          <tr className="border-b border-border"><th className={th}>局面</th><th className={th}>棒次</th><th className={th}>打者</th><th className={th}>逐球</th><th className={th}>本打席用球</th><th className={th}>結果</th><th className={th}>擊球</th><th className={th}>跑壘</th><th className={th}>狀態</th></tr>
         </thead>
         <tbody className="tnum">
           {pas.map((p, i) => {
@@ -113,7 +113,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; fla
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')} title="這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數">用球 {pt.pitches}（好球類 {pt.strikes}、壞球 {pt.balls}）</td>
                   <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>
@@ -147,7 +147,7 @@ export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: 
     <div className="overflow-x-auto scroll-x">
       <table className="w-full text-[13px] border-collapse min-w-[760px]">
         <thead className="sticky top-0 bg-surface z-[1]">
-          <tr className="border-b border-border"><th className={th}>局面</th><th className={th}>對方棒次</th><th className={th}>投手</th><th className={th}>逐球</th><th className={th}>球數</th><th className={th}>結果</th><th className={th}>擊球</th><th className={th}>跑壘／守備</th><th className={th}>狀態</th></tr>
+          <tr className="border-b border-border"><th className={th}>局面</th><th className={th}>對方棒次</th><th className={th}>投手</th><th className={th}>逐球</th><th className={th}>本打席用球</th><th className={th}>結果</th><th className={th}>擊球</th><th className={th}>跑壘／守備</th><th className={th}>狀態</th></tr>
         </thead>
         <tbody className="tnum">
           {pas.map((p, i) => {
@@ -164,7 +164,7 @@ export function PitchingPlayByPlay({ pas, flags }: { pas: PitchingPA[]; flags?: 
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{pt.pitches} 球・{pt.strikes}S {pt.balls}B</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')} title="這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數">用球 {pt.pitches}（好球類 {pt.strikes}、壞球 {pt.balls}）</td>
                   <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{extras || '—'}</td>

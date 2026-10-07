@@ -17,7 +17,6 @@ import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { pitchingLines, type PitchingLine } from '../data/stats'
 import { f1, f2, f3, pct, shortDate } from '../lib/fmt'
-import { useDataStore } from '../store/data'
 
 type View = 'basic' | 'advanced' | 'process'
 
@@ -38,7 +37,7 @@ export function PitchingPage() {
   const s = useStats()
   const navigate = useNavigate()
   const openGame = useOpenGame()
-  const params = useDataStore((st) => st.params)
+  const params = s.params
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
   const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=pitching`)
@@ -80,7 +79,7 @@ export function PitchingPage() {
 
   return (
     <>
-      <PageHeader title="投球" description={`ERA 以每場 ${params.inningsPerGame} 局換算；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
+      <PageHeader title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
@@ -94,10 +93,10 @@ export function PitchingPage() {
         <DataTable columns={withJerseyColumn(columnsFor(view))} rows={withNumbers(s.pitchers, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
+        <BarChartCard title="ERA 與 FIP" subtitle="差距可能來自守備、事件順序或樣本太少，場數少時僅供參考；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
         <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} onBarClick={openPlayer} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
         <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} onBarClick={openPlayer} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
-        <LineChartCard title="ERA / WHIP 走勢" subtitle="近 5 場滾動；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
+        <LineChartCard title="ERA / WHIP 走勢" subtitle={s.summaries.length >= 5 ? '近 5 場滾動；點一下看那一場' : `目前 ${s.summaries.length} 場，為累計（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
       </div>
     </>
   )

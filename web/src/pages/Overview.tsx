@@ -30,7 +30,7 @@ export function OverviewPage() {
   const { summary, team, teamPitch, summaries } = s
   const opponentFilter = useDataStore((st) => st.filters.opponent)
   const tournamentFilter = useDataStore((st) => st.filters.tournament)
-  const params = useDataStore((st) => st.params)
+  const params = s.params
   const stories = useMemo(() => teamStories({ dataset: s.dataset, summaries, batting: s.batting, pitching: s.pitching, params }), [s.dataset, summaries, s.batting, s.pitching, params])
   const next = useMemo(() => { const today = new Date().toISOString().slice(0, 10); return scheduledGames(s.dataset.games).find((g) => g.date >= today) }, [s.dataset.games])
   const resetFilters = useDataStore((st) => st.resetFilters)
@@ -53,7 +53,7 @@ export function OverviewPage() {
   const errors = useMemo(() => {
     const total = summaries.reduce((a, g) => a + g.errorsUs, 0)
     const po = s.fielders.reduce((a, f) => a + f.po + f.a, 0)
-    return { total, perGame: summaries.length ? total / summaries.length : 0, fpct: po + total > 0 ? po / (po + total) : null }
+    return { total, chances: po + total, perGame: summaries.length ? total / summaries.length : 0, fpct: po + total > 0 ? po / (po + total) : null }
   }, [summaries, s.fielders])
   const recentGames = useMemo(() => [...summaries].reverse().slice(0, 4), [summaries])
   if (summaries.length === 0) {
@@ -84,7 +84,7 @@ export function OverviewPage() {
         <StatTile label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
         <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
         <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
+        <StatTile label="守備率" to="/fielding" value={errors.fpct ?? 0} display={f3(errors.fpct)} note={`${errors.total} 次失誤／${errors.chances} 次機會・每場 ${f2(errors.perGame)} 失誤`} />
         <StatTile label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
       </StatGroup>
       </div>
@@ -92,7 +92,7 @@ export function OverviewPage() {
         <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={openGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
         <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分；點一下看那一場" onPointClick={openGame} data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
-        <LineChartCard title="OPS / OBP 走勢" subtitle="近 5 場滾動平均；點一下看那一場" onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
+        <LineChartCard title="OPS / OBP 走勢" subtitle={summaries.length >= 5 ? '近 5 場滾動平均；點一下看那一場' : `目前 ${summaries.length} 場，為累計平均（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
         <BarChartCard title="逐局得失分" subtitle={opponentFilter !== 'all' ? `對 ${opponentFilter} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
       </div>
       <div className="md:hidden">
@@ -101,7 +101,7 @@ export function OverviewPage() {
         <StatTile label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
         <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
         <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="每場失誤 / 守備率" to="/fielding" value={errors.perGame} display={`${f2(errors.perGame)}/${f3(errors.fpct)}`} note={`${errors.total} E・失誤／守備率`} />
+        <StatTile label="守備率" to="/fielding" value={errors.fpct ?? 0} display={f3(errors.fpct)} note={`${errors.total} 次失誤／${errors.chances} 次機會・每場 ${f2(errors.perGame)} 失誤`} />
         <StatTile label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
       </StatGroup>
       </div>

@@ -224,6 +224,30 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
   if (isBIP(pa.traj)) { l.bip++; if (pa.traj === 'G') l.gb++; if (pa.traj === 'F' || pa.traj === 'P') l.fb++; if (pa.traj === 'P') l.iffb++; if (pa.traj === 'L') l.ld++; if (pa.quality === '強') l.hard++ }
 }
 
+/** FIP before its constant: (13 HR + 3 (BB + HBP) − 2 K) per inning, scaled from MLB's 9 innings to ours. */
+export function fipCore(l: { hr: number; bb: number; hbp: number; k: number; outs: number }, inningsPerGame: number): number {
+  const ip = l.outs / 3
+  return ip > 0 ? ((13 * l.hr + 3 * (l.bb + l.hbp) - 2 * l.k) / ip) * (inningsPerGame / 9) : 0
+}
+
+/**
+ * The FIP constant from our own games, the way FanGraphs sets it for a league: team ERA − team FIP before the
+ * constant, over every game recorded (not just the filtered ones, so a pitcher's FIP does not move with the
+ * filter). Then team FIP equals team ERA, and a pitcher's FIP reads against the team. Without innings yet, MLB's
+ * constant scaled to our game length.
+ */
+export function fipConstantFrom(pas: PitchingPA[], inningsPerGame: number): number {
+  const t = emptyPitching('')
+  for (const pa of pas) if (pa.pitcher) accumulatePitching(t, pa)
+  if (t.outs === 0) return DEFAULT_PARAMS.fipConstant * (inningsPerGame / 9)
+  return (t.er * inningsPerGame) / (t.outs / 3) - fipCore(t, inningsPerGame)
+}
+
+/** The parameters the stats are computed with: the FIP constant filled in from the games when it is automatic. */
+export function resolveParams(params: StatParams, pitching: PitchingPA[]): StatParams {
+  return params.fipAuto ? { ...params, fipConstant: fipConstantFrom(pitching, params.inningsPerGame) } : params
+}
+
 export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS): PitchingLine {
   const ip = l.outs / 3
   l.ip = ip; l.ipDisplay = ipDisplay(l.outs)
@@ -234,7 +258,8 @@ export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS
   l.kbb = div(l.k, l.bb); l.kPct = div(l.k, l.bf); l.bbPct = div(l.bb, l.bf)
   l.oppAvg = div(l.h, l.ab); l.oppObp = div(l.h + l.bb + l.hbp, l.ab + l.bb + l.hbp + l.sf)
   l.babip = div(l.h - l.hr, l.ab - l.k - l.hr + l.sf)
-  l.fip = ip > 0 ? (13 * l.hr + 3 * (l.bb + l.hbp) - 2 * l.k) / ip + p.fipConstant : null
+  // FIP on the same scale as our ERA (per inningsPerGame innings, like ERA), plus the constant (see fipConstantFrom)
+  l.fip = ip > 0 ? fipCore(l, p.inningsPerGame) + p.fipConstant : null
   l.strikePct = div(l.strikes, l.pc)
   l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bip)
   l.whiffPct = div(l.whiffs, l.swings); l.cswPct = div(l.called + l.whiffs, l.pc); l.fStrikePct = div(l.firstPitchStrike, l.bf)
@@ -266,11 +291,22 @@ export function pitchingLines(pas: PitchingPA[], games: Game[], params = DEFAULT
   return [...map.values()].map((l) => { l.g = gameSets.get(l.name)!.size; return finalizePitching(l, params) }).sort((a, b) => b.outs - a.outs)
 }
 
-export function teamPitching(pas: PitchingPA[], params = DEFAULT_PARAMS): PitchingLine {
+/** The team's pitching line: every count summed (GS = games with a starter, W / L / SV / HLD from the games'
+ *  decisions), G = games pitched, and the rates recomputed from the totals. */
+export function teamPitching(pas: PitchingPA[], params = DEFAULT_PARAMS, games: Game[] = []): PitchingLine {
   const l = emptyPitching('球隊')
-  const games = new Set<string>()
-  for (const pa of pas) { if (!pa.pitcher) continue; accumulatePitching(l, pa); games.add(pa.gameId) }
-  l.g = games.size
+  const ids = new Set<string>()
+  for (const pa of pas) { if (!pa.pitcher) continue; accumulatePitching(l, pa); ids.add(pa.gameId) }
+  l.g = ids.size
+  l.gs = ids.size
+  const pitched = (gameId: string, name?: string) => !!name && pas.some((p) => p.gameId === gameId && p.pitcher === name)
+  for (const g of games) {
+    if (!ids.has(g.id)) continue
+    if (pitched(g.id, g.winningPitcher)) l.w++
+    if (pitched(g.id, g.losingPitcher)) l.l++
+    if (pitched(g.id, g.savePitcher)) l.sv++
+    for (const h of g.holds ?? []) if (pitched(g.id, h)) l.hld++
+  }
   return finalizePitching(l, params)
 }
 

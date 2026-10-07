@@ -207,7 +207,7 @@ ws.column_dimensions["A"].width = 22; ws.column_dimensions["B"].width = 12; ws.c
 params = [
     ("球隊名稱", "喝FIN就好BA", "", None),
     ("每場局數", 7, "ERA 換算基準。社會組／校際多為 7 局；MLB、CPBL 為 9。", "0"),
-    ("FIP常數", 3.135, "FIP = (13HR+3(BB+HBP)−2K)/IP + 常數。FanGraphs 2025 cFIP = 3.135；業餘可自行校正。", "0.000"),
+    ("FIP常數", "FIPAUTO", "自動：用本隊所有比賽推算（全隊防禦率 − 全隊 FIP 未加常數），全隊 FIP 就等於全隊防禦率。要固定值可直接改成數字（MLB 9 局為 3.135）。FIP = (13HR+3(BB+HBP)−2K)/IP × 每場局數/9 + 常數。", "0.000"),
     ("wBB", 0.691, "wOBA 線性權重（FanGraphs Guts! 2025 年值，可依年度更新）", "0.000"),
     ("wHBP", 0.722, "", "0.000"),
     ("w1B", 0.882, "", "0.000"),
@@ -219,8 +219,12 @@ params = [
 ]
 hdr(ws, 3, 1, "參數"); hdr(ws, 3, 2, "值"); hdr(ws, 3, 3, "說明")
 PARAM = {}
+_tot = lambda c: f"SUM(投球紀錄!${PL[c]}$2:${PL[c]}${LAST})"
+_ip = f"({_tot('出局數')}/3)"
+FIPAUTO = (f"=IFERROR({_tot('自責')}*$B$5/{_ip}-(13*{_tot('全壘打')}+3*({_tot('保送')}+{_tot('觸身')})-2*{_tot('三振')})/{_ip}*$B$5/9,3.135*$B$5/9)")
 for i, (k, v, note, fmt) in enumerate(params):
     rr = 4 + i
+    if v == "FIPAUTO": v = FIPAUTO
     put(ws, rr, 1, k, f_bold); put(ws, rr, 2, v, f_input, fill_input, fmt); put(ws, rr, 3, note, f_note, align=left)
     PARAM[k] = f"設定!$B${rr}"
 for name, items in LISTS.items():
@@ -750,7 +754,7 @@ def pit_stat_cols():
         ("OppAVG", "=IFERROR({H}/" + p("打數") + ',"")', "0.000"),
         ("OppOBP", "=IFERROR(({H}+{BB}+{HBP})/(" + p("打數") + "+{BB}+{HBP}+" + p("犧飛") + '),"")', "0.000"),
         ("BABIP", "=IFERROR(({H}-{HR})/(" + p("打數") + "-{K}-{HR}+" + p("犧飛") + '),"")', "0.000"),
-        ("FIP", '=IFERROR((13*{HR}+3*({BB}+{HBP})-2*{K})/({出局數}/3)+' + PARAM["FIP常數"] + ',"")', "0.00"),
+        ("FIP", '=IFERROR((13*{HR}+3*({BB}+{HBP})-2*{K})/({出局數}/3)*' + IPn + '/9+' + PARAM["FIP常數"] + ',"")', "0.00"),
         ("GB%", "=IFERROR(" + p("滾地") + "/" + p("場內球") + ',"")', "0.0%"),
         ("IFFB%", "=IFERROR(" + p("內野飛球") + "/" + p("飛球") + ',"")', "0.0%"),
         ("Whiff%", "=IFERROR(" + p("揮空") + "/" + p("揮棒") + ',"")', "0.0%"),

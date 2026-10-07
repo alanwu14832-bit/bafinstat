@@ -123,7 +123,7 @@ export function PlayersPage() {
   const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
   const filters = useDataStore((st) => st.filters)
-  const statParams = useDataStore((st) => st.params)
+  const statParams = s.params
   const cloud = useDataStore((st) => st.cloud)
   const saveRoster = useDataStore((st) => st.saveRoster)
   const registrations = useDataStore((st) => st.registrations)

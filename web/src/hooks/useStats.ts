@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
-import { battingLines, errorsByPosition, fieldingLines, pitchingLines, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
-import type { Dataset } from '../data/types'
+import { battingLines, errorsByPosition, fieldingLines, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
+import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
 
 export interface Computed extends FilteredData {
@@ -14,6 +14,8 @@ export interface Computed extends FilteredData {
   errorsByPos: Record<string, number>
   summary: TeamSummary
   hasDemo: boolean
+  /** the parameters these numbers were computed with (the automatic FIP constant filled in) */
+  params: StatParams
 }
 
 /** Everything the pages need, recomputed only when data/filters change. */
@@ -21,22 +23,24 @@ export function useStats(): Computed {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
   const filters = useDataStore((s) => s.filters)
-  const params = useDataStore((s) => s.params)
+  const rawParams = useDataStore((s) => s.params)
   return useMemo(() => {
     const dataset = effectiveDataset(base, demo)
+    const params = resolveParams(rawParams, dataset.pitching)
     const fd = applyFilters(dataset, filters)
     return {
       ...fd, dataset,
       batters: battingLines(dataset, fd.batting, params),
       team: teamBatting(dataset, fd.batting, params),
       pitchers: pitchingLines(fd.pitching, fd.games, params),
-      teamPitch: teamPitching(fd.pitching, params),
+      teamPitch: teamPitching(fd.pitching, params, fd.games),
       fielders: fieldingLines(fd.fielding),
       errorsByPos: errorsByPosition(fd.fielding),
       summary: teamSummary(fd.summaries),
       hasDemo: dataset.games.some((g) => g.isDemo),
+      params,
     }
-  }, [base, demo, filters, params])
+  }, [base, demo, filters, rawParams])
 }
 
 /** Option lists for the global filter bar (from the unfiltered dataset). Tournaments also come from the 報名名單, so a

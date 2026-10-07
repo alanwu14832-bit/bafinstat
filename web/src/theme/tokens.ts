@@ -19,7 +19,7 @@ export type ThemeTokens = Record<TokenName, string>
 /** Static light-theme values; used as SSR/test fallback and as the source of truth for docs. */
 export const LIGHT_TOKENS: ThemeTokens = {
   bg: '#f7f7f5', surface: '#ffffff', 'surface-2': '#f2f2ef', 'surface-3': '#e9e9e5',
-  border: 'rgba(24,24,20,0.10)', ink: '#17181a', 'ink-2': '#52575d', muted: '#82888f',
+  border: 'rgba(24,24,20,0.10)', ink: '#17181a', 'ink-2': '#52575d', muted: '#6b6b70',
   accent: '#c8811a', 'accent-ink': '#1a1207', 'accent-soft': 'rgba(200,129,26,0.12)',
   grid: '#ececea', axis: '#d3d3cf',
   'series-1': '#c8811a', 'series-2': '#aeaeb5', 'series-3': '#1f9484', 'series-4': '#7a5ad4',
@@ -33,7 +33,7 @@ export const LIGHT_TOKENS: ThemeTokens = {
 export const DARK_TOKENS: ThemeTokens = {
   ...LIGHT_TOKENS,
   bg: '#0f1113', surface: '#16191c', 'surface-2': '#1d2125', 'surface-3': '#262b30',
-  border: 'rgba(255,255,255,0.08)', ink: '#ecedee', 'ink-2': '#b3b8bf', muted: '#7c838b',
+  border: 'rgba(255,255,255,0.08)', ink: '#ecedee', 'ink-2': '#b3b8bf', muted: '#a1a1a6',
   accent: '#e2a03a', 'accent-soft': 'rgba(226,160,58,0.14)',
   grid: '#23272b', axis: '#33383e',
   'series-1': '#e2a03a', 'series-2': '#636369', 'series-3': '#2f9d8d', 'series-4': '#8f7ce4',

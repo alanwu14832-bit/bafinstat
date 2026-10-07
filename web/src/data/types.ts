@@ -214,7 +214,10 @@ export const DEFAULT_FILTERS: Filters = {
 /** Tunable constants (same defaults as the workbook's 設定 sheet). */
 export interface StatParams {
   inningsPerGame: number
+  /** FIP's constant, used as is when fipAuto is off */
   fipConstant: number
+  /** FIP constant from our own games (team ERA − team FIP before the constant), so team FIP = team ERA */
+  fipAuto: boolean
   wBB: number
   wHBP: number
   w1B: number
@@ -228,6 +231,6 @@ export interface StatParams {
 
 /** FanGraphs Guts! 2025 linear weights (see docs/ANALYTICS_RESEARCH.md). */
 export const DEFAULT_PARAMS: StatParams = {
-  inningsPerGame: TEAM.innings, fipConstant: 3.135, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037,
+  inningsPerGame: TEAM.innings, fipConstant: 3.135, fipAuto: true, wBB: 0.691, wHBP: 0.722, w1B: 0.882, w2B: 1.252, w3B: 1.584, wHR: 2.037,
   pitchWarn: 80, pitchMax: 100,
 }
