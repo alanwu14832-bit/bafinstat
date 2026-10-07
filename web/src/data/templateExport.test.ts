@@ -5,10 +5,10 @@ import { strFromU8, unzipSync } from 'fflate'
 import { backupTables, parseWorkbook } from './xlsx'
 import { fillTemplate } from './templateExport'
 import { SEED_DATASET } from './seed'
+import type { Dataset, Registration } from './types'
 
 // unzipping, filling and re-zipping the 3 MB template (then reading it back) takes several seconds on a CI runner
 const SLOW = 60_000
-import type { Dataset, Registration } from './types'
 
 const template = new Uint8Array(readFileSync(resolve(process.cwd(), '..', 'data', 'BAFIN_棒球數據總表.xlsx')))
 const regs: Registration[] = [{ season: 2026, tournament: '大專盃', players: ['蘇柏愷', '許振謙'] }]
