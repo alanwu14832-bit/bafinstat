@@ -1,3 +1,4 @@
+import { ARCHIVE, LIVE_BASE } from '../../config/archive'
 import { useState } from 'react'
 import { LoginForm } from './LoginForm'
 import { EditorClaim } from './EditorClaim'
@@ -14,6 +15,13 @@ export function CloudPanel() {
   const loadCloud = useDataStore((s) => s.loadCloud)
   const [msg, setMsg] = useState<string | null>(null)
 
+  if (ARCHIVE) {
+    return (
+      <Card title="舊版網站" subtitle={ARCHIVE.date}>
+        <p className="text-[13px] text-ink-2 leading-relaxed">這是以前的網站版本，只能瀏覽，不能登入、紀錄或上傳。要紀錄請<a className="underline underline-offset-2 text-ink" href={LIVE_BASE}>回到最新版網站</a>。</p>
+      </Card>
+    )
+  }
   if (!cloud.configured) {
     return (
       <Card title="雲端資料庫" subtitle="未啟用">

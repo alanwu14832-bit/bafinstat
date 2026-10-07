@@ -1,3 +1,4 @@
+import { ARCHIVE } from '../../config/archive'
 import { motion } from 'framer-motion'
 import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import { useEffect } from 'react'
@@ -31,7 +32,7 @@ interface NavListProps {
 /** Grouped nav list. Icons keep a fixed x-position; labels fade and are clipped by the link. */
 function NavList({ collapsed, reduced }: NavListProps) {
   const cloud = useDataStore((s) => s.cloud)
-  const showEditorItems = !cloud.configured || (!!cloud.user && cloud.isEditor)
+  const showEditorItems = !ARCHIVE && (!cloud.configured || (!!cloud.user && cloud.isEditor))
   const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.editorOnly || showEditorItems) })).filter((g) => g.items.length)
   return (
     <div className="flex flex-col gap-5 px-3">

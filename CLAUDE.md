@@ -16,6 +16,9 @@ A database change needs a migration in both repos, and the user must run it in b
   merge into `main`); Vercel serves `main` at bafinstat.vercel.app.
 - `supabase/schema.sql` + `supabase/migrations/` — the database; the site keeps working (and warns) before a migration runs.
 - `tools/build_workbook.py` builds `data/BAFIN_棒球數據總表.xlsx`, the Excel template the site hands out.
+- 網站版本: `auto-deploy.yml` builds each live version as a read-only copy (VITE_ARCHIVE_ID, base /v/<id>/) into the
+  `site-archive` branch (last 30); `web/scripts/archive.mjs` (postbuild) serves them at /v/<id>/; `public/boot.js` hands
+  deep links into a copy over to it. Archived copies never sign in (config/archive.ts).
 - `record/sim.test.ts` plays 150 random games through the recording model: keep it green when touching recording or the
   runner timeline.
 
