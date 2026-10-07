@@ -7,6 +7,7 @@ import { filterGames } from '../data/filters'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { StoryRow } from '../components/ui/SeasonHero'
+import { HeroGlow } from '../components/ui/HeroGlow'
 import { Stitches } from '../components/ui/Scoreboard'
 import { playerStories } from '../data/stories'
 import { PlateBadge } from '../components/ui/Scoreboard'
@@ -254,6 +255,11 @@ export function PlayersPage() {
   const setTab = (t: PlayerTab) => setParams((prev) => { const n = new URLSearchParams(prev); n.set('tab', t); if (selected) n.set('player', selected); return n }, { replace: true })
   const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams])
 
+  // the three numbers on the 球員卡, for the tab being read
+  const headline = tab === 'pitching'
+    ? (pit ? [{ label: 'ERA', value: f2(pit.era) }, { label: 'WHIP', value: f2(pit.whip) }, { label: '三振', value: String(pit.k) }] : [])
+    : (bat ? [{ label: 'AVG', value: f3(bat.avg) }, { label: 'OPS', value: f3(bat.ops) }, { label: 'wRC+', value: bat.wrcPlus === null ? '—' : String(Math.round(bat.wrcPlus)) }] : [])
+
   const pitchCols: Column<PitchLogRow>[] = [
     { key: 'date', header: '日期', format: (v) => shortDate(String(v)) },
     { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
@@ -288,36 +294,57 @@ export function PlayersPage() {
       <PageHeader title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；雷達圖為隊內百分位（PA ≥ 3 的打者）。`} />
       <DemoBanner />
 
-      {/* Player switcher: collapsed by default so the numbers come first; expand to pick someone else. */}
-      <Card className="overflow-hidden" bodyClassName="p-0">
-        <div className="flex items-center gap-3 px-4 md:px-5 py-3">
-          <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="roster-panel"
-            className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-[var(--radius-sm)] -ml-1 pl-1 pr-2 py-1 hover:bg-surface-2 cursor-pointer transition-colors motion-reduce:transition-none">
-            <PlateBadge size={36}>{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge>
-            <span className="min-w-0">
-              <span className="block text-[16px] font-semibold text-ink leading-5 truncate">{player?.name ?? '請選擇球員'}</span>
-              <span className="block text-[12px] text-ink-2 truncate">{player ? `${posLabel(player.primaryPos)}${player.secondaryPos ? ` / ${player.secondaryPos}` : ''}${player.bats ? `・${hand(player.bats)}` : ''}` : ''}</span>
-            </span>
-            <span className="ml-1 inline-flex items-center gap-1 text-[12px] text-ink-2 shrink-0"><span className="hidden sm:inline">{open ? '收合名單' : '更換球員'}</span><ChevronDown className={cx('size-4 transition-transform motion-reduce:transition-none', open && 'rotate-180')} /></span>
-          </button>
-          <div className="hidden sm:flex gap-1.5 flex-wrap justify-end">
-            {bat && <Badge>打者 {bat.g} 場</Badge>}
-            {pit && <Badge>投手 {pit.ipDisplay} 局</Badge>}
-            {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
+      {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
+          看點), with the homepage hero's glow. The name is the switcher: tap it to pick someone else. */}
+      <Card className="overflow-hidden relative" bodyClassName="p-0">
+        <HeroGlow />
+        <div className="relative px-5 md:px-7 pt-4 md:pt-6 pb-4 md:pb-6 flex flex-col gap-4 md:gap-5">
+          <div className="flex items-start gap-3">
+            <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="roster-panel"
+              className="group flex items-center gap-3.5 md:gap-5 min-w-0 flex-1 text-left rounded-[var(--radius-sm)] -ml-1.5 pl-1.5 pr-2 py-1.5 hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] cursor-pointer transition-colors motion-reduce:transition-none">
+              <span className="md:hidden flex"><PlateBadge size={56} className="figure">{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge></span>
+              <span className="hidden md:flex"><PlateBadge size={76} className="figure">{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge></span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="font-display text-[26px] md:text-[34px] font-bold text-ink leading-tight truncate">{player?.name ?? '請選擇球員'}</span>
+                  <ChevronDown aria-hidden className={cx('size-5 text-muted shrink-0 transition-transform motion-reduce:transition-none group-hover:text-ink', open && 'rotate-180')} />
+                </span>
+                <span className="block text-[13px] text-ink-2 truncate mt-0.5">{player ? [`${posLabel(player.primaryPos)}${player.secondaryPos ? ` / ${player.secondaryPos}` : ''}`, player.bats && hand(player.bats), player.status && player.status !== '現役' ? player.status : ''].filter(Boolean).join('・') : ''}</span>
+                <span className="block text-[11px] text-muted mt-1">{open ? '點這裡收合名單' : '點名字換球員'}</span>
+              </span>
+            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <Button variant="ghost" aria-label="上一位" className="size-10 pointer-fine:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
+              <Button variant="ghost" aria-label="下一位" className="size-10 pointer-fine:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
+            </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Button variant="ghost" aria-label="上一位" className="size-10 pointer-fine:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
-            <Button variant="ghost" aria-label="下一位" className="size-10 pointer-fine:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
-          </div>
-        </div>
-        <div className="px-4 md:px-5 pb-3 -mt-1 flex items-center gap-2 flex-wrap">
+          {player && (headline.length > 0 || bat || pit || fld) && (
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              {headline.length > 0 && (
+                <dl className="flex gap-6 md:gap-9">
+                  {headline.map((h) => (
+                    <div key={h.label} className="min-w-0">
+                      <dt className="text-[11px] text-muted">{h.label}</dt>
+                      <dd className="figure text-[30px] md:text-[40px] font-bold text-ink leading-none mt-1">{h.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              <div className="flex gap-1.5 flex-wrap md:justify-end">
+                {bat && <Badge>打者 {bat.g} 場・{bat.pa} 打席</Badge>}
+                {pit && <Badge>投手 {pit.ipDisplay} 局</Badge>}
+                {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
+              </div>
+            </div>
+          )}
+          {player && stories.length > 0 && (
+            <>
+              <div className="flex items-center gap-3 text-[11px] text-muted -mb-1"><Stitches width={40} /><span className="tracking-[0.08em]">{player.name} 的看點</span></div>
+              <StoryRow stories={stories} link={false} className="relative" />
+            </>
+          )}
           <Select label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="w-full sm:w-auto sm:max-w-[240px]"
             options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} />
-          <div className="flex gap-1.5 flex-wrap sm:hidden">
-            {bat && <Badge>打者 {bat.g} 場</Badge>}
-            {pit && <Badge>投手 {pit.ipDisplay} 局</Badge>}
-            {fld && <Badge>守備 {fld.positions.join(' / ')}</Badge>}
-          </div>
         </div>
         <AnimatePresence initial={false}>
           {open && (
@@ -381,13 +408,6 @@ export function PlayersPage() {
         <Card><EmptyState title="請選擇球員" /></Card>
       ) : (
         <>
-          {stories.length > 0 && (
-            <section aria-label={`${player.name} 的看點`} className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-5">
-              <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%)' }} />
-              <div className="relative flex items-center gap-3 text-[11px] text-muted mb-3"><Stitches width={40} /><span className="tracking-[0.08em]">{player.name} 的看點</span></div>
-              <StoryRow stories={stories} link={false} className="relative" />
-            </section>
-          )}
           {/* 打擊 and 投球 each get their own page of numbers */}
           <div className="flex items-center gap-3 flex-wrap">
             <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }]} />

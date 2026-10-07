@@ -6,35 +6,13 @@ import { RollingNumber } from '../motion/RollingNumber'
 import { Reveal } from '../motion/Reveal'
 import { TeamLogo } from './TeamLogo'
 import { Stitches } from './Scoreboard'
+import { HeroGlow } from './HeroGlow'
 import type { Story } from '../../data/stories'
 import type { GameSummary, TeamSummary } from '../../data/stats'
 import type { Game } from '../../data/types'
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return `${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）` }
-
-/** A baseball drawn large and faint behind the hero: the ball's outline and its two seams with their stitching. */
-function SeamMark({ className }: { className?: string }) {
-  const seam = (p0: [number, number], p1: [number, number], p2: [number, number], side: 1 | -1) => {
-    const marks = Array.from({ length: 12 }, (_, i) => {
-      const t = (i + 0.5) / 12, u = 1 - t
-      const x = u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0]
-      const y = u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]
-      const dx = 2 * u * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0]), dy = 2 * u * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1])
-      const len = Math.hypot(dx, dy), tx = dx / len, ty = dy / len, nx = -ty * side, ny = tx * side
-      // a V of thread across the seam, pointing along it
-      return <path key={i} d={`M${(x - nx * 9 - tx * 4).toFixed(1)} ${(y - ny * 9 - ty * 4).toFixed(1)}L${(x + tx * 3).toFixed(1)} ${(y + ty * 3).toFixed(1)}L${(x + nx * 9 - tx * 4).toFixed(1)} ${(y + ny * 9 - ty * 4).toFixed(1)}`} />
-    })
-    return <g><path d={`M${p0[0]} ${p0[1]}Q${p1[0]} ${p1[1]} ${p2[0]} ${p2[1]}`} strokeWidth="1.6" />{marks}</g>
-  }
-  return (
-    <svg viewBox="0 0 320 320" aria-hidden className={className} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
-      <circle cx="160" cy="160" r="152" strokeWidth="1.6" />
-      {seam([92, 26], [182, 160], [92, 294], 1)}
-      {seam([228, 26], [138, 160], [228, 294], -1)}
-    </svg>
-  )
-}
 
 function ResultChip({ s }: { s: GameSummary }) {
   const r = s.result
@@ -86,8 +64,7 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
   const record = `${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`
   return (
     <section aria-label="球季概況" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)]">
-      <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 60%)' }} />
-      <SeamMark className="pointer-events-none absolute -right-16 -top-20 w-[340px] md:w-[420px] text-accent opacity-[0.14]" />
+      <HeroGlow />
       <div className="relative p-5 md:p-7 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
           <div className="min-w-0">

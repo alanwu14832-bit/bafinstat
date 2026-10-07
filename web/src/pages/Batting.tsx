@@ -7,6 +7,7 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
 import { Checkbox } from '../components/ui/Input'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { DonutCard } from '../components/charts/DonutCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
@@ -47,6 +48,24 @@ export function BattingPage() {
   const quality = useMemo(() => [...s.batters].filter((b) => b.bip >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0)).slice(0, 10).map((b) => ({ name: b.name, 強: b.hard, 中弱: b.bip - b.hard })), [s.batters])
   const discipline = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA).sort((a, b) => (a.kPct ?? 0) - (b.kPct ?? 0)).slice(0, 12).map((b) => ({ name: b.name, 'K%': Number(((b.kPct ?? 0) * 100).toFixed(1)), 'BB%': Number(((b.bbPct ?? 0) * 100).toFixed(1)) })), [s.batters, minPA])
 
+  const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
+  const leaders = useMemo(() => {
+    const q = (b: BattingLine) => b.pa >= minPA
+    const to = (n: string) => `/players?player=${encodeURIComponent(n)}&tab=batting`
+    const out: Leader[] = []
+    const add = (label: string, l: { value: number; names: string[] } | null, fmt: (v: number) => string, note?: (n: string) => string | undefined) => {
+      if (l) out.push({ label, value: fmt(l.value), names: l.names, to: to(l.names[0]), note: note?.(l.names[0]) })
+    }
+    const line = (n: string) => s.batters.find((b) => b.name === n)
+    add('打擊率', leaderOf(s.batters, (b) => b.avg, { qualifies: q }), f3, (n) => `${line(n)?.h} 安 / ${line(n)?.ab} 打數`)
+    add('OPS', leaderOf(s.batters, (b) => b.ops, { qualifies: q }), f3, (n) => `${line(n)?.pa} 打席`)
+    add('全壘打', leaderOf(s.batters, (b) => b.hr), String)
+    add('安打', leaderOf(s.batters, (b) => b.h), String, (n) => `${line(n)?.ab} 打數`)
+    add('打點', leaderOf(s.batters, (b) => b.rbi), String)
+    add('盜壘', leaderOf(s.batters, (b) => b.sb), String, (n) => `失敗 ${line(n)?.cs ?? 0}`)
+    return out.slice(0, 5)
+  }, [s.batters, minPA])
+
   const footer = useMemo(() => {
     const t = s.team
     const f: Partial<Record<keyof BattingLine, string>> = { name: '球隊合計' }
@@ -63,6 +82,7 @@ export function BattingPage() {
       <PageHeader title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
+      <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
       <Card id="stats" title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
         <DataTable columns={columnsFor(view)} rows={rows} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
@@ -70,7 +90,7 @@ export function BattingPage() {
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
         <DonutCard title="擊球型態" subtitle="全隊場內球的滾地／飛球／平飛比例" segments={bbType} centerCaption="場內球" />
         <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，場內球 ≥ 3 的打者" data={quality} onBarClick={openPlayer} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
-        <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} formatValue={(v) => `${v.toFixed(1)}%`} />
+        <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
     </>
   )

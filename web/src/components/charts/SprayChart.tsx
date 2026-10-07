@@ -36,7 +36,8 @@ export function SprayChart({ counts, secondary, unit = '球', emptyText = '尚�
     const idx = Math.min(SEQ.length - 1, Math.floor((n / max) * (SEQ.length - 1)))
     return `var(${SEQ[idx]})`
   }
-  const inkFor = (n: number) => (max > 0 && n / max > 0.55 ? '#ffffff' : 'var(--ink)')
+  // the top of the scale is the team colour itself, so its own ink (white on navy, dark on amber) reads on it
+  const inkFor = (n: number) => (max > 0 && Math.floor((n / max) * (SEQ.length - 1)) >= 4 ? 'var(--accent-ink)' : 'var(--ink)')
   return (
     <Card {...card} className={cx('h-full', card.className)}>
       <motion.div initial={reduced ? false : { opacity: 0.01 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="min-w-0">

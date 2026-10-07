@@ -18,8 +18,9 @@
   --grid: #ececef;
   --axis: #d2d2d7;
 
-  --series-1: #2f63d1;
-  --series-2: #c9811f;
+  /* series-1 is always our team (the team colour), series-2 the other side or the comparison (neutral grey) */
+  --series-1: var(--accent);
+  --series-2: #aeaeb5;
   --series-3: #1f9484;
   --series-4: #7a5ad4;
   --series-5: #cf4f78;
@@ -27,19 +28,20 @@
   --series-7: #3c8fc4;
   --series-8: #c94444;
 
-  --seq-100: #dbe6fa;
-  --seq-150: #c8d9f7;
-  --seq-200: #b3cbf3;
-  --seq-250: #9dbcee;
-  --seq-300: #86ace8;
-  --seq-350: #6f9be2;
-  --seq-400: #5889da;
-  --seq-450: #4376d3;
-  --seq-500: #2f63d1;
-  --seq-550: #2856b8;
-  --seq-600: #234a9f;
-  --seq-650: #1d3e86;
-  --seq-700: #17326e;
+  /* sequential scale (spray charts): the team colour, from faint to full */
+  --seq-100: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --seq-150: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  --seq-200: color-mix(in srgb, var(--accent) 23%, var(--surface));
+  --seq-250: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  --seq-300: color-mix(in srgb, var(--accent) 38%, var(--surface));
+  --seq-350: color-mix(in srgb, var(--accent) 46%, var(--surface));
+  --seq-400: color-mix(in srgb, var(--accent) 54%, var(--surface));
+  --seq-450: color-mix(in srgb, var(--accent) 62%, var(--surface));
+  --seq-500: color-mix(in srgb, var(--accent) 70%, var(--surface));
+  --seq-550: color-mix(in srgb, var(--accent) 78%, var(--surface));
+  --seq-600: color-mix(in srgb, var(--accent) 86%, var(--surface));
+  --seq-650: color-mix(in srgb, var(--accent) 93%, var(--surface));
+  --seq-700: color-mix(in srgb, var(--accent) 100%, var(--surface));
 
   --good: #2e8b57;
   --warning: #d19a1e;
@@ -110,8 +112,8 @@
     --axis: #3a3a3f;
     --shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
 
-    --series-1: #5687e6;
-    --series-2: #c4841f;
+    --series-1: var(--accent);
+    --series-2: #636369;
     --series-3: #2f9d8d;
     --series-4: #8f7ce4;
     --series-5: #d86a8e;
@@ -119,19 +121,19 @@
     --series-7: #3f93c4;
     --series-8: #d65c5c;
 
-    --seq-100: #1c2a45;
-    --seq-150: #1f3155;
-    --seq-200: #223965;
-    --seq-250: #264276;
-    --seq-300: #2a4b87;
-    --seq-350: #2f5599;
-    --seq-400: #3560ab;
-    --seq-450: #3d6cc0;
-    --seq-500: #4a7bd2;
-    --seq-550: #5687e6;
-    --seq-600: #6d98ea;
-    --seq-650: #86aaee;
-    --seq-700: #a2bdf2;
+    --seq-100: color-mix(in srgb, var(--accent) 14%, var(--surface));
+    --seq-150: color-mix(in srgb, var(--accent) 20%, var(--surface));
+    --seq-200: color-mix(in srgb, var(--accent) 27%, var(--surface));
+    --seq-250: color-mix(in srgb, var(--accent) 34%, var(--surface));
+    --seq-300: color-mix(in srgb, var(--accent) 41%, var(--surface));
+    --seq-350: color-mix(in srgb, var(--accent) 48%, var(--surface));
+    --seq-400: color-mix(in srgb, var(--accent) 56%, var(--surface));
+    --seq-450: color-mix(in srgb, var(--accent) 63%, var(--surface));
+    --seq-500: color-mix(in srgb, var(--accent) 70%, var(--surface));
+    --seq-550: color-mix(in srgb, var(--accent) 78%, var(--surface));
+    --seq-600: color-mix(in srgb, var(--accent) 85%, var(--surface));
+    --seq-650: color-mix(in srgb, var(--accent) 93%, var(--surface));
+    --seq-700: color-mix(in srgb, var(--accent) 100%, var(--surface));
 
     --good: #4fb078;
     --warning: #e0b04a;
@@ -163,8 +165,8 @@
   --axis: #3a3a3f;
   --shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.07), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 30px -12px rgba(0, 0, 0, 0.6);
 
-  --series-1: #5687e6;
-  --series-2: #c4841f;
+  --series-1: var(--accent);
+  --series-2: #636369;
   --series-3: #2f9d8d;
   --series-4: #8f7ce4;
   --series-5: #d86a8e;
@@ -172,19 +174,19 @@
   --series-7: #3f93c4;
   --series-8: #d65c5c;
 
-  --seq-100: #1c2a45;
-  --seq-150: #1f3155;
-  --seq-200: #223965;
-  --seq-250: #264276;
-  --seq-300: #2a4b87;
-  --seq-350: #2f5599;
-  --seq-400: #3560ab;
-  --seq-450: #3d6cc0;
-  --seq-500: #4a7bd2;
-  --seq-550: #5687e6;
-  --seq-600: #6d98ea;
-  --seq-650: #86aaee;
-  --seq-700: #a2bdf2;
+  --seq-100: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  --seq-150: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --seq-200: color-mix(in srgb, var(--accent) 27%, var(--surface));
+  --seq-250: color-mix(in srgb, var(--accent) 34%, var(--surface));
+  --seq-300: color-mix(in srgb, var(--accent) 41%, var(--surface));
+  --seq-350: color-mix(in srgb, var(--accent) 48%, var(--surface));
+  --seq-400: color-mix(in srgb, var(--accent) 56%, var(--surface));
+  --seq-450: color-mix(in srgb, var(--accent) 63%, var(--surface));
+  --seq-500: color-mix(in srgb, var(--accent) 70%, var(--surface));
+  --seq-550: color-mix(in srgb, var(--accent) 78%, var(--surface));
+  --seq-600: color-mix(in srgb, var(--accent) 85%, var(--surface));
+  --seq-650: color-mix(in srgb, var(--accent) 93%, var(--surface));
+  --seq-700: color-mix(in srgb, var(--accent) 100%, var(--surface));
 
   --good: #4fb078;
   --warning: #e0b04a;

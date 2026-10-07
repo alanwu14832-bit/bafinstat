@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
 import { LineChartCard } from '../components/charts/LineChartCard'
@@ -51,6 +52,23 @@ export function PitchingPage() {
     return { id: g.game.id, name: shortDate(g.game.date), ERA: outs ? Number(((er * params.inningsPerGame) / (outs / 3)).toFixed(2)) : 0, WHIP: outs ? Number(((bb + h) / (outs / 3)).toFixed(2)) : 0 }
   }), [s.summaries, s.pitching, params])
 
+  const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
+  const leaders = useMemo(() => {
+    const q = (p: PitchingLine) => p.ip >= minIP
+    const to = (n: string) => `/players?player=${encodeURIComponent(n)}&tab=pitching`
+    const line = (n: string) => s.pitchers.find((p) => p.name === n)
+    const out: Leader[] = []
+    const add = (label: string, l: { value: number; names: string[] } | null, fmt: (v: number) => string, note?: (n: string) => string | undefined) => {
+      if (l) out.push({ label, value: fmt(l.value), names: l.names, to: to(l.names[0]), note: note?.(l.names[0]) })
+    }
+    add('防禦率', leaderOf(s.pitchers, (p) => p.era, { low: true, qualifies: q }), (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`)
+    add('WHIP', leaderOf(s.pitchers, (p) => p.whip, { low: true, qualifies: q }), (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`)
+    add('三振', leaderOf(s.pitchers, (p) => p.k), String, (n) => `${line(n)?.bf} 名打者`)
+    add('投球局數', leaderOf(s.pitchers, (p) => p.outs), (v) => `${Math.floor(v / 3)}.${v % 3}`, (n) => `${line(n)?.g} 場`)
+    add('勝投', leaderOf(s.pitchers, (p) => p.w), String, (n) => `${line(n)?.w} 勝 ${line(n)?.l} 敗`)
+    return out.slice(0, 5)
+  }, [s.pitchers, minIP])
+
   const footer = useMemo(() => {
     const t = s.teamPitch
     const f: Partial<Record<keyof PitchingLine, string>> = { name: '球隊合計' }
@@ -63,6 +81,7 @@ export function PitchingPage() {
       <PageHeader title="投球" description={`ERA 以每場 ${params.inningsPerGame} 局換算；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
+      <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
       <StatGroup>
         <StatTile label="團隊 ERA" to="?view=basic&sort=era&dir=asc#stats" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
         <StatTile label="團隊 FIP" to="?view=advanced&sort=fip&dir=asc#stats" value={s.teamPitch.fip ?? 0} format="era" />

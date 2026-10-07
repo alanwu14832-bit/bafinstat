@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { GameEditor } from '../components/ui/GameEditor'
+import { GameCard, type GameStar } from '../components/ui/GameCard'
 import { ScheduleSection, daysToNextGame } from './Schedule'
 import { useDataStore } from '../store/data'
 import { extractGame } from '../data/edit'
@@ -155,6 +156,20 @@ export function GamesPage() {
     { key: 'result', header: '結果', align: 'center', format: (v) => resultBadge(v as GameRow['result']) },
     { key: 'score', header: '比分', align: 'right', className: 'font-medium' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
   ]
+  // 卡片 (scoreboard cards, the default) or 表格 (the sortable table), kept in the address as ?layout=table
+  const layout = params.get('layout') === 'table' ? 'table' : 'cards'
+  const setLayout = (v: 'cards' | 'table') => { const next = new URLSearchParams(params); if (v === 'table') next.set('layout', 'table'); else next.delete('layout'); setParams(next, { replace: true }) }
+  // each game's 本場焦點: the batter with the most hits + RBI + runs (home runs count double)
+  const stars = useMemo(() => {
+    const out = new Map<string, GameStar>()
+    for (const g of s.summaries) {
+      const lines = battingLines(s.dataset, s.dataset.batting.filter((p) => p.gameId === g.game.id))
+      let best: BattingLine | undefined, score = 0
+      for (const l of lines) { const v = l.h * 2 + l.hr * 2 + l.rbi * 1.5 + l.r; if (v > score) { score = v; best = l } }
+      if (best && best.h + best.rbi > 0) out.set(g.game.id, { name: best.name, text: [`${best.ab} 打數 ${best.h} 安`, best.hr && `${best.hr} 轟`, best.rbi && `${best.rbi} 打點`, best.r && `${best.r} 得分`].filter(Boolean).join('・') })
+    }
+    return out
+  }, [s.summaries, s.dataset])
   const current = s.summaries.find((g) => g.game.id === open) ?? null
   const albums = useDataStore((st) => st.albums)
   const gameAlbums = useMemo(() => (current ? albums.filter((a) => a.gameId === current.game.id) : []), [albums, current])
@@ -186,9 +201,21 @@ export function GamesPage() {
         actions={<Tabs size="sm" aria-label="比賽頁分頁" value={view} onChange={setView} items={[{ value: 'schedule', label: '賽程' }, { value: 'results', label: '成績' }]} />} />
       {view === 'schedule' ? <ScheduleSection /> : (<>
         <DemoBanner />
-        <Card flush>
-          <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
-        </Card>
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between gap-3 -mb-1">
+            <span className="text-[12px] text-muted">新的在前；點一場看逐局比分與 Box Score</span>
+            <Tabs size="sm" aria-label="比賽排列方式" value={layout} onChange={setLayout} items={[{ value: 'cards', label: '卡片' }, { value: 'table', label: '表格' }]} />
+          </div>
+        )}
+        {layout === 'cards' && rows.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+            {[...s.summaries].reverse().map((g) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={stars.get(g.game.id)} onOpen={() => setOpen(g.game.id)} />)}
+          </div>
+        ) : (
+          <Card flush>
+            <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} onRowClick={(r) => setOpen(r.id)} dense emptyTitle="沒有比賽" emptyDescription="調整篩選條件或匯入資料。" />
+          </Card>
+        )}
       </>)}
       <Sheet open={!!current} onClose={close} ariaLabel="逐場成績" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl">
         {current && (
