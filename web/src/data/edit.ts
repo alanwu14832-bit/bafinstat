@@ -3,7 +3,7 @@
  * The edited fragment goes through normalizeDataset so the same rules as an import apply
  * (innings from out codes, vocabulary aliases, fielding derived when none is given, warnings).
  */
-import { creditPlays, deriveFielding, normalizeDataset, type GameWarning } from './normalize'
+import { catcherLine, catchingByPlayer, creditPlays, deriveFielding, normalizeDataset, type GameWarning } from './normalize'
 import type { BattingPA, Dataset, FieldingLine, Game, PitchingPA } from './types'
 
 export interface GameEdit {
@@ -75,7 +75,7 @@ function tallyFromPlays(game: Game, batting: BattingPA[], pitching: PitchingPA[]
 /**
  * Keep the fielding lines in step with edited plate appearances: whatever the plays implied before the edit and
  * imply now is added as a difference, so an error or a putout changed in a plate appearance moves E / PO / A on the
- * right fielder, and numbers typed into the 守備 table stay. PO / A / DP are left alone when the lines never had any
+ * right fielder (被盜壘 / 阻殺 / 捕逸 move on the catcher), and numbers typed into the 守備 table stay. PO / A / DP are left alone when the lines never had any
  * (the save then credits them from scratch).
  */
 export function reconcileFielding(lines: FieldingLine[], game: Game, before: { batting: BattingPA[]; pitching: PitchingPA[] }, after: { batting: BattingPA[]; pitching: PitchingPA[] }): FieldingLine[] {
@@ -97,6 +97,15 @@ export function reconcileFielding(lines: FieldingLine[], game: Game, before: { b
       // a fielder (or pitcher) the lines did not have yet
       out.push({ ...b.line, e: Math.max(0, de), po: Math.max(0, dpo), a: Math.max(0, da), dp: Math.max(0, ddp) })
     }
+  }
+  // 被盜壘 / 阻殺 / 捕逸 move with the plate appearances too, on whoever was catching
+  const cWas = catchingByPlayer(game, before.pitching, lines), cNow = catchingByPlayer(game, after.pitching, lines)
+  for (const name of new Set([...cWas.keys(), ...cNow.keys()])) {
+    const a = cWas.get(name), b = cNow.get(name)
+    const dsb = (b?.sb ?? 0) - (a?.sb ?? 0), dcs = (b?.cs ?? 0) - (a?.cs ?? 0), dpb = (b?.pb ?? 0) - (a?.pb ?? 0)
+    if (!dsb && !dcs && !dpb) continue
+    const line = catcherLine(out, game, name)
+    line.sb = Math.max(0, line.sb + dsb); line.cs = Math.max(0, line.cs + dcs); line.pb = Math.max(0, line.pb + dpb)
   }
   return out
 }

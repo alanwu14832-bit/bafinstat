@@ -282,11 +282,15 @@ export interface FieldingStat {
 
 export function fieldingLines(lines: FieldingLine[]): FieldingStat[] {
   const map = new Map<string, FieldingStat>()
+  // a player with two lines in one game (he moved to another position) played one game
+  const games = new Set<string>()
   for (const f of lines) {
     if (!f.player) continue
     let s = map.get(f.player)
     if (!s) { s = { name: f.player, g: 0, innings: 0, po: 0, a: 0, e: 0, dp: 0, tc: 0, pb: 0, sb: 0, cs: 0, fpct: null, rfg: null, csPct: null, positions: [] }; map.set(f.player, s) }
-    s.g++; s.innings += f.innings ?? 0; s.po += f.po; s.a += f.a; s.e += f.e; s.dp += f.dp; s.pb += f.pb; s.sb += f.sb; s.cs += f.cs
+    const key = `${f.player}\u0000${f.gameId}`
+    if (!games.has(key)) { games.add(key); s.g++ }
+    s.innings += f.innings ?? 0; s.po += f.po; s.a += f.a; s.e += f.e; s.dp += f.dp; s.pb += f.pb; s.sb += f.sb; s.cs += f.cs
     if (f.pos && !s.positions.includes(f.pos)) s.positions.push(f.pos)
   }
   return [...map.values()].map((s) => {

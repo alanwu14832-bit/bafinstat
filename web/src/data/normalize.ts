@@ -10,6 +10,7 @@
  *    errors from the opponent's 失誤 rows by batted-ball location, pitchers' innings from their outs)
  *  - credits putouts / assists / double plays from the pitching log when a game has none recorded
  *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
+ *  - credits 被盜壘 / 阻殺 / 捕逸 to whoever was catching (當日登錄名單) when a game has none recorded
  *  - fills game.innings when blank, and returns human-readable warnings per game
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
@@ -162,6 +163,59 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { cr
   return { credited, unplaced }
 }
 
+export type Catching = { sb: number; cs: number; pb: number }
+
+/**
+ * 被盜壘 / 阻殺 / 捕逸 per catcher, from the opponent's plate appearances: each one goes to whoever was catching then.
+ * The catcher comes from the game's 當日登錄名單 (the starting C, then every substitution to C, effective from the
+ * half-inning it was made in); without one, the game's first fielding line at C.
+ */
+export function catchingByPlayer(game: Game, pitching: PitchingPA[], lines: FieldingLine[]): Map<string, Catching> {
+  const out = new Map<string, Catching>()
+  const fallback = lines.find((l) => l.pos === 'C')?.player
+  const roster = game.dayRoster
+  const starter = roster?.starters.find((s) => s.pos === 'C')?.name
+  const toC = (roster?.subs ?? []).filter((x) => x.pos === 'C')
+  const halfIdx = (inning: number, half: 'top' | 'bottom') => (inning - 1) * 2 + (half === 'bottom' ? 1 : 0)
+  const field: 'top' | 'bottom' = game.homeAway === '客' ? 'bottom' : 'top'
+  const catcherAt = (inning: number) => {
+    const at = halfIdx(inning, field)
+    let c = starter
+    for (const x of toC) if (halfIdx(x.inning, x.half) <= at) c = x.in
+    return c ?? fallback
+  }
+  for (const p of pitching) {
+    if (!p.sba && !p.cs && !p.pb) continue
+    const name = catcherAt(p.inning)
+    if (!name) continue
+    const t = out.get(name) ?? { sb: 0, cs: 0, pb: 0 }
+    t.sb += p.sba || 0; t.cs += p.cs || 0; t.pb += p.pb || 0
+    out.set(name, t)
+  }
+  return out
+}
+
+/** The fielding line a catcher's numbers go on: his line at C, else his only line, else a new C line. */
+export function catcherLine(lines: FieldingLine[], game: Game, name: string): FieldingLine {
+  const own = lines.filter((l) => l.player === name)
+  const line = own.find((l) => l.pos === 'C') ?? (own.length === 1 && own[0].pos !== 'P' ? own[0] : undefined)
+  if (line) return line
+  const add: FieldingLine = { gameId: game.id, player: name, pos: 'C', po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0, note: '捕手數據由投球紀錄推定' }
+  lines.push(add)
+  return add
+}
+
+/** Credit 被盜壘 / 阻殺 / 捕逸 to the catchers (in place). Returns how many were credited. */
+export function creditCatching(game: Game, lines: FieldingLine[], pitching: PitchingPA[]): number {
+  let n = 0
+  for (const [name, t] of catchingByPlayer(game, pitching, lines)) {
+    const l = catcherLine(lines, game, name)
+    l.sb += t.sb; l.cs += t.cs; l.pb += t.pb
+    n += t.sb + t.cs + t.pb
+  }
+  return n
+}
+
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
@@ -216,6 +270,11 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     if (gameLines.length && pit.length && gameLines.every((f) => !f.po && !f.a)) {
       const c = creditPlays(gameLines, pit)
       if (c.credited) warn(`刺殺／助殺由投球紀錄推定（三振→捕手、滾地→守位助殺＋一壘刺殺、飛球→守位刺殺、雙殺→樞紐）${c.unplaced ? `；${c.unplaced} 個出局沒有落點，未歸屬` : ''}`)
+    }
+    // 被盜壘 / 阻殺 / 捕逸: when no line has any, credit them to whoever was catching from the opponent's plate appearances
+    if (gameLines.length && pit.length && gameLines.every((f) => !f.sb && !f.cs && !f.pb)) {
+      const lines = [...gameLines]
+      if (creditCatching(g, lines, pit)) fielding.push(...lines.slice(gameLines.length))
     }
 
     // consistency checks
