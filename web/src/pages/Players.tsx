@@ -176,12 +176,12 @@ export function PlayersPage() {
     { key: 'kPct', label: '避免三振', invert: true, fmt: (v) => `K% ${pct0(v)}` }, { key: 'bbPct', label: '選球', fmt: (v) => `BB% ${pct0(v)}` }, { key: 'hardPct', label: '強擊', fmt: (v) => `Hard% ${pct0(v)}` },
   ]
   const RECENT = 5
-  const pool = useMemo(() => s.batters.filter((b) => b.pa >= 3), [s.batters])
+  const pool = useMemo(() => s.batters.filter((b) => b.pa >= 1), [s.batters])
   const recentBat = useMemo(() => {
     if (gameLog.length <= RECENT) return undefined
     const ids = gameLog.slice(0, RECENT).map((g) => g.id)
     const l = battingLines(s.dataset, s.batting.filter((p) => ids.includes(p.gameId) && ranOrBatted(p, selected)), statParams).find((x) => x.name === selected)
-    return l && l.pa >= 3 ? l : undefined
+    return l && l.pa >= 1 ? l : undefined
   }, [gameLog, s.dataset, s.batting, selected, statParams])
   const group = useMemo(() => sameGroup(s.dataset.roster, selected), [s.dataset.roster, selected])
   const groupPool = useMemo(() => (group ? pool.filter((b) => group.names.has(b.name)) : []), [group, pool])
@@ -194,7 +194,7 @@ export function PlayersPage() {
     const ids = new Set(filterGames(s.dataset, { ...filters, from: prev.from, to: prev.to }).games.map((g) => g.id))
     const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && ranOrBatted(p, selected) && (filters.position === 'all' || (p.pos ?? '') === filters.position))
     const l = battingLines(s.dataset, pas, statParams).find((x) => x.name === selected)
-    return l && l.pa >= 3 ? l : undefined
+    return l && l.pa >= 1 ? l : undefined
   }, [prev, spansPrev, s.dataset, filters, selected, statParams])
 
   type Basis = 'recent' | 'pos' | 'last' | 'team'
@@ -332,7 +332,7 @@ export function PlayersPage() {
 
   return (
     <>
-      <PageHeader scoped title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；雷達圖為隊內百分位（PA ≥ 3 的打者）。`} />
+      <PageHeader scoped title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；雷達圖為隊內百分位（PA ≥ 1 的打者）。`} />
       <DemoBanner />
 
       {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
@@ -340,7 +340,7 @@ export function PlayersPage() {
       <Card className="overflow-hidden relative" bodyClassName="p-0">
         <HeroGlow />
         <div className="relative px-5 md:px-7 pt-4 md:pt-6 pb-4 md:pb-6 flex flex-col gap-4 md:gap-5">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-col-reverse sm:flex-row sm:items-start gap-1 sm:gap-3">
             <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="roster-panel"
               className="group flex items-center gap-3.5 md:gap-5 min-w-0 flex-1 text-left rounded-[var(--radius-sm)] -ml-1.5 pl-1.5 pr-2 py-1.5 hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)] cursor-pointer transition-colors motion-reduce:transition-none">
               <span className="md:hidden flex"><PlateBadge size={56} className="figure">{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge></span>
@@ -354,7 +354,7 @@ export function PlayersPage() {
                 <span className="block text-[11px] text-muted mt-1">{open ? '點這裡收合名單' : '點名字換球員'}</span>
               </span>
             </button>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center justify-end gap-1 shrink-0 -mr-2 -mt-1 sm:m-0">
               {player && (bat || pit) && <Button variant="ghost" size="sm" icon={<Download />} onClick={sharePlayer} title="下載這位球員的成績卡（PNG），標明期間與樣本">成績卡</Button>}
               <Button variant="ghost" aria-label="上一位" className="size-10 pointer-fine:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
               <Button variant="ghost" aria-label="下一位" className="size-10 pointer-fine:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
@@ -471,12 +471,12 @@ export function PlayersPage() {
               <StatTile label="sSeager" to={rank('/batting?view=process&sort=sSeager')} toLabel="全隊排行" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note="好球敢打、壞球忍得住" />
             </StatGroup>
           {compare && cmpPlayer && (
-            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 3）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 1）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
               <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} only="batting" />
             </Card>
           )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            {bat && bat.pa < 3 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有 3 個打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" data={radar} reference={50}
+            {bat && bat.pa < 1 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" data={radar} reference={50}
               subtitle={`${compare ? `與 ${compare} 比較；` : ''}越外圈越好，虛線 = 隊內中位（PR 50）；參照 ${pool.length} 位打者、${s.summary.games} 場，描述這段期間的表現，不代表穩定能力`}
               action={!compare && (
                 <Select size="sm" label="比較" aria-label="雷達圖比較對象" value={basis?.value ?? ''} onChange={(e) => setBasisPick(e.target.value as Basis)}
