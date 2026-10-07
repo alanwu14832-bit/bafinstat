@@ -27,7 +27,7 @@ import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, beyondDefault, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, beyondDefault, BIP_RESULTS, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { describeChange } from '../record/summary'
@@ -218,12 +218,15 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
+  // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點
+  const inPlay = state.pitches[state.pitches.length - 1] === 'IP'
+  const needLoc = !!plan && !NO_BATTED_BALL.has(plan.result) && !plan.loc
   const throwToggle = (who: number | 'batter', name: string) => {
     if (!plan || !beyondDefault(state, plan, who)) return undefined
     const on = !!plan.throws?.includes(who)
     return <ThrowToggle name={name} on={on} onToggle={() => setPlan({ ...plan, throws: on ? plan.throws!.filter((w) => w !== who) : [...(plan.throws ?? []), who] })} />
   }
-  const confirm = () => { if (!plan || problems.length) return; act((s) => commitPA(s, plan)); setPlan(null) }
+  const confirm = () => { if (!plan || problems.length || needLoc) return; act((s) => commitPA(s, plan)); setPlan(null) }
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
   // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
   // while fielding the 守位 box starts from the slot's position — except a P that is no longer the pitcher (after a fielder
@@ -326,7 +329,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
-              <PitchPad onPitch={(code) => apply((s) => addPitch(s, code))} disabled={!!plan} />
+              <PitchPad onPitch={(code) => apply((s) => addPitch(s, code))} disabled={!!plan || inPlay} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -362,13 +365,18 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
             )}
 
             {/* the result */}
-            {!plan ? <ResultChips onPick={choose} /> : (
+            {!plan ? (
+              <div className="flex flex-col gap-2.5">
+                {inPlay && <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft px-3 py-2 text-[13px] text-ink">擊進場內：請選這球的打擊結果（點錯了按上方「刪最後一球」）</div>}
+                <ResultChips onPick={choose} only={inPlay ? BIP_RESULTS : undefined} />
+              </div>
+            ) : (
               <div className="rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[15px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">{plan.result === '界外飛' ? '接殺的界外球記為 IP，落點填接球的守備員' : '確認細節後送出'}</span></div>
                   <button type="button" onClick={() => setPlan(null)} className="h-9 text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
                 </div>
-                {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} />}
+                {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} requireLoc />}
                 <div>
                   <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
                   <div className="flex flex-col gap-1.5">
@@ -390,7 +398,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                   {side === 'opp' && (Object.values(plan.runners).includes('home') || plan.batter === 'home') && (
                     <label className="inline-flex items-center gap-2 text-[13px] cursor-pointer"><input type="checkbox" checked={plan.earned} onChange={(e) => setPlan({ ...plan, earned: e.target.checked })} className="size-4 accent-[var(--ink)]" />失分為自責分（ER）</label>
                   )}
-                  <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0} className="ml-auto max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                  <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1">
+                    {needLoc && <span className="text-[12px] text-critical">還沒點落點</span>}
+                    <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needLoc} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                  </div>
                 </div>
               </div>
             )}
