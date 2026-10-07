@@ -10,9 +10,9 @@ import { AlertTriangle, X } from 'lucide-react'
 /** Pitch code → chip. 好球類：S/SS/CS/IP；界外 F；壞球 B */
 const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }> = {
   SS: { label: 'SS', cls: 'bg-[color-mix(in_srgb,var(--series-8)_18%,transparent)] text-ink', title: '揮棒落空' },
-  CS: { label: 'CS', cls: 'bg-[color-mix(in_srgb,var(--series-1)_18%,transparent)] text-ink', title: '未揮棒好球' },
-  S: { label: 'S', cls: 'bg-[color-mix(in_srgb,var(--series-1)_18%,transparent)] text-ink', title: '好球' },
-  F: { label: 'F', cls: 'bg-[color-mix(in_srgb,var(--series-2)_22%,transparent)] text-ink', title: '界外' },
+  CS: { label: 'CS', cls: 'bg-[color-mix(in_srgb,var(--series-7)_18%,transparent)] text-ink', title: '未揮棒好球' },
+  S: { label: 'S', cls: 'bg-[color-mix(in_srgb,var(--series-7)_18%,transparent)] text-ink', title: '好球' },
+  F: { label: 'F', cls: 'bg-[color-mix(in_srgb,var(--warning)_22%,transparent)] text-ink', title: '界外' },
   IP: { label: 'IP', cls: 'bg-[color-mix(in_srgb,var(--series-3)_20%,transparent)] text-ink', title: '擊進場內' },
   B: { label: 'B', cls: 'bg-surface-3 text-ink-2', title: '壞球' },
 }

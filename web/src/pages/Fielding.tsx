@@ -6,6 +6,7 @@ import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { SprayChart } from '../components/charts/SprayChart'
 import { useStats } from '../hooks/useStats'
@@ -25,6 +26,23 @@ export function FieldingPage() {
   const byPos = useMemo(() => POS_ORDER.filter((p) => p in s.errorsByPos || s.fielding.some((f) => f.pos === p)).map((p) => ({ name: p, 失誤: s.errorsByPos[p] ?? 0 })), [s.errorsByPos, s.fielding])
   const errCounts = useMemo(() => { const c = Array.from({ length: 10 }, () => 0); for (const [pos, e] of Object.entries(s.errorsByPos)) if (POS_NUM[pos]) c[POS_NUM[pos]] += e; return c }, [s.errorsByPos])
   const catchers = s.fielders.filter((f) => f.positions.includes('C'))
+  const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
+  // 守備率 needs a few chances to mean anything: at least as many as games played (and 3)
+  const minTC = Math.max(3, s.summary.games)
+  const leaders = useMemo(() => {
+    const to = (n: string) => `/players?player=${encodeURIComponent(n)}`
+    const line = (n: string) => s.fielders.find((f) => f.name === n)
+    const out: Leader[] = []
+    const add = (label: string, l: { value: number; names: string[] } | null, fmt: (v: number) => string, note?: (n: string) => string | undefined) => {
+      if (l) out.push({ label, value: fmt(l.value), names: l.names, to: to(l.names[0]), note: note?.(l.names[0]) })
+    }
+    add('守備率', leaderOf(s.fielders, (f) => f.fpct, { qualifies: (f) => f.tc >= minTC }), f3, (n) => `${line(n)?.tc} 次機會・${line(n)?.positions.join(' / ')}`)
+    add('刺殺', leaderOf(s.fielders, (f) => f.po), String, (n) => line(n)?.positions.join(' / '))
+    add('助殺', leaderOf(s.fielders, (f) => f.a), String, (n) => line(n)?.positions.join(' / '))
+    add('雙殺', leaderOf(s.fielders, (f) => f.dp), String, (n) => line(n)?.positions.join(' / '))
+    add('阻殺', leaderOf(s.fielders, (f) => f.cs), String, (n) => `被盜 ${line(n)?.sb ?? 0}`)
+    return out.slice(0, 5)
+  }, [s.fielders, minTC])
 
   const columns: Column<FieldingStat>[] = [
     { key: 'name', header: '球員', className: 'font-medium', sortable: true },
@@ -42,6 +60,7 @@ export function FieldingPage() {
     <>
       <PageHeader title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）；被盜壘、阻殺、捕逸也由投球紀錄歸給當時的捕手（看當日登錄名單的換人）。" />
       <DemoBanner />
+      <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；守備率需 ≥ ${minTC} 次守備機會`} />
       <StatGroup>
         <StatTile label="團隊守備率" to="?sort=fpct&dir=asc#stats" value={tc ? (totals.po + totals.as) / tc : 0} format="decimal3" note={`${tc} 次守備機會`} />
         <StatTile label="失誤" to="?sort=e#stats" value={totals.e} />
