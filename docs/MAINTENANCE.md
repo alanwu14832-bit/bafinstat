@@ -107,3 +107,15 @@
 - **真的要把網站退回某一版**（不只是看）：
   1. 最快：Vercel → 專案 → **Deployments** → 找到那個時間的部署 → 右邊 ⋯ → **Instant Rollback**。之後要恢復自動更新，到同一頁按 **Undo Rollback**（或把新版 Promote 回來）。
   2. 或請 Claude「把網站退回 2026-10-07 23:00 那一版」，它會把程式退回並重新上線。
+
+## 把 GitHub repo 改成私人（不公開）
+1. GitHub → repo → **Settings** → 最下面 **Danger Zone** → **Change repository visibility** → **Make private**。
+2. 網站本身（Vercel）照常更新，不用改。
+3. 「網站版本」要能讀到私人 repo 的舊版：
+   - GitHub 右上頭像 → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**：
+     Repository access 選 **Only select repositories** → 這個 repo；Permissions → Repository permissions → **Contents: Read-only**；到期日選最長，記下到期日。
+   - Vercel → 專案 → **Settings** → **Environment Variables** → 新增 `ARCHIVE_TOKEN`，值貼上那串 token → 存好後到 Deployments 對最新一筆按 **Redeploy**。
+   - token 到期前重新產生一個換上去（沒換的話網站照常，只是「網站版本」暫時列不出舊版）。
+4. 私人 repo 的 GitHub Actions 每月免費 2,000 分鐘：每次上線約 1–2 分鐘，Windows 檢查改成每週日一次（Actions 也可手動跑）。用量在 GitHub → Settings → Billing 看。
+5. GitHub Pages 備用網址（alanwu14832-bit.github.io/bafinstat）私人 repo 的免費方案不能用，已改成不自動更新；正式網址是 Vercel 的不受影響。
+

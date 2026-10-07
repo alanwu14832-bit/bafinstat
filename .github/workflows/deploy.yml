@@ -1,9 +1,7 @@
 name: Deploy dashboard to GitHub Pages
 
+# 正式網站在 Vercel；GitHub Pages 只是備用網址，改成手動才跑（私人 repo 的免費方案不能用 Pages）。
 on:
-  push:
-    branches: [main]
-    paths: ['web/**', 'data/**', '.github/workflows/deploy.yml']
   workflow_dispatch:
 
 permissions:

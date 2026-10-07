@@ -49,12 +49,25 @@ type Metric<T> = { label: string; get: (l: T) => number | null | undefined; fmt:
 const BAT_METRICS: Metric<BattingLine>[] = [
   { label: 'G', get: (l) => l.g, fmt: String }, { label: 'PA', get: (l) => l.pa, fmt: String }, { label: 'H', get: (l) => l.h, fmt: String }, { label: 'HR', get: (l) => l.hr, fmt: String }, { label: 'RBI', get: (l) => l.rbi, fmt: String }, { label: 'SB', get: (l) => l.sb, fmt: String },
   { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wRC+', get: (l) => l.wrcPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
-  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'sSeager', get: (l) => l.sSeager, fmt: signedPct }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
+  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'sSeager', get: (l) => l.sSeager, fmt: signedPct }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct, lowerBetter: true }, { label: '壘死', get: (l) => l.baserunningOuts, fmt: String, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
 ]
 const PIT_METRICS: Metric<PitchingLine>[] = [
   { label: 'IP', get: (l) => l.ip, fmt: (v) => v.toFixed(1) }, { label: 'ERA', get: (l) => l.era, fmt: f2, lowerBetter: true }, { label: 'FIP', get: (l) => l.fip, fmt: f2, lowerBetter: true }, { label: 'WHIP', get: (l) => l.whip, fmt: f2, lowerBetter: true },
-  { label: 'K/7', get: (l) => l.k7, fmt: f2 }, { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
+  { label: 'K/7', get: (l) => l.k7, fmt: f2 }, { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
 ]
+
+/** One side of a comparison row: the better number stands out (accent pill, bold, ▲ towards the label), the other fades. */
+function CompareValue({ text, state, side }: { text: string; state: 'win' | 'lose' | 'tie'; side: 'a' | 'b' }) {
+  if (state === 'win') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 tnum font-semibold text-ink bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]">
+        {side === 'b' && <span aria-hidden className="text-[10px] text-accent">◀</span>}{text}{side === 'a' && <span aria-hidden className="text-[10px] text-accent">▶</span>}
+        <span className="sr-only">（較佳）</span>
+      </span>
+    )
+  }
+  return <span className={cx('inline-block px-2.5 py-0.5 tnum', state === 'lose' ? 'text-muted' : 'text-ink-2')}>{text}</span>
+}
 
 function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] }) {
   return (
@@ -65,9 +78,9 @@ function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] 
         const better = na !== null && nb !== null && na !== nb ? (m.lowerBetter ? (na < nb ? 'a' : 'b') : (na > nb ? 'a' : 'b')) : null
         return (
           <tr key={m.label} className="border-t border-border">
-            <td className={cx('px-4 py-1.5 text-right tnum', better === 'a' ? 'font-semibold text-ink' : 'text-ink-2')}>{na === null ? '—' : m.fmt(na)}</td>
-            <td className="px-3 py-1.5 text-center text-[12px] text-muted whitespace-nowrap"><StatHint label={m.label}>{m.label}</StatHint></td>
-            <td className={cx('px-4 py-1.5 text-left tnum', better === 'b' ? 'font-semibold text-ink' : 'text-ink-2')}>{nb === null ? '—' : m.fmt(nb)}</td>
+            <td className="px-3 py-1 text-right"><CompareValue text={na === null ? '—' : m.fmt(na)} state={better === null ? 'tie' : better === 'a' ? 'win' : 'lose'} side="a" /></td>
+            <td className="px-2 py-1.5 text-center text-[12px] text-muted whitespace-nowrap"><StatHint label={m.label}>{m.label}</StatHint></td>
+            <td className="px-3 py-1 text-left"><CompareValue text={nb === null ? '—' : m.fmt(nb)} state={better === null ? 'tie' : better === 'b' ? 'win' : 'lose'} side="b" /></td>
           </tr>
         )
       })}

@@ -3,9 +3,11 @@ name: Windows 相容性檢查
 # 在真的 Windows 電腦（GitHub 提供）上：安裝、跑測試、建置網站、產生 Excel 公版，
 # 再用 Windows 內建的 Edge 打開每一頁，檢查有沒有錯誤或畫面往旁邊溢出。只做檢查，不影響上線。
 
+# 每週日跑一次，也可以在 Actions 手動按 Run workflow。不放在每次推送：私人 repo 的 Actions 每月免費 2,000 分鐘，
+# Windows 分鐘數算兩倍，每次推送都跑很快就用完，連自動上線也會停。
 on:
-  push:
-    branches: ['claude/baseball-stats-platform-avxula']
+  schedule:
+    - cron: '23 18 * * 6'
   workflow_dispatch:
 
 permissions:
