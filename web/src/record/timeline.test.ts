@@ -142,3 +142,28 @@ describe('changing an earlier plate appearance is never blocked by a later one',
     expect(deriveHalf(rows, h, 'bat').map((r) => r.basesBefore)).toEqual(['無', '1', '12', '12', '12'])
   })
 })
+
+describe('taking back a runner play', () => {
+  it('a steal taken back before a walk: the walk forces him to second instead of the removal being refused', async () => {
+    const { addPlay, removePlay, outsIn } = await import('./timeline')
+    const rows = [
+      pa({ batter: '甲', result: '一安', basesBefore: '無', outsBefore: 0, code: 'L' }),
+      pa({ batter: '乙', result: '保送', basesBefore: '1', outsBefore: 0, code: 'L' }),
+      pa({ batter: '丙', result: '三振', basesBefore: '12', outsBefore: 0, code: 'I' }),
+      pa({ batter: '丁', result: '三振', basesBefore: '12', outsBefore: 1, code: 'II' }),
+      pa({ batter: '戊', result: '三振', basesBefore: '12', outsBefore: 2, code: 'III' }),
+    ]
+    const ix = rows.map((_, i) => i)
+    // 甲 steals second before 乙's first pitch, then 乙 walks (甲 not forced: first is empty)
+    const withSteal = deriveHalf(rows, addPlay(inferHalf(rows, ix, 'bat')!, 1, 0, 'sb', [0]).half, 'bat')
+    expect(withSteal[1]).toMatchObject({ basesBefore: '2', events: [{ at: 0, kind: 'sb', from: 1, to: 2 }] })
+    const h = inferHalf(withSteal, ix, 'bat')!
+    const { half: back, removed } = removePlay(h, 1, 0)
+    expect(removed).toBeTruthy()
+    expect(back.steps.flatMap((s) => stepProblems(s, (r) => rows[r].batter))).toEqual([])
+    expect(back.steps[1].dest).toEqual({ 0: 2 })
+    expect(outsIn(back.steps[1])).toBe(0)
+    expect(deriveHalf(withSteal, back, 'bat')[1]).toMatchObject({ basesBefore: '1' })
+    expect(deriveHalf(withSteal, back, 'bat')[1].events).toBeUndefined()
+  })
+})
