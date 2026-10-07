@@ -131,6 +131,30 @@ describe('the inning\'s last plate appearance', () => {
   })
 })
 
+describe('壘死 vs 出局 on the play', () => {
+  it('壘死 is charged to the runner and kept through the editor; a plain 出局 is not', async () => {
+    const { inferHalf, deriveHalf, midOf } = await import('./timeline')
+    const { battingLines } = await import('../data/stats')
+    const { SEED_DATASET } = await import('../data/seed')
+    let s = send(send(start(), '一安'), '一安')             // 甲 2B, 乙 1B
+    const plan = defaultPlan(s, '外飛')                      // 丙 flies out …
+    plan.runners = { 0: 'out', 1: 'out' }; plan.runningOuts = [0]  // … 甲 doubled off (壘死), 乙 thrown out (出局)
+    s = commitPA(s, plan)
+    expect(s.batting[0].outOnBase).toBe(1); expect(s.batting[0].baserunningOuts).toBe(1)
+    expect(s.batting[1].outOnBase).toBe(1); expect(s.batting[1].baserunningOuts).toBeUndefined()
+    expect(s.batting[2].events).toEqual([{ at: 1, kind: 'out', from: 2, to: 'out', play: true }])
+    expect(describeChange(send(send(start(), '一安'), '一安'), s)).toContain('壘死（2B）')
+    const rows = s.batting
+    const half = inferHalf(rows, [0, 1, 2], 'bat')!
+    const again = deriveHalf(rows, half, 'bat')
+    expect(again[0].baserunningOuts).toBe(1); expect(again[1].baserunningOuts).toBeUndefined()
+    expect(midOf(half.steps[2]).length).toBe(2)
+    const lines = battingLines(SEED_DATASET, rows)
+    expect(lines.find((l) => l.name === '甲')!.baserunningOuts).toBe(1)
+    expect(lines.find((l) => l.name === '乙')!.baserunningOuts).toBe(0)
+  })
+})
+
 describe('擊進場內 is the last pitch', () => {
   it('ignores anything tapped after IP, so a double tap stays one IP', () => {
     const s = addPitch(addPitch(addPitch(start(), 'B'), 'IP'), 'IP')
@@ -141,6 +165,6 @@ describe('擊進場內 is the last pitch', () => {
 describe('軌跡 the result already tells', () => {
   it('is filled in for grounders and fly balls, left to the recorder for hits and errors', () => {
     const s = send(start(), '一安')
-    expect(['內滾', '雙殺', '犧觸', '野選', '內飛', '外飛', '界外飛', '犧飛', '一安', '失誤'].map((r) => defaultPlan(s, r).traj)).toEqual(['G', 'G', 'G', 'G', 'F', 'F', 'F', 'F', undefined, undefined])
+    expect(['內滾', '雙殺', '犧觸', '野選', '內飛', '外飛', '界外飛', '犧飛', '一安', '失誤'].map((r) => defaultPlan(s, r).traj)).toEqual(['G', 'G', 'G', 'G', 'P', 'F', 'F', 'F', undefined, undefined])
   })
 })

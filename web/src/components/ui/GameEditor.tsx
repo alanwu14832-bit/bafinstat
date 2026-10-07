@@ -101,12 +101,12 @@ type PitDraft = Omit<PitchingPA, 'pitches' | 'errors'> & { pitchesText: string; 
 const toBatDraft = (p: BattingPA): BatDraft => { const { pitches, ...rest } = p; return { ...rest, pitchesText: pitches.join(' ') } }
 const toPitDraft = (p: PitchingPA): PitDraft => { const { pitches, errors, ...rest } = p; return { ...rest, pitchesText: pitches.join(' '), errorsText: errorsText(errors) } }
 const parsePitches = (t: string) => t.toUpperCase().split(/[\s,，、/]+/).filter(Boolean)
-const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, ...rest } = d; return { ...rest, pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
+const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, ...rest } = d; return { ...rest, pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, ...(+(rest.baserunningOuts ?? 0) ? { baserunningOuts: +(rest.baserunningOuts ?? 0) } : {}), run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
 const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, ...rest } = d; const errors = cleanErrors(et); return { ...rest, ...(errors.length ? { errors } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
 
 const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
-const TRAJ = ['G', 'F', 'L'] as const
+const TRAJ = ['G', 'F', 'L', 'P'] as const
 const QUAL = ['強', '中', '弱'] as const
 const LOCS = LOC_CODES.map(String)
 const locOption = (v: string) => (Number(v) > 9 ? `${v} ${locLabel(Number(v))}` : v)
@@ -117,7 +117,7 @@ const batCols: Col<BatDraft>[] = [
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
-  { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘死', kind: 'int', w: 44 },
+  { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '壘死', kind: 'int', w: 44 },
   { key: 'run', label: '得分', kind: 'int', w: 44 }, { key: 'rbi', label: '打點', kind: 'int', w: 44 }, { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
 const pitCols: Col<PitDraft>[] = [
@@ -236,7 +236,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const add = (v: number) => Math.max(0, v + d)
       if (side === 'bat' && k === m.row) {
         const b = { ...(r as BattingPA) }
-        if (m.kind === 'sb') b.sb = add(b.sb); if (m.kind === 'cs') b.cs = add(b.cs); if (m.kind === 'err') b.advOnError = add(b.advOnError); if (m.kind === 'pk' || m.kind === 'out') b.outOnBase = add(b.outOnBase)
+        if (m.kind === 'sb') b.sb = add(b.sb); if (m.kind === 'cs') b.cs = add(b.cs); if (m.kind === 'err') b.advOnError = add(b.advOnError); if (m.kind === 'pk' || m.kind === 'out') b.outOnBase = add(b.outOnBase); if (m.kind === 'out') { const v = add(b.baserunningOuts ?? 0); if (v) b.baserunningOuts = v; else delete b.baserunningOuts }
         return b
       }
       if (side === 'pit' && k === i) {
@@ -342,12 +342,31 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const events = [...rest, { at: rows[i].pitches.length, kind: 'throw', from: old?.from ?? (cur as 1 | 2 | 3), to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
       onEnd(who, to, rows.map((r, k) => (k === i ? { ...r, events } : r)))
     }
+    // 壘死 (we bat): a runner put out on the play by his own baserunning mistake — a mark on this plate appearance
+    // (kind 'out' from his base) that the timeline turns into his row's 壘死; 出局 clears it
+    const midBase = (row: number) => midOf(step).find((o) => o.row === row)?.base
+    const outMark = (row: number) => (rows[i].events ?? []).find((e) => e.play && !e.batter && e.kind === 'out' && e.to === 'out' && e.from === midBase(row))
+    const runningOut = side === 'bat' ? {
+      of: (row: number) => step.dest[row] === 'out' && !!outMark(row),
+      set: (row: number, on: boolean) => {
+        const from = midBase(row)
+        if (!from) return
+        const rest = (rows[i].events ?? []).filter((e) => e !== outMark(row))
+        const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'out', from, to: 'out' as const, play: true as const }] : rest
+        const next = rows.map((r, k) => {
+          if (k === i) { const n = { ...r, events }; if (!events.length) delete (n as { events?: unknown }).events; return n }
+          if (k === row && !on) { const n = { ...(r as BattingPA) }; delete n.baserunningOuts; return n }
+          return r
+        })
+        onEnd(row, 'out', next)
+      },
+    } : undefined
     const pinch = side === 'bat' ? {
       onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult,
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut,
       ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {

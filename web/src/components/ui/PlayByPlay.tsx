@@ -104,7 +104,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; fla
             const pt = pitchTotals(p.pitches)
             const header = p.inning !== lastInning
             lastInning = p.inning
-            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.outOnBase ? `壘死 ${p.outOnBase}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
+            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.baserunningOuts ? `壘死 ${p.baserunningOuts}` : '', p.outOnBase - (p.baserunningOuts ?? 0) > 0 ? `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" />}

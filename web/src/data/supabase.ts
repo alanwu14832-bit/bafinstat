@@ -24,7 +24,7 @@ export function supabase(): SupabaseClient {
 // ---------------------------------------------------------------- row ↔ model mapping
 interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
 interface GameRow { id: string; date: string; time: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null; day_roster?: GameDayRoster | null }
-interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; runner?: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; run: number; rbi: number; code: string | null; note: string | null; events?: PlayEvent[] | null }
+interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; runner?: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; baserunning_outs?: number; run: number; rbi: number; code: string | null; note: string | null; events?: PlayEvent[] | null }
 interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; errors?: string[] | null; code: string | null; note: string | null; events?: PlayEvent[] | null }
 interface FieldingRow { game_id: string; seq: number; player: string; pos: string; innings: number | null; po: number; a: number; e: number; dp: number; pb: number; sb: number; cs: number; note: string | null }
 
@@ -42,7 +42,7 @@ export function toGameRow(g: Game): GameRow {
 export function toBattingRow(p: BattingPA, seq: number): BattingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), batting_order: p.order ?? null, pos: n(p.pos), batter: p.batter, pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sb: p.sb, cs: p.cs, adv_on_error: p.advOnError, out_on_base: p.outOnBase, run: p.run, rbi: p.rbi, code: n(p.code), note: n(p.note),
     // only when there is one: a project without the column (migration not run) still takes every other row
-    ...(p.runner ? { runner: p.runner } : {}), ...(p.events?.length ? { events: p.events } : {}) }
+    ...(p.runner ? { runner: p.runner } : {}), ...(p.events?.length ? { events: p.events } : {}), ...(p.baserunningOuts ? { baserunning_outs: p.baserunningOuts } : {}) }
 }
 export function toPitchingRow(p: PitchingPA, seq: number): PitchingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), opp_order: p.oppOrder ?? null, pitcher: p.pitcher, opp_batter: n(p.oppBatter), pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sba: p.sba, cs: p.cs, wp: p.wp, pb: p.pb, pk: p.pk, code: n(p.code), note: n(p.note),
@@ -56,7 +56,7 @@ export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; ba
   return {
     roster: rows.players.map((r) => ({ name: r.name, number: u(r.number), primaryPos: u(r.primary_pos), secondaryPos: u(r.secondary_pos), bats: u(r.bats) as Player['bats'], throws: u(r.throws) as Player['throws'], status: u(r.status), note: u(r.note) })),
     games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined), dayRoster: parseDayRoster(r.day_roster) })),
-    batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, ...(r.runner ? { runner: r.runner } : {}), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}) })),
+    batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, ...(r.runner ? { runner: r.runner } : {}), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}), ...(r.baserunning_outs ? { baserunningOuts: r.baserunning_outs } : {}) })),
     pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, ...(r.errors?.length ? { errors: r.errors } : {}), code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}) })),
     fielding: rows.fielding.map((r) => ({ gameId: r.game_id, player: r.player, pos: r.pos, innings: u(r.innings === null ? null : Number(r.innings)), po: r.po, a: r.a, e: r.e, dp: r.dp, pb: r.pb, sb: r.sb, cs: r.cs, note: u(r.note) })),
   }
@@ -94,6 +94,8 @@ async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 5
 const OPTIONAL_GAME_COLUMNS = ['day_roster', 'status', 'updated_by'] as const
 /** batting_pa.runner (代跑), added with the rosters migration. */
 export const RUNNER_COLUMN = 'runner'
+/** batting_pa.baserunning_outs (壘死), added with the 2026-10-09 migration. */
+export const BASERUNNING_OUTS_COLUMN = 'baserunning_outs'
 /** pitching_pa.errors (守備失誤), added with the rosters migration. */
 export const ERRORS_COLUMN = 'errors'
 /** batting_pa.events / pitching_pa.events (runner moves between pitches), added with the play-events migration. */
@@ -184,7 +186,7 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
       }
       fail(ctx, e)
     }
-    await chunked(seqBy(ds.batting).map(([r, s]) => toBattingRow(r, s)), (rows) => insertRows('batting_pa', '打席紀錄', rows, [RUNNER_COLUMN, EVENTS_COLUMN]))
+    await chunked(seqBy(ds.batting).map(([r, s]) => toBattingRow(r, s)), (rows) => insertRows('batting_pa', '打席紀錄', rows, [RUNNER_COLUMN, EVENTS_COLUMN, BASERUNNING_OUTS_COLUMN]))
     await chunked(seqBy(ds.pitching).map(([r, s]) => toPitchingRow(r, s)), (rows) => insertRows('pitching_pa', '投球紀錄', rows, [ERRORS_COLUMN, EVENTS_COLUMN]))
     await chunked(seqBy(ds.fielding).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }

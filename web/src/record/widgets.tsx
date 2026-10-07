@@ -74,7 +74,7 @@ export function BattedBallPicker({ result, value, onChange, requireLoc }: { resu
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <div><div className="text-[12px] text-ink-2 mb-1">軌跡</div><div className="flex gap-1.5">{(['G', 'F', 'L'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : '平飛 L'}</button>)}</div></div>
+        <div><div className="text-[12px] text-ink-2 mb-1">軌跡</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : '內野飛球 P'}</button>)}</div></div>
         <div><div className="text-[12px] text-ink-2 mb-1">強度</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
       </div>
     </div>

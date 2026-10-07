@@ -8,7 +8,8 @@ import { TEAM } from '../config/team'
 export type HomeAway = '主' | '客'
 export type GameResult = 'W' | 'L' | 'T'
 export type Hand = 'R' | 'L' | 'S'
-export type Trajectory = 'G' | 'F' | 'L'
+/** G 滾地 · F 飛球 · L 平飛 · P 內野飛球（小飛球，算飛球的一種） */
+export type Trajectory = 'G' | 'F' | 'L' | 'P'
 export type Quality = '強' | '中' | '弱'
 
 /** Pitch codes: S 好球 · SS 揮空 · CS 未揮好球 · F 界外 · IP 擊進場內 · B 壞球 */
@@ -130,7 +131,10 @@ export interface BattingPA {
   sb: number
   cs: number
   advOnError: number
+  /** 壘上出局: put out on the bases after reaching, any way but 盜壘失敗 (the out code on this row is then his) */
   outOnBase: number
+  /** 壘死: of those, the outs from his own baserunning mistake (run past a base, doubled off, caught off the bag…) */
+  baserunningOuts?: number
   run: number
   rbi: number
   code?: string

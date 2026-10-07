@@ -29,7 +29,7 @@ const whoOf = (side: PaSide, p: AnyPA) => {
   return `對方 ${q.oppBatter || (q.oppOrder ? `第 ${q.oppOrder} 棒` : '打者')}`
 }
 const extrasOf = (side: PaSide, p: AnyPA) => (isBat(side, p)
-  ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.outOnBase && `壘死 ${p.outOnBase}`, p.rbi && `打點 ${p.rbi}`]
+  ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `壘死 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`]
   : [(p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
 ).filter(Boolean).join('・')
 
@@ -175,19 +175,25 @@ export interface TimelineProps {
   onThrow: (who: number | 'batter', kind: ExtraBases | null) => void
   /** one more base on the throw: moves him up one and marks it 趁傳進壘 */
   onThrowUp: (who: number | 'batter') => void
+  /** (we bat) 壘死 rather than 出局: a runner put out by his own baserunning mistake on the play */
+  runningOut?: { of: (row: number) => boolean; set: (row: number, on: boolean) => void }
   /** opponent runs: earned (ER) or not (R), on the row of whoever scored */
   earned?: { of: (row: number) => boolean; toggle: (row: number) => void }
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
 /** One segmented control: where someone was when this plate appearance ended. */
-function EndPicker({ value, from, onPick, label }: { value: End; from: number; onPick: (e: End) => void; label: string }) {
-  const opts: Array<{ v: End; l: string }> = [{ v: 'out', l: '出局' }, ...([1, 2, 3] as const).filter((b) => b >= Math.max(1, from)).map((b) => ({ v: b as End, l: `${b}B` })), { v: 'home', l: '得分' }]
+function EndPicker({ value, from, onPick, label, mistake }: { value: End; from: number; onPick: (e: End) => void; label: string; mistake?: { on: boolean; set: (on: boolean) => void } }) {
+  // a runner of ours can also be 壘死 (out by his own baserunning mistake): an 出局 that is charged to him
+  type Opt = { v: End; l: string; m?: boolean }
+  const opts: Opt[] = [{ v: 'out', l: '出局', m: false }, ...(mistake ? [{ v: 'out' as End, l: '壘死', m: true }] : []), ...([1, 2, 3] as const).filter((b) => b >= Math.max(1, from)).map((b) => ({ v: b as End, l: `${b}B` })), { v: 'home', l: '得分' }]
+  const isOn = (o: Opt) => value === o.v && (o.m === undefined || !mistake || mistake.on === o.m)
   return (
-    <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border" role="group" aria-label={`${label} 這打席結束時`}>
+    <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border flex-wrap" role="group" aria-label={`${label} 這打席結束時`}>
       {opts.map((o) => (
-        <button key={String(o.v)} type="button" aria-pressed={value === o.v} onClick={() => onPick(o.v)}
-          className={cx('h-9 pointer-fine:h-8 min-w-11 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', value === o.v ? (o.v === 'out' ? 'bg-critical text-bg' : 'bg-ink text-bg') : cx('text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && 'text-critical'))}>{o.l}</button>
+        <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.m !== undefined && mistake ? mistake.set(o.m) : onPick(o.v))}
+          title={o.m ? '自己跑壘失誤出局（算這位跑者的壘死）' : o.m === false && mistake ? '被守備刺殺／封殺出局' : undefined}
+          className={cx('h-9 pointer-fine:h-8 min-w-11 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? (o.v === 'out' ? 'bg-critical text-bg' : 'bg-ink text-bg') : cx('text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && 'text-critical'))}>{o.l}</button>
       ))}
     </div>
   )
@@ -293,7 +299,8 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
             <li key={o.row} id={`tl-runner-${o.row}`} className={cx('rounded-[var(--radius-sm)] border bg-surface px-3 py-2 flex flex-col gap-2 scroll-mt-28 transition-colors motion-reduce:transition-none', picked === o.row ? 'border-ink ring-2 ring-ink/15' : 'border-border')}>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[13px] font-medium text-ink min-w-[7rem]"><span className="text-muted tnum mr-1">{o.base}B</span>{name}</span>
-                <EndPicker value={tl.step.dest[o.row] ?? o.base} from={o.base} onPick={(e) => tl.onEnd(o.row, e)} label={name} />
+                <EndPicker value={tl.step.dest[o.row] ?? o.base} from={o.base} onPick={(e) => tl.onEnd(o.row, e)} label={name}
+                  mistake={tl.runningOut ? { on: tl.runningOut.of(o.row), set: (on) => tl.runningOut!.set(o.row, on) } : undefined} />
                 <ThrowChip tl={tl} who={o.row} name={name} />
                 {tl.earned && tl.step.dest[o.row] === 'home' && <EarnedChip on={tl.earned.of(o.row)} onToggle={() => tl.earned!.toggle(o.row)} />}
               </div>

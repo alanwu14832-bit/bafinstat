@@ -126,3 +126,18 @@ describe('守備失誤 column of 投球紀錄', () => {
     expect(dataset.pitching.filter((p) => p.errors).length).toBe(1)
   })
 })
+
+describe('壘上出局 and 壘死 in Excel', () => {
+  it('round-trips both, and reads a sheet that only has 壘死 (the old layout) as 壘上出局', async () => {
+    const { SEED_DATASET } = await import('./seed')
+    const ds = { ...SEED_DATASET, batting: SEED_DATASET.batting.map((p, i) => (i === 0 ? { ...p, outOnBase: 1, baserunningOuts: 1 } : i === 1 ? { ...p, outOnBase: 1 } : p)) }
+    const wb = datasetToWorkbook(ds)
+    const back = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer, 'b.xlsx').dataset.batting
+    expect([back[0].outOnBase, back[0].baserunningOuts, back[1].outOnBase, back[1].baserunningOuts]).toEqual([1, 1, 1, undefined])
+    // an old sheet: 壘死 meant any out on the bases
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['打席紀錄']).map((r) => { const { 壘上出局: o, ...rest } = r; return { ...rest, 壘死: o ?? '' } })
+    wb.Sheets['打席紀錄'] = XLSX.utils.json_to_sheet(rows)
+    const old = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer, 'old.xlsx').dataset.batting
+    expect([old[0].outOnBase, old[0].baserunningOuts, old[1].outOnBase]).toEqual([1, undefined, 1])
+  })
+})

@@ -32,6 +32,7 @@ STAT_DICTIONARY = [
     dict(key="FC", zh="野手選擇", en="Fielder's Choice", group="打擊", formula="打擊結果 = 野選", status="現有", priority="P2", note=""),
     dict(key="SB", zh="盜壘", en="Stolen Bases", group="打擊", formula="盜壘欄加總", status="現有", priority="P0", note=""),
     dict(key="CS", zh="盜壘失敗", en="Caught Stealing", group="打擊", formula="盜壘失敗欄加總", status="新增", priority="P1", note="舊表只記『壘死』，無法算盜壘成功率"),
+    dict(key="壘死", zh="壘死", en="Outs on Bases (baserunning mistakes)", group="打擊", formula="壘死欄加總：自己跑壘失誤出局", status="新增", priority="P2", note="衝過頭、飛球被雙殺回不去、離壘被觸殺等；被守備封殺／刺殺不算（記在壘上出局）"),
     dict(key="SB%", zh="盜壘成功率", en="Stolen Base %", group="打擊", formula="SB ÷ (SB + CS)", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
     # ---------------- 打擊 rate ----------------
     dict(key="AVG", zh="打擊率", en="Batting Average", group="打擊", formula="H ÷ AB", status="新增", priority="P0", note="舊表未計算"),
@@ -52,6 +53,7 @@ STAT_DICTIONARY = [
     dict(key="P/PA", zh="每打席用球數", en="Pitches per PA", group="打擊過程", formula="用球數 ÷ PA", status="新增", priority="P1", note="從逐球紀錄取得"),
     dict(key="Swing%", zh="揮棒率", en="Swing Rate", group="打擊過程", formula="揮棒(SS+F+IP) ÷ 總球數", status="新增", priority="P2", note=""),
     dict(key="Whiff%", zh="揮空率", en="Whiff Rate", group="打擊過程", formula="揮空(SS) ÷ 揮棒(SS+F+IP)", status="新增", priority="P1", note="MLB Statcast 指標；舊表已有逐球資料即可算"),
+    dict(key="IFFB%", zh="內野飛球率", en="Infield Fly Ball %", group="打擊過程", formula="軌跡 P ÷ 飛球(F + P)", status="新增", priority="P2", note="內野飛球幾乎都是出局，打者越低越好"),
     dict(key="sSeager", zh="選擇性積極度", en="Simple SEAGER", group="打擊過程", formula="壞球沒揮(B) ÷ (揮棒 + 壞球沒揮) − 好球沒揮(CS) ÷ (好球沒揮 + 壞球沒揮)", status="新增", priority="P2", note="Robert Orr 的 SEAGER 簡化版（Sky Kalkman）；越高越好。沒有記錄進壘點：沒揮的球依裁判判決分好壞球，揮棒一律當成好球帶內；故意四壞不計"),
     dict(key="Contact%", zh="擊球率", en="Contact Rate", group="打擊過程", formula="1 − Whiff%", status="新增", priority="P2", note=""),
     dict(key="FirstPitchSwing%", zh="首球揮棒率", en="First-Pitch Swing %", group="打擊過程", formula="第一球為 SS/F/IP 的打席 ÷ PA", status="新增", priority="P2", note=""),
@@ -97,6 +99,7 @@ STAT_DICTIONARY = [
     dict(key="FIP", zh="獨立防禦率", en="Fielding Independent Pitching", group="投球", formula="(13×HR + 3×(BB+HBP) − 2×K) ÷ IP + FIP常數", status="新增", priority="P1", note="常數在『設定』調整（預設 3.10）"),
     dict(key="pGB%", zh="滾地球率", en="Ground Ball % Against", group="投球", formula="滾地 ÷ 場內球", status="新增", priority="P1", note=""),
     dict(key="pWhiff%", zh="揮空率", en="Whiff % Induced", group="投球", formula="SS ÷ (SS + F + IP)", status="新增", priority="P1", note=""),
+    dict(key="pIFFB%", zh="被打內野飛球率", en="Infield Fly Ball % Induced", group="投球", formula="軌跡 P ÷ 飛球(F + P)", status="新增", priority="P2", note="投手越高越好"),
     dict(key="CSW%", zh="好球＋揮空率", en="Called Strikes + Whiffs", group="投球", formula="(CS + SS) ÷ 用球數", status="新增", priority="P1", note="現代投手評估的核心過程指標"),
     dict(key="FStrike%", zh="首球好球率", en="First-Pitch Strike %", group="投球", formula="第一球為好球/界外/場內 的打席 ÷ BF", status="新增", priority="P1", note=""),
     dict(key="P/IP", zh="每局用球數", en="Pitches per Inning", group="投球", formula="PC ÷ IP", status="新增", priority="P1", note="投手效率"),
