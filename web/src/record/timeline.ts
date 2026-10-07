@@ -217,12 +217,12 @@ function carry(steps: Step[], i: number, was0?: OnBase[]) {
       for (const o of mid) if (dest[o.row] === 'out' && !outsJ.includes(o.row)) outsJ.unshift(o.row)
       return { ...steps[j], before, moves, dest, outs: outsJ }
     }
-    // a change to an earlier plate appearance never blocks itself on a later one: when standing still would put two
-    // runners on a base there (moved back to first, and the next batter reaches first), he keeps the base he ended on
+    // a change never blocks itself on what the result already says: when standing still would put two runners on a
+    // base (moved back to first, or a steal taken back, and the batter reaches first), he keeps the base he ended on
     // (forced along), and anyone still in the way is pushed ahead the way a force play would
     const nobody = () => ''
     let next = build(true)
-    if (j > i && stepProblems(next, nobody).length) {
+    if ((j > i || was0) && stepProblems(next, nobody).length) {
       next = build(false)
       if (stepProblems(next, nobody).length) next = forceAhead(next)
     }
