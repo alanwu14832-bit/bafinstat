@@ -61,6 +61,7 @@ export function StoryRow({ stories, link = true, className }: { stories: Story[]
  */
 export function SeasonHero({ summary, summaries, stories, next, title }: { summary: TeamSummary; summaries: GameSummary[]; stories: Story[]; next?: Game; title: string }) {
   const last5 = summaries.slice(-5)
+  const last = summaries[summaries.length - 1]
   const record = `${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`
   return (
     <section aria-label="球季概況" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)]">
@@ -92,12 +93,18 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
                 <div className="flex gap-1.5">{last5.map((s) => <ResultChip key={s.game.id} s={s} />)}</div>
               </div>
             )}
-            {next && (
-              <Link to="/games?view=schedule" className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8 self-start md:self-end">
+            {/* the first three questions a visitor has: how are we doing (the record), the last game, the next one */}
+            <div className="flex flex-wrap gap-2 md:justify-end">
+              {last && (
+                <Link to={`/games/${encodeURIComponent(last.game.id)}`} className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8">
+                  <span>最近一場 <span className="tnum font-semibold text-ink">{last.runsUs}:{last.runsOpp}</span> <span className="font-medium text-ink">{last.game.opponent}</span>（{last.result === 'W' ? '勝' : last.result === 'L' ? '敗' : '和'}）</span>
+                </Link>
+              )}
+              <Link to="/games?view=schedule" className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8">
                 <CalendarDays className="size-3.5 text-accent" />
-                <span>下一場 <span className="tnum font-medium text-ink">{dayLabel(next.date)}{next.time ? ` ${next.time}` : ''}</span> vs <span className="font-medium text-ink">{next.opponent}</span></span>
+                {next ? <span>下一場 <span className="tnum font-medium text-ink">{dayLabel(next.date)}{next.time ? ` ${next.time}` : ''}</span> vs <span className="font-medium text-ink">{next.opponent}</span></span> : <span>下一場 <span className="font-medium text-ink">未排定</span></span>}
               </Link>
-            )}
+            </div>
           </div>
         </div>
         {stories.length > 0 && (

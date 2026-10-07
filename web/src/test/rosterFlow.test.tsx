@@ -107,6 +107,7 @@ describe('roster feature end to end (local mode)', () => {
 
     // 6) game detail sheet
     render(<MemoryRouter initialEntries={[`/games?game=${SCHED.id}`]}><Routes><Route path="/games" element={<GamesPage />} /></Routes></MemoryRouter>)
+    fireEvent.click(screen.getByRole('tab', { name: '登錄名單' }))
     const scope = within(screen.getByText('當日登錄名單').closest('section')!)
     expect(scope.getByText('允許再上場')).toBeInTheDocument()
     expect(scope.getByText('代打')).toBeInTheDocument()

@@ -116,6 +116,7 @@ export function PhotosPage() {
                     {a.note && <p className="text-[13px] text-ink-2 leading-relaxed">{a.note}</p>}
                     <div className="relative z-[2] mt-auto flex items-center gap-2">
                       <Button variant="primary" size="sm" icon={<ExternalLink />} href={a.url} className={cx('flex-1')} title={a.url}>開啟相簿</Button>
+                      {a.gameId && base.games.some((g) => g.id === a.gameId) && <Button variant="outline" size="sm" to={`/games/${encodeURIComponent(a.gameId)}`} title="看這場比賽的比分、摘要與逐球紀錄">比賽</Button>}
                       <span className="text-[11px] text-muted whitespace-nowrap">{albumProvider(a.url)}</span>
                       {canEdit && <Button variant="ghost" size="sm" aria-label="編輯" icon={<Pencil />} onClick={() => setEditing(a)} />}
                     </div>

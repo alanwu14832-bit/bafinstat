@@ -1,5 +1,11 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useState, type ReactNode } from 'react'
+import { Download } from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { downloadCsv } from '../lib/csv'
+import { scopeText } from '../components/layout/FilterChips'
+import { useDataStore } from '../store/data'
+import { TEAM_NAME } from '../data/seed'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -7,7 +13,7 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
 import { Checkbox } from '../components/ui/Input'
 import { DemoBanner } from '../components/ui/DemoBanner'
-import { withJerseyColumn } from '../components/ui/jerseyColumn'
+import { BelowMinimum, compactColumns, tagNameColumn, useTableView, withFraction, withJerseyColumn } from '../components/ui/jerseyColumn'
 import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
@@ -26,12 +32,14 @@ function columnsFor(view: View): Column<BattingLine>[] {
   const n = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true })
   const r3 = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v) => f3(v as number | null) })
   const p = (key: keyof BattingLine & string, header: string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v) => pct(v as number | null) })
+  // rates with their numerator / denominator next to them (a .500 on 2 at-bats should look like one)
+  const frac = (key: keyof BattingLine & string, header: string, parts: (r: BattingLine) => [number, number], fmt: (v: number | null) => string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v, r) => withFraction(fmt(v as number | null), ...parts(r)), text: (v) => fmt(v as number | null) })
   const plus: Column<BattingLine> = { key: 'opsPlus', header: 'OPS+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
   const wrc: Column<BattingLine> = { key: 'wrcPlus', header: 'wRC+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
   const seager: Column<BattingLine> = { key: 'sSeager', header: 'sSeager', align: 'right', sortable: true, format: (v) => signedPct(v as number | null) }
-  if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), n('baserunningOuts', '壘死'), r3('avg', 'AVG'), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS'), plus]
-  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, p('kPct', 'K%'), p('bbPct', 'BB%'), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), p('sbPct', 'SB%')]
-  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), p('gbPct', 'GB%'), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), p('hardPct', 'Hard%'), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
+  if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), n('baserunningOuts', '壘死'), frac('avg', 'AVG', (r) => [r.h, r.ab], f3), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS'), plus]
+  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
+  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bip], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bip], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
 }
 
 
@@ -40,6 +48,8 @@ export function BattingPage() {
   const navigate = useNavigate()
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
+  // a player's tile linked here (球員頁「全隊排行」): mark his row
+  const hl = new URLSearchParams(useLocation().search).get('hl') ?? undefined
   const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=batting`)
   const [qualifiedOnly, setQualifiedOnly] = useState(false)
   const minPA = Math.max(1, Math.ceil(s.summary.games * MIN_PA_RATIO))
@@ -68,25 +78,35 @@ export function BattingPage() {
     return out.slice(0, 5)
   }, [s.batters, minPA])
 
+  // phones: 精簡 shows the name and four columns of the tab being read; 完整 is the whole table
+  const tableView = useTableView()
+  const below = (r: BattingLine) => (r.pa < minPA ? <BelowMinimum /> : null)
+  const COMPACT: Record<View, string[]> = { basic: ['pa', 'avg', 'obp', 'ops'], advanced: ['pa', 'ops', 'wrcPlus', 'woba'], process: ['pa', 'whiffPct', 'hardPct', 'gbPct'] }
+  const full = withJerseyColumn(columnsFor(view))
+  const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
+  // 匯出 CSV: the full table of this tab (every column), with what it covers on top
+  const csvFilters = useDataStore((st) => st.filters)
+  const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`打擊成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 打擊成績`, scopeText(csvFilters, s.games), `OPS+、wRC+ 以篩選範圍的全隊為 100；未達門檻：PA < ${minPA}`, `來源：${window.location.href}`])}>CSV</Button>
+
   const footer = useMemo(() => {
     const t = s.team
-    const f: Partial<Record<keyof BattingLine, string>> = { name: '球隊合計' }
+    const f: Partial<Record<keyof BattingLine, ReactNode>> = { name: '球隊合計' }
     for (const c of columnsFor(view)) {
       if (c.key === 'name') continue
       const v = t[c.key]
-      f[c.key] = c.format ? String(c.format(v, t)) : String(v ?? '')
+      f[c.key] = c.format ? c.format(v, t) : String(v ?? '')
     }
     return f
   }, [s.team, view])
 
   return (
     <>
-      <PageHeader title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
+      <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}（比賽數 × ${MIN_PA_RATIO}）。`}
         actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
-      <Card id="stats" title="打擊成績" subtitle="點欄位標題排序；點球員開啟個人檔案。OPS+ 以目前篩選範圍的全隊為 100" flush action={<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} />}>
-        <DataTable columns={withJerseyColumn(columnsFor(view))} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={520} />
+      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100；PA < ${minPA} 標「未達門檻」，不列入領先者`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+        <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />

@@ -1,7 +1,10 @@
+import { FilterChips } from './FilterChips'
 import type { ReactNode } from 'react'
 import { Stitches } from '../ui/Scoreboard'
 
 export interface PageHeaderProps {
+  /** stats pages: show what the numbers cover (games, 資料截至) and the active filters as removable chips */
+  scoped?: boolean
   /** Kept for API compatibility; no longer rendered (the page title alone is enough). */
   eyebrow?: string
   title: string
@@ -10,8 +13,8 @@ export interface PageHeaderProps {
 }
 
 /** Page title row: title + one-line context on the left, page-level controls on the right. */
-export function PageHeader({ title, description, actions }: PageHeaderProps) {
-  return (
+export function PageHeader({ title, description, actions, scoped }: PageHeaderProps) {
+  const head = (
     <div className="flex items-end justify-between gap-x-6 gap-y-3 flex-wrap pt-2 pb-1">
       <div className="min-w-0">
         <span aria-hidden className="block text-ink draw-x motion-reduce:animate-none mb-3" key={`${title}-accent`}><Stitches width={48} /></span>
@@ -21,4 +24,6 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>
   )
+  if (!scoped) return head
+  return <>{head}<FilterChips /></>
 }
