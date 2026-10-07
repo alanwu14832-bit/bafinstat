@@ -55,6 +55,9 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   // a lineup drawn up for another game (or one already played) is not carried into this one: last week's bench would leak in
   const [applied, setApplied] = useState(() => !!stored && (!stored.gameId || stored.gameId === initial?.id))
   const saved = applied && stored?.order.some(Boolean) ? stored : null
+  // brought in from the schedule / the 先發陣容 page: a summary first, 修改 opens the fields
+  const [infoOpen, setInfoOpen] = useState(() => !initial)
+  const [lineupOpen, setLineupOpen] = useState(() => !saved)
   // a lineup drawn up for a 報名名單 whose game is not on the schedule yet: start with that tournament, so the same list applies
   const lineupReg = !initial && applied ? registrationByKey(registrations, stored?.regKey) : undefined
   const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
@@ -70,7 +73,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const pickSchedule = (id: string) => {
     setFromSchedule(id)
     const s = scheduled.find((g) => g.id === id)
-    if (s) setGame({ ...s, recorder: game.recorder }); else setGame((g) => ({ ...g, id: '', status: undefined }))
+    if (s) setGame({ ...s, recorder: game.recorder }); else { setGame((g) => ({ ...g, id: '', status: undefined })); setInfoOpen(true) }
     // switching away from the lineup's own game drops what it carried (its bench and re-entry belong to that game)
     if (applied && stored?.gameId && stored.gameId !== id) { setBench([]); setAllowReentry(false); setApplied(false) }
     // picking the game the 先發陣容 lineup was drawn up for brings it in now
@@ -98,9 +101,9 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const [error, setError] = useState<string | null>(null)
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const start = () => {
-    if (!game.opponent.trim()) { setError('請填對手'); return }
-    if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); return }
-    if (!pitcher.trim()) { setError('請填先發投手'); return }
+    if (!game.opponent.trim()) { setError('請填對手'); setInfoOpen(true); return }
+    if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); setLineupOpen(true); return }
+    if (!pitcher.trim()) { setError('請填先發投手'); setLineupOpen(true); return }
     // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
     const id = fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
     const slots = lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos }))
@@ -110,9 +113,18 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   }
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
-      <Card className="xl:col-span-2" title="比賽資訊" subtitle="比賽ID 會依日期自動編號">
+      <Card className="xl:col-span-2" title="比賽資訊" subtitle={infoOpen ? '比賽ID 會依日期自動編號' : '已從賽程帶入'}>
         <datalist id="rec-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
+        {!infoOpen ? (
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1 flex flex-col gap-1">
+              <div className="text-[16px] font-semibold text-ink tnum">{game.date}{game.time ? ` ${game.time}` : ''}・vs {game.opponent || '（未填對手）'}</div>
+              <div className="text-[13px] text-ink-2">{[game.tournament, game.homeAway === '主' ? '主場（對方先攻）' : '客場（我隊先攻）', game.venue, `${game.innings ?? TEAM.innings} 局`].filter(Boolean).join('・')}</div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setInfoOpen(true)} className="shrink-0 -mt-1">修改</Button>
+          </div>
+        ) : <>
         {scheduled.length > 0 && <Field label="從賽程帶入" className="mb-3"><Select value={fromSchedule} onChange={(e) => pickSchedule(e.target.value)} className="w-full" options={[{ value: '', label: '不用，手動填' }, ...scheduled.map((g) => ({ value: g.id, label: gameLabel(g) }))]} /></Field>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
@@ -124,9 +136,29 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <Field label="場地"><Input value={game.venue ?? ''} onChange={(e) => g('venue', e.target.value)} /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
+        </>}
       </Card>
-      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={[lineupNote, saved ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}>
+      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
+>
+        {/* also decides who the bench chips offer, so it stays when the lineup is folded */}
         {listed && <RegistrationHint reg={reg!} everyone={everyone} onToggle={() => setEveryone(!everyone)} className="mb-3" />}
+        {!lineupOpen ? (
+          <div className="flex flex-col gap-3">
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1.5">
+              {lineup.map((l, i) => l.name ? (
+                <li key={i} className="flex items-center gap-2 text-[14px] min-w-0">
+                  <PlateBadge size={24}>{i + 1}</PlateBadge>
+                  <span className="font-medium text-ink truncate">{l.name}</span>
+                  <span className="text-[12px] text-muted">{l.pos}</span>
+                </li>
+              ) : null)}
+            </ol>
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] text-ink-2 min-w-0 flex-1">先發投手 <span className="font-medium text-ink">{pitcher || '—'}</span></span>
+              <Button variant="ghost" size="sm" onClick={() => setLineupOpen(true)} className="shrink-0">修改打序</Button>
+            </div>
+          </div>
+        ) : <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -139,6 +171,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} tag={benchTag} placeholder="必填" className="w-full" /></Field>
         </div>
+        </>}
         <div className="mt-4 pt-4 border-t border-border">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-[13px] font-medium text-ink">板凳（今天有到）</span>
@@ -169,7 +202,11 @@ function RegistrationHint({ reg, everyone, onToggle, className }: { reg: Registr
 }
 
 /* ------------------------------------------------------------------ live */
-function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onSaveDraft: () => void; saving: boolean; focus: boolean; onToggleFocus: () => void }) {
+/** Saving while recording: every play goes to the cloud by itself, so there is only a status line — and a button when
+ *  that is not running (no cloud: save into this site) or the last automatic save failed (retry). */
+interface SaveState { status: string; button: string | null; saving: boolean; onSave: () => void }
+
+function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
   const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
@@ -287,11 +324,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const allUp = (kind: 'wp' | 'pb') => { act((s) => wildPitch(s, kind)); setRunnerOpen(false) }
   const quick = 'h-10 pointer-fine:h-9 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default'
   const secondary = (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <Button variant="ghost" size="sm" icon={<Save />} onClick={onSaveDraft} disabled={saving}>{saving ? '儲存中…' : '儲存到雲端'}</Button>
-      <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
-      <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
-      <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">結束比賽</Button>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 text-[12px] text-muted min-h-9">
+        <span role="status" className={cx('min-w-0', save.button === '重試儲存' && 'text-critical')}>{save.status}</span>
+        {save.button && <Button variant={save.button === '重試儲存' ? 'outline' : 'ghost'} size="sm" icon={<Save />} onClick={save.onSave} disabled={save.saving}>{save.saving ? '儲存中…' : save.button}</Button>}
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
+        <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
+        <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>
+        <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">結束比賽</Button>
+      </div>
     </div>
   )
 
@@ -506,6 +549,7 @@ export function RecordPage() {
   const [finish, setFinish] = useState<{ w: string; l: string; sv: string } | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   const [autoSaved, setAutoSaved] = useState<string | null>(null)
+  const [saveFailed, setSaveFailed] = useState(false)
   // focus mode: the live sheet fills the screen (real fullscreen where the browser allows it; iPhones just get the overlay)
   const [focus, setFocus] = useState(false)
   const toggleFocus = () => {
@@ -529,8 +573,8 @@ export function RecordPage() {
     const t = window.setTimeout(() => {
       void saveGame(toGameEdit(state))
         .then(() => saveCloudDraft(state.game.id, state, cloud.user?.email))
-        .then((ok) => { if (ok === false) setDraftsSupported(false); setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })) })
-        .catch((e) => setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`))
+        .then((ok) => { if (ok === false) setDraftsSupported(false); setSaveFailed(false); setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })) })
+        .catch((e) => { setSaveFailed(true); setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`) })
     }, 1500)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -559,16 +603,26 @@ export function RecordPage() {
       </>
     )
   }
-  const saveDraft = async () => {
-    if (!state) return
+  const saveDraft = async (): Promise<boolean> => {
+    if (!state) return false
     setMsg(null)
     try {
       const w = await saveGame(toGameEdit(state))
       // like the autosave, also refresh the resumable progress (another device then gets the latest substitutions too)
       if (cloud.configured && cloud.user) { const ok = await saveCloudDraft(state.game.id, state, cloud.user.email).catch(() => null); if (ok === false) setDraftsSupported(false) }
       setMsg(w.length ? `已儲存（${w.length} 則提醒，結束比賽時會列出）` : '已儲存，全隊現在就看得到這場的進度')
-    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
+      return true
+    } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); return false }
   }
+  const abandon = () => {
+    if (!state || !window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) return
+    if (cloud.configured) void deleteCloudDraft(state.game.id).catch(() => undefined)
+    writeDraft(null); setState(null); setHistory([]); void refreshDrafts()
+  }
+  // with the cloud every play is saved by itself: a status line, and a button only to retry a failed save
+  const save: SaveState = cloud.configured
+    ? { status: saveFailed ? '上一次自動儲存失敗' : autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每球送出後會自動存到雲端', button: saveFailed ? '重試儲存' : null, saving: cloud.pushing, onSave: () => { void saveDraft().then((ok) => { if (ok) setSaveFailed(false) }) } }
+    : { status: '進度存在這台裝置；關掉再打開這頁可以接續', button: '儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
   const complete = async () => {
     if (!state || !finish) return
     setMsg(null)
@@ -584,8 +638,9 @@ export function RecordPage() {
 
   return (
     <>
-      <PageHeader title="紀錄比賽" description={state ? `${state.game.date}・${state.game.tournament}・vs ${state.game.opponent}・${state.game.id}` : '填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。'}
-        actions={state ? <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={() => { if (window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) { if (cloud.configured) void deleteCloudDraft(state.game.id).catch(() => undefined); writeDraft(null); setState(null); setHistory([]); void refreshDrafts() } }}>放棄這場</Button> : undefined} />
+      {/* during a game the scoreboard bar is the top of the page (the top bar already says 紀錄比賽) */}
+      {state ? <h1 className="sr-only">紀錄比賽：{state.game.date} vs {state.game.opponent}</h1>
+        : <PageHeader title="紀錄比賽" description="填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。" />}
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       {!state && cloudDrafts && cloudDrafts.length > 0 && (
         <Card title="雲端有進行中的比賽" subtitle="在另一台裝置開始的紀錄，可以在這裡接續" flush>
@@ -612,17 +667,16 @@ export function RecordPage() {
       )}
       {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
       {cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
-      {!state ? <Setup onStart={(s) => { setState(s); setHistory([]) }} /> : (
+      {!state ? <Setup onStart={(s) => { setState(s); setHistory([]); document.scrollingElement?.scrollTo?.({ top: 0 }) }} /> : (
         <>
-          <div className="text-[12px] text-muted -mt-2 md:-mt-4">{cloud.configured ? (autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每個打席送出後會自動儲存到雲端') : '進度會自動存在這台裝置的瀏覽器'}・重新整理或關機後再打開這頁即可接續</div>
           {focus ? createPortal(
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
                 <div className="flex items-center gap-3 text-[12px] text-muted"><span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className="truncate">{autoSaved ? `已自動儲存 ${autoSaved}` : '自動儲存中'}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
-                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus onToggleFocus={toggleFocus} />
+                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus onToggleFocus={toggleFocus} />
               </div>
             </div>, document.body)
-            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} onSaveDraft={() => void saveDraft()} saving={cloud.pushing} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} />}
+            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} />}
         </>
       )}
       <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel="結束比賽" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md">

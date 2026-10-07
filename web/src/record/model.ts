@@ -67,6 +67,8 @@ export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界
 export const BIP_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
 export const REACH_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 const HIT_BASES: Record<string, Dest> = { 一安: 1, 二安: 2, 三安: 3, 全壘打: 'home' }
+/** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
+export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'F', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 const ROMAN = ['I', 'II', 'III'] as const
 const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 
@@ -269,7 +271,9 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   } else {
     for (const r of s.runners) runners[r.row] = r.base
   }
-  const plan: PAPlan = { result, batter, runners, rbi: 0, earned: true }
+  // the trajectory the result already tells: grounders G, fly balls F (a hit or an error can be any of them)
+  const traj = TRAJ_OF[result]
+  const plan: PAPlan = { result, batter, runners, rbi: 0, earned: true, ...(traj ? { traj } : {}) }
   plan.rbi = defaultRbi(plan)
   return plan
 }

@@ -53,3 +53,10 @@ describe('擊進場內 is the last pitch', () => {
     expect(addPitch(s, 'B').pitches).toEqual(['B', 'IP'])
   })
 })
+
+describe('軌跡 the result already tells', () => {
+  it('is filled in for grounders and fly balls, left to the recorder for hits and errors', () => {
+    const s = send(start(), '一安')
+    expect(['內滾', '雙殺', '犧觸', '野選', '內飛', '外飛', '界外飛', '犧飛', '一安', '失誤'].map((r) => defaultPlan(s, r).traj)).toEqual(['G', 'G', 'G', 'G', 'F', 'F', 'F', 'F', undefined, undefined])
+  })
+})
