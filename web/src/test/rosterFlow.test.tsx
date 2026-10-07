@@ -60,6 +60,11 @@ describe('roster feature end to end (local mode)', () => {
 
     // 3) record setup: the lineup, bench and reentry came with it
     expect(screen.getByText(/已帶入「先發陣容」頁排好的陣容/)).toBeInTheDocument()
+    // brought in from the schedule and the 先發陣容 page: shown as summaries (修改 opens the fields)
+    expect(screen.getByText('已從賽程帶入')).toBeInTheDocument()
+    expect(screen.getByText(`${SCHED.date} ${SCHED.time}・vs ${SCHED.opponent}`)).toBeInTheDocument()
+    expect(screen.queryByLabelText('第 1 棒')).toBeNull()
+    fireEvent.click(screen.getAllByRole('button', { name: '修改' })[0])
     expect(screen.getByDisplayValue(`${SCHED.date} ${SCHED.time} vs ${SCHED.opponent}（${SCHED.tournament}）`)).toBeInTheDocument()
     for (const n of ['許振謙', '謝昊瑾', '嚴敬翔']) expect(screen.getByRole('button', { name: n })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByLabelText('允許被換下的球員再上場')).toBeChecked()
@@ -81,7 +86,7 @@ describe('roster feature end to end (local mode)', () => {
     fireEvent.click(screen.getByRole('button', { name: '確定' }))
     s = readDraft()!
     expect(s.subs).toEqual([expect.objectContaining({ kind: 'PH', in: '謝昊瑾', out: s.starters![0].name, inning: 1, half: 'top', slot: 0 })])
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /儲存到雲端/ })); await new Promise((r) => setTimeout(r, 0)) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '儲存' })); await new Promise((r) => setTimeout(r, 0)) })
     expect(useDataStore.getState().base.games.find((g) => g.id === SCHED.id)?.dayRoster?.subs).toHaveLength(1)
     cleanup()
 
