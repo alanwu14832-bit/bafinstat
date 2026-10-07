@@ -12,7 +12,7 @@ import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
 import { POSITIONS, type BattingPA, type PitchingPA } from '../../data/types'
 import { count } from '../../record/model'
-import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from '../../record/widgets'
+import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { FIELD_POSITIONS } from '../../data/errors'
 import { batterEndFor, midOf, OUT_PLAYS, type End, type Step } from '../../record/timeline'
@@ -170,9 +170,9 @@ export interface TimelineProps {
   onPlay: (pitch: number, kind: string, rows: number[]) => void
   /** take back the n-th play of this plate appearance */
   onRemovePlay: (n: number) => void
-  /** 趁傳進壘 on the batted ball: whether `who` went further than the result alone gives (can), and whether it is marked */
-  throwOf: (who: number | 'batter') => { can: boolean; on: boolean }
-  onThrow: (who: number | 'batter', on: boolean) => void
+  /** 趁傳進壘／失誤進壘 on the batted ball: whether `who` went further than the result alone gives (can), and how it is marked */
+  throwOf: (who: number | 'batter') => { can: boolean; kind: ExtraBases | null }
+  onThrow: (who: number | 'batter', kind: ExtraBases | null) => void
   /** one more base on the throw: moves him up one and marks it 趁傳進壘 */
   onThrowUp: (who: number | 'batter') => void
   /** opponent runs: earned (ER) or not (R), on the row of whoever scored */
@@ -254,8 +254,10 @@ function EarnedChip({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 /** 我隊守備失誤 folded into one button; open when the result is an error or errors are already counted. */
 function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => void }) {
   const n = pa.errors?.length ?? 0
-  const [open, setOpen] = useState(n > 0 || pa.result === '失誤')
-  useEffect(() => { if (pa.result === '失誤') setOpen(true) }, [pa.result])
+  // 失誤進壘 on the play: someone of ours erred
+  const errPlay = !!pa.events?.some((e) => e.play && e.kind === 'err')
+  const [open, setOpen] = useState(n > 0 || pa.result === '失誤' || errPlay)
+  useEffect(() => { if (pa.result === '失誤' || errPlay) setOpen(true) }, [pa.result, errPlay])
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="self-start h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border border-dashed border-border-strong text-[12px] font-medium text-ink-2 hover:text-ink cursor-pointer">＋ 我隊守備失誤</button>
   return (
     <Section title="我隊守備失誤" aside={<span className="text-[11px] text-muted">例如一安＋左外野漏接 → 點 LF；失誤兩次就點兩下</span>}>
@@ -266,20 +268,16 @@ function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => 
         })}
       </div>
       {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：沒點守位時，依落點算一次失誤。</p>}
+      {errPlay && pa.result !== '失誤' && !pa.errors?.length && <p role="alert" className="text-[12px] text-critical">有跑者「失誤進壘」：請點是誰失誤</p>}
     </Section>
   )
 }
 
-/** 趁傳進壘 on the batted ball, shown once he ends further than the result alone takes him. */
+/** 趁傳進壘／失誤進壘 on the batted ball, shown once he ends further than the result alone takes him. */
 function ThrowChip({ tl, who, name }: { tl: TimelineProps; who: number | 'batter'; name: string }) {
   const t = tl.throwOf(who)
   if (!t.can) return null
-  return (
-    <button type="button" aria-pressed={t.on} aria-label={`${name} 趁傳進壘`} onClick={() => tl.onThrow(who, !t.on)}
-      className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer transition-colors', t.on ? 'border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-accent-soft text-ink' : 'border-dashed border-border-strong text-ink-2 hover:text-ink')}>
-      {t.on ? '✓ 趁傳進壘' : '趁傳？'}
-    </button>
-  )
+  return <AdvChoice kind={t.kind} onPick={(k) => tl.onThrow(who, k)} name={name} />
 }
 
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */

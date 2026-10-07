@@ -36,7 +36,7 @@ import { LiveBar, RunnerSheet, SubSheet } from '../record/LiveParts'
 import { readDraft, writeDraft } from '../record/draft'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
-import { BattedBallPicker, NO_BATTED_BALL, PitchPad, ResultChips } from '../record/widgets'
+import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
 
 /* ------------------------------------------------------------------ setup */
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
@@ -251,7 +251,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     if (!p) return p
     const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
     // a 趁傳 mark goes away once he no longer goes further than the result gives
-    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)) }
+    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)) }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
@@ -267,12 +267,24 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     resultsRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [inPlay])
   const needLoc = !!plan && !NO_BATTED_BALL.has(plan.result) && !plan.loc
+  // 失誤進壘 while we field needs whose error it was
+  const needErrBy = !!plan && side === 'opp' && !!plan.errAdv?.length && !plan.errBy?.length
+  // past where the result alone takes him: on the throw (趁傳進壘) or on a fielding error (失誤進壘, no RBI for that run;
+  // while we field it is our error, and a run that scores this way is unearned)
   const throwToggle = (who: number | 'batter', name: string) => {
     if (!plan || !beyondDefault(state, plan, who)) return undefined
-    const on = !!plan.throws?.includes(who)
-    return <ThrowToggle name={name} on={on} onToggle={() => setPlan({ ...plan, throws: on ? plan.throws!.filter((w) => w !== who) : [...(plan.throws ?? []), who] })} />
+    const kind = plan.errAdv?.includes(who) ? 'err' : plan.throws?.includes(who) ? 'throw' : null
+    const pick = (k: ExtraBases | null) => {
+      const next: PAPlan = { ...plan, throws: (plan.throws ?? []).filter((w) => w !== who), errAdv: (plan.errAdv ?? []).filter((w) => w !== who) }
+      if (k === 'throw') next.throws!.push(who)
+      if (k === 'err') next.errAdv!.push(who)
+      const home = (who === 'batter' ? plan.batter : plan.runners[who]) === 'home'
+      if (k === 'err' && home && side === 'opp') next.earned = false
+      setPlan(rbiTouched ? next : { ...next, rbi: defaultRbi(next) })
+    }
+    return <AdvChoice name={name} kind={kind} onPick={pick} />
   }
-  const confirm = () => { if (!plan || problems.length || needLoc) return; act((s) => commitPA(s, plan)); setPlan(null) }
+  const confirm = () => { if (!plan || problems.length || needLoc || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null) }
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
   // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
   // while fielding the 守位 box starts from the slot's position — except a P that is no longer the pitcher (after a fielder
@@ -443,6 +455,18 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')} />
                   </div>
                 </div>
+                {side === 'opp' && !!plan.errAdv?.length && (
+                  // 失誤進壘 while we field: whose error it was (counted as our error on this plate appearance)
+                  <div className="flex flex-col gap-1.5">
+                    <div className="text-[12px] text-ink-2">誰失誤<span className="text-muted ml-1.5">算我隊守備失誤；兩人都有就都點</span></div>
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
+                      {FIELD_POSITIONS.map((pos) => {
+                        const on = !!plan.errBy?.includes(pos)
+                        return <button key={pos} type="button" aria-pressed={on} onClick={() => setPlan({ ...plan, errBy: on ? plan.errBy!.filter((x) => x !== pos) : [...(plan.errBy ?? []), pos] })} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{pos}</button>
+                      })}
+                    </div>
+                  </div>
+                )}
                 {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m}，請調整跑者去向</span>)}</div>}
                 <div className="flex items-center gap-4 flex-wrap">
                   {side === 'us' && (
@@ -457,7 +481,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   )}
                   <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1">
                     {needLoc && <span className="text-[12px] text-critical">還沒點落點</span>}
-                    <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needLoc} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                    {needErrBy && <span className="text-[12px] text-critical">還沒點誰失誤</span>}
+                    <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needLoc || needErrBy} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
                   </div>
                 </div>
               </div>
@@ -513,15 +538,6 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   )
 }
 
-/** 趁傳 next to a destination beyond what the result gives: the extra bases were taken on the throw. */
-function ThrowToggle({ on, onToggle, name }: { on: boolean; onToggle: () => void; name: string }) {
-  return (
-    <button type="button" aria-pressed={on} aria-label={`${name} 趁傳進壘`} onClick={onToggle}
-      className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer transition-colors', on ? 'border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-accent-soft text-ink' : 'border-dashed border-border-strong text-ink-2 hover:text-ink')}>
-      {on ? '✓ 趁傳進壘' : '趁傳？'}
-    </button>
-  )
-}
 
 function DestRow({ label, value, onChange, min, batter, extra }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode }) {
   const opts: Array<{ v: Dest; l: string }> = [{ v: 'out', l: '出局' }, { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]

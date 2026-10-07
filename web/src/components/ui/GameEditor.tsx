@@ -7,7 +7,7 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, errorsText } from '../../data/errors'
-import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA } from '../../data/types'
+import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
@@ -16,6 +16,7 @@ import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
 import { addPlay, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half, type Move } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
+import type { ExtraBases } from '../../record/widgets'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -217,10 +218,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const noRbi = rows[i].result === '失誤' || rows[i].result === '雙殺' || rows[i].result === '三振'
     const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
       let next = base
+      const old = who === 'batter' ? step.batter : step.dest[who]
+      // a 失誤進壘 mark on the play goes once he ends somewhere else: its bases come off his 失誤進壘 count
+      const err = end !== old ? playOf(who, old) : undefined
+      if (side === 'bat' && err?.kind === 'err') next = next.map((r, k) => (k === rowOf(who) ? { ...r, advOnError: Math.max(0, (r as BattingPA).advOnError - basesOf(err)) } : r))
       // a run brought home by this batter's play is his RBI (not on an error or a double play)
       if (side === 'bat' && !noRbi) {
-        const old = who === 'batter' ? step.batter : step.dest[who]
-        const d = end === 'home' && old !== 'home' ? 1 : old === 'home' && end !== 'home' ? -1 : 0
+        const d = end === 'home' && old !== 'home' ? 1 : old === 'home' && end !== 'home' && err?.kind !== 'err' ? -1 : 0
         if (d) next = next.map((r, k) => (k === i ? { ...r, rbi: Math.max(0, Math.min(4, (r as BattingPA).rbi + d)) } : r))
       }
       commitHalf(side, next, setEnd(half, i, who, end))
@@ -270,7 +274,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       })
       commitHalf(side, next, h)
     }
-    // 趁傳進壘 on the batted ball: the bases beyond where the result alone put him (a runner: where he stood for it)
+    // 趁傳進壘／失誤進壘 on the batted ball: the bases beyond where the result alone put him (a runner: where he stood for it)
     const endOf = (who: number | 'batter') => (who === 'batter' ? step.batter : step.dest[who])
     // where the result alone takes a runner (the way 紀錄比賽 suggests it): a hit moves everyone that many bases, a walk
     // pushes the forced runners, a bunt or an error one base, a sacrifice fly scores the man on third
@@ -288,26 +292,51 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     }
     const natural = (who: number | 'batter') => (who === 'batter' ? batterEndFor(rows[i].result) : runnerNatural(who))
     const num = (e: End | undefined) => (e === 'home' ? 4 : typeof e === 'number' ? e : 0)
-    const playThrows = (rows[i].events ?? []).filter((e) => e.play)
-    const isThrow = (who: number | 'batter') => playThrows.some((e) => (who === 'batter' ? !!e.batter : !e.batter && e.to === endOf(who)))
-    const throwOf = (who: number | 'batter') => { const n = natural(who); return { can: typeof n === 'number' && num(endOf(who)) > n, on: isThrow(who) } }
-    const onThrow = (who: number | 'batter', on: boolean) => {
+    const basesOf = (e: PlayEvent) => num(e.to as End) - e.from
+    const rowOf = (who: number | 'batter') => (who === 'batter' ? i : who)
+    // his mark on the play (two runners can both score, so a runner's is told apart by where the result put him)
+    const playOf = (who: number | 'batter', to: End | undefined = endOf(who)) => {
+      const at = (rows[i].events ?? []).filter((e) => e.play && e.to === to && (who === 'batter' ? !!e.batter : !e.batter))
+      return at.length > 1 ? at.find((e) => e.from === natural(who)) : at[0]
+    }
+    const throwOf = (who: number | 'batter') => { const n = natural(who); return { can: typeof n === 'number' && num(endOf(who)) > n, kind: (playOf(who)?.kind ?? null) as ExtraBases | null } }
+    const onThrow = (who: number | 'batter', kind: ExtraBases | null) => {
       const n = natural(who), to = endOf(who)
       if (typeof n !== 'number' || to === undefined || to === 'out') return
       // from where the result alone put him (like 紀錄比賽)
       const from = Math.min(3, n) as 1 | 2 | 3
-      const rest = (rows[i].events ?? []).filter((e) => !(e.play && (who === 'batter' ? e.batter : !e.batter && e.to === to)))
-      const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'throw', from, to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }] : rest
+      const old = playOf(who)
+      const rest = (rows[i].events ?? []).filter((e) => e !== old)
+      const mark: PlayEvent | null = kind ? { at: rows[i].pitches.length, kind, from: old?.from ?? from, to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) } : null
+      const events = mark ? [...rest, mark] : rest
       const patch = <T extends BattingPA | PitchingPA>(r: T): T => { const { events: _old, ...rest2 } = r; void _old; return (events.length ? { ...rest2, events } : rest2) as T }
-      if (side === 'bat') setBat((b) => b.map((x, k) => (k === i ? toBatDraft(patch(fromBatDraft(x))) : x)))
-      else setPit((p) => p.map((x, k) => (k === i ? toPitDraft(patch(fromPitDraft(x))) : x)))
+      const errBases = (e: PlayEvent | null | undefined) => (e?.kind === 'err' ? basesOf(e) : 0)
+      if (side === 'bat') {
+        // 失誤進壘 while we bat: his own 失誤進壘 count goes up by the bases, and a run scored that way is no RBI
+        const dAdv = errBases(mark) - errBases(old)
+        const dRbi = to === 'home' && !noRbi ? (old?.kind === 'err' ? 1 : 0) - (mark?.kind === 'err' ? 1 : 0) : 0
+        setBat((b) => b.map((x, k) => {
+          let r = fromBatDraft(x)
+          if (k === i) r = patch(r)
+          if (k === rowOf(who) && dAdv) r = { ...r, advOnError: Math.max(0, r.advOnError + dAdv) }
+          if (k === i && dRbi) r = { ...r, rbi: Math.max(0, Math.min(4, r.rbi + dRbi)) }
+          return k === i || k === rowOf(who) ? toBatDraft(r) : x
+        }))
+      } else {
+        // while we field it is our error (pick the fielder in 我隊守備失誤 below) and a run scored on it is unearned
+        setPit((p) => p.map((x, k) => {
+          let r = k === i ? patch(fromPitDraft(x)) : null
+          if (k === rowOf(who) && mark?.kind === 'err' && to === 'home' && x.code === 'ER') r = { ...(r ?? fromPitDraft(x)), code: 'R' }
+          return r ? toPitDraft(r) : x
+        }))
+      }
     }
     const onThrowUp = (who: number | 'batter') => {
       const cur = endOf(who)
       if (typeof cur !== 'number') return
       const to: End = cur >= 3 ? 'home' : ((cur + 1) as End)
       // an earlier 趁傳 mark on him is extended (一安 → 2B → 3B on the throws), otherwise a new one from where he was
-      const old = playThrows.find((e) => (who === 'batter' ? !!e.batter : !e.batter && e.to === cur))
+      const old = playOf(who, cur)
       const rest = (rows[i].events ?? []).filter((e) => e !== old)
       const events = [...rest, { at: rows[i].pitches.length, kind: 'throw', from: old?.from ?? (cur as 1 | 2 | 3), to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
       onEnd(who, to, rows.map((r, k) => (k === i ? { ...r, events } : r)))
