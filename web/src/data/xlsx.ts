@@ -227,7 +227,7 @@ function parseSingleMeta(wb: XLSX.WorkBook): Game | null {
 const LEGACY_SUMMARY = '當日比賽統計'
 const LEGACY_BAT = ['打　擊', '打 擊', '打擊']
 const LEGACY_PIT = ['投球守備']
-const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+const REACH = new Set(['一安', '二安', '場地二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 
 function findSheet(wb: XLSX.WorkBook, names: string[]): XLSX.WorkSheet | undefined {
   for (const n of names) if (wb.Sheets[n]) return wb.Sheets[n]

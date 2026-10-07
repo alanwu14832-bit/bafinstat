@@ -139,7 +139,7 @@ def assign_innings(rows):
             # The 3rd out was a runner (this row's batter reached base; 壘死 marks a runner out). Scorers put
             # that out on the runner's row even though it happened during the next batter's PA, so a following
             # non-out row still belongs to this inning.
-            runner_out = r["out_on_base"] > 0 and r["result"] in ("一安", "二安", "三安", "保送", "故四", "觸身", "失誤", "野選", "妨礙")
+            runner_out = r["out_on_base"] > 0 and r["result"] in ("一安", "二安", "場地二安", "三安", "保送", "故四", "觸身", "失誤", "野選", "妨礙")
             if runner_out and nxt and nxt["code"] not in ("I", "II", "III"):
                 nxt["inning"], nxt["outs_before"] = inning, 2
                 rows[i + 1] = nxt

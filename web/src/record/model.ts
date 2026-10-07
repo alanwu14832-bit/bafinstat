@@ -13,7 +13,7 @@
  *   - every runner move between pitches is also logged in order (第 2 球暴投 1B→2B) and saved on the plate appearance
  *     it happened in as `events`; one that ends the half-inning before that batter's result is not (there is no row)
  */
-import type { BattingPA, DayRosterSub, Game, GameDayRoster, PitchingPA, PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
 
 export type Half = 'top' | 'bottom'
@@ -64,9 +64,9 @@ export interface RecordState {
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
 /** Results where the ball was put in play (the PA's last pitch is IP). */
-export const BIP_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
-export const REACH_RESULTS = new Set(['一安', '二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
-const HIT_BASES: Record<string, Dest> = { 一安: 1, 二安: 2, 三安: 3, 全壘打: 'home' }
+export const BIP_RESULTS = new Set(['一安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
+export const REACH_RESULTS = new Set(['一安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+const HIT_BASES: Record<string, Dest> = { 一安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
 /** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
 export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'F', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 const ROMAN = ['I', 'II', 'III'] as const
@@ -251,7 +251,7 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   let batter: Dest = 'out'
   if (result in HIT_BASES) {
     batter = HIT_BASES[result]
-    const n = result === '全壘打' ? 4 : result === '一安' ? 1 : result === '二安' ? 2 : 3
+    const n = HIT_BASE_COUNT[result]
     for (const r of s.runners) runners[r.row] = adv(r, n)
   } else if (result === '保送' || result === '故四' || result === '觸身' || result === '妨礙') {
     batter = 1

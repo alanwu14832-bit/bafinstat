@@ -18,7 +18,7 @@ import { cleanErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
-const REACH = new Set(['一安', '二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
+const REACH = new Set(['一安', '二安', '場地二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 const RESULT_ALIASES: Record<string, string> = { 界外飛球: '界外飛', 界外飛出局: '界外飛', 界外接殺: '界外飛', 犧牲: '犧觸', 犧打: '犧觸', 犧牲觸擊: '犧觸', 犧牲飛球: '犧飛', 全壘: '全壘打', 四壞: '保送', 故意四壞: '故四', 死球: '觸身', 觸身球: '觸身', 雙殺打: '雙殺', 不死三振: '三振' }
 const NON_FIELD = new Set(['DH', 'PH', 'PR', ''])
 

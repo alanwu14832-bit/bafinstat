@@ -2,10 +2,10 @@
  * Stats engine. Definitions mirror the helper columns of the workbook so the
  * website and the spreadsheet always agree. See data/stat_dictionary.json.
  */
-import { DEFAULT_PARAMS, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
+import { DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
-const HIT_RESULTS = new Set(['一安', '二安', '三安', '全壘打'])
+const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 export const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
 const SWING_CODES = new Set(['SS', 'F', 'IP'])
 const STRIKE_CODES = new Set(['S', 'SS', 'CS', 'F', 'IP'])
@@ -92,7 +92,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   if (isAB) l.ab++
   const hit = HIT_RESULTS.has(r)
   if (hit) l.h++
-  if (r === '一安') l.h1++; if (r === '二安') l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
+  if (r === '一安') l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
   if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺') l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
   l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs
@@ -186,7 +186,7 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
   l.pc += pt.pitches; l.strikes += pt.strikes; l.balls += pt.balls; l.whiffs += pt.whiffs; l.swings += pt.swings; l.called += pt.called
   if (STRIKE_CODES.has(pa.pitches[0] ?? '')) l.firstPitchStrike++
   if (HIT_RESULTS.has(r)) l.h++
-  if (r === '二安') l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++; if (r === '犧飛') l.sf++
+  if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++; if (r === '犧飛') l.sf++
   if (r === '三振') l.k++; if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++
   // 雙殺 produces two outs but is recorded on one row; only possible with 0–1 outs before the PA (see 數據字典 IP)
   if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1

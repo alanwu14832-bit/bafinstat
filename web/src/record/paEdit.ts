@@ -3,7 +3,7 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import type { BattingPA, PitchingPA } from '../data/types'
+import { isDouble, type BattingPA, type PitchingPA } from '../data/types'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
 
@@ -79,7 +79,7 @@ export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string):
 const ON_FIRST = new Set(['一安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 /** Base the batter reached on his result: 1–3, 4 for a home run, null when he was out at the plate. */
 export function startBase(pa: Pick<BattingPA, 'result' | 'code'>): number | null {
-  if (pa.result === '二安') return 2
+  if (isDouble(pa.result)) return 2
   if (pa.result === '三安') return 3
   if (pa.result === '全壘打') return 4
   if (ON_FIRST.has(pa.result)) return 1

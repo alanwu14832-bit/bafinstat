@@ -15,6 +15,7 @@ import { count, offense, score, type RecordState } from '../record/model'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
+import { HIT_BASE_COUNT } from '../data/types'
 import { cx } from '../lib/format'
 
 const POLL_MS = 5000
@@ -73,8 +74,8 @@ export function LivePage() {
   const recent = rows.slice(-6).reverse()
   const batter = side === 'us' ? `${s.slot + 1} 棒 ${s.lineup[s.slot]?.name ?? ''}` : `對方 ${s.oppOrder} 棒${s.oppBatter ? ` ${s.oppBatter}` : ''}`
   const n = Math.max(sc.lineUs.length, s.game.innings ?? 0)
-  const hitsUs = s.batting.filter((p) => ['一安', '二安', '三安', '全壘打'].includes(p.result)).length
-  const hitsOpp = s.pitching.filter((p) => ['一安', '二安', '三安', '全壘打'].includes(p.result)).length
+  const hitsUs = s.batting.filter((p) => p.result in HIT_BASE_COUNT).length
+  const hitsOpp = s.pitching.filter((p) => p.result in HIT_BASE_COUNT).length
 
   return (
     <>
@@ -112,7 +113,7 @@ export function LivePage() {
                 className="px-4 py-2 flex items-center gap-3">
                 <span className="text-muted tnum w-8 shrink-0">{p.inning}{'batter' in p ? '' : ''}局</span>
                 <span className="font-medium text-ink truncate flex-1">{'batter' in p ? p.batter : (p.oppBatter || `對方 ${p.oppOrder} 棒`)}</span>
-                <span className={cx(['一安', '二安', '三安', '全壘打'].includes(p.result) ? 'font-semibold text-ink' : 'text-ink-2')}>{p.result || '—'}</span>
+                <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : 'text-ink-2')}>{p.result || '—'}</span>
                 {p.code && <Badge variant={p.code === 'R' || p.code === 'ER' ? 'good' : 'neutral'}>{p.code}</Badge>}
               </motion.li>
             ))}

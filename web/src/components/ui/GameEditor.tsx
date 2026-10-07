@@ -7,7 +7,7 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, errorsText } from '../../data/errors'
-import { LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
@@ -282,7 +282,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const mid = midOf(step), me = mid.find((o) => o.row === row)
       if (!me) return undefined
       const res = rows[i].result
-      const hit = ({ 一安: 1, 二安: 2, 三安: 3, 全壘打: 4 } as Record<string, number>)[res]
+      const hit = HIT_BASE_COUNT[res]
       if (hit) return Math.min(4, me.base + hit)
       const on = (b: number) => mid.some((o) => o.base === b)
       if (['保送', '故四', '觸身', '妨礙'].includes(res)) return me.base === 1 || (me.base === 2 && on(1)) || (me.base === 3 && on(1) && on(2)) ? me.base + 1 : me.base
