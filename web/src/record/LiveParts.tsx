@@ -116,7 +116,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
 
 /* ------------------------------------------------------------------ runner sheet */
 export const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: Side; out?: boolean }> = [
-  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘', side: 'us' }, { ev: 'advance', label: '進一個壘' },
+  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘', side: 'us' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' },
   { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'out', label: '壘死', out: true },
 ]
 const bigBtn = (out?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors', out && 'text-critical')

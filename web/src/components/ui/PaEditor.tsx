@@ -153,8 +153,8 @@ function CountButton({ label, value, onChange }: { label: string; value: number;
 
 /** Runner plays between pitches, as 紀錄比賽 offers them (a wild pitch while we bat is the other team's). */
 const PLAY_KINDS: Record<PaSide, string[]> = {
-  bat: ['sb', 'wp', 'pb', 'err', 'advance', 'cs', 'pk', 'out'],
-  pit: ['sb', 'wp', 'pb', 'advance', 'cs', 'pk', 'out'],
+  bat: ['sb', 'wp', 'pb', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
+  pit: ['sb', 'wp', 'pb', 'throw', 'advance', 'cs', 'pk', 'out'],
 }
 export interface TimelineProps {
   step: Step
@@ -397,14 +397,13 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
           {bat && <div className="mt-1"><Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} /></div>}
         </Section>
       ) : null}
-      {timeline && pit ? (
-        <Section title="這個打席的跑壘次數" aside={<span className="text-[11px] text-muted">點一下加一次、− 減一次（上面的跑者按鈕會自動加）</span>}>
+      {timeline && pit && !timeline.step.before.length && !timeline.step.moves.length ? (
+        // with runners on, 被盜壘／阻殺／暴投／捕逸／牽制出局 are counted from the plays in 逐球; with nobody on, a wild pitch
+        // or passed ball has no runner to pick, so it is counted here
+        <Section title="壘上無人時的暴投・捕逸" aside={<span className="text-[11px] text-muted">壘上有人時，在上面「逐球」選跑者記，次數會自動算</span>}>
           <div className="flex flex-wrap gap-1.5">
-            <CountButton label="被盜壘" value={pit.sba} onChange={(v) => set({ sba: v })} />
-            <CountButton label="阻殺（盜壘失敗）" value={pit.cs} onChange={(v) => set({ cs: v })} />
             <CountButton label="暴投" value={pit.wp} onChange={(v) => set({ wp: v })} />
             <CountButton label="捕逸" value={pit.pb} onChange={(v) => set({ pb: v })} />
-            <CountButton label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
           </div>
         </Section>
       ) : null}
