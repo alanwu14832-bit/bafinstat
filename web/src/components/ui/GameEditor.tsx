@@ -272,7 +272,21 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     }
     // 趁傳進壘 on the batted ball: the bases beyond where the result alone put him (a runner: where he stood for it)
     const endOf = (who: number | 'batter') => (who === 'batter' ? step.batter : step.dest[who])
-    const natural = (who: number | 'batter') => (who === 'batter' ? batterEndFor(rows[i].result) : midOf(step).find((o) => o.row === who)?.base)
+    // where the result alone takes a runner (the way 紀錄比賽 suggests it): a hit moves everyone that many bases, a walk
+    // pushes the forced runners, a bunt or an error one base, a sacrifice fly scores the man on third
+    const runnerNatural = (row: number): number | undefined => {
+      const mid = midOf(step), me = mid.find((o) => o.row === row)
+      if (!me) return undefined
+      const res = rows[i].result
+      const hit = ({ 一安: 1, 二安: 2, 三安: 3, 全壘打: 4 } as Record<string, number>)[res]
+      if (hit) return Math.min(4, me.base + hit)
+      const on = (b: number) => mid.some((o) => o.base === b)
+      if (['保送', '故四', '觸身', '妨礙'].includes(res)) return me.base === 1 || (me.base === 2 && on(1)) || (me.base === 3 && on(1) && on(2)) ? me.base + 1 : me.base
+      if (res === '犧觸' || res === '失誤') return Math.min(4, me.base + 1)
+      if (res === '犧飛' && me.base === 3) return 4
+      return me.base
+    }
+    const natural = (who: number | 'batter') => (who === 'batter' ? batterEndFor(rows[i].result) : runnerNatural(who))
     const num = (e: End | undefined) => (e === 'home' ? 4 : typeof e === 'number' ? e : 0)
     const playThrows = (rows[i].events ?? []).filter((e) => e.play)
     const isThrow = (who: number | 'batter') => playThrows.some((e) => (who === 'batter' ? !!e.batter : !e.batter && e.to === endOf(who)))
@@ -280,8 +294,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const onThrow = (who: number | 'batter', on: boolean) => {
       const n = natural(who), to = endOf(who)
       if (typeof n !== 'number' || to === undefined || to === 'out') return
-      // a runner: the last base before where he ended; the batter: where the hit put him
-      const from = (who === 'batter' ? n : Math.max(n, Math.min(3, num(to) - 1))) as 1 | 2 | 3
+      // from where the result alone put him (like 紀錄比賽)
+      const from = Math.min(3, n) as 1 | 2 | 3
       const rest = (rows[i].events ?? []).filter((e) => !(e.play && (who === 'batter' ? e.batter : !e.batter && e.to === to)))
       const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'throw', from, to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }] : rest
       const patch = <T extends BattingPA | PitchingPA>(r: T): T => { const { events: _old, ...rest2 } = r; void _old; return (events.length ? { ...rest2, events } : rest2) as T }
@@ -303,7 +317,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, notice: tlNotice, ...pinch }
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult,
+      ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
@@ -404,12 +419,12 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Tabs size="sm" aria-label="編輯區" value={tab} onChange={(t) => { setTab(t); setSel(null) }} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }, { value: 'roster', label: '登錄名單', count: starterSet.size + bench.filter((n) => !starterSet.has(n)).length }]} />
-          <span className="text-xs text-muted">{tab === 'roster' ? '先發、板凳（到場未先發）與替補紀錄；全部留空＝這場沒有登錄名單。' : '局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。'}</span>
+          {(tab === 'roster' || tab === 'fld' || paView === 'table') && <span className="text-xs text-muted">{tab === 'roster' ? '先發、板凳（到場未先發）與替補紀錄；全部留空＝這場沒有登錄名單。' : tab === 'fld' ? '守備留空會由打席推定。' : '局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。'}</span>}
         </div>
         {(tab === 'bat' || tab === 'pit') && (
           <div className="flex items-center gap-2 flex-wrap">
             <Tabs size="sm" aria-label="打席編輯方式" value={paView} onChange={(v) => { setPaView(v); setSel(null) }} items={[{ value: 'tap', label: '逐打席' }, { value: 'table', label: '表格' }]} />
-            <span className="text-xs text-muted">{paView === 'tap' ? '點一個打席，用紀錄比賽的按鈕修改；改完按最下方「儲存修改」。' : '一次看全部欄位，適合大量修改。'}</span>
+            {paView === 'table' && <span className="text-xs text-muted">一次看全部欄位，適合大量修改。</span>}
           </div>
         )}
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
