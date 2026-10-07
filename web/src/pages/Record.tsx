@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRightLeft, CloudDownload, Flag, Maximize2, Minimize2, RefreshCw, Save, X } from 'lucide-react'
@@ -27,7 +27,7 @@ import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, beyondDefault, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { describeChange } from '../record/summary'
@@ -212,10 +212,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const choose = (result: string) => { setPlan(defaultPlan(state, result)); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
     if (!p) return p
-    const next = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
+    const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
+    // a 趁傳 mark goes away once he no longer goes further than the result gives
+    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)) }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
+  const throwToggle = (who: number | 'batter', name: string) => {
+    if (!plan || !beyondDefault(state, plan, who)) return undefined
+    const on = !!plan.throws?.includes(who)
+    return <ThrowToggle name={name} on={on} onToggle={() => setPlan({ ...plan, throws: on ? plan.throws!.filter((w) => w !== who) : [...(plan.throws ?? []), who] })} />
+  }
   const confirm = () => { if (!plan || problems.length) return; act((s) => commitPA(s, plan)); setPlan(null) }
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
   // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
@@ -366,9 +373,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                   <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
                   <div className="flex flex-col gap-1.5">
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
-                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} />
+                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)} />
                     ))}
-                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter />
+                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')} />
                   </div>
                 </div>
                 {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m}，請調整跑者去向</span>)}</div>}
@@ -438,7 +445,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   )
 }
 
-function DestRow({ label, value, onChange, min, batter }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean }) {
+/** 趁傳 next to a destination beyond what the result gives: the extra bases were taken on the throw. */
+function ThrowToggle({ on, onToggle, name }: { on: boolean; onToggle: () => void; name: string }) {
+  return (
+    <button type="button" aria-pressed={on} aria-label={`${name} 趁傳進壘`} onClick={onToggle}
+      className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer transition-colors', on ? 'border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-accent-soft text-ink' : 'border-dashed border-border-strong text-ink-2 hover:text-ink')}>
+      {on ? '✓ 趁傳進壘' : '趁傳？'}
+    </button>
+  )
+}
+
+function DestRow({ label, value, onChange, min, batter, extra }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode }) {
   const opts: Array<{ v: Dest; l: string }> = [{ v: 'out', l: '出局' }, { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -448,6 +465,7 @@ function DestRow({ label, value, onChange, min, batter }: { label: string; value
           <button key={String(o.v)} type="button" onClick={() => onChange(o.v)} className={cx('h-8 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', value === o.v ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && value !== o.v && 'text-critical')}>{o.l}</button>
         ))}
       </div>
+      {extra}
     </div>
   )
 }

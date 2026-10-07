@@ -14,7 +14,10 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
   const pit = b.pitching.length > a.pitching.length ? b.pitching[b.pitching.length - 1] : null
   if (bat) parts.push(`${bat.batter} ${bat.result}${bat.rbi ? `（${bat.rbi} 分打點）` : ''}`)
   else if (pit) parts.push(`對方${pit.oppBatter ? ` ${pit.oppBatter}` : pit.oppOrder ? ` ${pit.oppOrder} 棒` : ''} ${pit.result}`)
-  else {
+  if (bat || pit) {
+    // 趁傳進壘 on the hit
+    for (const e of (bat ?? pit)!.events ?? []) if (e.play) parts.push(playText(e))
+  } else {
     // runner plays between pitches: names from where everyone stood before (lead runner moves first)
     const plays = b.half === a.half && b.inning === a.inning ? (b.plays ?? []).slice((a.plays ?? []).length) : []
     const nameAt = (base: number) => a.runners.find((r) => r.side === side && r.base === base)?.name ?? ''

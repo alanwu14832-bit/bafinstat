@@ -13,7 +13,7 @@ import { PlayerSelect } from './PlayerSelect'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
-import { addPlay, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half, type Move } from '../../record/timeline'
+import { addPlay, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half, type Move } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 
@@ -270,12 +270,30 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       })
       commitHalf(side, next, h)
     }
+    // 趁傳進壘 on the batted ball: the bases beyond where the result alone put him (a runner: where he stood for it)
+    const endOf = (who: number | 'batter') => (who === 'batter' ? step.batter : step.dest[who])
+    const natural = (who: number | 'batter') => (who === 'batter' ? batterEndFor(rows[i].result) : midOf(step).find((o) => o.row === who)?.base)
+    const num = (e: End | undefined) => (e === 'home' ? 4 : typeof e === 'number' ? e : 0)
+    const playThrows = (rows[i].events ?? []).filter((e) => e.play)
+    const isThrow = (who: number | 'batter') => playThrows.some((e) => (who === 'batter' ? !!e.batter : !e.batter && e.to === endOf(who)))
+    const throwOf = (who: number | 'batter') => { const n = natural(who); return { can: typeof n === 'number' && num(endOf(who)) > n, on: isThrow(who) } }
+    const onThrow = (who: number | 'batter', on: boolean) => {
+      const n = natural(who), to = endOf(who)
+      if (typeof n !== 'number' || to === undefined || to === 'out') return
+      // a runner: the last base before where he ended; the batter: where the hit put him
+      const from = (who === 'batter' ? n : Math.max(n, Math.min(3, num(to) - 1))) as 1 | 2 | 3
+      const rest = (rows[i].events ?? []).filter((e) => !(e.play && (who === 'batter' ? e.batter : !e.batter && e.to === to)))
+      const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'throw', from, to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }] : rest
+      const patch = <T extends BattingPA | PitchingPA>(r: T): T => { const { events: _old, ...rest2 } = r; void _old; return (events.length ? { ...rest2, events } : rest2) as T }
+      if (side === 'bat') setBat((b) => b.map((x, k) => (k === i ? toBatDraft(patch(fromBatDraft(x))) : x)))
+      else setPit((p) => p.map((x, k) => (k === i ? toPitDraft(patch(fromPitDraft(x))) : x)))
+    }
     const pinch = side === 'bat' ? {
       onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, onResult, notice: tlNotice, ...pinch }
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onResult, notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
