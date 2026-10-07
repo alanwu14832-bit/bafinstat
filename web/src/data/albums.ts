@@ -27,8 +27,9 @@ const fromRow = (r: AlbumRow): AlbumLink => ({ id: r.id, gameId: r.game_id ?? un
 
 /** null when the table is missing (migration not run yet). */
 export async function loadCloudAlbums(): Promise<AlbumLink[] | null> { const rows = await fetchAlbums(); return rows === null ? null : rows.map(fromRow) }
-export async function saveCloudAlbum(a: AlbumLink, email?: string | null): Promise<AlbumLink> {
-  const row = await upsertAlbum({ id: a.id, game_id: a.gameId ?? null, title: a.title ?? null, date: a.date ?? null, url: a.url, photographer: a.photographer ?? null, note: a.note ?? null, created_by: a.createdBy ?? email ?? null })
+export async function saveCloudAlbum(a: AlbumLink, _email?: string | null): Promise<AlbumLink> {
+  // created_by is stamped by the database with the recorder's name (this table is public)
+  const row = await upsertAlbum({ id: a.id, game_id: a.gameId ?? null, title: a.title ?? null, date: a.date ?? null, url: a.url, photographer: a.photographer ?? null, note: a.note ?? null, created_by: a.createdBy ?? null })
   return fromRow(row)
 }
 export const deleteCloudAlbum = (id: string) => deleteAlbumRow(id)

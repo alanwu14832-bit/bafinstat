@@ -12,7 +12,7 @@ import type { User } from '@supabase/supabase-js'
 import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
-import { cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
+import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
@@ -47,7 +47,9 @@ interface DataState {
   demo: boolean
   filters: Filters
   params: StatParams
-  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean }
+  cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean
+    /** why a signed-in account cannot write yet (need_code: enter the 邀請碼…); null when it can, or unknown */
+    access?: EditorAccess | null }
   setFilters: (patch: Partial<Filters>) => void
   resetFilters: () => void
   setDemo: (on: boolean) => void
@@ -65,6 +67,8 @@ interface DataState {
   setParams: (patch: Partial<StatParams>) => void
   loadCloud: () => Promise<void>
   setCloudUser: (user: User | null) => void
+  /** 啟用紀錄員權限 with the one-time 邀請碼 */
+  claimWithCode: (code: string) => Promise<EditorAccess>
   /** photo album links (see data/albums.ts) */
   albums: AlbumLink[]
   albumsSupported: boolean
@@ -247,8 +251,21 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
   setCloudUser: (user) => {
-    set({ cloud: { ...get().cloud, user, isEditor: false } })
-    if (user) void fetchIsEditor(user.email).then((ok) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: ok } }) }).catch(() => set({ cloud: { ...get().cloud, isEditor: false } }))
+    set({ cloud: { ...get().cloud, user, isEditor: false, access: null } })
+    if (!user) return
+    // the account must be the one bound to its listed email (a database without the security migration: email check)
+    const settle = (isEditor: boolean, access: EditorAccess | null) => { if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor, access: isEditor ? null : access } }) }
+    void claimEditor()
+      .then(async (a) => (a === null ? settle(await fetchIsEditor(user.email), 'not_listed') : settle(a === 'ok', a)))
+      .catch(() => settle(false, null))
+  },
+  claimWithCode: async (code) => {
+    const user = get().cloud.user
+    if (!user) return 'not_signed_in'
+    const a = await claimEditor(code)
+    if (a === null) return 'ok'
+    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: a === 'ok', access: a === 'ok' ? null : a } })
+    return a
   },
   albums: cloudConfigured ? [] : readLocalAlbums(),
   albumsSupported: true,

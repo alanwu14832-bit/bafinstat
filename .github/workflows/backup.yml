@@ -1,0 +1,48 @@
+name: 每日備份資料
+
+# 每天把資料庫裡的比賽資料存一份 JSON，放在這次執行的 Artifacts（保留 30 天，所以隨時有約 30 份）。
+# 用的是網站公開讀取的金鑰，備份內容和網站上任何人看得到的一樣，不含紀錄員帳號。
+# 還原：GitHub → Actions → 每日備份資料 → 選一次執行 → Artifacts 下載；交給 Claude 寫回資料庫。
+on:
+  schedule:
+    - cron: '41 19 * * *'   # 每天台灣時間 03:41
+  workflow_dispatch:
+
+# 只需要讀 repo（上傳 Artifacts 不需要額外權限）
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    if: ${{ vars.VITE_SUPABASE_URL != '' }}
+    steps:
+      - name: 下載每張資料表
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          # 舊版 anon key（eyJ 開頭）也放進 Authorization；新版 publishable key 只放 apikey
+          AUTH=(); case "$KEY" in eyJ*) AUTH=(-H "Authorization: Bearer $KEY");; esac
+          set -euo pipefail
+          mkdir -p backup
+          for t in games players batting_pa pitching_pa fielding_lines albums registrations; do
+            echo '[]' > "backup/$t.json"
+            from=0
+            while true; do
+              # PostgREST 一次最多回 1000 列，用 Range 分頁
+              curl -sS --fail "$URL/rest/v1/$t?select=*" -H "apikey: $KEY" "${AUTH[@]}" \
+                -H "Range-Unit: items" -H "Range: $from-$((from + 999))" > page.json || { echo "::warning::$t 讀不到（資料表不存在？）"; break; }
+              n=$(jq length page.json)
+              jq -s '.[0] + .[1]' "backup/$t.json" page.json > merged.json && mv merged.json "backup/$t.json"
+              [ "$n" -lt 1000 ] && break
+              from=$((from + 1000))
+            done
+            echo "$t: $(jq length "backup/$t.json") 列" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ github.run_number }}
+          path: backup/
+          retention-days: 30

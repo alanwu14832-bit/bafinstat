@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LoginForm } from './LoginForm'
+import { EditorClaim } from './EditorClaim'
 import { CloudOff, LogOut, RefreshCw } from 'lucide-react'
 import { Card } from './Card'
 import { Button } from './Button'
@@ -34,7 +35,8 @@ export function CloudPanel() {
         {cloud.error && <div className="text-critical">{cloud.error}</div>}
         {cloud.user ? (
           <>
-            <div className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-ink-2 leading-relaxed">已以 <span className="font-medium text-ink">{cloud.user.email}</span> 登入。{cloud.isEditor ? '上傳的檔案會寫入雲端，所有人即時看到。' : '這個帳號不在紀錄員名單，只能瀏覽；請管理員把 email 加進 editors 表。'}</div>
+            <div className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-ink-2 leading-relaxed">已以 <span className="font-medium text-ink">{cloud.user.email}</span> 登入。{cloud.isEditor ? '上傳的檔案會寫入雲端，所有人即時看到。' : cloud.access && cloud.access !== 'not_listed' ? '這個帳號還不能寫入，見下方。' : '這個帳號不在紀錄員名單，只能瀏覽；請管理員把你加進紀錄員名單。'}</div>
+            <EditorClaim />
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" icon={<RefreshCw />} onClick={() => void loadCloud()} disabled={cloud.status === 'loading'}>重新載入</Button>
               <Button size="sm" variant="ghost" icon={<LogOut />} onClick={() => void run(signOut, '已登出')}>登出</Button>

@@ -8,6 +8,9 @@ on:
     branches: ['claude/baseball-stats-platform-avxula']
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   windows:
     runs-on: windows-latest

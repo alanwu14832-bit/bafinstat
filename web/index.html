@@ -19,22 +19,7 @@
       href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400&family=Noto+Serif+TC:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <script>
-      // Apply the persisted theme before first paint to avoid a flash.
-      try {
-        var t = localStorage.getItem('bafin.theme');
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-      } catch (e) {}
-    </script>
-    <script>
-      // Restore a deep link handed over by 404.html (see public/404.html).
-      (function (l) {
-        if (l.search[1] === '/') {
-          var decoded = l.search.slice(1).split('&').map(function (s) { return s.replace(/~and~/g, '&') }).join('?')
-          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash)
-        }
-      })(window.location)
-    </script>
+    <script src="%BASE%boot.js"></script>
   </head>
   <body>
     <div id="root"></div>
