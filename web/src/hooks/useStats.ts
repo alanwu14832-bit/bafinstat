@@ -39,18 +39,20 @@ export function useStats(): Computed {
   }, [base, demo, filters, params])
 }
 
-/** Option lists for the global filter bar (from the unfiltered dataset). */
+/** Option lists for the global filter bar (from the unfiltered dataset). Tournaments also come from the 報名名單, so a
+ *  tournament registered before its first game can already be picked (and recorded under the same name). */
 export function useFilterOptions() {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
+  const registrations = useDataStore((s) => s.registrations)
   return useMemo(() => {
     const ds = effectiveDataset(base, demo)
     return {
-      tournaments: uniqueSorted(ds.games.map((g) => g.tournament)),
+      tournaments: uniqueSorted([...ds.games.map((g) => g.tournament), ...registrations.map((r) => r.tournament)]),
       opponents: uniqueSorted(ds.games.map((g) => g.opponent)),
       positions: uniqueSorted([...ds.batting.map((p) => p.pos), ...ds.fielding.map((f) => f.pos)]),
       minDate: ds.games.reduce<string>((m, g) => (m && m < g.date ? m : g.date), ''),
       maxDate: ds.games.reduce<string>((m, g) => (m > g.date ? m : g.date), ''),
     }
-  }, [base, demo])
+  }, [base, demo, registrations])
 }
