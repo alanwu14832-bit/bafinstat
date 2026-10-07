@@ -123,3 +123,22 @@ describe('逐球跑壘: runner plays between pitches', () => {
     expect(rows[4]).toMatchObject({ outsBefore: 2, basesBefore: '無', code: 'III' })
   })
 })
+
+describe('changing an earlier plate appearance is never blocked by a later one', () => {
+  it('a walk moved back from 2B to 1B: the next batter reaching first forces him along instead of refusing', () => {
+    // 甲 walks and is on 2B when 乙 comes up (he took it at some point); 乙 singles, 甲 stays on 2B
+    const rows = [
+      pa({ batter: '甲', result: '保送', basesBefore: '無', outsBefore: 0, code: 'L' }),
+      pa({ batter: '乙', result: '一安', basesBefore: '2', outsBefore: 0, code: 'L' }),
+      pa({ batter: '丙', result: '三振', basesBefore: '12', outsBefore: 0, code: 'I' }),
+      pa({ batter: '丁', result: '三振', basesBefore: '12', outsBefore: 1, code: 'II' }),
+      pa({ batter: '戊', result: '三振', basesBefore: '12', outsBefore: 2, code: 'III' }),
+    ]
+    const ix = rows.map((_, i) => i)
+    const h = setEnd(inferHalf(rows, ix, 'bat')!, 0, 'batter', 1)
+    const name = (r: number) => rows[r].batter
+    expect(h.steps.flatMap((s) => stepProblems(s, name))).toEqual([])
+    expect(h.steps[1].dest).toEqual({ 0: 2 })
+    expect(deriveHalf(rows, h, 'bat').map((r) => r.basesBefore)).toEqual(['無', '1', '12', '12', '12'])
+  })
+})

@@ -205,16 +205,42 @@ function carry(steps: Step[], i: number, was0?: OnBase[]) {
     const before = j === i ? steps[j].before : stepAfter(steps[j - 1])
     const moves = replay(before, steps[j].moves)
     const mid = midOf({ before, moves })
-    // someone who stood still on the result keeps standing still from wherever he now is
     const was = new Map((j === i && was0 ? was0 : midOf(steps[j])).map((o) => [o.row, o.base]))
-    const dest: Record<number, End> = {}
-    for (const o of mid) { const d = steps[j].dest[o.row]; dest[o.row] = d === undefined || d === was.get(o.row) ? o.base : d }
-    // a destination behind where he now stands is moved up to where he is
-    for (const o of mid) { const d = dest[o.row]; if (typeof d === 'number' && d < o.base) dest[o.row] = o.base }
-    const outsJ = steps[j].outs.filter((r) => r === steps[j].index ? steps[j].batter === 'out' : dest[r] === 'out')
-    for (const o of mid) if (dest[o.row] === 'out' && !outsJ.includes(o.row)) outsJ.unshift(o.row)
-    steps[j] = { ...steps[j], before, moves, dest, outs: outsJ }
+    const build = (follow: boolean) => {
+      const dest: Record<number, End> = {}
+      // follow: someone who stood still on the result keeps standing still from wherever he now is;
+      // otherwise he still ends where he ended
+      for (const o of mid) { const d = steps[j].dest[o.row]; dest[o.row] = d === undefined || (follow && d === was.get(o.row)) ? o.base : d }
+      // a destination behind where he now stands is moved up to where he is
+      for (const o of mid) { const d = dest[o.row]; if (typeof d === 'number' && d < o.base) dest[o.row] = o.base }
+      const outsJ = steps[j].outs.filter((r) => r === steps[j].index ? steps[j].batter === 'out' : dest[r] === 'out')
+      for (const o of mid) if (dest[o.row] === 'out' && !outsJ.includes(o.row)) outsJ.unshift(o.row)
+      return { ...steps[j], before, moves, dest, outs: outsJ }
+    }
+    // a change to an earlier plate appearance never blocks itself on a later one: when standing still would put two
+    // runners on a base there (moved back to first, and the next batter reaches first), he keeps the base he ended on
+    // (forced along), and anyone still in the way is pushed ahead the way a force play would
+    const nobody = () => ''
+    let next = build(true)
+    if (j > i && stepProblems(next, nobody).length) {
+      next = build(false)
+      if (stepProblems(next, nobody).length) next = forceAhead(next)
+    }
+    steps[j] = next
   }
+}
+
+/** Each runner still on base ends at least one base ahead of the person behind him (trailing first; past third he scores). */
+function forceAhead(s: Step): Step {
+  const dest = { ...s.dest }
+  let behind = typeof s.batter === 'number' ? s.batter : s.batter === 'home' ? 4 : 0
+  for (const o of [...midOf(s)].sort((a, z) => a.base - z.base)) {
+    const d = dest[o.row]
+    if (d === 'out') continue
+    if (d === 'home') { behind = 4; continue }
+    if (behind && d <= behind) { const to = behind + 1; dest[o.row] = to >= 4 ? 'home' : (to as Base); behind = Math.min(4, to) } else behind = d
+  }
+  return { ...s, dest }
 }
 
 /**
