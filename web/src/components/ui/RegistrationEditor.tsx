@@ -6,6 +6,7 @@ import { EmptyState } from './EmptyState'
 import { Field, Input } from './Input'
 import { Select } from './Select'
 import { rosterNames } from './PlayerSelect'
+import { RosterSortToggle, useRosterSort } from './RosterSortToggle'
 import { cx } from '../../lib/format'
 import { registrationKey, seasonOf, REGISTRATIONS_UNSUPPORTED } from '../../data/registrations'
 import type { Game, Player, Registration } from '../../data/types'
@@ -40,7 +41,8 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
 
   // cloud lists arrive after the first render and can change under us, so fall back to the newest one
   const selected = registrations.find((r) => registrationKey(r.season, r.tournament) === picked) ?? registrations[0]
-  const order = useMemo(() => rosterNames(roster), [roster])
+  const sortMode = useRosterSort()
+  const order = useMemo(() => rosterNames(roster, sortMode), [roster, sortMode])
   const numberOf = useMemo(() => new Map(roster.map((p) => [p.name, p.number])), [roster])
   const activeNames = useMemo(() => { const on = new Set(roster.filter(isActive).map((p) => p.name)); return order.filter((n) => on.has(n)) }, [roster, order])
   const inactiveNames = useMemo(() => { const on = new Set(activeNames); return order.filter((n) => !on.has(n)) }, [order, activeNames])
@@ -130,6 +132,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[12px] font-medium text-ink-2">報名球員</span>
               <Badge variant={draft.players.size ? 'accent' : 'neutral'}>{draft.players.size} 人</Badge>
+              <RosterSortToggle />
               <div className="ml-auto flex gap-1">
                 <Button size="sm" variant="ghost" onClick={() => setDraft({ ...draft, players: new Set([...draft.players, ...activeNames, ...(showInactive ? inactiveNames : [])]) })}>全選</Button>
                 <Button size="sm" variant="ghost" onClick={() => setDraft({ ...draft, players: new Set() })} disabled={!draft.players.size}>清除</Button>
@@ -165,7 +168,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
                 <div className="text-[15px] font-semibold text-ink leading-5">{label(selected)}</div>
                 <div className="text-xs text-muted mt-0.5 tnum">{selected.players.length} 人{selected.updatedAt ? `・更新於 ${selected.updatedAt.slice(0, 10)}` : ''}</div>
               </div>
-              {canEdit && <Button size="sm" variant="outline" icon={<Pencil />} onClick={() => edit(selected)}>編輯</Button>}
+              <div className="flex items-center gap-2 flex-wrap"><RosterSortToggle />{canEdit && <Button size="sm" variant="outline" icon={<Pencil />} onClick={() => edit(selected)}>編輯</Button>}</div>
             </div>
             {selected.players.length ? (
               <ul className="flex flex-wrap gap-1.5" aria-label={`${label(selected)} 報名球員`}>

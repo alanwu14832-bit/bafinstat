@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { RosterSort } from '../data/rosterSort'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type FontMode = 'serif' | 'sans'
@@ -6,6 +7,7 @@ export type FontMode = 'serif' | 'sans'
 const THEME_KEY = 'bafin.theme'
 const SIDEBAR_KEY = 'bafin.sidebar'
 const FONT_KEY = 'bafin.font'
+const ROSTER_SORT_KEY = 'bafin.rosterSort'
 
 function readStorage(key: string): string | null {
   try {
@@ -68,6 +70,9 @@ interface UiState {
   toggleSidebar: () => void
   setMobileNavOpen: (open: boolean) => void
   setTheme: (mode: ThemeMode) => void
+  /** 球員排序 everywhere players are listed: by jersey number (default) or surname; remembered on this device */
+  rosterSort: RosterSort
+  setRosterSort: (mode: RosterSort) => void
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -90,6 +95,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     writeStorage(THEME_KEY, mode === 'system' ? null : mode)
     applyTheme(mode, true)
     set({ theme: mode })
+  },
+  rosterSort: readStorage(ROSTER_SORT_KEY) === 'surname' ? 'surname' : 'number',
+  setRosterSort: (mode) => {
+    writeStorage(ROSTER_SORT_KEY, mode === 'number' ? null : mode)
+    set({ rosterSort: mode })
   },
 }))
 

@@ -8,6 +8,8 @@ import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { withJerseyColumn } from '../components/ui/jerseyColumn'
+import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
@@ -89,7 +91,7 @@ export function PitchingPage() {
         <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
       <Card id="stats" title="投手成績" subtitle="點投手開啟個人檔案" flush>
-        <DataTable columns={columnsFor(view)} rows={s.pitchers} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} />
+        <DataTable columns={withJerseyColumn(columnsFor(view))} rows={withNumbers(s.pitchers, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="ERA 與 FIP" subtitle="差距大代表守備或運氣影響明顯；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />

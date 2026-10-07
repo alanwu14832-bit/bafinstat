@@ -10,6 +10,7 @@ import { CloudPanel } from '../components/ui/CloudPanel'
 import { Checkbox, Field } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../components/ui/PlayerSelect'
+import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { useDataStore } from '../store/data'
 import { FIELD_POSITIONS } from '../data/types'
@@ -103,7 +104,8 @@ export function LineupPage() {
   // a 報名名單 whose games are not on the schedule yet (新生盃 entered early) can be picked on its own
   const listOnly = useMemo(() => unscheduledRegistrations(registrations, scheduled), [registrations, scheduled])
   const reg = useMemo(() => (game ? registrationFor(registrations, game) : registrationByKey(registrations, lineup.regKey)), [registrations, game, lineup.regKey])
-  const names = useMemo(() => candidateNames(base.roster, reg), [base.roster, reg])
+  const sortMode = useRosterSort()
+  const names = useMemo(() => candidateNames(base.roster, reg, sortMode), [base.roster, reg, sortMode])
   const listed = !!reg?.players.length
   // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
   const [keys, setKeys] = useState<number[]>(() => Array.from({ length: 9 }, (_, i) => i))
@@ -175,7 +177,7 @@ export function LineupPage() {
   return (
     <>
       <PageHeader title="先發陣容" description="先選這份陣容是哪一場，再排守位、打序，最後勾今天有到的板凳；陣容會存在這台裝置，開始紀錄比賽時自動帶入。手機是清單、電腦是球場圖。"
-        actions={<div className="flex items-center gap-2"><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
+        actions={<div className="flex items-center gap-2 flex-wrap"><RosterSortToggle /><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       <Card bodyClassName="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-4">

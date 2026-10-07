@@ -8,6 +8,8 @@ import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Pencil, Search, 
 import { PageHeader } from '../components/layout/PageHeader'
 import { StoryRow } from '../components/ui/SeasonHero'
 import { HeroGlow } from '../components/ui/HeroGlow'
+import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
+import { sortRoster } from '../data/rosterSort'
 import { Stitches } from '../components/ui/Scoreboard'
 import { playerStories } from '../data/stories'
 import { PlateBadge } from '../components/ui/Scoreboard'
@@ -107,7 +109,9 @@ export function PlayersPage() {
   const reduced = usePrefersReducedMotion()
   const [params, setParams] = useSearchParams()
   const openGame = useOpenGame()
-  const roster = useMemo(() => [...s.dataset.roster].sort((a, b) => Number(!!b.status && b.status !== '現役' ? 0 : 1) - Number(!!a.status && a.status !== '現役' ? 0 : 1)), [s.dataset.roster])
+  // current players first, then the 球員排序 (背號 or 姓氏) chosen on the site; 上一位／下一位 follow it too
+  const sortMode = useRosterSort()
+  const roster = useMemo(() => sortRoster(s.dataset.roster, sortMode), [s.dataset.roster, sortMode])
   const names = useMemo(() => roster.map((p) => p.name), [roster])
   const requested = params.get('player')
   const [selected, setSelected] = useState<string>(requested && names.includes(requested) ? requested : names[0] ?? '')
@@ -353,6 +357,7 @@ export function PlayersPage() {
               <div className="px-4 md:px-5 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap">
                 <Input icon={<Search />} size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋姓名或背號" aria-label="搜尋球員" className="w-full sm:w-[240px]" autoFocus />
                 <span className="text-xs text-muted tnum whitespace-nowrap">{filtered.length} / {roster.length} 人</span>
+                <RosterSortToggle />
                 <div className="ml-auto flex items-center gap-1.5">
                   <Button size="sm" variant="outline" icon={<ClipboardList />} onClick={() => { setShowRegs(true); setOpen(false) }} title="各杯賽每年的報名名單">報名名單</Button>
                   {canEdit && <Button size="sm" variant="outline" icon={<Pencil />} onClick={() => { setEditingRoster(true); setOpen(false) }}>編輯名單</Button>}

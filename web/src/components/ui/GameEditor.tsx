@@ -10,6 +10,7 @@ import { cleanErrors, errorsText } from '../../data/errors'
 import { HIT_BASE_COUNT, LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
+import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
@@ -469,6 +470,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Tabs size="sm" aria-label="編輯區" value={tab} onChange={(t) => { setTab(t); setSel(null) }} items={[{ value: 'bat', label: '我隊打擊', count: bat.length }, { value: 'pit', label: '我隊投球', count: pit.length }, { value: 'fld', label: '守備', count: fld.length }, { value: 'roster', label: '登錄名單', count: starterSet.size + bench.filter((n) => !starterSet.has(n)).length }]} />
           {(tab === 'roster' || tab === 'fld' || paView === 'table') && <span className="text-xs text-muted">{tab === 'roster' ? '先發、板凳（到場未先發）與替補紀錄；全部留空＝這場沒有登錄名單。' : tab === 'fld' ? '守備留空會由打席推定。' : '局／出局(前) 留空會由結果代碼自動補算；守備留空會由打席推定。'}</span>}
+          <RosterSortToggle className="ml-auto" />
         </div>
         {(tab === 'bat' || tab === 'pit') && (
           <div className="flex items-center gap-2 flex-wrap">

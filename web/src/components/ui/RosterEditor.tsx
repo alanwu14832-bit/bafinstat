@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, FileSpreadsheet, Plus, Trash2 } from 'lucide-react'
 import { mergeRoster, parseRosterWorkbook, type RosterImportResult, type RosterMerge } from '../../data/rosterImport'
 import { Button } from './Button'
@@ -7,17 +7,29 @@ import { cx } from '../../lib/format'
 import { playersWithRecords, type RosterChange } from '../../data/roster'
 import { ROSTER_POSITIONS, type Dataset, type Player } from '../../data/types'
 import { POSITION_LABEL } from '../../lib/fmt'
+import { sortRoster, type RosterSort } from '../../data/rosterSort'
+import { RosterSortToggle, useRosterSort } from './RosterSortToggle'
 
 interface Row { original: string; player: Player; removed: boolean }
 const STATUSES = ['現役', '離隊', '畢業', '休賽']
 const HANDS = [{ v: '', l: '—' }, { v: 'R', l: '右' }, { v: 'L', l: '左' }, { v: 'S', l: '左右' }]
 const cell = cx(inputCls('sm'), 'h-8 px-2 text-[13px] w-full')
 const sel = cx(cell, 'appearance-none cursor-pointer')
+/** Rows in the 球員排序 (背號 or 姓氏); rows still being typed (no name yet) stay at the bottom. */
+function sortRows(rows: Row[], mode: RosterSort): Row[] {
+  const named = rows.filter((r) => r.player.name.trim()), blank = rows.filter((r) => !r.player.name.trim())
+  const order = sortRoster(named.map((r) => r.player), mode)
+  return [...order.map((p) => named.find((r) => r.player === p)!), ...blank]
+}
 
 /** Inline roster table: add, edit, rename, mark status, remove (only players without records). */
 export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; busy?: boolean; onSave: (c: RosterChange) => Promise<void>; onCancel: () => void }) {
   const withRecords = useMemo(() => playersWithRecords(base), [base])
-  const [rows, setRows] = useState<Row[]>(() => base.roster.map((p) => ({ original: p.name, player: { ...p }, removed: false })))
+  const sortMode = useRosterSort()
+  const [rows, setRows] = useState<Row[]>(() => sortRows(base.roster.map((p) => ({ original: p.name, player: { ...p }, removed: false })), sortMode))
+  // re-sorted only when the 排序 is switched, never while a number or name is being typed
+  const firstSort = useRef(true)
+  useEffect(() => { if (firstSort.current) { firstSort.current = false; return } setRows((rs) => sortRows(rs, sortMode)) }, [sortMode])
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ file: string; parsed: RosterImportResult; merge: RosterMerge } | null>(null)
   const [touched, setTouched] = useState<Set<string>>(new Set())
@@ -55,7 +67,8 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
       <div className="flex items-center gap-2 flex-wrap">
         <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls,.csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = '' }} />
         <Button size="sm" icon={<FileSpreadsheet />} onClick={() => fileRef.current?.click()}>匯入 Excel</Button>
-        <span className="text-[12px] text-muted">任何有「姓名」欄的工作表都可以；背號、守位、慣用手、狀態會自動對應。同名球員以檔案為準，檔案空白的欄位保留舊值。</span>
+        <span className="text-[12px] text-muted flex-1 min-w-[200px]">任何有「姓名」欄的工作表都可以；背號、守位、慣用手、狀態會自動對應。同名球員以檔案為準，檔案空白的欄位保留舊值。</span>
+        <RosterSortToggle />
       </div>
       {preview && (
         <div className="rounded-[var(--radius-sm)] border border-border bg-surface-2/50 p-3 md:p-4 flex flex-col gap-2 text-[13px]">

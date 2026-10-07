@@ -16,6 +16,7 @@ import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } fr
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../components/ui/PlayerSelect'
+import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
@@ -88,7 +89,8 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const reg = useMemo(() => registrationFor(registrations, game), [registrations, game])
   const listed = !!reg?.players.length
   const [everyone, setEveryone] = useState(false)
-  const names = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg), [base.roster, reg, everyone])
+  const sortMode = useRosterSort()
+  const names = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg, sortMode), [base.roster, reg, everyone, sortMode])
   const inLineup = useMemo(() => new Set(lineup.map((l) => l.name).filter(Boolean)), [lineup])
   const starting = useMemo(() => new Set([...inLineup, pitcher]), [inLineup, pitcher])
   const benchNames = useMemo(() => {
@@ -138,7 +140,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
         </div>
         </>}
       </Card>
-      <Card className="xl:col-span-3" title="先發打序與守位" subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
+      <Card className="xl:col-span-3" title="先發打序與守位" action={<RosterSortToggle />} subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
 >
         {/* also decides who the bench chips offer, so it stays when the lineup is folded */}
         {listed && <RegistrationHint reg={reg!} everyone={everyone} onToggle={() => setEveryone(!everyone)} className="mb-3" />}
@@ -212,7 +214,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
   // mid-game nobody may get stuck: if the 報名名單 is missing someone, the recorder can list the whole team
   const [everyone, setEveryone] = useState(false)
-  const pool = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg), [base.roster, reg, everyone])
+  const sortMode = useRosterSort()
+  const pool = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg, sortMode), [base.roster, reg, everyone, sortMode])
   // today's bench first, players already substituted out last (greyed out unless re-entry is allowed)
   const pitcherCands = useMemo(() => subCandidates(state, pool, 'pitcher'), [state, pool])
   const batterCands = useMemo(() => subCandidates(state, pool, 'batter'), [state, pool])

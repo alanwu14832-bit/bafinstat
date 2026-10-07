@@ -6,6 +6,8 @@ import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { DemoBanner } from '../components/ui/DemoBanner'
+import { withJerseyColumn } from '../components/ui/jerseyColumn'
+import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { SprayChart } from '../components/charts/SprayChart'
@@ -68,7 +70,7 @@ export function FieldingPage() {
         <StatTile label="捕手阻殺率" to={catchers.length ? '#catchers' : '?sort=csPct#stats'} value={totals.sb + totals.cs ? (totals.cs / (totals.sb + totals.cs)) * 100 : 0} format="pct" note={`${totals.cs} 阻殺 / ${totals.sb} 被盜`} />
       </StatGroup>
       <Card id="stats" title="守備成績" subtitle="點球員開啟個人檔案；PO／A 未記錄時為推定值" flush>
-        <DataTable columns={columns} rows={s.fielders} rowKey={(r) => r.name} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columns.some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as keyof FieldingStat, dir: linked.dir } : { key: 'tc', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
+        <DataTable columns={withJerseyColumn(columns)} rows={withNumbers(s.fielders, s.dataset.roster)} rowKey={(r) => r.name} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columns.some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as keyof FieldingStat, dir: linked.dir } : { key: 'tc', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
       </Card>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="失誤分佈" subtitle="各守位失誤次數" counts={errCounts} unit="次失誤" emptyText="沒有失誤" />
