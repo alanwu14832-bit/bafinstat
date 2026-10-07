@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Checkbox, Field, Input } from '../components/ui/Input'
 import { cx } from '../lib/format'
-import { datasetToWorkbook, legacyToDataset, parseWorkbook, type ImportReport } from '../data/xlsx'
+import { backupTables, datasetToWorkbook, legacyToDataset, parseWorkbook, type ImportReport } from '../data/xlsx'
 import { useFilterOptions } from '../hooks/useStats'
 import type { Dataset, Registration } from '../data/types'
 import { useDataStore } from '../store/data'
@@ -77,7 +77,27 @@ export function ImportPage() {
       setError(e instanceof Error ? e.message : String(e))
     }
   }
-  const exportCurrent = () => XLSX.writeFile(datasetToWorkbook(base, registrations), `${TEAM.filePrefix}_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  // 匯出備份: the data written into the 總表 template (its colours, dropdowns and formulas, 總表 recalculated when
+  // opened); a plain workbook when the template cannot be fetched
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<string | null>(null)
+  const exportCurrent = async () => {
+    const name = `${TEAM.filePrefix}_資料備份_${new Date().toISOString().slice(0, 10)}.xlsx`
+    setExporting(true); setExportNote(null)
+    try {
+      const res = await fetch(TEMPLATE_URL)
+      if (!res.ok) throw new Error(`範本下載失敗（${res.status}）`)
+      const { fillTemplate } = await import('../data/templateExport')
+      const { file, warnings } = fillTemplate(new Uint8Array(await res.arrayBuffer()), backupTables(base, registrations))
+      const url = URL.createObjectURL(new Blob([file as Uint8Array<ArrayBuffer>], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+      const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      setExportNote(warnings.length ? `已匯出（總表格式）。注意：${warnings.join('；')}` : '已匯出總表格式：用 Excel 打開後，總表與各計算欄會自動算好。')
+    } catch (e) {
+      XLSX.writeFile(datasetToWorkbook(base, registrations), name)
+      setExportNote(`總表格式沒辦法產生（${e instanceof Error ? e.message : String(e)}），改匯出純資料版。`)
+    } finally { setExporting(false) }
+  }
   const sourceLabel = source === 'cloud' ? `雲端資料庫${importedAt ? `・同步於 ${new Date(importedAt).toLocaleString('zh-TW')}` : ''}` : source === 'seed' ? '內建範例（由原紀錄表轉入）' : `匯入於 ${importedAt ? new Date(importedAt).toLocaleString('zh-TW') : ''}`
 
   if (cloud.configured && !canWriteCloud) {
@@ -140,9 +160,10 @@ export function ImportPage() {
               {[['比賽', base.games.length], ['打席', base.batting.length], ['球員', base.roster.length]].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
             </dl>
             <div className="flex gap-2 flex-wrap mt-4">
-              <Button size="sm" icon={<Download />} onClick={exportCurrent}>匯出備份 (.xlsx)</Button>
+              <Button size="sm" icon={<Download />} onClick={() => void exportCurrent()} disabled={exporting}>{exporting ? '匯出中…' : '匯出備份（總表格式）'}</Button>
               {source === 'imported' && <Button size="sm" variant="ghost" icon={<RefreshCw />} onClick={() => { if (window.confirm('確定清除匯入的資料，回到內建範例？')) resetToSeed() }}>回到內建資料</Button>}
             </div>
+            {exportNote && <p role="status" className="text-xs text-ink-2 mt-2">{exportNote}</p>}
             <Checkbox className="mt-4" checked={demo} onChange={setDemo} label="混入示範比賽（僅供瀏覽功能）" />
           </Card>
           <Card title="計算參數" subtitle="與總表『設定』工作表相同">
