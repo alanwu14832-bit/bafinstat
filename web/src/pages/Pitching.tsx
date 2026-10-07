@@ -38,7 +38,7 @@ export function PitchingPage() {
   const params = useDataStore((st) => st.params)
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
-  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}`)
+  const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=pitching`)
   const minIP = Math.max(1, Math.ceil(s.summary.games * 0.7))
 
   const eraFip = useMemo(() => s.pitchers.filter((p) => p.ip >= minIP).map((p) => ({ name: p.name, ERA: Number((p.era ?? 0).toFixed(2)), FIP: Number((p.fip ?? 0).toFixed(2)) })), [s.pitchers, minIP])

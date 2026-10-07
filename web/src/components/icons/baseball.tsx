@@ -14,11 +14,13 @@ export const IconBaseball = (p: IconProps) => (
     <path d="M5.2 8.4l1.7.5M4.7 12h1.8M5.2 15.6l1.7-.5M18.8 8.4l-1.7.5M19.3 12h-1.8M18.8 15.6l-1.7-.5" />
   </svg>
 )
+/** A bat on the diagonal: knob at the bottom left, the handle thickening into the barrel at the top right. */
 export const IconBat = (p: IconProps) => (
   <svg {...base(p)}>
-    <path d="M13.2 10.8 18.1 5.9a2.75 2.75 0 1 1 3.9 3.9l-4.9 4.9z" />
-    <path d="M13.2 10.8 5.6 18.4M5.6 18.4l-2 2" />
-    <circle cx="3.9" cy="20.1" r="0.6" />
+    <g transform="rotate(-45 12 12)">
+      <path d="M2.6 11.4H10C13.4 11.4 15.4 9.6 18.8 9.6H22.4A2.4 2.4 0 0 1 22.4 14.4H18.8C15.4 14.4 13.4 12.6 10 12.6H2.6" />
+      <path d="M1.4 9.9V14.1" />
+    </g>
   </svg>
 )
 export const IconGlove = (p: IconProps) => (
