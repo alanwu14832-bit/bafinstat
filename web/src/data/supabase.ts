@@ -275,14 +275,6 @@ export async function currentUser(): Promise<User | null> {
   const { data } = await supabase().auth.getSession()
   return data.session?.user ?? null
 }
-export async function sendMagicLink(email: string) {
-  const { error } = await supabase().auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}import` } })
-  if (error) throw new Error(error.message)
-}
-export async function verifyEmailCode(email: string, token: string) {
-  const { error } = await supabase().auth.verifyOtp({ email, token, type: 'email' })
-  if (error) throw new Error(error.message)
-}
 export async function signInWithPassword(email: string, password: string) {
   const { error } = await supabase().auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message === 'Invalid login credentials' ? 'email 或密碼錯誤' : error.message)
