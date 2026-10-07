@@ -108,7 +108,7 @@ export function basePath(pa: BattingPA): PathStep[] {
   move('盜壘', pa.sb)
   if (pa.run) steps.push({ label: '得分', end: 'run' })
   else if (pa.cs) steps.push({ label: '盜壘失敗', end: 'out' })
-  else if (pa.outOnBase) steps.push({ label: '出局', end: 'out' })
+  else if (pa.outOnBase) steps.push({ label: pa.baserunningOuts ? '壘死' : '出局', end: 'out' })
   else if (pa.code === 'L') steps.push({ label: '殘壘', end: 'stranded' })
   return steps
 }
@@ -123,11 +123,12 @@ export function applyRunEvent(pa: BattingPA, ev: RunEvent): BattingPA {
   if (ev === 'sb') { next.sb += 1; return next }
   if (ev === 'err') { next.advOnError += 1; return next }
   // a new ending: clear the old one first
-  next.run = 0; next.cs = 0; next.outOnBase = 0
+  next.run = 0; next.cs = 0; next.outOnBase = 0; delete next.baserunningOuts
   if (next.code === 'R' || next.code === 'L') delete next.code
   switch (ev) {
     case 'cs': next.cs = 1; break
-    case 'pk': case 'out': next.outOnBase = 1; break
+    case 'pk': next.outOnBase = 1; break
+    case 'out': next.outOnBase = 1; next.baserunningOuts = 1; break
     case 'score': return withRun(next, 1)
     case 'stranded': next.code = 'L'; break
   }
@@ -146,7 +147,7 @@ export function undoRunStep(pa: BattingPA): BattingPA {
   const next = { ...pa }
   if (next.run) return withRun(next, 0)
   if (next.cs) { next.cs -= 1; return next }
-  if (next.outOnBase) { next.outOnBase -= 1; return next }
+  if (next.outOnBase) { next.outOnBase -= 1; delete next.baserunningOuts; return next }
   if (next.code === 'L') { delete next.code; return next }
   if (next.sb) { next.sb -= 1; return next }
   if (next.advOnError) next.advOnError -= 1

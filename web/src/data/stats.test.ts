@@ -117,3 +117,12 @@ describe('wRC+, sSeager and K/7', () => {
     expect(p.k7).toBeCloseTo(7, 9); expect(p.k9).toBeCloseTo(9, 9)
   })
 })
+
+describe('內野飛球 (P)', () => {
+  it('is a fly ball, and IFFB% is the share of fly balls that stayed in the infield', () => {
+    const pa = (traj: string): BattingPA => ({ gameId: game.id, inning: 1, batter: '甲', pitches: ['IP'], result: '內飛', traj, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0 })
+    const [l] = battingLines(ds, [pa('P'), pa('F'), pa('F'), pa('G')])
+    expect(l.bip).toBe(4); expect(l.fb).toBe(3); expect(l.iffb).toBe(1)
+    expect(l.fbPct).toBeCloseTo(3 / 4, 9); expect(l.iffbPct).toBeCloseTo(1 / 3, 9)
+  })
+})

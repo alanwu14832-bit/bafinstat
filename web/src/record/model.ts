@@ -69,7 +69,7 @@ export const BIP_RESULTS = new Set(['一安', '內安', '二安', '場地二安'
 export const REACH_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 const HIT_BASES: Record<string, Dest> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
 /** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
-export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'F', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
+export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 const ROMAN = ['I', 'II', 'III'] as const
 const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 
@@ -234,6 +234,8 @@ export interface PAPlan {
   errAdv?: Array<number | 'batter'>
   /** (we field) whose error it was: positions, counted as our errors on this plate appearance */
   errBy?: string[]
+  /** 壘死: runner rows put out by their own baserunning mistake on the play (the rest of the runners out are just 出局) */
+  runningOuts?: number[]
 }
 
 const destNum = (d: Dest | undefined) => (d === 'home' ? 4 : typeof d === 'number' ? d : 0)
@@ -345,7 +347,12 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     return [{ at: base.pitches.length, kind, from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
   }
   const errAdv = new Set(plan.errAdv ?? [])
+  const runningOut = (plan.runningOuts ?? []).flatMap((row) => {
+    const r = s.runners.find((x) => x.row === row)
+    return r && plan.runners[row] === 'out' ? [{ at: base.pitches.length, kind: 'out', from: r.base, to: 'out' as const, play: true as const }] : []
+  })
   const thrown: PlayEvent[] = [
+    ...runningOut,
     ...(plan.throws ?? []).filter((w) => !errAdv.has(w)).flatMap((w) => onPlay(w, 'throw')),
     ...[...errAdv].flatMap((w) => onPlay(w, 'err')),
   ]
@@ -359,6 +366,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     outs = Math.min(3, outs + 1)
     const r = rside === 'us' ? batting[row] : pitching[row]
     if (!isBatter && rside === 'us') (r as BattingPA).outOnBase += 1
+    if (!isBatter && rside === 'us' && plan.runningOuts?.includes(row)) { const b = r as BattingPA; b.baserunningOuts = (b.baserunningOuts ?? 0) + 1 }
     r.code = ROMAN[outs - 1]
   }
   const markRun = (row: number, rside: Side) => {
@@ -424,7 +432,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
     case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
     case 'throw': case 'advance': dest = advance(1); break
     case 'score': dest = 'home'; break
-    case 'out': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; break
+    case 'out': dest = 'out'; if (side === 'us') { const b = r as BattingPA; b.outOnBase += 1; b.baserunningOuts = (b.baserunningOuts ?? 0) + 1 } break
   }
   let runners = s.runners.filter((x) => x !== runner)
   if (dest === 'out') { outs = Math.min(3, outs + 1); r.code = ROMAN[outs - 1] }

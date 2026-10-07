@@ -25,7 +25,8 @@ export function pitchTotals(pitches: string[]): PitchTotals {
 }
 
 const isRISP = (bases?: string) => !!bases && (bases.includes('2') || bases.includes('3'))
-const isBIP = (traj?: string) => traj === 'G' || traj === 'F' || traj === 'L'
+// P = 內野飛球: a fly ball that stays in the infield (counted with the fly balls, and on its own for IFFB%)
+const isBIP = (traj?: string) => traj === 'G' || traj === 'F' || traj === 'L' || traj === 'P'
 
 export function batterHand(roster: Player[], name: string): Hand {
   const p = roster.find((r) => r.name === name)
@@ -46,7 +47,9 @@ export interface BattingLine {
   name: string
   g: number; pa: number; ab: number; r: number; h: number; h1: number; h2: number; h3: number; hr: number; tb: number; xbh: number; rbi: number
   bb: number; ibb: number; hbp: number; so: number; sh: number; sf: number; gidp: number; roe: number; fc: number; sb: number; cs: number
-  rispAB: number; rispH: number; bip: number; gb: number; fb: number; ld: number; hard: number
+  /** 壘死: outs on the bases from his own baserunning mistakes */
+  baserunningOuts: number
+  rispAB: number; rispH: number; bip: number; gb: number; fb: number; ld: number; hard: number; iffb: number
   pitches: number; whiffs: number; swings: number; called: number; firstPitchSwing: number; qab: number
   /** balls he took (not counting an intentional walk's) — the out-of-zone takes of sSeager */
   ballsTaken: number
@@ -58,15 +61,15 @@ export interface BattingLine {
   sSeager: number | null
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
-  gbPct: number | null; fbPct: number | null; ldPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
+  gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
 }
 
 function emptyBatting(name: string): BattingLine {
   return {
-    name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0,
-    rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, ballsTaken: 0, pull: 0, center: 0, oppo: 0,
+    name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0,
+    rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, ballsTaken: 0, pull: 0, center: 0, oppo: 0,
     avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, sSeager: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
-    pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
+    pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
   }
 }
 
@@ -89,7 +92,7 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
   // in the zone, ball = out of it) and every swing counts as a zone swing.
   const takes = l.called + l.ballsTaken
   l.sSeager = takes > 0 && l.swings + l.ballsTaken > 0 ? l.ballsTaken / (l.swings + l.ballsTaken) - l.called / takes : null
-  l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.hardPct = div(l.hard, l.bip)
+  l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bip)
   l.pullPct = div(l.pull, l.bip); l.centerPct = div(l.center, l.bip); l.oppoPct = div(l.oppo, l.bip)
   return l
 }
@@ -106,11 +109,11 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   if (isSingle(r)) l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
   if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺') l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
-  l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs
+  l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0
   if (isAB && isRISP(pa.basesBefore)) { l.rispAB++; if (hit) l.rispH++ }
   if (isBIP(pa.traj)) {
     l.bip++
-    if (pa.traj === 'G') l.gb++; if (pa.traj === 'F') l.fb++; if (pa.traj === 'L') l.ld++
+    if (pa.traj === 'G') l.gb++; if (pa.traj === 'F' || pa.traj === 'P') l.fb++; if (pa.traj === 'P') l.iffb++; if (pa.traj === 'L') l.ld++
     if (pa.quality === '強') l.hard++
     const dir = sprayDirection(pa.loc, hand)
     if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else if (dir === 'oppo') l.oppo++
@@ -138,8 +141,8 @@ export function battingLines(ds: Dataset, pas: BattingPA[], params = DEFAULT_PAR
     const from = map.get(pa.batter)!
     let to = map.get(pa.runner)
     if (!to) { to = emptyBatting(pa.runner); map.set(pa.runner, to); games.set(pa.runner, new Set()) }
-    from.r -= pa.run; from.sb -= pa.sb; from.cs -= pa.cs
-    to.r += pa.run; to.sb += pa.sb; to.cs += pa.cs
+    from.r -= pa.run; from.sb -= pa.sb; from.cs -= pa.cs; from.baserunningOuts -= pa.baserunningOuts ?? 0
+    to.r += pa.run; to.sb += pa.sb; to.cs += pa.cs; to.baserunningOuts += pa.baserunningOuts ?? 0
     games.get(pa.runner)!.add(pa.gameId)
   }
   const out = [...map.values()].map((l) => { l.g = games.get(l.name)!.size; return finalizeBatting(l, params) })
@@ -184,19 +187,19 @@ export interface PitchingLine {
   g: number; gs: number; w: number; l: number; sv: number; hld: number; outs: number; ip: number; ipDisplay: string
   bf: number; ab: number; pc: number; strikes: number; balls: number; k: number; bb: number; ibb: number; hbp: number; h: number; h2: number; h3: number; hr: number; sf: number
   r: number; er: number; wp: number; sba: number; cs: number; pk: number
-  bip: number; gb: number; fb: number; ld: number; hard: number; whiffs: number; swings: number; called: number; firstPitchStrike: number
+  bip: number; gb: number; fb: number; ld: number; iffb: number; hard: number; whiffs: number; swings: number; called: number; firstPitchStrike: number
   era: number | null; whip: number | null; k7: number | null; k9: number | null; bb9: number | null; h9: number | null; kbb: number | null; kPct: number | null; bbPct: number | null
   oppAvg: number | null; oppObp: number | null; babip: number | null; fip: number | null; strikePct: number | null
-  gbPct: number | null; fbPct: number | null; ldPct: number | null; hardPct: number | null; whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
+  gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
   pPerIP: number | null; pPerBF: number | null; lobPct: number | null
 }
 
 function emptyPitching(name: string): PitchingLine {
   return {
     name, g: 0, gs: 0, w: 0, l: 0, sv: 0, hld: 0, outs: 0, ip: 0, ipDisplay: '0.0', bf: 0, ab: 0, pc: 0, strikes: 0, balls: 0, k: 0, bb: 0, ibb: 0, hbp: 0, h: 0, h2: 0, h3: 0, hr: 0, sf: 0,
-    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
+    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
     era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
-    gbPct: null, fbPct: null, ldPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
+    gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
   }
 }
 
@@ -218,7 +221,7 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
   l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk
-  if (isBIP(pa.traj)) { l.bip++; if (pa.traj === 'G') l.gb++; if (pa.traj === 'F') l.fb++; if (pa.traj === 'L') l.ld++; if (pa.quality === '強') l.hard++ }
+  if (isBIP(pa.traj)) { l.bip++; if (pa.traj === 'G') l.gb++; if (pa.traj === 'F' || pa.traj === 'P') l.fb++; if (pa.traj === 'P') l.iffb++; if (pa.traj === 'L') l.ld++; if (pa.quality === '強') l.hard++ }
 }
 
 export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS): PitchingLine {
@@ -233,7 +236,7 @@ export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS
   l.babip = div(l.h - l.hr, l.ab - l.k - l.hr + l.sf)
   l.fip = ip > 0 ? (13 * l.hr + 3 * (l.bb + l.hbp) - 2 * l.k) / ip + p.fipConstant : null
   l.strikePct = div(l.strikes, l.pc)
-  l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.hardPct = div(l.hard, l.bip)
+  l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bip)
   l.whiffPct = div(l.whiffs, l.swings); l.cswPct = div(l.called + l.whiffs, l.pc); l.fStrikePct = div(l.firstPitchStrike, l.bf)
   l.pPerIP = ip > 0 ? l.pc / ip : null; l.pPerBF = div(l.pc, l.bf)
   const lobDen = l.h + l.bb + l.hbp - 1.4 * l.hr

@@ -404,35 +404,44 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
   const out = rows.slice()
   const touch = (i: number) => (out[i] = { ...out[i] })
   let outs = 0
-  const end = (i: number, how: 'out' | 'home' | 'left', isBatter: boolean) => {
+  // mistake: 壘死 (true), plainly put out (false), or not known here — keep what the row says (undefined)
+  const end = (i: number, how: 'out' | 'home' | 'left', isBatter: boolean, mistake?: boolean) => {
     const r = touch(i) as Row
     const wasRun = r.code === 'R' ? 'R' : 'ER'
     if (side === 'bat') (r as BattingPA).run = how === 'home' ? 1 : 0
     if (how === 'out') {
       outs += 1
       r.code = ROMAN[Math.min(2, outs - 1)]
-      if (side === 'bat' && !isBatter) { const b = r as BattingPA; if (!b.outOnBase && !b.cs) b.outOnBase = 1 }
+      if (side === 'bat' && !isBatter) {
+        const b = r as BattingPA
+        if (!b.outOnBase && !b.cs) b.outOnBase = 1
+        if (mistake) b.baserunningOuts = 1
+        else if (mistake === false) delete b.baserunningOuts
+      }
     } else {
       r.code = how === 'home' ? (side === 'bat' ? 'R' : wasRun) : 'L'
-      if (side === 'bat') { const b = r as BattingPA; b.outOnBase = 0; b.cs = 0 }
+      if (side === 'bat') { const b = r as BattingPA; b.outOnBase = 0; b.cs = 0; delete b.baserunningOuts }
     }
   }
   for (const s of half.steps) {
     // the runner plays during his pitches come first; 壘上(前) / 出局(前) are what was left for his result
-    for (const m of s.moves) if (m.to === 'out' || m.to === 'home') end(m.row, m.to, false)
+    for (const m of s.moves) if (m.to === 'out' || m.to === 'home') end(m.row, m.to, false, m.to === 'out' ? m.kind === 'out' : undefined)
     const r = touch(s.index) as Row
     const mid = midOf(s)
     r.basesBefore = basesText(mid)
     r.outsBefore = outs
     // 趁傳進壘 on the play stays while that person still ends where it says
-    const onPlay = (r.events ?? []).filter((e) => e.play && (e.batter ? s.batter === e.to : mid.some((o) => s.dest[o.row] === e.to)))
+    // (a 壘死 mark is his while the runner who stood on its base is still out)
+    const onPlay = (r.events ?? []).filter((e) => e.play && (e.batter ? s.batter === e.to : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to)))
     // the inning's last one: where the runners left on base ended has to be written down (no next 壘上(前) says it)
     if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter }, onPlay, r.pitches.length))
     const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
     if (events.length) r.events = events
     else delete r.events
     // outs in the order they happened, then the runs
-    for (const row of s.outs) end(row, 'out', row === s.index)
+    // a runner out on the play: 壘死 when the play says so (a mark from his base), else the row's own count stands
+    const runningOut = new Set(onPlay.filter((e) => e.to === 'out' && !e.batter).flatMap((e) => mid.filter((o) => o.base === e.from).map((o) => o.row)))
+    for (const row of s.outs) end(row, 'out', row === s.index, runningOut.has(row) ? true : undefined)
     for (const o of mid) if (s.dest[o.row] === 'home') end(o.row, 'home', false)
     if (s.batter === 'home') end(s.index, 'home', true)
   }

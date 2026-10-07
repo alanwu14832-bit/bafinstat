@@ -251,7 +251,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     if (!p) return p
     const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
     // a 趁傳 mark goes away once he no longer goes further than the result gives
-    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)) }
+    // (a 壘死 mark goes away once he is no longer out)
+    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)), runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out') }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
@@ -450,7 +451,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
                   <div className="flex flex-col gap-1.5">
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
-                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)} />
+                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)}
+                        mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined} />
                     ))}
                     <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')} />
                   </div>
@@ -539,14 +541,19 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
 }
 
 
-function DestRow({ label, value, onChange, min, batter, extra }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode }) {
-  const opts: Array<{ v: Dest; l: string }> = [{ v: 'out', l: '出局' }, { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
+function DestRow({ label, value, onChange, min, batter, extra, mistake }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void } }) {
+  // a runner of ours can also be 壘死: out by his own baserunning mistake (charged to him), next to a plain 出局
+  type Opt = { v: Dest; l: string; m?: boolean }
+  const opts: Opt[] = [{ v: 'out', l: '出局', m: false }, ...(mistake ? [{ v: 'out' as Dest, l: '壘死', m: true }] : []), { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
+  const isOn = (o: Opt) => value === o.v && (o.m === undefined || !mistake || mistake.on === o.m)
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-[13px] text-ink w-[132px] truncate">{label}</span>
-      <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border">
+      <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border flex-wrap">
         {opts.filter((o) => batter || o.v === 'out' || o.v === 'home' || (typeof o.v === 'number' && o.v >= min)).map((o) => (
-          <button key={String(o.v)} type="button" onClick={() => onChange(o.v)} className={cx('h-8 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', value === o.v ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && value !== o.v && 'text-critical')}>{o.l}</button>
+          <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.m !== undefined && mistake ? mistake.set(o.m) : onChange(o.v))}
+            title={o.m ? '自己跑壘失誤出局（算這位跑者的壘死）' : o.m === false && mistake ? '被守備刺殺／封殺出局' : undefined}
+            className={cx('h-8 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical')}>{o.l}</button>
         ))}
       </div>
       {extra}
