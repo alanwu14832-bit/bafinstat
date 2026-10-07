@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowRightLeft, CloudDownload, Flag, Maximize2, Minimize2, RefreshCw, Save, X } from 'lucide-react'
@@ -220,6 +220,15 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
   const problems = plan ? planProblems(state, plan) : []
   // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點
   const inPlay = state.pitches[state.pitches.length - 1] === 'IP'
+  // 擊進場內 → straight to the results (just below the scoreboard bar)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const jump = useRef(false)
+  const toResults = () => { jump.current = true }
+  useEffect(() => {
+    if (!inPlay || !jump.current) return
+    jump.current = false
+    resultsRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+  }, [inPlay])
   const needLoc = !!plan && !NO_BATTED_BALL.has(plan.result) && !plan.loc
   const throwToggle = (who: number | 'batter', name: string) => {
     if (!plan || !beyondDefault(state, plan, who)) return undefined
@@ -329,7 +338,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
-              <PitchPad onPitch={(code) => apply((s) => addPitch(s, code))} disabled={!!plan || inPlay} />
+              <PitchPad onPitch={(code) => { if (inPlay) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -366,8 +375,13 @@ function Live({ state, apply, undo, canUndo, onFinish, onSaveDraft, saving, focu
 
             {/* the result */}
             {!plan ? (
-              <div className="flex flex-col gap-2.5">
-                {inPlay && <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft px-3 py-2 text-[13px] text-ink">擊進場內：請選這球的打擊結果（點錯了按上方「刪最後一球」）</div>}
+              <div ref={resultsRef} className="flex flex-col gap-2.5 scroll-mt-[196px] sm:scroll-mt-[150px]">
+                {inPlay && (
+                  <div role="status" className="flex items-center gap-3 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft pl-3 pr-1.5 py-1.5 text-[13px] text-ink">
+                    <span className="flex-1 min-w-0">擊進場內：請選這球的打擊結果</span>
+                    <button type="button" onClick={() => apply(undoPitch)} className="shrink-0 h-9 px-3 rounded-[var(--radius-sm)] text-[12px] text-ink-2 hover:text-ink hover:bg-surface/60 underline underline-offset-2 cursor-pointer">點錯了，刪掉 IP</button>
+                  </div>
+                )}
                 <ResultChips onPick={choose} only={inPlay ? BIP_RESULTS : undefined} />
               </div>
             ) : (

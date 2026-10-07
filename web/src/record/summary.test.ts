@@ -46,3 +46,10 @@ describe('趁傳進壘 on a hit', () => {
     expect(deriveHalf(rows, setEnd(half, 1, 0, 2), 'bat')[1].events).toEqual([expect.objectContaining({ batter: true })])
   })
 })
+
+describe('擊進場內 is the last pitch', () => {
+  it('ignores anything tapped after IP, so a double tap stays one IP', () => {
+    const s = addPitch(addPitch(addPitch(start(), 'B'), 'IP'), 'IP')
+    expect(addPitch(s, 'B').pitches).toEqual(['B', 'IP'])
+  })
+})
