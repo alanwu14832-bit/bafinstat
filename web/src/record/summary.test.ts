@@ -73,6 +73,23 @@ describe('失誤進壘 on a hit', () => {
   })
 })
 
+describe('場地二安', () => {
+  it('is a double in the stats and every runner moves up exactly two bases', async () => {
+    const { battingLines } = await import('../data/stats')
+    const { normalizeGameEdit } = await import('../data/edit')
+    const { SEED_DATASET } = await import('../data/seed')
+    const { toGameEdit } = await import('./model')
+    let s = send(send(start(), '一安'), '保送')            // 甲 2B, 乙 1B
+    const plan = defaultPlan(s, '場地二安')
+    expect(plan.batter).toBe(2); expect(plan.runners).toEqual({ 0: 'home', 1: 3 })
+    s = commitPA(s, plan)
+    expect(s.batting[2].rbi).toBe(1)
+    const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
+    const line = battingLines(fragment, fragment.batting).find((l) => l.name === '丙')!
+    expect(line.h).toBe(1); expect(line.h2).toBe(1); expect(line.tb).toBe(2)
+  })
+})
+
 describe('擊進場內 is the last pitch', () => {
   it('ignores anything tapped after IP, so a double tap stays one IP', () => {
     const s = addPitch(addPitch(addPitch(start(), 'B'), 'IP'), 'IP')

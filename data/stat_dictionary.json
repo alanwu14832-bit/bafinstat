@@ -44,7 +44,7 @@
   "zh": "安打",
   "en": "Hits",
   "group": "打擊",
-  "formula": "一安 + 二安 + 三安 + 全壘打",
+  "formula": "一安 + 二安（含場地二安） + 三安 + 全壘打",
   "status": "現有",
   "priority": "P0",
   "note": ""
@@ -54,7 +54,7 @@
   "zh": "二壘安打",
   "en": "Doubles",
   "group": "打擊",
-  "formula": "打擊結果 = 二安",
+  "formula": "打擊結果 = 二安 或 場地二安",
   "status": "現有",
   "priority": "P0",
   "note": ""

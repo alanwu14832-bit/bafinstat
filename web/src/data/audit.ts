@@ -2,13 +2,13 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { isHoleLoc, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
 import { pitchTotals } from './stats'
 
 export interface Issue { side: 'bat' | 'pit'; index: number; message: string }
 
 const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
-const HIT_RESULTS = new Set(['一安', '二安', '三安', '全壘打'])
+const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const BALL_RESULTS = new Set(['保送', '故四'])
 // scorers write the hit-by-pitch ball as B, so four balls + 觸身 is normal

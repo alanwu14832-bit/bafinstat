@@ -16,7 +16,7 @@
  * step keeps them as `moves` between the runners the batter came up with (`before`) and the ones still there for
  * his result (`midOf`). Rows without events fold any such play into the plate appearance before, as before.
  */
-import type { BattingPA, PitchingPA, PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isDouble, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
@@ -51,7 +51,7 @@ const parseBases = (b?: string): Base[] => [...new Set((b ?? '').split('').filte
 const basesText = (on: OnBase[]) => on.map((o) => o.base).sort((a, z) => a - z).join('') || '無'
 /** Base a batter who was not out stands on after his result, before anyone else moves (a home run is home). */
 function hitBase(result: string): End {
-  if (result === '二安') return 2
+  if (isDouble(result)) return 2
   if (result === '三安') return 3
   if (result === '全壘打') return 'home'
   return 1
@@ -436,7 +436,7 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
     const up = (o: OnBase, n: number): End => (o.base + n >= 4 ? 'home' : ((o.base + n) as Base))
     const reachedOnK = r.result === '三振' && (r.code === 'R' || r.code === 'ER' || r.code === 'L')
     let batter: End = reachedOnK ? 1 : batterEndFor(r.result)
-    const n = r.result === '一安' ? 1 : r.result === '二安' ? 2 : r.result === '三安' ? 3 : r.result === '全壘打' ? 4 : 0
+    const n = HIT_BASE_COUNT[r.result] ?? 0
     const forcedWalk = ['保送', '故四', '觸身', '妨礙'].includes(r.result) || reachedOnK
     const outsHere: number[] = []
     for (const o of before) {
