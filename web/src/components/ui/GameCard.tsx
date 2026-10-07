@@ -2,7 +2,8 @@ import { cx } from '../../lib/format'
 import { Badge } from './Badge'
 import { HeroGlow } from './HeroGlow'
 import { TeamLogo } from './TeamLogo'
-import type { GameSummary } from '../../data/stats'
+import { battingLines, type BattingLine, type GameSummary } from '../../data/stats'
+import type { Dataset } from '../../data/types'
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return Number.isNaN(d.getTime()) ? iso : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）` }
@@ -28,11 +29,20 @@ function OppMark({ name, size = 22 }: { name: string; size?: number }) {
 
 export interface GameStar { name: string; text: string }
 
+/** A game's 本場焦點: the batter with the most hits + RBI + runs (home runs count double); none when nobody hit. */
+export function gameStar(ds: Dataset, gameId: string): GameStar | undefined {
+  const lines = battingLines(ds, ds.batting.filter((p) => p.gameId === gameId))
+  let best: BattingLine | undefined, score = 0
+  for (const l of lines) { const v = l.h * 2 + l.hr * 2 + l.rbi * 1.5 + l.r; if (v > score) { score = v; best = l } }
+  if (!best || best.h + best.rbi <= 0) return undefined
+  return { name: best.name, text: [`${best.ab} 打數 ${best.h} 安`, best.hr && `${best.hr} 轟`, best.rbi && `${best.rbi} 打點`, best.r && `${best.r} 得分`].filter(Boolean).join('・') }
+}
+
 /**
  * One game as a small scoreboard: date and tournament, both teams with their runs (the winner in full ink), the line
  * score by inning with R / H / E, and who decided it. A win glows faintly in the team colour like the homepage hero.
  */
-export function GameCard({ s, teamName, star, onOpen }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void }) {
+export function GameCard({ s, teamName, star, onOpen, className }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void; className?: string }) {
   const g = s.game
   const win = s.result === 'W'
   const n = Math.max(g.innings ?? 0, s.lineUs.length, s.lineOpp.length, 1)
@@ -45,7 +55,7 @@ export function GameCard({ s, teamName, star, onOpen }: { s: GameSummary; teamNa
   const decided = [g.winningPitcher && `勝投 ${g.winningPitcher}`, g.losingPitcher && `敗投 ${g.losingPitcher}`, g.savePitcher && `救援 ${g.savePitcher}`].filter(Boolean).join('・')
   return (
     <button type="button" onClick={onOpen} aria-label={`${g.date} ${teamName} ${s.runsUs} 比 ${s.runsOpp} ${g.opponent}，${win ? '勝' : s.result === 'L' ? '敗' : '和'}，看這場`}
-      className="lift group relative overflow-hidden text-left rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-3.5 cursor-pointer min-w-0">
+      className={cx('lift group relative overflow-hidden text-left rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-3.5 cursor-pointer min-w-0', className)}>
       {win && <HeroGlow size="sm" strength={0.75} />}
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
