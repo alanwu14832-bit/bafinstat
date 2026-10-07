@@ -25,7 +25,7 @@ else {
     const res = TOKEN
       ? await fetch(`https://api.github.com/repos/${REPO}/tarball/site-archive`, { headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' } })
       : await fetch(`https://codeload.github.com/${REPO}/tar.gz/refs/heads/site-archive`)
-    if (res.status === 404 && !TOKEN) throw new Error('HTTP 404 (a private repo needs ARCHIVE_TOKEN)')
+    if (res.status === 404 && !TOKEN) throw new Error('HTTP 404: no saved versions yet, or a private repo without ARCHIVE_TOKEN')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     writeFileSync(tgz, Buffer.from(await res.arrayBuffer()))
     const out = resolve(dist, 'v')
