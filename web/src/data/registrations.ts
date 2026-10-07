@@ -102,7 +102,8 @@ export async function loadCloudRegistrations(): Promise<Registration[] | null> {
   const rows = await fetchRegistrations()
   return rows === null ? null : sortRegistrations(rows.map(fromRow))
 }
-export async function saveCloudRegistration(r: Registration, email?: string | null): Promise<Registration> {
-  return fromRow(await upsertRegistration({ season: r.season, tournament: r.tournament.trim(), players: r.players, updated_by: email ?? null }))
+export async function saveCloudRegistration(r: Registration, _email?: string | null): Promise<Registration> {
+  // updated_by is stamped by the database with the recorder's name (this table is public)
+  return fromRow(await upsertRegistration({ season: r.season, tournament: r.tournament.trim(), players: r.players, updated_by: null }))
 }
 export const deleteCloudRegistration = (season: number, tournament: string) => deleteRegistrationRow(season, tournament)

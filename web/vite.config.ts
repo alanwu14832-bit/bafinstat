@@ -3,6 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { accentCss, assetUrl, resolveTeam, type TeamConfig } from './src/config/teamDefaults'
+import { contentSecurityPolicy } from './src/config/security'
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
@@ -13,6 +14,7 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 function teamSite(): Plugin {
   let team: TeamConfig
   let base = '/'
+  let supabaseUrl: string | undefined
   const manifest = () => JSON.stringify({
     name: team.org, short_name: team.short, lang: 'zh-TW', start_url: base, scope: base, display: 'standalone',
     background_color: '#f5f5f7', theme_color: '#f5f5f7',
@@ -27,10 +29,14 @@ function teamSite(): Plugin {
       return { define: { __TEAM_SEED__: JSON.stringify(seed) } }
     },
     configResolved(config) {
-      team = resolveTeam(loadEnv(config.mode, config.envDir || process.cwd(), 'VITE_'))
+      const env = loadEnv(config.mode, config.envDir || process.cwd(), 'VITE_')
+      team = resolveTeam(env)
+      supabaseUrl = env.VITE_SUPABASE_URL
       base = config.base
     },
-    transformIndexHtml: (html) => html
+    transformIndexHtml: (html, ctx) => html
+      // the built site only (the dev server needs inline scripts and its own websocket)
+      .replace('<meta charset="UTF-8" />', ctx.server ? '<meta charset="UTF-8" />' : `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${escapeHtml(contentSecurityPolicy(supabaseUrl))}" />`)
       .replaceAll('%TEAM_ORG%', escapeHtml(team.org))
       .replaceAll('%TEAM_SHORT%', escapeHtml(team.short))
       .replaceAll('%TEAM_MARK%', escapeHtml(assetUrl(team.mark, base)))
