@@ -285,7 +285,7 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     for (const [inn, outs] of byInning) if (outs !== 3 && inn < maxInn) warn(`投球紀錄第 ${inn} 局出局數為 ${outs}（應為 3），請檢查結果代碼`)
     for (const p of [...bat, ...pit]) if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) warn(`第 ${p.inning} 局有 2 出局後的「雙殺」，只計 1 個出局`)
     const issues = auditGame(bat, pit).filter((i) => !i.message.includes('落點'))
-    if (issues.length) { for (const i of issues.slice(0, 6)) warn(`可疑打席：${i.message}`); if (issues.length > 6) warn(`另有 ${issues.length - 6} 個可疑打席，開啟比賽頁可逐一查看`) }
+    if (issues.length) { for (const i of issues.slice(0, 6)) warn(`待核對：${i.message}`); if (issues.length > 6) warn(`另有 ${issues.length - 6} 項待核對，開啟比賽頁可逐一查看`) }
     const noResult = bat.filter((p) => p.batter && !p.result).length + pit.filter((p) => p.pitcher && !p.result).length
     if (noResult) warn(`${noResult} 個打席沒有「打擊結果」，不計入統計`)
     const unknown = [...new Set(bat.flatMap((p) => [p.batter, p.runner ?? '']).filter((n) => n && !names.has(n)))]

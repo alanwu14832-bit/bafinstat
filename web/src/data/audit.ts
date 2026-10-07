@@ -85,6 +85,47 @@ function checkSequence<T extends { inning: number; code?: string; result: string
   })
 }
 
+/**
+ * 打點 and 盜壘 against what the game says happened:
+ *  - an inning's RBI cannot be more than the runs scored in it, and a play cannot drive in more runs than there were
+ *    runners on base (plus the batter on a home run);
+ *  - one time on base can steal at most 3 bases;
+ *  - in a game recorded pitch by pitch (its rows carry runner events), each half-inning's steals must match the steals
+ *    in its runner events — a count typed or added twice shows up here.
+ */
+function checkRunsAndSteals(batting: BattingPA[], pitching: PitchingPA[], out: Issue[]) {
+  const byInning = new Map<number, number[]>()
+  batting.forEach((p, i) => byInning.set(p.inning, [...(byInning.get(p.inning) ?? []), i]))
+  for (const [inning, idx] of byInning) {
+    const rbi = idx.reduce((a, i) => a + (batting[i].rbi ?? 0), 0), runs = idx.reduce((a, i) => a + (batting[i].run ?? 0), 0)
+    if (rbi > runs) out.push({ side: 'bat', index: idx.find((i) => batting[i].rbi > 0) ?? idx[0], message: `第 ${inning} 局：打點合計 ${rbi}，但這局只得 ${runs} 分（打點不會比得分多），請核對這局各打席的打點` })
+  }
+  batting.forEach((p, i) => {
+    const where = `第 ${p.inning} 局・${p.batter}`
+    const on = (p.basesBefore ?? '').replace(/[^123]/g, '').length
+    const max = p.result === '全壘打' ? on + 1 : on
+    if (p.basesBefore !== undefined && p.rbi > max && p.rbi <= 4) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」時壘上 ${on} 人，最多 ${max} 分打點，卻記了 ${p.rbi}` })
+    if (p.sb > 3) out.push({ side: 'bat', index: i, message: `${where}：這次上壘記了盜壘 ${p.sb}，一次上壘最多盜 3 個壘（二、三、本壘）` })
+  })
+  const steals = <T extends { inning: number; events?: Array<{ kind: string }> }>(rows: T[], count: (r: T) => number, side: 'bat' | 'pit', label: string) => {
+    if (!rows.some((r) => r.events?.length)) return
+    const halves = new Map<number, number[]>()
+    rows.forEach((r, i) => halves.set(r.inning, [...(halves.get(r.inning) ?? []), i]))
+    const lastInning = Math.max(...rows.map((r) => r.inning))
+    for (const [inning, idx] of halves) {
+      const counted = idx.reduce((a, i) => a + count(rows[i]), 0)
+      const events = idx.reduce((a, i) => a + (rows[i].events ?? []).filter((e) => e.kind === 'sb').length, 0)
+      // a half that ended with a runner put out (盜壘失敗／牽制) before the batter finished, or the game's last half,
+      // has a plate appearance without a row: steals during it have no runner events to sit on
+      const third = idx.map((i) => rows[i] as unknown as { code?: string; result: string; outsBefore?: number; outOnBase?: number; cs?: number }).find((r) => r.code === 'III')
+      const endedOnBases = !third || !batterOut(third, side)
+      if (counted > events && !endedOnBases && inning !== lastInning) out.push({ side, index: idx.find((i) => count(rows[i]) > 0) ?? idx[0], message: `第 ${inning} 局：${label} ${counted} 次，但跑壘紀錄裡只有 ${events} 次盜壘，可能重複計算，請核對` })
+    }
+  }
+  steals(batting, (r) => r.sb, 'bat', '我隊盜壘')
+  steals(pitching, (r) => r.sba, 'pit', '對方盜壘（被盜壘）')
+}
+
 export function auditGame(batting: BattingPA[], pitching: PitchingPA[]): Issue[] {
   const out: Issue[] = []
   checkSequence(batting, 'bat', out)
@@ -96,6 +137,7 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[]): Issue[]
     if (p.rbi > 4) out.push({ side: 'bat', index: i, message: `${where}：打點 ${p.rbi} 超過 4` })
     if (p.rbi > 0 && (p.result === '三振' || p.result === '雙殺') ) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」通常不會有打點` })
   })
+  checkRunsAndSteals(batting, pitching, out)
   pitching.forEach((p, i) => {
     if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛' && p.result !== '三振') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
   })

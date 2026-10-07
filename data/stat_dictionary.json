@@ -834,10 +834,10 @@
   "zh": "獨立防禦率",
   "en": "Fielding Independent Pitching",
   "group": "投球",
-  "formula": "(13×HR + 3×(BB+HBP) − 2×K) ÷ IP + FIP常數",
+  "formula": "(13×HR + 3×(BB+HBP) − 2×K) ÷ IP × 每場局數/9 + FIP常數",
   "status": "新增",
   "priority": "P1",
-  "note": "常數在『設定』調整（預設 3.10）"
+  "note": "和防禦率一樣以每場局數換算；常數預設由本隊所有比賽自動推算（全隊 FIP＝全隊防禦率），可在『設定』改成固定值"
  },
  {
   "key": "pGB%",

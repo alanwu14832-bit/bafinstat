@@ -42,7 +42,7 @@ export function gameStar(ds: Dataset, gameId: string): GameStar | undefined {
  * One game as a small scoreboard: date and tournament, both teams with their runs (the winner in full ink), the line
  * score by inning with R / H / E, and who decided it. A win glows faintly in the team colour like the homepage hero.
  */
-export function GameCard({ s, teamName, star, onOpen, className }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void; className?: string }) {
+export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void; className?: string; issues?: number }) {
   const g = s.game
   const win = s.result === 'W'
   const n = Math.max(g.innings ?? 0, s.lineUs.length, s.lineOpp.length, 1)
@@ -62,7 +62,7 @@ export function GameCard({ s, teamName, star, onOpen, className }: { s: GameSumm
           <div className="text-[12px] text-ink-2 tnum">{dayLabel(g.date)}</div>
           <div className="text-[11px] text-muted mt-0.5 truncate">{[g.tournament, g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・')}</div>
         </div>
-        <span className="inline-flex items-center gap-1.5">{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} /></span>
+        <span className="inline-flex items-center gap-1.5">{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} /></span>
       </div>
       <div className="relative flex flex-col gap-1.5">
         {teams.map((t) => (

@@ -31,6 +31,9 @@ interface GameRow { id: string; date: string; tournament: string; opponent: stri
 
 const resultBadge = (r: GameRow['result']) => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 
+/** What the game check (data/audit.ts) actually looks at, so 已核對 never claims more than it checked. */
+const AUDIT_SCOPE = '出局順序、逐球與結果、得分代碼、打點與得分、盜壘次數與跑壘紀錄'
+
 const posChip = 'inline-flex items-center justify-center h-5 min-w-8 px-1.5 rounded-[6px] bg-surface-2 text-[11px] font-medium text-ink-2 tnum shrink-0'
 const nameBtn = 'min-w-0 h-9 pointer-fine:h-7 truncate text-left text-[13px] font-medium text-ink hover:underline underline-offset-2 cursor-pointer'
 const halfLabel = (r: AppearanceRow) => (r.inning ? `第${r.inning}局${r.half === 'bottom' ? '下' : '上'}` : '')
@@ -165,6 +168,8 @@ export function GamesPage() {
   const setLayout = (v: 'cards' | 'table') => { const next = new URLSearchParams(params); if (v === 'table') next.set('layout', 'table'); else next.delete('layout'); setParams(next, { replace: true }) }
   // each game's 本場焦點
   const stars = useMemo(() => new Map(s.summaries.map((g) => [g.game.id, gameStar(s.dataset, g.game.id)])), [s.summaries, s.dataset])
+  // 待核對 per game (the same check as inside the game), so the games that need correcting stand out in the list
+  const issueCounts = useMemo(() => new Map(s.summaries.map((g) => [g.game.id, auditGame(s.dataset.batting.filter((p) => p.gameId === g.game.id), s.dataset.pitching.filter((p) => p.gameId === g.game.id)).length])), [s.summaries, s.dataset])
   const current = s.summaries.find((g) => g.game.id === open) ?? null
   const albums = useDataStore((st) => st.albums)
   const gameAlbums = useMemo(() => (current ? albums.filter((a) => a.gameId === current.game.id) : []), [albums, current])
@@ -204,7 +209,7 @@ export function GamesPage() {
         )}
         {layout === 'cards' && rows.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
-            {[...s.summaries].reverse().map((g) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={stars.get(g.game.id)} onOpen={() => setOpen(g.game.id)} />)}
+            {[...s.summaries].reverse().map((g) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={stars.get(g.game.id)} issues={issueCounts.get(g.game.id)} onOpen={() => setOpen(g.game.id)} />)}
           </div>
         ) : (
           <Card flush>
@@ -265,8 +270,8 @@ export function GamesPage() {
                 <div className="flex items-center gap-3 flex-wrap">
                   <Tabs size="sm" aria-label="檢視" value={tab} onChange={setTab} items={[{ value: 'box', label: '攻守成績' }, { value: 'bat', label: '逐打席・打擊', count: pbpBat.length }, { value: 'pit', label: '逐打席・投球', count: pbpPit.length }]} />
                   {issues.length > 0 ? (
-                    <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning" />{issues.length} 個可疑打席</button>
-                  ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good" />記錄檢查通過</span>}
+                    <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning" />{issues.length} 項待核對</button>
+                  ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good" />已核對：{AUDIT_SCOPE}</span>}
                 </div>
                 {showIssues && issues.length > 0 && (
                   <ul className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[12px]">

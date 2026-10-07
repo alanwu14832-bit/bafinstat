@@ -96,7 +96,7 @@ STAT_DICTIONARY = [
     dict(key="OppAVG", zh="被打擊率", en="Opponent AVG", group="投球", formula="被安打 ÷ 對方打數", status="新增", priority="P1", note=""),
     dict(key="OppOBP", zh="被上壘率", en="Opponent OBP", group="投球", formula="(H + BB + HBP) ÷ (AB + BB + HBP + SF)", status="新增", priority="P2", note="CPBL 官方紀錄項目"),
     dict(key="pBABIP", zh="被場內球安打率", en="BABIP Against", group="投球", formula="(H − HR) ÷ (AB − K − HR + SF)", status="新增", priority="P2", note=""),
-    dict(key="FIP", zh="獨立防禦率", en="Fielding Independent Pitching", group="投球", formula="(13×HR + 3×(BB+HBP) − 2×K) ÷ IP + FIP常數", status="新增", priority="P1", note="常數在『設定』調整（預設 3.10）"),
+    dict(key="FIP", zh="獨立防禦率", en="Fielding Independent Pitching", group="投球", formula="(13×HR + 3×(BB+HBP) − 2×K) ÷ IP × 每場局數/9 + FIP常數", status="新增", priority="P1", note="和防禦率一樣以每場局數換算；常數預設由本隊所有比賽自動推算（全隊 FIP＝全隊防禦率），可在『設定』改成固定值"),
     dict(key="pGB%", zh="滾地球率", en="Ground Ball % Against", group="投球", formula="滾地 ÷ 場內球", status="新增", priority="P1", note=""),
     dict(key="pWhiff%", zh="揮空率", en="Whiff % Induced", group="投球", formula="SS ÷ (SS + F + IP)", status="新增", priority="P1", note=""),
     dict(key="pIFFB%", zh="被打內野飛球率", en="Infield Fly Ball % Induced", group="投球", formula="軌跡 P ÷ 飛球(F + P)", status="新增", priority="P2", note="投手越高越好"),
