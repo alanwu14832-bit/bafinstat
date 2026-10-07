@@ -32,7 +32,7 @@ import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import type { BattingPA } from '../data/types'
 import { battingLines, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
-import { f2, f3, pct, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
+import { f2, f3, pct, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
 import { cx } from '../lib/format'
 
 /** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
@@ -48,12 +48,12 @@ const hand = (b?: string) => (b ? (b === 'L' ? '左打' : b === 'S' ? '左右開
 type Metric<T> = { label: string; get: (l: T) => number | null | undefined; fmt: (v: number) => string; lowerBetter?: boolean; min?: (l: T) => boolean }
 const BAT_METRICS: Metric<BattingLine>[] = [
   { label: 'G', get: (l) => l.g, fmt: String }, { label: 'PA', get: (l) => l.pa, fmt: String }, { label: 'H', get: (l) => l.h, fmt: String }, { label: 'HR', get: (l) => l.hr, fmt: String }, { label: 'RBI', get: (l) => l.rbi, fmt: String }, { label: 'SB', get: (l) => l.sb, fmt: String },
-  { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
-  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
+  { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wRC+', get: (l) => l.wrcPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
+  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'sSeager', get: (l) => l.sSeager, fmt: signedPct }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
 ]
 const PIT_METRICS: Metric<PitchingLine>[] = [
   { label: 'IP', get: (l) => l.ip, fmt: (v) => v.toFixed(1) }, { label: 'ERA', get: (l) => l.era, fmt: f2, lowerBetter: true }, { label: 'FIP', get: (l) => l.fip, fmt: f2, lowerBetter: true }, { label: 'WHIP', get: (l) => l.whip, fmt: f2, lowerBetter: true },
-  { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
+  { label: 'K/7', get: (l) => l.k7, fmt: f2 }, { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
 ]
 
 function CompareRows<T>({ a, b, metrics }: { a?: T; b?: T; metrics: Metric<T>[] }) {
@@ -387,9 +387,9 @@ export function PlayersPage() {
               <StatTile label="上壘率 OBP" to="/batting?sort=obp" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
               <StatTile label="長打率 SLG" to="/batting?sort=slg" value={bat.slg ?? 0} format="decimal3" note={`${bat.h2} 2B・${bat.h3} 3B・${bat.hr} HR`} />
               <StatTile label="OPS" to="/batting?sort=ops" value={bat.ops ?? 0} format="decimal3" note={bat.opsPlus === null ? `${bat.pa} PA・${bat.rbi} RBI` : `OPS+ ${bat.opsPlus}・${bat.pa} PA`} />
-              <StatTile label="wOBA" to="/batting?view=advanced&sort=woba" value={bat.woba ?? 0} format="decimal3" />
+              <StatTile label="wRC+" to="/batting?view=advanced&sort=wrcPlus" value={bat.wrcPlus ?? 0} display={bat.wrcPlus === null ? '—' : String(bat.wrcPlus)} note={`wOBA ${f3(bat.woba)}・隊平均 = 100`} />
               <StatTile label="K% / BB%" to="/batting?view=advanced&sort=kPct&dir=asc" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
-              <StatTile label="Whiff% / Hard%" to="/batting?view=process&sort=whiffPct&dir=asc" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note="揮空率 / 強勁擊球率" />
+              <StatTile label="sSeager" to="/batting?view=process&sort=sSeager" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note={`Whiff% ${pct0(bat.whiffPct)}・Hard% ${pct0(bat.hardPct)}`} />
               <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
             </StatGroup>
           {compare && cmpPlayer && (
@@ -421,7 +421,7 @@ export function PlayersPage() {
               <StatTile label="防禦率 ERA" to="/pitching?view=basic&sort=era&dir=asc" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP・${pit.w} 勝 ${pit.l} 敗${pit.sv ? `・${pit.sv} 救援` : ''}`} />
               <StatTile label="FIP" to="/pitching?view=advanced&sort=fip&dir=asc" value={pit.fip ?? 0} format="era" note="只看三振、保送、全壘打" />
               <StatTile label="WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={pit.whip ?? 0} format="ratio" note={`${pit.h} H + ${pit.bb} BB`} />
-              <StatTile label="K / BB" to="/pitching?view=advanced&sort=kbb" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`K/9 ${f2(pit.k9)}・BB/9 ${f2(pit.bb9)}`} />
+              <StatTile label="K / BB" to="/pitching?view=advanced&sort=kbb" value={pit.k} display={`${pit.k} / ${pit.bb}`} note={`K/7 ${f2(pit.k7)}・K/9 ${f2(pit.k9)}・BB/9 ${f2(pit.bb9)}`} />
               <StatTile label="K% / BB%" to="/pitching?view=advanced&sort=kPct" value={(pit.kPct ?? 0) * 100} format="pct" display={`${pct0(pit.kPct)}/${pct0(pit.bbPct)}`} note={`面對 ${pit.bf} 位打者`} />
               <StatTile label="被打擊率" to="/pitching?view=advanced&sort=oppAvg&dir=asc" value={pit.oppAvg ?? 0} format="decimal3" display={f3(pit.oppAvg)} note={`${pit.h} H / ${pit.ab} AB・${pit.hr} HR`} />
               <StatTile label="好球率 / 首球好球" to="/pitching?view=process&sort=strikePct" value={(pit.strikePct ?? 0) * 100} format="pct" display={`${pct0(pit.strikePct)}/${pct0(pit.fStrikePct)}`} note={`${pit.pc} 球・每局 ${pit.pPerIP === null ? '—' : pit.pPerIP.toFixed(1)} 球`} />

@@ -310,6 +310,16 @@
   "note": "權重見『設定』工作表（FanGraphs 線性權重，可更新）"
  },
  {
+  "key": "wRC+",
+  "zh": "加權得分創造指數",
+  "en": "Weighted Runs Created Plus",
+  "group": "打擊",
+  "formula": "100 × ((wOBA − 隊wOBA) ÷ 1.232 + 隊R/PA) ÷ 隊R/PA",
+  "status": "新增",
+  "priority": "P1",
+  "note": "以同一篩選範圍的全隊為基準（100 = 隊平均，130 = 多創造三成得分）；1.232 為 FanGraphs 2025 wOBA scale；不做球場修正"
+ },
+ {
   "key": "K%",
   "zh": "三振率",
   "en": "Strikeout Rate",
@@ -388,6 +398,16 @@
   "status": "新增",
   "priority": "P1",
   "note": "MLB Statcast 指標；舊表已有逐球資料即可算"
+ },
+ {
+  "key": "sSeager",
+  "zh": "選擇性積極度",
+  "en": "Simple SEAGER",
+  "group": "打擊過程",
+  "formula": "壞球沒揮(B) ÷ (揮棒 + 壞球沒揮) − 好球沒揮(CS) ÷ (好球沒揮 + 壞球沒揮)",
+  "status": "新增",
+  "priority": "P2",
+  "note": "Robert Orr 的 SEAGER 簡化版（Sky Kalkman）；越高越好。沒有記錄進壘點：沒揮的球依裁判判決分好壞球，揮棒一律當成好球帶內；故意四壞不計"
  },
  {
   "key": "Contact%",
@@ -688,6 +708,16 @@
   "status": "現有",
   "priority": "P0",
   "note": ""
+ },
+ {
+  "key": "K/7",
+  "zh": "每七局三振",
+  "en": "Strikeouts per 7",
+  "group": "投球",
+  "formula": "K × 7 ÷ IP",
+  "status": "新增",
+  "priority": "P1",
+  "note": "7 局一場比賽的三振數"
  },
  {
   "key": "K/9",

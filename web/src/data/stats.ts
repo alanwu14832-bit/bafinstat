@@ -48,8 +48,14 @@ export interface BattingLine {
   bb: number; ibb: number; hbp: number; so: number; sh: number; sf: number; gidp: number; roe: number; fc: number; sb: number; cs: number
   rispAB: number; rispH: number; bip: number; gb: number; fb: number; ld: number; hard: number
   pitches: number; whiffs: number; swings: number; called: number; firstPitchSwing: number; qab: number
+  /** balls he took (not counting an intentional walk's) — the out-of-zone takes of sSeager */
+  ballsTaken: number
   pull: number; center: number; oppo: number
   avg: number | null; obp: number | null; slg: number | null; ops: number | null; opsPlus: number | null; iso: number | null; babip: number | null; woba: number | null
+  /** wRC+ against the same slice of the team (100 = team average) */
+  wrcPlus: number | null
+  /** Simple SEAGER: selective aggression (see finalizeBatting) */
+  sSeager: number | null
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
@@ -58,8 +64,8 @@ export interface BattingLine {
 function emptyBatting(name: string): BattingLine {
   return {
     name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0,
-    rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, pull: 0, center: 0, oppo: 0,
-    avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
+    rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, ballsTaken: 0, pull: 0, center: 0, oppo: 0,
+    avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, sSeager: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
     pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
   }
 }
@@ -78,6 +84,11 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
   l.rispAvg = div(l.rispH, l.rispAB); l.qabPct = div(l.qab, l.pa)
   l.pPerPA = div(l.pitches, l.pa); l.whiffPct = div(l.whiffs, l.swings); l.contactPct = l.whiffPct === null ? null : 1 - l.whiffPct
   l.swingPct = div(l.swings, l.pitches); l.fpsPct = div(l.firstPitchSwing, l.pa)
+  // Simple SEAGER (Sky Kalkman's take on Robert Orr's SEAGER): out-of-zone takes ÷ (zone swings + out-of-zone takes)
+  // − zone takes ÷ all takes. No pitch location is recorded, so a take's zone is the umpire's call (called strike =
+  // in the zone, ball = out of it) and every swing counts as a zone swing.
+  const takes = l.called + l.ballsTaken
+  l.sSeager = takes > 0 && l.swings + l.ballsTaken > 0 ? l.ballsTaken / (l.swings + l.ballsTaken) - l.called / takes : null
   l.gbPct = div(l.gb, l.bip); l.fbPct = div(l.fb, l.bip); l.ldPct = div(l.ld, l.bip); l.hardPct = div(l.hard, l.bip)
   l.pullPct = div(l.pull, l.bip); l.centerPct = div(l.center, l.bip); l.oppoPct = div(l.oppo, l.bip)
   return l
@@ -105,6 +116,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
     if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else if (dir === 'oppo') l.oppo++
   }
   l.pitches += pt.pitches; l.whiffs += pt.whiffs; l.swings += pt.swings; l.called += pt.called
+  if (r !== '故四') l.ballsTaken += pt.balls
   if (SWING_CODES.has(pa.pitches[0] ?? '')) l.firstPitchSwing++
   const hardBIP = isBIP(pa.traj) && pa.quality === '強'
   if (hit || r === '保送' || r === '故四' || r === '觸身' || r === '犧觸' || r === '犧牲' || r === '犧飛' || pa.rbi > 0 || pt.pitches >= 6 || hardBIP) l.qab++
@@ -131,9 +143,9 @@ export function battingLines(ds: Dataset, pas: BattingPA[], params = DEFAULT_PAR
     games.get(pa.runner)!.add(pa.gameId)
   }
   const out = [...map.values()].map((l) => { l.g = games.get(l.name)!.size; return finalizeBatting(l, params) })
-  // OPS+ relative to the same slice of the team (100 = team average; no park factor)
+  // OPS+ and wRC+ relative to the same slice of the team (100 = team average; no park factor)
   const team = teamBatting(ds, pas, params)
-  for (const l of out) l.opsPlus = opsPlus(l, team)
+  for (const l of out) { l.opsPlus = opsPlus(l, team); l.wrcPlus = wrcPlus(l, team) }
   return out.sort((a, b) => b.pa - a.pa)
 }
 
@@ -143,6 +155,18 @@ export function opsPlus(l: { obp: number | null; slg: number | null }, base: { o
   return Math.round(100 * (l.obp / base.obp + l.slg / base.slg - 1))
 }
 
+/** FanGraphs Guts! 2025 wOBA scale: turns a wOBA difference into runs per plate appearance (the weights are 2025's too). */
+export const WOBA_SCALE = 1.232
+/**
+ * wRC+ against `base` (the team in the same filter): 100 × ((wOBA − 基準wOBA) ÷ wOBA scale + 基準R/PA) ÷ 基準R/PA,
+ * rounded; null when either wOBA is undefined or the base scored no runs.
+ */
+export function wrcPlus(l: { woba: number | null }, base: { woba: number | null; r: number; pa: number }): number | null {
+  if (l.woba === null || base.woba === null || !base.pa || !base.r) return null
+  const rpa = base.r / base.pa
+  return Math.round((100 * ((l.woba - base.woba) / WOBA_SCALE + rpa)) / rpa)
+}
+
 export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARAMS): BattingLine {
   const l = emptyBatting('球隊')
   const games = new Set<string>()
@@ -150,6 +174,7 @@ export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARA
   l.g = games.size
   finalizeBatting(l, params)
   l.opsPlus = l.ops === null ? null : 100
+  l.wrcPlus = wrcPlus(l, l)
   return l
 }
 
@@ -160,7 +185,7 @@ export interface PitchingLine {
   bf: number; ab: number; pc: number; strikes: number; balls: number; k: number; bb: number; ibb: number; hbp: number; h: number; h2: number; h3: number; hr: number; sf: number
   r: number; er: number; wp: number; sba: number; cs: number; pk: number
   bip: number; gb: number; fb: number; ld: number; hard: number; whiffs: number; swings: number; called: number; firstPitchStrike: number
-  era: number | null; whip: number | null; k9: number | null; bb9: number | null; h9: number | null; kbb: number | null; kPct: number | null; bbPct: number | null
+  era: number | null; whip: number | null; k7: number | null; k9: number | null; bb9: number | null; h9: number | null; kbb: number | null; kPct: number | null; bbPct: number | null
   oppAvg: number | null; oppObp: number | null; babip: number | null; fip: number | null; strikePct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; hardPct: number | null; whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
   pPerIP: number | null; pPerBF: number | null; lobPct: number | null
@@ -170,7 +195,7 @@ function emptyPitching(name: string): PitchingLine {
   return {
     name, g: 0, gs: 0, w: 0, l: 0, sv: 0, hld: 0, outs: 0, ip: 0, ipDisplay: '0.0', bf: 0, ab: 0, pc: 0, strikes: 0, balls: 0, k: 0, bb: 0, ibb: 0, hbp: 0, h: 0, h2: 0, h3: 0, hr: 0, sf: 0,
     r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bip: 0, gb: 0, fb: 0, ld: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
-    era: null, whip: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
+    era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
     gbPct: null, fbPct: null, ldPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
   }
 }
@@ -201,7 +226,8 @@ export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS
   l.ip = ip; l.ipDisplay = ipDisplay(l.outs)
   l.era = ip > 0 ? (l.er * p.inningsPerGame) / ip : null
   l.whip = ip > 0 ? (l.bb + l.h) / ip : null
-  l.k9 = ip > 0 ? (l.k * 9) / ip : null; l.bb9 = ip > 0 ? (l.bb * 9) / ip : null; l.h9 = ip > 0 ? (l.h * 9) / ip : null
+  // K/7: per 7 innings, the length of most of our games (K/9 is the MLB convention)
+  l.k7 = ip > 0 ? (l.k * 7) / ip : null; l.k9 = ip > 0 ? (l.k * 9) / ip : null; l.bb9 = ip > 0 ? (l.bb * 9) / ip : null; l.h9 = ip > 0 ? (l.h * 9) / ip : null
   l.kbb = div(l.k, l.bb); l.kPct = div(l.k, l.bf); l.bbPct = div(l.bb, l.bf)
   l.oppAvg = div(l.h, l.ab); l.oppObp = div(l.h + l.bb + l.hbp, l.ab + l.bb + l.hbp + l.sf)
   l.babip = div(l.h - l.hr, l.ab - l.k - l.hr + l.sf)
