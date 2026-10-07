@@ -171,6 +171,9 @@ export interface TimelineProps {
   onPlay: (pitch: number, kind: string, rows: number[]) => void
   /** take back the n-th play of this plate appearance */
   onRemovePlay: (n: number) => void
+  /** 趁傳進壘 on the batted ball: whether `who` went further than the result alone gives (can), and whether it is marked */
+  throwOf: (who: number | 'batter') => { can: boolean; on: boolean }
+  onThrow: (who: number | 'batter', on: boolean) => void
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
@@ -235,6 +238,18 @@ function PlayBuilder({ side, pitches, tl }: { side: PaSide; pitches: number; tl:
   )
 }
 
+/** 趁傳進壘 on the batted ball, shown once he ends further than the result alone takes him. */
+function ThrowChip({ tl, who, name }: { tl: TimelineProps; who: number | 'batter'; name: string }) {
+  const t = tl.throwOf(who)
+  if (!t.can) return null
+  return (
+    <button type="button" aria-pressed={t.on} aria-label={`${name} 趁傳進壘`} onClick={() => tl.onThrow(who, !t.on)}
+      className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer transition-colors', t.on ? 'border-[color-mix(in_srgb,var(--accent)_70%,transparent)] bg-accent-soft text-ink' : 'border-dashed border-border-strong text-ink-2 hover:text-ink')}>
+      {t.on ? '✓ 趁傳進壘' : '趁傳？'}
+    </button>
+  )
+}
+
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */
 function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl: TimelineProps; picked: number | null }) {
   const { step, nameOf } = tl
@@ -249,6 +264,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[13px] font-medium text-ink min-w-[7rem]"><span className="text-muted tnum mr-1">{o.base}B</span>{name}</span>
                 <EndPicker value={tl.step.dest[o.row] ?? o.base} from={o.base} onPick={(e) => tl.onEnd(o.row, e)} label={name} />
+                <ThrowChip tl={tl} who={o.row} name={name} />
               </div>
               {tl.onPinchRunner && <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>}
             </li>
@@ -258,6 +274,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
         <li className="rounded-[var(--radius-sm)] border border-ink/25 bg-surface px-3 py-2 flex items-center gap-2 flex-wrap text-[13px]">
           <span className="font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
           <span className="text-ink-2">{step.batter === 'out' ? '出局' : step.batter === 'home' ? '得分' : `上 ${step.batter}B`}</span>
+          <ThrowChip tl={tl} who="batter" name={batterName} />
           {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">之後的跑壘在下一個打席記</span>}
         </li>
       </ul>

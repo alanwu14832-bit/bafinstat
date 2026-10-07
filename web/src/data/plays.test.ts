@@ -12,4 +12,10 @@ describe('逐球跑壘 text', () => {
   it('says what happened', () => {
     expect(plays.map(playText)).toEqual(['暴投 1B→2B', '盜壘 3B→得分', '盜壘失敗（2B）'])
   })
+  it('keeps 趁傳進壘 on the hit apart from plays between pitches', () => {
+    const onHit: PlayEvent[] = [{ at: 3, kind: 'throw', from: 1, to: 2, play: true, batter: true }, { at: 3, kind: 'throw', from: 2, to: 3, play: true }]
+    expect(playsText(onHit)).toBe('3 趁傳進壘 1-2 打者；3 趁傳進壘 2-3 跑者')
+    expect(parsePlays(playsText(onHit))).toEqual(onHit)
+    expect(onHit.map(playText)).toEqual(['打者趁傳進壘 1B→2B', '趁傳進壘 2B→3B'])
+  })
 })

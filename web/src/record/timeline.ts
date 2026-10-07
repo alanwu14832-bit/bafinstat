@@ -64,7 +64,8 @@ export function inningsOf(rows: Row[]): Map<number, number[]> {
   return m
 }
 
-const eventsOf = (r: Row): PlayEvent[] => (r.events ?? []).filter((e) => e && [1, 2, 3].includes(e.from))
+// plays between pitches only: 趁傳進壘 on the batted ball (`play`) is part of where people ended, not a move before it
+const eventsOf = (r: Row): PlayEvent[] => (r.events ?? []).filter((e) => e && !e.play && [1, 2, 3].includes(e.from))
 const moveOuts = (r: Row) => eventsOf(r).filter((e) => e.to === 'out').length
 /** Bases when the batter came up: his 壘上(前) (taken at the result) with his own runner plays undone; null if they do not fit. */
 function startBases(r: Row): Base[] | null {
@@ -334,7 +335,10 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     const mid = midOf(s)
     r.basesBefore = basesText(mid)
     r.outsBefore = outs
-    if (s.moves.length) r.events = s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to }))
+    // 趁傳進壘 on the play stays while that person still ends where it says
+    const onPlay = (r.events ?? []).filter((e) => e.play && (e.batter ? s.batter === e.to : mid.some((o) => s.dest[o.row] === e.to)))
+    const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
+    if (events.length) r.events = events
     else delete r.events
     // outs in the order they happened, then the runs
     for (const row of s.outs) end(row, 'out', row === s.index)

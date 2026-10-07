@@ -224,6 +224,17 @@ export interface PAPlan {
   rbi: number
   /** opponent runs on this play are earned (ER) rather than unearned (R) */
   earned: boolean
+  /** 趁傳進壘: who took the bases beyond what the hit gave him on the throw (runner rows, or the batter) */
+  throws?: Array<number | 'batter'>
+}
+
+const destNum = (d: Dest | undefined) => (d === 'home' ? 4 : typeof d === 'number' ? d : 0)
+/** Whether `who` goes further than the result alone sends him (so the extra bases can be marked 趁傳進壘). */
+export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batter'): boolean {
+  const base = defaultPlan(s, plan.result)
+  const was = who === 'batter' ? base.batter : base.runners[who]
+  const now = who === 'batter' ? plan.batter : plan.runners[who]
+  return typeof was === 'number' && destNum(now) > was
 }
 
 /** Sensible default destinations for a result; the recorder adjusts before confirming. */
@@ -306,7 +317,16 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: s.oppBatter || undefined, ...extras, ...(s.extras.errors?.length ? { errors: [...s.extras.errors] } : {}), note })
     rowIndex = pitching.length - 1
   }
-  if (s.plays?.length) (side === 'us' ? batting : pitching)[rowIndex].events = s.plays.map((e) => ({ ...e }))
+  // the plays between pitches, then 趁傳進壘 on the batted ball (from where the hit alone put him)
+  const def = plan.throws?.length ? defaultPlan(s, plan.result) : null
+  const thrown: PlayEvent[] = (plan.throws ?? []).flatMap((who) => {
+    const was = who === 'batter' ? def!.batter : def!.runners[who]
+    const now = who === 'batter' ? plan.batter : plan.runners[who]
+    if (typeof was !== 'number' || now === undefined || now === 'out' || destNum(now) <= was) return []
+    return [{ at: base.pitches.length, kind: 'throw', from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
+  })
+  const events = [...(s.plays ?? []).map((e) => ({ ...e })), ...thrown]
+  if (events.length) (side === 'us' ? batting : pitching)[rowIndex].events = events
   const next: RecordState = { ...s, batting, pitching }
   const markOut = (row: number, rside: Side, isBatter: boolean) => {
     outs = Math.min(3, outs + 1)
