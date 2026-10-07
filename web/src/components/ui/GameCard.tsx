@@ -19,7 +19,7 @@ export function ResultPlate({ result, className }: { result: GameSummary['result
 }
 
 /** The opponent's mark: its first character on a neutral tile (we have no logos for other teams). */
-function OppMark({ name, size = 22 }: { name: string; size?: number }) {
+export function OppMark({ name, size = 22 }: { name: string; size?: number }) {
   return (
     <span aria-hidden style={{ width: size, height: size, fontSize: size * 0.5 }} className="shrink-0 rounded-[7px] bg-surface-3 text-ink-2 font-semibold inline-flex items-center justify-center">
       {Array.from(name.trim())[0] ?? '?'}
