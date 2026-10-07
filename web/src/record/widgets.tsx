@@ -37,14 +37,14 @@ export function PitchPad({ onPitch, disabled }: { onPitch: (code: string) => voi
   )
 }
 
-/** 安打／上壘／出局 result chips; `value` is shown selected. */
-export function ResultChips({ value, onPick }: { value?: string; onPick: (result: string) => void }) {
+/** 安打／上壘／出局 result chips; `value` is shown selected. With `only`, the other results are greyed out (after IP: a ball in play). */
+export function ResultChips({ value, onPick, only }: { value?: string; onPick: (result: string) => void; only?: Set<string> }) {
   return (
     <div className="flex flex-col gap-2.5">
       {RESULT_GROUPS.map((g) => (
         <div key={g.label} className="flex items-start gap-2">
           <span className="text-[12px] text-muted w-8 shrink-0 h-9 inline-flex items-center">{g.label}</span>
-          <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" aria-pressed={value === r} onClick={() => onPick(r)} className={chipBtn(value === r)}>{r}</button>)}</div>
+          <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" aria-pressed={value === r} disabled={!!only && !only.has(r)} onClick={() => onPick(r)} className={cx(chipBtn(value === r), 'disabled:opacity-30 disabled:cursor-default')}>{r}</button>)}</div>
         </div>
       ))}
     </div>
@@ -53,12 +53,12 @@ export function ResultChips({ value, onPick }: { value?: string; onPick: (result
 
 export interface BattedBall { loc?: number; traj?: string; quality?: string }
 /** 落點 (fielder grid + gaps for hits), 軌跡 and 強度; tapping the selected one again clears it. */
-export function BattedBallPicker({ result, value, onChange }: { result: string; value: BattedBall; onChange: (v: BattedBall) => void }) {
+export function BattedBallPicker({ result, value, onChange, requireLoc }: { result: string; value: BattedBall; onChange: (v: BattedBall) => void; requireLoc?: boolean }) {
   const set = (patch: BattedBall) => onChange({ ...value, ...patch })
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
       <div>
-        <div className="text-[12px] text-ink-2 mb-1">落點</div>
+        <div className={cx('text-[12px] mb-1', requireLoc && !value.loc ? 'text-critical font-medium' : 'text-ink-2')}>落點{requireLoc && !value.loc ? '（必填，點接球或落地的位置）' : ''}</div>
         <div className="grid grid-cols-3 gap-1 w-[150px]">
           {LOC_GRID.flat().map((n, i) => n === null ? <span key={i} /> : (
             <button key={i} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
