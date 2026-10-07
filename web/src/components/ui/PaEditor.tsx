@@ -16,7 +16,7 @@ import { BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips } from
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { FIELD_POSITIONS } from '../../data/errors'
 import { RunnerDiamond } from '../../record/RunnerDiamond'
-import { midOf, OUT_PLAYS, type End, type Step } from '../../record/timeline'
+import { batterEndFor, midOf, OUT_PLAYS, type End, type Step } from '../../record/timeline'
 import { playLabel } from '../../data/plays'
 
 export type PaSide = 'bat' | 'pit'
@@ -174,6 +174,8 @@ export interface TimelineProps {
   /** 趁傳進壘 on the batted ball: whether `who` went further than the result alone gives (can), and whether it is marked */
   throwOf: (who: number | 'batter') => { can: boolean; on: boolean }
   onThrow: (who: number | 'batter', on: boolean) => void
+  /** one more base on the throw: moves him up one and marks it 趁傳進壘 */
+  onThrowUp: (who: number | 'batter') => void
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
@@ -271,11 +273,19 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
           )
         })}
         {/* the batter: where his result put him; what he does next is recorded on the following plate appearances */}
-        <li className="rounded-[var(--radius-sm)] border border-ink/25 bg-surface px-3 py-2 flex items-center gap-2 flex-wrap text-[13px]">
-          <span className="font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
-          <span className="text-ink-2">{step.batter === 'out' ? '出局' : step.batter === 'home' ? '得分' : `上 ${step.batter}B`}</span>
-          <ThrowChip tl={tl} who="batter" name={batterName} />
-          {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">之後的跑壘在下一個打席記</span>}
+        <li className="rounded-[var(--radius-sm)] border border-ink/25 bg-surface px-3 py-2 flex flex-col gap-2 text-[13px]">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
+            {/* where the batter ended on his own play: a single that took second on the throw ends on 2B */}
+            <EndPicker value={step.batter} from={typeof batterEndFor(pa.result) === 'number' ? (batterEndFor(pa.result) as number) : 1} onPick={(e) => tl.onEnd('batter', e)} label={batterName} />
+            <ThrowChip tl={tl} who="batter" name={batterName} />
+            {typeof step.batter === 'number' && (
+              <button type="button" onClick={() => tl.onThrowUp('batter')} className="h-9 pointer-fine:h-8 px-2.5 rounded-full border border-border bg-surface text-[12px] font-medium text-ink-2 hover:text-ink hover:bg-surface-2 cursor-pointer">
+                趁傳上 {step.batter >= 3 ? '本壘' : `${step.batter + 1}B`}
+              </button>
+            )}
+          </div>
+          {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">他打完停在哪一壘；之後的盜壘、暴投等在下一個打席記</span>}
         </li>
       </ul>
       {tl.notice && <p role="alert" className="text-[12px] text-critical">{tl.notice}</p>}

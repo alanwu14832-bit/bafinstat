@@ -288,12 +288,22 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       if (side === 'bat') setBat((b) => b.map((x, k) => (k === i ? toBatDraft(patch(fromBatDraft(x))) : x)))
       else setPit((p) => p.map((x, k) => (k === i ? toPitDraft(patch(fromPitDraft(x))) : x)))
     }
+    const onThrowUp = (who: number | 'batter') => {
+      const cur = endOf(who)
+      if (typeof cur !== 'number') return
+      const to: End = cur >= 3 ? 'home' : ((cur + 1) as End)
+      // an earlier 趁傳 mark on him is extended (一安 → 2B → 3B on the throws), otherwise a new one from where he was
+      const old = playThrows.find((e) => (who === 'batter' ? !!e.batter : !e.batter && e.to === cur))
+      const rest = (rows[i].events ?? []).filter((e) => e !== old)
+      const events = [...rest, { at: rows[i].pitches.length, kind: 'throw', from: old?.from ?? (cur as 1 | 2 | 3), to, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
+      onEnd(who, to, rows.map((r, k) => (k === i ? { ...r, events } : r)))
+    }
     const pinch = side === 'bat' ? {
       onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onResult, notice: tlNotice, ...pinch }
+    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
