@@ -13,7 +13,8 @@ A database change needs a migration in both repos, and the user must run it in b
 ## This repo
 - `web/` — the site (Vite + React 19 + TypeScript + Tailwind 4 + zustand). `npm ci`, `npm test`, `npm run build` there.
 - Deploys: pushing `claude/baseball-stats-platform-avxula` runs `.github/workflows/auto-deploy.yml` (tests + build, then
-  merge into `main`); Vercel serves `main` at bafinstat.vercel.app.
+  merge into `main`); Vercel serves `main` at bafinstat.vercel.app. Vercel builds `main` only (`web/vercel.json`
+  `git.deploymentEnabled`): every deployment carries the saved versions and counts against the 10 GB Deployment Storage.
 - `supabase/schema.sql` + `supabase/migrations/` — the database; the site keeps working (and warns) before a migration runs.
   `supabase/tests/run.sh` (also in auto-deploy) loads them into a plain Postgres and runs `permissions.sql`: add a check
   there for every new table, policy or function.
