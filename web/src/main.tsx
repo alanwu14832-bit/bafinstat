@@ -34,6 +34,18 @@ document.addEventListener('pointerdown', (e) => {
 }, { passive: true })
 for (const type of ['pointerup', 'pointercancel', 'dragstart'] as const) document.addEventListener(type, release, { passive: true })
 
+// After the site is updated, the old version's page files are gone: a page opened from a tab left open then fails to
+// download. Reload once to get the new version (not again within a minute, so a dead connection cannot loop it).
+window.addEventListener('vite:preloadError', (e) => {
+  try {
+    const at = Number(sessionStorage.getItem('bafin.reloadedAt') || 0)
+    if (Date.now() - at < 60_000) return   // the page's own error message takes over
+    sessionStorage.setItem('bafin.reloadedAt', String(Date.now()))
+  } catch { return }
+  e.preventDefault()
+  window.location.reload()
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

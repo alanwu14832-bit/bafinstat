@@ -9,7 +9,6 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
-    "build:single": "vite build --config vite.single.config.ts",
     "prebuild": "node scripts/prebuild.mjs",
     "postbuild": "node scripts/archive.mjs"
   },

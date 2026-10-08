@@ -213,3 +213,7 @@ html[data-font="serif"] .font-bold { font-weight: 700; }
     .lift:hover { translate: 0 -2px; box-shadow: var(--shadow-hover); }
   }
 }
+
+/* 紀錄比賽「大字」(Record.tsx): the live screen and its sheets one size up. zoom (unlike transform) lays the content
+   out again at the larger size, so it still fits the screen width and only grows downwards. */
+html.record-large .record-zoom { zoom: 1.2; }
