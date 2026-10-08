@@ -205,7 +205,48 @@ function emptyPitching(name: string): PitchingLine {
 
 export const ipDisplay = (outs: number) => `${Math.floor(outs / 3)}.${outs % 3}`
 
-export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
+const OUT_NO: Record<string, number> = { I: 1, II: 2, III: 3 }
+/**
+ * How many outs each plate appearance's pitcher is credited with (IP), for a list of rows in game order.
+ * Every out of an inning is counted once: its result code (I / II / III = the 1st / 2nd / 3rd out) is on the row of
+ * the player who made it. A 雙殺 also stands for the out before its own when no row carries that one (a workbook
+ * puts the code on the batter's row only; live recording codes the runner's row too — counting 2 for the 雙殺 row
+ * then counted that out twice). Each out goes to the pitcher on the mound when it was made — the plate appearance
+ * during which the inning's outs passed it (outs before) — so a reliever gets the double play that erases a runner
+ * his predecessor put on. Rows without outs-before keep the out on the row that carries it.
+ */
+export function outsCredited(pas: PitchingPA[]): Map<PitchingPA, number> {
+  const credit = new Map<PitchingPA, number>()
+  const groups = new Map<string, PitchingPA[]>()
+  for (const pa of pas) { const k = `${pa.gameId}\u0000${pa.inning}`; (groups.get(k) ?? groups.set(k, []).get(k)!).push(pa) }
+  for (const rows of groups.values()) {
+    const owner = new Map<number, PitchingPA>()
+    const coded = rows.filter((pa) => OUT_NO[pa.code ?? ''])
+    for (const pa of coded) owner.set(OUT_NO[pa.code!], pa)
+    if (owner.size < coded.length) {
+      // the same out number twice (rows with a wrong inning, a mistyped code): count row by row as before
+      for (const pa of coded) credit.set(pa, (credit.get(pa) ?? 0) + (pa.result === '雙殺' && (pa.outsBefore ?? 0) <= 1 && !owner.has(OUT_NO[pa.code!] - 1) ? 2 : 1))
+      continue
+    }
+    for (const pa of rows) {
+      const k = OUT_NO[pa.code ?? '']
+      if (pa.result === '雙殺' && k >= 2 && (pa.outsBefore ?? 0) <= 1 && !owner.has(k - 1)) owner.set(k - 1, pa)
+    }
+    const timed = rows.every((r) => typeof r.outsBefore === 'number')
+    for (const [k, holder] of owner) {
+      let at = holder
+      if (timed) {
+        const i = rows.findIndex((r, j) => r.outsBefore! < k && (j === rows.length - 1 || rows[j + 1].outsBefore! >= k))
+        if (i >= 0) at = rows[i]
+      }
+      credit.set(at, (credit.get(at) ?? 0) + 1)
+    }
+  }
+  return credit
+}
+
+/** outs: what outsCredited gives this row (callers with the whole game pass it; alone, the row's own code counts) */
+export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: number) {
   const r = pa.result
   if (!r) return
   const pt = pitchTotals(pa.pitches)
@@ -216,8 +257,9 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA) {
   if (HIT_RESULTS.has(r)) l.h++
   if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++; if (r === '犧飛') l.sf++
   if (r === '三振') l.k++; if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++
-  // 雙殺 produces two outs but is recorded on one row; only possible with 0–1 outs before the PA (see 數據字典 IP)
-  if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1
+  // outs: counted once per out and credited to the pitcher on the mound (outsCredited)
+  if (outs !== undefined) l.outs += outs
+  else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
   l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk
@@ -238,7 +280,8 @@ export function fipCore(l: { hr: number; bb: number; hbp: number; k: number; out
  */
 export function fipConstantFrom(pas: PitchingPA[], inningsPerGame: number): number {
   const t = emptyPitching('')
-  for (const pa of pas) if (pa.pitcher) accumulatePitching(t, pa)
+  const outs = outsCredited(pas)
+  for (const pa of pas) if (pa.pitcher) accumulatePitching(t, pa, outs.get(pa) ?? 0)
   if (t.outs === 0) return DEFAULT_PARAMS.fipConstant * (inningsPerGame / 9)
   return (t.er * inningsPerGame) / (t.outs / 3) - fipCore(t, inningsPerGame)
 }
@@ -273,12 +316,13 @@ export function pitchingLines(pas: PitchingPA[], games: Game[], params = DEFAULT
   const map = new Map<string, PitchingLine>()
   const gameSets = new Map<string, Set<string>>()
   const starters = new Map<string, string>() // gameId -> first pitcher
+  const outs = outsCredited(pas)
   for (const pa of pas) {
     if (!pa.pitcher) continue
     if (!starters.has(pa.gameId)) starters.set(pa.gameId, pa.pitcher)
     let l = map.get(pa.pitcher)
     if (!l) { l = emptyPitching(pa.pitcher); map.set(pa.pitcher, l); gameSets.set(pa.pitcher, new Set()) }
-    accumulatePitching(l, pa)
+    accumulatePitching(l, pa, outs.get(pa) ?? 0)
     gameSets.get(pa.pitcher)!.add(pa.gameId)
   }
   for (const [gid, name] of starters) { const l = map.get(name); if (l && gameSets.get(name)!.has(gid)) l.gs++ }
@@ -296,7 +340,8 @@ export function pitchingLines(pas: PitchingPA[], games: Game[], params = DEFAULT
 export function teamPitching(pas: PitchingPA[], params = DEFAULT_PARAMS, games: Game[] = []): PitchingLine {
   const l = emptyPitching('球隊')
   const ids = new Set<string>()
-  for (const pa of pas) { if (!pa.pitcher) continue; accumulatePitching(l, pa); ids.add(pa.gameId) }
+  const outs = outsCredited(pas)
+  for (const pa of pas) { if (!pa.pitcher) continue; accumulatePitching(l, pa, outs.get(pa) ?? 0); ids.add(pa.gameId) }
   l.g = ids.size
   l.gs = ids.size
   const pitched = (gameId: string, name?: string) => !!name && pas.some((p) => p.gameId === gameId && p.pitcher === name)
