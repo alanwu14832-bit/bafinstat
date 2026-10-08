@@ -64,11 +64,11 @@ export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; ba
 }
 
 // ---------------------------------------------------------------- queries
-async function selectAll<T>(table: string, order: string[]): Promise<T[]> {
+async function selectAll<T>(table: string, order: string[], columns = '*'): Promise<T[]> {
   const out: T[] = []
   const page = 1000
   for (let from = 0; ; from += page) {
-    let q = supabase().from(table).select('*').range(from, from + page - 1)
+    let q = supabase().from(table).select(columns).range(from, from + page - 1)
     for (const col of order) q = q.order(col, { ascending: true })
     const { data, error } = await q
     if (error) throw new Error(`${table}: ${error.message}`)
@@ -131,49 +131,90 @@ async function upsertGames(rows: Array<Record<string, unknown>>): Promise<{ erro
   return { error: null, dropped }
 }
 
+/** Games per save_games() call: each call is one transaction (an import of a whole season goes in a few calls). */
+const SAVE_BATCH = 25
+/** Child rows of these games, numbered 1, 2, … per game in the order given. */
+const seqBy = <T extends { gameId: string }>(rows: T[], ids: Set<string>) => { const c = new Map<string, number>(); return rows.filter((r) => ids.has(r.gameId)).map((r) => { const s = (c.get(r.gameId) ?? 0) + 1; c.set(r.gameId, s); return [r, s] as const }) }
+/** 'save_games' in `dropped`: the database has no save_games() yet (2026-10-13_save_games.sql not run), saved the old way. */
+export const SAVE_GAMES_FN = 'save_games'
+export const SAVE_GAMES_UNSUPPORTED = '已儲存。雲端還沒開啟存檔保護（存到一半斷線時，舊紀錄可能暫時不見）：請管理員在 Supabase 執行 supabase/migrations/2026-10-13_save_games.sql'
+// one save at a time from this device, so two autosaves never interleave their writes
+let saveQueue: Promise<unknown> = Promise.resolve()
+
 /**
  * Write a dataset to the cloud. mode 'replace' wipes games not present in the
  * upload; 'append' only writes games whose id is new (existing games untouched);
  * 'upsert' overwrites exactly the games in the upload and leaves the rest alone (in-app edits).
+ * Each batch of games (the game rows and all their records) is written by save_games() in one transaction, so a
+ * failure leaves those games exactly as they were (supabase/migrations/2026-10-13_save_games.sql).
  * Returns the number of games written, and `dropped`: games columns the project lacks (migration not run),
  * e.g. 'day_roster' means the 當日登錄名單 was not saved.
  */
-export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number; dropped: string[] }> {
+export function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number; dropped: string[] }> {
+  const run = saveQueue.then(() => pushNow(ds, mode))
+  saveQueue = run.catch(() => undefined)
+  return run
+}
+
+async function pushNow(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number; dropped: string[] }> {
+  const sb = supabase()
+  const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
+  if (ds.roster.length) {
+    const { error } = await sb.from('players').upsert(ds.roster.map(toPlayerRow), { onConflict: 'name' })
+    fail('球員名單', error)
+  }
+  let written = 0
+  for (let i = 0; i < ds.games.length; i += SAVE_BATCH) {
+    const games = ds.games.slice(i, i + SAVE_BATCH)
+    const ids = new Set(games.map((g) => g.id))
+    const { data, error } = await sb.rpc(SAVE_GAMES_FN, {
+      p_games: games.map(toGameRow),
+      p_batting: seqBy(ds.batting, ids).map(([r, s]) => toBattingRow(r, s)),
+      p_pitching: seqBy(ds.pitching, ids).map(([r, s]) => toPitchingRow(r, s)),
+      p_fielding: seqBy(ds.fielding, ids).map(([r, s]) => toFieldingRow(r, s)),
+      p_only_new: mode === 'append',
+    })
+    if (error && i === 0 && (error.code === 'PGRST202' || error.code === '42883')) return pushPiecewise(ds, mode)
+    fail('儲存比賽', error)
+    written += Number(data) || 0
+  }
+  // replace: only after everything is in, remove the games the upload does not have (their records cascade)
+  if (mode === 'replace') await removeGamesExcept(new Set(ds.games.map((g) => g.id)))
+  return { games: written, skipped: ds.games.length - written, dropped: [] }
+}
+
+async function removeGamesExcept(keep: Set<string>) {
+  const gone = (await selectAll<{ id: string }>('games', ['id'], 'id')).map((r) => r.id).filter((id) => !keep.has(id))
+  await chunked(gone, async (chunk) => { const { error } = await supabase().from('games').delete().in('id', chunk); if (error) throw new Error(`刪除舊比賽: ${error.message}`) }, 200)
+}
+
+/**
+ * The way games were saved before save_games(): the game rows, then each table's records cleared and written again
+ * (separate requests, so a failure in between can leave a game without records until the next save).
+ */
+async function pushPiecewise(ds: Dataset, mode: 'replace' | 'append' | 'upsert'): Promise<{ games: number; skipped: number; dropped: string[] }> {
   const sb = supabase()
   const fail = (ctx: string, e: { message: string } | null) => { if (e) throw new Error(`${ctx}: ${e.message}`) }
   let games = ds.games
   let skipped = 0
   if (mode === 'append') {
-    const { data, error } = await sb.from('games').select('id')
-    fail('讀取既有比賽', error)
-    const existing = new Set((data ?? []).map((r: { id: string }) => r.id))
+    const existing = new Set((await selectAll<{ id: string }>('games', ['id'], 'id')).map((r) => r.id))
     games = ds.games.filter((g) => !existing.has(g.id))
     skipped = ds.games.length - games.length
   }
   const ids = new Set(games.map((g) => g.id))
-  if (ds.roster.length) {
-    let { error } = await sb.from('players').upsert(ds.roster.map(toPlayerRow), { onConflict: 'name' })
-    fail('球員名單', error)
-  }
-  if (mode === 'replace') {
-    // delete games missing from the upload (child rows cascade)
-    const { data, error } = await sb.from('games').select('id'); fail('讀取既有比賽', error)
-    const gone = (data ?? []).map((r: { id: string }) => r.id).filter((id) => !ids.has(id))
-    if (gone.length) { const { error: e2 } = await sb.from('games').delete().in('id', gone); fail('刪除舊比賽', e2) }
-  }
-  let dropped: string[] = []
+  const dropped: string[] = [SAVE_GAMES_FN]
   if (games.length) {
     // who changed it is stamped by the database (a name, never an email: these rows are public);
     // older schema without the status / day_roster columns: those are stripped and the upsert retried
     const res = await upsertGames(games.map((g) => ({ ...toGameRow(g) })))
-    dropped = res.dropped
+    dropped.push(...res.dropped)
     fail('比賽清單', res.error)
     // child rows: clear then insert, per game batch
     const idList = [...ids]
     for (const table of ['batting_pa', 'pitching_pa', 'fielding_lines']) {
       await chunked(idList, async (chunk) => { const { error: e } = await sb.from(table).delete().in('game_id', chunk); fail(table, e) }, 200)
     }
-    const seqBy = <T extends { gameId: string }>(rows: T[]) => { const c = new Map<string, number>(); return rows.filter((r) => ids.has(r.gameId)).map((r) => { const s = (c.get(r.gameId) ?? 0) + 1; c.set(r.gameId, s); return [r, s] as const }) }
     // a column added by a later migration (代跑, 守備失誤) that the project lacks: save the rows without it and say so
     const insertRows = async <R extends object>(table: string, ctx: string, rows: R[], cols: string[]) => {
       let { error: e } = await sb.from(table).insert(rows)
@@ -187,10 +228,11 @@ export async function pushCloudDataset(ds: Dataset, mode: 'replace' | 'append' |
       }
       fail(ctx, e)
     }
-    await chunked(seqBy(ds.batting).map(([r, s]) => toBattingRow(r, s)), (rows) => insertRows('batting_pa', '打席紀錄', rows, [RUNNER_COLUMN, EVENTS_COLUMN, BASERUNNING_OUTS_COLUMN]))
-    await chunked(seqBy(ds.pitching).map(([r, s]) => toPitchingRow(r, s)), (rows) => insertRows('pitching_pa', '投球紀錄', rows, [ERRORS_COLUMN, EVENTS_COLUMN]))
-    await chunked(seqBy(ds.fielding).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
+    await chunked(seqBy(ds.batting, ids).map(([r, s]) => toBattingRow(r, s)), (rows) => insertRows('batting_pa', '打席紀錄', rows, [RUNNER_COLUMN, EVENTS_COLUMN, BASERUNNING_OUTS_COLUMN]))
+    await chunked(seqBy(ds.pitching, ids).map(([r, s]) => toPitchingRow(r, s)), (rows) => insertRows('pitching_pa', '投球紀錄', rows, [ERRORS_COLUMN, EVENTS_COLUMN]))
+    await chunked(seqBy(ds.fielding, ids).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }
+  if (mode === 'replace') await removeGamesExcept(new Set(ds.games.map((g) => g.id)))
   return { games: games.length, skipped, dropped }
 }
 
@@ -205,6 +247,14 @@ export async function updateGameDayRosters(entries: Array<{ id: string; day_rost
     if (error) throw new Error(`比賽清單: ${error.message}`)
   }
   return true
+}
+
+/** Rewrite the 中繼成功 list (holds) of these games, after a player was renamed (pushRoster cannot reach into arrays). */
+export async function updateGameHolds(entries: Array<{ id: string; holds: string[] | null }>) {
+  for (const { id, holds } of entries) {
+    const { error } = await supabase().from('games').update({ holds }).eq('id', id)
+    if (error) throw new Error(`比賽清單: ${error.message}`)
+  }
 }
 
 // ---------------------------------------------------------------- roster
@@ -368,6 +418,12 @@ export async function saveQuickLogin(code: string, days: number) {
   // 永久 (0) needs supabase/migrations/2026-10-11_quick_login_forever.sql
   if (error && days === 0 && /1 到 365/.test(error.message) && !/永久/.test(error.message)) throw new Error('「永久」需要資料庫更新：請管理員在 Supabase 執行 supabase/migrations/2026-10-12_quick_login_fix.sql')
   if (error) throw new Error(quickMissing(error) ? QUICK_SQL : error.message)
+}
+/** Lift the pause after 10 wrong 快速登入 passwords, keeping the password (own-account recorders; 2026-10-13_save_games.sql). */
+export async function unlockQuickLogin() {
+  const { error } = await supabase().rpc('unlock_quick_login')
+  if (error && (error.code === 'PGRST202' || error.code === '42883')) throw new Error('「解除暫停」需要資料庫更新：請管理員在 Supabase 執行 supabase/migrations/2026-10-13_save_games.sql（或直接重新設定一次密碼，也會解除）')
+  if (error) throw new Error(error.message)
 }
 /** The signed-in account's own password (8+ characters). */
 export async function setOwnPassword(password: string) {

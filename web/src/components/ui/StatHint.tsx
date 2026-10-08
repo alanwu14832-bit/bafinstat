@@ -10,7 +10,7 @@ import { cx } from '../../lib/format'
  * disappears when the pointer leaves. Rendered in a portal with fixed positioning so it never gets clipped
  * by scrolling tables, and flips below the label when there is no room above.
  */
-export function HintCard({ hint, anchor, open }: { hint: Hint; anchor: HTMLElement | null; open: boolean }) {
+export function HintCard({ hint, anchor, open, id }: { hint: Hint; anchor: HTMLElement | null; open: boolean; id?: string }) {
   const reduced = usePrefersReducedMotion()
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
   useLayoutEffect(() => {
@@ -23,7 +23,7 @@ export function HintCard({ hint, anchor, open }: { hint: Hint; anchor: HTMLEleme
   return createPortal(
     <AnimatePresence>
       {open && pos && (
-        <div role="tooltip" className={cx('pointer-events-none fixed z-[80] -translate-x-1/2', !pos.below && '-translate-y-full')} style={{ left: pos.x, top: pos.y }}>
+        <div role="tooltip" id={id} className={cx('pointer-events-none fixed z-[80] -translate-x-1/2', !pos.below && '-translate-y-full')} style={{ left: pos.x, top: pos.y }}>
           <motion.div initial={reduced ? false : { opacity: 0, y: pos.below ? -4 : 4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduced ? undefined : { opacity: 0, y: pos.below ? -3 : 3 }}
             transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             className="w-[260px] max-w-[calc(100vw-24px)] rounded-[8px] bg-ink text-bg px-3 py-2.5 shadow-[var(--shadow-modal)] text-left whitespace-normal">
@@ -57,7 +57,7 @@ export function StatHint({ label, hint, children, className }: { label?: unknown
         className={cx('underline decoration-dotted decoration-[color-mix(in_srgb,currentColor_45%,transparent)] underline-offset-[3px] cursor-help rounded-[2px] outline-none focus-visible:decoration-solid', className)}>
         {children ?? (typeof label === 'string' ? label : null)}
       </span>
-      <HintCard hint={h} anchor={ref.current} open={open} />
+      <HintCard hint={h} anchor={ref.current} open={open} id={id} />
     </>
   )
 }

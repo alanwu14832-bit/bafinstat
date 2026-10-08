@@ -31,7 +31,6 @@ npm install
 npm run dev        # http://localhost:5173
 npm test           # 統計引擎測試（以 10/10 比賽驗證）
 npm run build      # 產出 dist/
-npm run build:single   # 單檔版 dist-single/index.html
 ```
 到「資料匯入」上傳整個總表（或一份填好的單場模板檔）即可；資料只存在瀏覽器 localStorage。
 

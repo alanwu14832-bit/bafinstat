@@ -13,7 +13,7 @@ import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
 import { ARCHIVE } from '../config/archive'
-import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters } from '../data/supabase'
+import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
@@ -32,9 +32,15 @@ const PARAMS_KEY = 'bafin.params'
 function readJSON<T>(key: string): T | null {
   try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : null } catch { return null }
 }
-function writeJSON(key: string, value: unknown | null) {
-  try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable */ }
+/** false when the browser refused the write (storage full or blocked) */
+function writeJSON(key: string, value: unknown | null): boolean {
+  try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); return true } catch { return false }
 }
+export const STORAGE_FULL = '這台裝置的瀏覽器儲存空間不足（或被封鎖），這次的資料沒有存起來，重新整理後會回到之前的樣子。請先到「資料匯入」按「匯出備份」，再清理瀏覽器空間。'
+/** Without the cloud the data lives only in this browser: a write that did not stick is an error, not a success. */
+function keepLocal(value: Persisted) { if (!writeJSON(DATA_KEY, value)) throw new Error(STORAGE_FULL) }
+/** The cloud copy kept on this device is only a cache: drop it to make room (e.g. for a game in progress). */
+export function dropCloudCache() { if (cloudConfigured) writeJSON(DATA_KEY, null) }
 
 export type DataSource = 'seed' | 'imported' | 'cloud'
 export type CloudStatus = 'off' | 'loading' | 'ready' | 'error'
@@ -107,6 +113,7 @@ const droppedWarnings = (dropped: string[], gameId = ''): GameWarning[] => [
   ...(dropped.includes(RUNNER_COLUMN) ? [{ gameId, message: RUNNER_UNSUPPORTED }] : []),
   ...(dropped.includes(ERRORS_COLUMN) ? [{ gameId, message: ERRORS_UNSUPPORTED }] : []),
   ...(dropped.includes(EVENTS_COLUMN) ? [{ gameId, message: EVENTS_UNSUPPORTED }] : []),
+  ...(dropped.includes(SAVE_GAMES_FN) ? [{ gameId, message: SAVE_GAMES_UNSUPPORTED }] : []),
 ]
 let registrationsLive = false
 
@@ -137,7 +144,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       return result
     }
     const importedAt = new Date().toISOString()
-    writeJSON(DATA_KEY, { base: ds, importedAt } satisfies Persisted)
+    keepLocal({ base: ds, importedAt })
     set({ base: ds, source: 'imported', importedAt, filters: DEFAULT_FILTERS })
     return result
   },
@@ -155,7 +162,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     const merged = mergeDatasets(get().base, ds)
     const importedAt = new Date().toISOString()
-    writeJSON(DATA_KEY, { base: merged, importedAt } satisfies Persisted)
+    keepLocal({ base: merged, importedAt })
     set({ base: merged, source: 'imported', importedAt })
     return null
   },
@@ -183,7 +190,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     const next = applyGameEdit(base, fragment)
     const importedAt = new Date().toISOString()
-    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    keepLocal({ base: next, importedAt })
     set({ base: next, source: 'imported', importedAt })
     return warnings
   },
@@ -204,6 +211,10 @@ export const useDataStore = create<DataState>((set, get) => ({
         const was = new Map(base.games.map((g) => [g.id, g.dayRoster]))
         const moved = next.games.filter((g) => g.dayRoster && g.dayRoster !== was.get(g.id)).map((g) => ({ id: g.id, day_roster: g.dayRoster! }))
         if (moved.length) await updateGameDayRosters(moved) // false = column missing: no rosters in the cloud to fix
+        // and the 中繼成功 lists (an array column)
+        const holdsWas = new Map(base.games.map((g) => [g.id, (g.holds ?? []).join('\u0000')]))
+        const holds = next.games.filter((g) => (g.holds ?? []).join('\u0000') !== holdsWas.get(g.id)).map((g) => ({ id: g.id, holds: g.holds?.length ? g.holds : null }))
+        if (holds.length) await updateGameHolds(holds)
         if (renames.length || change.removed.length) {
           const regs = await loadCloudRegistrations() // fresh copy; null = table missing
           if (regs) {
@@ -219,7 +230,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       return
     }
     const importedAt = new Date().toISOString()
-    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    keepLocal({ base: next, importedAt })
     const regs = get().registrations
     const fixed = fixRegs(regs)
     if (fixed.some((r, i) => r !== regs[i])) writeLocalRegistrations(fixed)
@@ -237,7 +248,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
     const next = removeGame(base, id)
     const importedAt = new Date().toISOString()
-    writeJSON(DATA_KEY, { base: next, importedAt } satisfies Persisted)
+    keepLocal({ base: next, importedAt })
     set({ base: next, source: 'imported', importedAt })
   },
   setParams: (patch) => { const params = { ...get().params, ...patch }; writeJSON(PARAMS_KEY, params); set({ params }) },

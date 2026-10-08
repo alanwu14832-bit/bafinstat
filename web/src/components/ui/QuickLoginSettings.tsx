@@ -5,7 +5,7 @@ import { Button } from './Button'
 import { Badge } from './Badge'
 import { Input } from './Input'
 import { Select } from './Select'
-import { fetchQuickLogin, saveQuickLogin, type QuickLoginStatus } from '../../data/supabase'
+import { fetchQuickLogin, saveQuickLogin, unlockQuickLogin, type QuickLoginStatus } from '../../data/supabase'
 import { useDataStore } from '../../store/data'
 
 // 0 = 永久: until the password is changed or quick login is turned off (supabase/migrations/2026-10-11_quick_login_forever.sql)
@@ -42,6 +42,12 @@ export function QuickLoginSettings() {
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
 
+  const unlock = async () => {
+    setBusy(true); setMsg(null)
+    try { await unlockQuickLogin(); setMsg('已解除暫停，快速登入恢復可用（密碼沒有改）。'); await load() }
+    catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
+
   return (
     <Card title="快速登入" subtitle="一組共用密碼，輸入就能紀錄，不用帳號"
       action={status ? <Badge variant={status.enabled ? 'good' : 'neutral'}>{status.enabled ? '開啟中' : '關閉'}</Badge> : undefined}>
@@ -58,7 +64,12 @@ export function QuickLoginSettings() {
                 : '設一組密碼後，知道它的人不用帳號也能紀錄、修改比賽。'}
               {status.updated_at && <span className="text-muted">（{status.updated_by ?? '紀錄員'} 於 {new Date(status.updated_at).toLocaleDateString('zh-TW')} 設定）</span>}
             </p>
-            {status.locked_until && <p role="alert" className="text-[12px] text-critical">有人輸錯太多次，快速登入暫停到 {new Date(status.locked_until).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}；重新設定密碼會解除。</p>}
+            {status.locked_until && (
+              <div role="alert" className="flex flex-wrap items-center gap-2 text-[12px] text-critical">
+                <span>有人輸錯太多次，快速登入暫停到 {new Date(status.locked_until).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}。如果是有人故意亂試，可以先解除；常常發生就換一組密碼。</span>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void unlock()}>解除暫停</Button>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row gap-2">
               <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={status.enabled ? '新的快速登入密碼（至少 6 個字）' : '快速登入密碼（至少 6 個字）'} aria-label="快速登入密碼" autoComplete="off" spellCheck={false} className="w-full sm:flex-1" />
               <Select aria-label="有效天數" value={String(days)} onChange={(e) => setDays(Number(e.target.value))} options={DAYS.map((d) => ({ value: String(d), label: daysLabel(d) }))} />
@@ -67,7 +78,7 @@ export function QuickLoginSettings() {
               <Button size="sm" variant="primary" icon={<Zap />} disabled={busy || !code.trim()} onClick={() => void save(code)}>{status.enabled ? '換成這組密碼' : '開啟快速登入'}</Button>
               {status.enabled && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void save('')}>關閉快速登入</Button>}
             </div>
-            <p className="text-[12px] text-muted leading-relaxed">密碼越簡單越容易被猜到：系統只允許每小時錯 10 次，錯滿就暫停一小時。換密碼或關閉時，所有用快速登入的裝置都會被登出；密碼外流時請馬上換一組。</p>
+            <p className="text-[12px] text-muted leading-relaxed">密碼越簡單越容易被猜到：系統只允許每小時錯 10 次，錯滿就暫停一小時（這裡可以解除）。換密碼或關閉時，所有用快速登入的裝置都會被登出；密碼外流時請馬上換一組。</p>
           </>
         )}
         {msg && <div role="status" className="text-xs text-ink-2">{msg}</div>}

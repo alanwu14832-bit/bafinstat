@@ -3,7 +3,7 @@
 --
 -- 1) 紀錄員綁定帳號: write access belongs to one login account, not to whoever can sign up with the email.
 --    A recorder's account is bound on first use by an email code (proves they own the inbox) or by the one-time
---    邀請碼 an existing recorder (or the admin, from here) hands them. Accounts that already exist are bound now.
+--    邀請碼 an existing recorder (or the admin, from here) hands them.
 -- 2) 不公開紀錄員 email: updated_by / created_by on public tables hold a name, never an email.
 -- 3) 操作紀錄 (audit_log): every change to games, players, registrations, albums and editors, readable by recorders only.
 -- 4) 資料上限: album links must be http(s); notes and in-progress data have size caps (new writes only).
@@ -20,9 +20,8 @@ alter table editors add column if not exists invite_expires timestamptz;
 alter table editors add column if not exists invite_attempts int not null default 0;
 create unique index if not exists editors_user_idx on editors (user_id) where user_id is not null;
 
--- accounts that already exist for a listed email were set up before this change: bind them (check the list afterwards)
-update editors e set user_id = u.id, bound_at = now(), bound_via = 'existing'
-  from auth.users u where e.user_id is null and lower(u.email) = lower(e.email);
+-- (2026-10-13: this file no longer binds existing accounts by email on its own — with sign-ups open, whoever registered
+--  a listed email first would have become a recorder. Accounts are bound by an email code, the 邀請碼 or admin_bind_editor.)
 
 -- write access: the signed-in account itself must be the bound one
 create or replace function is_editor() returns boolean
@@ -227,7 +226,7 @@ revoke truncate on all tables in schema public from authenticated;
 
 notify pgrst, 'reload schema';
 
--- 檢查：綁定結果（user_id 有值＝已綁定；bound_via existing＝這次自動綁定的舊帳號，請確認都是本人）
+-- 檢查：綁定結果（user_id 有值＝已綁定；bound_via existing＝第一次執行這個檔時自動綁定的舊帳號，請確認都是本人）
 select email, note, bound_via, bound_at, (select last_sign_in_at from auth.users u where u.id = editors.user_id) as last_sign_in
   from editors order by created_at;
 

@@ -215,7 +215,7 @@ end $$;
 --
 -- 1) 紀錄員綁定帳號: write access belongs to one login account, not to whoever can sign up with the email.
 --    A recorder's account is bound on first use by an email code (proves they own the inbox) or by the one-time
---    邀請碼 an existing recorder (or the admin, from here) hands them. Accounts that already exist are bound now.
+--    邀請碼 an existing recorder (or the admin, from here) hands them.
 -- 2) 不公開紀錄員 email: updated_by / created_by on public tables hold a name, never an email.
 -- 3) 操作紀錄 (audit_log): every change to games, players, registrations, albums and editors, readable by recorders only.
 -- 4) 資料上限: album links must be http(s); notes and in-progress data have size caps (new writes only).
@@ -232,9 +232,8 @@ alter table editors add column if not exists invite_expires timestamptz;
 alter table editors add column if not exists invite_attempts int not null default 0;
 create unique index if not exists editors_user_idx on editors (user_id) where user_id is not null;
 
--- accounts that already exist for a listed email were set up before this change: bind them (check the list afterwards)
-update editors e set user_id = u.id, bound_at = now(), bound_via = 'existing'
-  from auth.users u where e.user_id is null and lower(u.email) = lower(e.email);
+-- (2026-10-13: this file no longer binds existing accounts by email on its own — with sign-ups open, whoever registered
+--  a listed email first would have become a recorder. Accounts are bound by an email code, the 邀請碼 or admin_bind_editor.)
 
 -- write access: the signed-in account itself must be the bound one
 create or replace function is_editor() returns boolean
@@ -666,3 +665,78 @@ grant execute on function quick_login(text) to authenticated;
 grant execute on function quick_logout() to authenticated;
 grant execute on function set_quick_login(text, int) to authenticated;
 grant execute on function quick_login_status() to authenticated;
+
+-- ---------------------------------------------------------------- 2026-10-13 存檔保護
+-- 一場比賽（比賽資料＋打擊／投球／守備紀錄）由 save_games() 一次存完：中途失敗就整筆不算，舊紀錄不會不見。
+-- 也在這裡：快速登入「解除暫停」（unlock_quick_login）。說明見 migrations/2026-10-13_save_games.sql。
+-- a JSON object without its null fields (so the column defaults apply)
+create or replace function _no_nulls(j jsonb) returns jsonb
+language sql immutable set search_path = public as $$
+  select j - coalesce((select array_agg(key) from jsonb_each(j) where jsonb_typeof(value) = 'null'), '{}'::text[])
+$$;
+
+-- Save games and replace their records, all or nothing. Rows are the site's (snake_case, like the tables).
+-- p_only_new: 合併匯入 — games already in the cloud are left untouched. Returns how many games were written.
+-- Runs with the caller's rights: the row level security policies (紀錄員 only) apply to every write.
+create or replace function save_games(p_games jsonb, p_batting jsonb default '[]', p_pitching jsonb default '[]',
+                                      p_fielding jsonb default '[]', p_only_new boolean default false) returns int
+language plpgsql volatile security invoker set search_path = public as $$
+declare ids text[];
+begin
+  if not is_editor() then raise exception '你的帳號不在紀錄員名單，無法寫入' using errcode = '42501'; end if;
+  if jsonb_typeof(p_games) is distinct from 'array' then raise exception 'save_games: p_games 要是陣列' using errcode = '22023'; end if;
+  select coalesce(array_agg(distinct g ->> 'id'), '{}') into ids from jsonb_array_elements(p_games) g where coalesce(g ->> 'id', '') <> '';
+  if p_only_new then
+    select coalesce(array_agg(i), '{}') into ids from unnest(ids) i where not exists (select 1 from games where id = i);
+  end if;
+  if cardinality(ids) = 0 then return 0; end if;
+
+  insert into games as t (id, date, time, tournament, opponent, home_away, venue, weather, recorder, innings,
+                          winning_pitcher, losing_pitcher, save_pitcher, holds, note, status, day_roster)
+  select r.id, r.date, r.time, coalesce(r.tournament, '未分類'), coalesce(r.opponent, '未知'), coalesce(r.home_away, '主'),
+         r.venue, r.weather, r.recorder, r.innings, r.winning_pitcher, r.losing_pitcher, r.save_pitcher, r.holds, r.note,
+         r.status, r.day_roster
+    from jsonb_populate_recordset(null::games, p_games) r
+   where r.id = any(ids)
+  on conflict (id) do update set
+    date = excluded.date, time = excluded.time, tournament = excluded.tournament, opponent = excluded.opponent,
+    home_away = excluded.home_away, venue = excluded.venue, weather = excluded.weather, recorder = excluded.recorder,
+    innings = excluded.innings, winning_pitcher = excluded.winning_pitcher, losing_pitcher = excluded.losing_pitcher,
+    save_pitcher = excluded.save_pitcher, holds = excluded.holds, note = excluded.note, status = excluded.status,
+    day_roster = coalesce(excluded.day_roster, t.day_roster),   -- saved without a 當日登錄名單: keep the one it has
+    updated_at = now();
+
+  delete from batting_pa where game_id = any(ids);
+  delete from pitching_pa where game_id = any(ids);
+  delete from fielding_lines where game_id = any(ids);
+  insert into batting_pa
+  select r.* from jsonb_array_elements(coalesce(p_batting, '[]')) j,
+         jsonb_populate_record(null::batting_pa, '{"pitches": [], "result": "", "sb": 0, "cs": 0, "adv_on_error": 0, "out_on_base": 0, "baserunning_outs": 0, "run": 0, "rbi": 0}'::jsonb || _no_nulls(j)) r
+   where j ->> 'game_id' = any(ids);
+  insert into pitching_pa
+  select r.* from jsonb_array_elements(coalesce(p_pitching, '[]')) j,
+         jsonb_populate_record(null::pitching_pa, '{"pitches": [], "result": "", "sba": 0, "cs": 0, "wp": 0, "pb": 0, "pk": 0}'::jsonb || _no_nulls(j)) r
+   where j ->> 'game_id' = any(ids);
+  insert into fielding_lines
+  select r.* from jsonb_array_elements(coalesce(p_fielding, '[]')) j,
+         jsonb_populate_record(null::fielding_lines, '{"po": 0, "a": 0, "e": 0, "dp": 0, "pb": 0, "sb": 0, "cs": 0}'::jsonb || _no_nulls(j)) r
+   where j ->> 'game_id' = any(ids);
+  return cardinality(ids);
+end $$;
+
+-- 解除快速登入的暫停 (10 wrong passwords within an hour), keeping the password
+create or replace function unlock_quick_login() returns void
+language plpgsql volatile security definer set search_path = public as $$
+begin
+  if not is_bound_editor() then raise exception '只有用自己帳號登入的紀錄員可以解除暫停' using errcode = '42501'; end if;
+  update quick_login set failures = 0, window_start = null, locked_until = null where id = 1;
+end $$;
+
+revoke all on function _no_nulls(jsonb) from public, anon;
+revoke all on function save_games(jsonb, jsonb, jsonb, jsonb, boolean) from public, anon;
+revoke all on function unlock_quick_login() from public, anon;
+grant execute on function _no_nulls(jsonb) to authenticated;
+grant execute on function save_games(jsonb, jsonb, jsonb, jsonb, boolean) to authenticated;
+grant execute on function unlock_quick_login() to authenticated;
+
+notify pgrst, 'reload schema';
