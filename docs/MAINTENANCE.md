@@ -23,13 +23,16 @@
 
 紀錄員不需要懂程式；管理員也不需要，只要會照這份手冊點後台。
 
-## 2. 加一個紀錄員（約 2 分鐘）
+## 2. 加一個紀錄員（約 1 分鐘，在網站上做）
 
-1. Supabase → **Authentication → Users → Add user → Create new user**，填對方的 Email 和一組密碼，勾 **Auto Confirm User**，把密碼私訊給對方。（不要用 Invite user：Supabase 內建的寄信服務只寄給 Supabase 專案團隊的成員，每小時最多 2 封，紀錄員收不到邀請信。）
-2. Supabase → **SQL Editor** 執行 `select admin_bind_editor('對方的email', '名字');`（把 email 加進紀錄員名單，並綁定到剛建立的帳號；只加進 `editors` 表但沒綁定，是寫不進去的）。
-3. 請對方到網站左下角登入。登入後側欄會多出「先發陣容／紀錄比賽／資料匯入」。
+1. 用自己的帳號登入網站 → 「資料匯入」頁 → 「紀錄員名單」→ 填對方的 email 和名字 → 新增。畫面會出現一組 **10 碼邀請碼**（7 天內有效），私下傳給對方（不要貼在群組）。
+2. 對方打開網站 → 左下角登入 → 選「**第一次使用**」→ 輸入 email、邀請碼、自己設定的密碼。完成後側欄會多出「先發陣容／紀錄比賽／資料匯入」。
 
-移除：`editors` 刪掉那一列即可（他的帳號留著也寫不了資料）；離隊就順便在 Authentication → Users 刪掉。忘記密碼：刪掉他的帳號、重新 Add user，再執行一次 `admin_bind_editor`。
+移除：紀錄員名單按他的「移除」，立即失效。忘記密碼或換手機：紀錄員名單按他的「重發邀請碼」，他用新的邀請碼在「第一次使用」重新設定（舊帳號會立刻失去寫入權）。
+
+也可以在 Supabase 後台做（例如還沒有任何紀錄員時）：Authentication → Users → **Add user → Create new user**（勾 Auto Confirm User）→ SQL Editor 執行 `select admin_bind_editor('對方的email', '名字');`。
+
+只是要讓人幫忙紀錄一場、不想給帳號的話，用「快速登入」（資料匯入頁的「快速登入」卡片設一組共用密碼）。
 
 攝影師不需要帳號。做法：攝影師用自己的 Google 帳號在 Drive 建「2026-03-01 vs 群風」這類資料夾，右鍵 → 共用 → 一般存取權改成「知道連結的使用者：檢視者」，把連結傳給紀錄員；紀錄員到「相簿」頁「新增相簿連結」選那場比賽貼上。想集中管理的話，系隊 Gmail 建一個「球隊照片」資料夾，把攝影師的個人帳號加為「編輯者」，他們就能直接往裡面傳；上傳的檔案佔攝影師自己的 Drive 空間。
 
@@ -84,7 +87,7 @@
 | 症狀 | 原因 | 處理 |
 |---|---|---|
 | 網站打得開但數據是「示範」或空的、右上角「雲端失敗」 | Supabase 免費專案 **7 天沒人用會自動暫停**（休賽期最常見） | Supabase 後台 → 該專案 → **Restore project**，約 1 分鐘。這個 repo 有 `.github/workflows/keepalive.yml` 每 3 天自動戳一次資料庫防止暫停；只要 GitHub 的 Actions 沒被關掉就不會發生。注意：公開 repo **60 天沒有任何 commit**，GitHub 會自動停用排程 workflow（暑假最容易碰到）；到 GitHub → Actions → Keep Supabase awake 按 **Enable workflow** 即可 |
-| 紀錄員登入後看不到「紀錄比賽」 | 信箱不在 `editors` 表，或還沒綁定帳號 | SQL Editor 執行 `select admin_bind_editor('他的email');` |
+| 紀錄員登入後看不到「紀錄比賽」 | 信箱不在紀錄員名單，或還沒用邀請碼啟用 | 其他紀錄員在「紀錄員名單」新增他或按「重發邀請碼」，他再到登入框的「第一次使用」輸入邀請碼；或 SQL Editor 執行 `select admin_bind_editor('他的email');` |
 | 匯錯資料、一場記了兩次 | — | 「比賽」頁點那場 → 右上角垃圾桶刪除；或「資料匯入」選「以此檔取代雲端全部資料」用上個月的備份整份還原 |
 | 某個人的名字有兩種寫法、數據被拆開 | 打字不一致 | 「球員 → 編輯名單」把其中一個改名成另一個，所有紀錄會自動合併 |
 | 網站整個打不開（404 或空白） | Vercel 部署失敗 | Vercel → Deployments 看最新一筆是否 Error；Promote 上一版；把錯誤訊息貼給 Claude |

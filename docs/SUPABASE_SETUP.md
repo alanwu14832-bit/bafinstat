@@ -15,11 +15,10 @@ Project Settings → **API**：
 anon key 可以放在前端，因為資料表已開啟 RLS：未登入只能讀，登入才能寫。
 
 ## 3. 登入方式（紀錄員）
-建議用**密碼登入**（不寄信、沒有每小時 2 封的限制）：Authentication → Users → **Add user → Create new user**，填 email 與密碼，勾 Auto Confirm User。網站的「密碼登入」就能用。
-
-網站只有密碼登入（不再提供 Email 連結／驗證碼登入）。另外建議：
-- Authentication → Settings → 關閉 **Allow new users to sign up**（避免陌生人註冊）。
-- 新增紀錄員：Add user 建好帳號後，到 SQL Editor 執行 `select admin_bind_editor('對方email','名字');`。
+紀錄員由網站上的「紀錄員名單」管理：現有紀錄員新增對方的 email，拿到一組 10 碼邀請碼；對方在登入框選「第一次使用」，輸入 email、邀請碼並設定密碼。沒有邀請碼的帳號只能瀏覽。為此要設定：
+- Authentication → Sign In / Providers → Email：打開 **Allow new users to sign up**、關閉 **Confirm email**、Minimum password length 設 **8**（「第一次使用」要能建立帳號；不用擔心陌生人註冊，沒有邀請碼寫不了任何東西）。
+- 要用「快速登入」的話，同一頁再打開 **Allow anonymous sign-ins**（見 docs/SECURITY.md）。
+- 還沒有任何紀錄員時（第一位）：Authentication → Users → **Add user → Create new user**（勾 Auto Confirm User），再到 SQL Editor 執行 `select admin_bind_editor('對方email','名字');`。
 - Authentication → URL Configuration → Site URL 填網站網址，Redirect URLs 也加同一個網址。
 
 登入流程：右上角登入 → 輸入 email 與密碼 → 就能紀錄與上傳。
@@ -68,8 +67,8 @@ npm run dev
 - `supabase/migrations/2026-09-26_rosters.sql`：**當日登錄名單與報名名單**。在 `games` 加 `day_roster` 欄（先發、板凳、替補紀錄、允許再上場），並建立 `registrations` 表（某年某杯賽的報名名單）。沒執行時比賽照常紀錄與儲存，只是登錄名單存不進雲端（存檔時會提醒）、比賽頁的「當日登錄名單」改由打席紀錄推定、球員頁的報名名單會提示尚未開通，先發陣容與紀錄比賽的候選名單則列出全隊。
 
 ## 誰能登入、誰能寫
-- 帳號：Authentication → Users → Add user（設 email 與密碼）。請關閉 Providers → Email 的 **Enable email signups**，避免任何人自行註冊。
-- 寫入權限：Table Editor → `editors` 新增那個 email；移除那一列即刻失效。
+- 帳號：紀錄員在網站「資料匯入 → 紀錄員名單」新增 email，對方用邀請碼在登入框的「第一次使用」設定密碼（第一位紀錄員見上面第 3 節）。
+- 寫入權限：要在紀錄員名單上、而且用邀請碼啟用過的帳號才寫得進去；在名單按「移除」即刻失效。
 - 網站側欄底部有「紀錄員登入」；登入且在名單內的人才看得到「紀錄比賽」「資料匯入」與比賽頁的「修改資料」。
 - 更完整的制度見 `docs/SECURITY.md`。
 
