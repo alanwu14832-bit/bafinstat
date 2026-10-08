@@ -281,7 +281,48 @@ export async function signInWithPassword(email: string, password: string) {
   const { error } = await supabase().auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message === 'Invalid login credentials' ? 'email 或密碼錯誤' : error.message)
 }
-export async function signOut() { await supabase().auth.signOut() }
+export async function signOut() {
+  // a 快速登入 session ends with it (supabase/migrations/2026-10-10_quick_login.sql)
+  const { data } = await supabase().auth.getSession()
+  if (data.session?.user.is_anonymous) await supabase().rpc('quick_logout').then(() => undefined, () => undefined)
+  await supabase().auth.signOut()
+}
+
+// ---------------------------------------------------------------- 快速登入 (supabase/migrations/2026-10-10_quick_login.sql)
+const QUICK_SQL = '資料庫還沒有快速登入：請管理員在 Supabase 執行 supabase/migrations/2026-10-10_quick_login.sql'
+const quickMissing = (e: { code?: string; message: string }) => e.code === 'PGRST202' || e.code === '42883' || /quick_login/.test(e.message)
+/**
+ * 快速登入: the shared password makes this device a recorder for some days, without an account of its own. The site
+ * signs in anonymously (a throwaway account), and the database checks the password (it never comes to the site) and
+ * records the account as a quick session. A wrong password leaves nobody signed in.
+ * Needs Supabase → Authentication → Sign In / Providers → "Allow anonymous sign-ins".
+ */
+export async function quickSignIn(code: string) {
+  const sb = supabase()
+  const { data: had } = await sb.auth.getSession()
+  if (had.session && !had.session.user.is_anonymous) throw new Error('你已經用自己的帳號登入了，不需要快速登入')
+  if (!had.session) {
+    const { error } = await sb.auth.signInAnonymously()
+    if (error) throw new Error(/anonymous/i.test(error.message) ? '快速登入還沒開啟：管理員要到 Supabase → Authentication → Sign In / Providers 打開「Allow anonymous sign-ins」' : error.message)
+  }
+  const { data, error } = await sb.rpc('quick_login', { p_code: code.trim() })
+  if (!error && data === 'ok') return
+  await sb.auth.signOut()
+  if (error) throw new Error(quickMissing(error) ? QUICK_SQL : error.message)
+  throw new Error(data === 'bad' ? '快速登入密碼不對' : data === 'locked' ? '密碼錯太多次，快速登入暫停一小時；也可以改用 email 登入' : data === 'off' ? '快速登入還沒設定：請紀錄員到「資料匯入」頁設定快速登入密碼' : '快速登入沒有成功，請再試一次')
+}
+export interface QuickLoginStatus { enabled: boolean; days: number; active: number; locked_until: string | null; updated_at: string | null; updated_by: string | null }
+/** The 快速登入 settings (recorders signed in with their own account); null when the database does not have it yet. */
+export async function fetchQuickLogin(): Promise<QuickLoginStatus | null> {
+  const { data, error } = await supabase().rpc('quick_login_status')
+  if (error) { if (quickMissing(error)) return null; throw new Error(error.message) }
+  return data as QuickLoginStatus
+}
+/** Sets the shared password (empty: turns quick login off). Every device signed in with the old one is signed out. */
+export async function saveQuickLogin(code: string, days: number) {
+  const { error } = await supabase().rpc('set_quick_login', { p_code: code.trim() || null, p_days: days })
+  if (error) throw new Error(quickMissing(error) ? QUICK_SQL : error.message)
+}
 /** The signed-in account's own password (8+ characters). */
 export async function setOwnPassword(password: string) {
   const { error } = await supabase().auth.updateUser({ password })

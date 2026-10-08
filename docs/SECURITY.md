@@ -13,6 +13,7 @@
 | 資料庫 | Supabase Postgres + Row Level Security | **任何人可讀**；**只有「已綁定的紀錄員帳號」可寫**（`is_editor()` 比對登入帳號本身，不只是 email） |
 | 帳號綁定 | `supabase/migrations/2026-10-08_security.sql` | 名單上的 email 要「綁定」到一個登入帳號才能寫：管理員綁定或一次性**邀請碼**（網站已不提供 Email 驗證碼登入）。光是用某人的 email 註冊帳號，什麼都寫不了 |
 | 邀請碼 | 10 碼、7 天有效、只存雜湊值 | 輸錯 10 次鎖住；用過即失效；紀錄員自己也讀不到雜湊值 |
+| 快速登入 | `supabase/migrations/2026-10-10_quick_login.sql` | 一組共用密碼，輸入後那台裝置變成紀錄員 N 天（網站先匿名登入，資料庫比對密碼的 bcrypt 雜湊，網站本身拿不到密碼）。**每小時全隊合計只能錯 10 次**，錯滿就暫停一小時（email 登入不受影響）。快速登入可以紀錄、修改比賽，但**看不到也改不了紀錄員名單、操作紀錄和快速登入密碼**；換密碼或關閉時，所有快速登入的裝置立刻失去寫入權。寫入的資料標成「快速登入」 |
 | 金鑰 | 前端只有 anon（publishable）key | 權限完全由 RLS 決定；匿名角色另外被收回所有寫入權（雙重保險）；`service_role` key 永遠不放前端、不進 git（已掃過整個 git 歷史，沒有外洩） |
 | 個資 | 公開表格不存 email | `updated_by`／`created_by` 由資料庫自動填紀錄員的備註名稱（例如「管理員」），舊資料裡的 email 已被換掉 |
 | 稽核 | `audit_log`（只有紀錄員讀得到） | 比賽、球員、報名名單、相簿、紀錄員名單的每次新增／修改／刪除：時間、帳號、哪一筆；刪除會保留整列內容，可以手動救回 |
@@ -30,13 +31,15 @@
 4. **URL Configuration**：Site URL 與 Redirect URLs 只留自己的網址（`https://bafinstat.vercel.app` 與自訂網域），不要有萬用字元。
 5. **Advisors → Security Advisor**：按一次 Refresh，應該沒有紅色項目；有的話把畫面給 Claude 看。
 6. **兩步驟驗證**：Supabase、Vercel、GitHub、共用 Gmail 全部開 2FA。後台帳號才是真正的最高權限。
-7. **GitHub Actions 變數**：repo → Settings → Secrets and variables → Actions → Variables 要有 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`（每日備份與保持清醒會用）。
+7. **快速登入（要用才設）**：執行 `supabase/migrations/2026-10-10_quick_login.sql`，再到 Authentication → Sign In / Providers 打開 **Allow anonymous sign-ins**；密碼由紀錄員在「資料匯入」頁的「快速登入」卡片設定（或 SQL：`select set_quick_login('密碼', 30);`，關閉：`select set_quick_login(null);`）。注意：快速登入密碼等於寫入權，只告訴需要紀錄的人；外流就馬上換一組。
+8. **GitHub Actions 變數**：repo → Settings → Secrets and variables → Actions → Variables 要有 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`（每日備份與保持清醒會用）。
 
 ## 3. 人員與權限制度
 
 | 角色 | 能做什麼 | 怎麼給 | 怎麼收 |
 |---|---|---|---|
 | 瀏覽者（全隊、家長） | 看所有頁面、即時比分 | 不用做任何事 | — |
+| 快速登入 | 紀錄比賽、上傳、修改、刪除比賽（不能管理紀錄員名單） | 紀錄員在「資料匯入 → 快速登入」設一組密碼告訴他 | 換密碼或關閉快速登入，所有快速登入的裝置立即失效 |
 | 紀錄員 | 紀錄比賽、上傳、修改、刪除比賽 | ① Authentication → Users → **Add user**（email＋密碼、勾 Auto Confirm）② SQL Editor：`select admin_bind_editor('對方email', '名字');` | Table Editor → `editors` 刪掉那一列，立即失效 |
 | 管理員 | 上述全部 + Supabase／Vercel／GitHub 後台 | 邀請進 Supabase 組織（Organization → Members） | 每學期檢查成員，畢業或卸任立刻移除 |
 
@@ -51,7 +54,7 @@
 | 每場賽後 | 比賽頁的「記錄檢查」為 0 個可疑打席再收工 |
 | 每月 | GitHub → Actions → 每日備份資料，確認是綠勾；另外「資料匯入 → 匯出備份（總表格式）」存一份到隊上雲端 |
 | 每學期 | 檢查 `editors` 名單、Supabase 組織成員；請 Claude 跑一次 `npm audit` 與套件更新 |
-| 有人離隊 | 從 `editors` 移除；他知道的共用密碼全部重設 |
+| 有人離隊 | 從 `editors` 移除；他知道的共用密碼全部重設（包括快速登入密碼） |
 | **懷疑帳號被盜／資料被改** | ① 從 `editors` 刪掉可疑帳號（立即失去寫入權）② Table Editor → `audit_log` 依時間看是誰改了什麼 ③ 用每日備份還原（把備份檔交給 Claude）④ 必要時 Settings → API 重設 anon key，並更新 Vercel 與 GitHub 變數 |
 
 免費方案沒有 Supabase 自己的自動備份與時間點還原（PITR），所以每日備份很重要。資料變得重要時，升級 Supabase Pro（每月 25 美元）就有每日備份與 7 天 PITR。

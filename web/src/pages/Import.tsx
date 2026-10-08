@@ -14,6 +14,7 @@ import type { Dataset, Registration } from '../data/types'
 import { useDataStore } from '../store/data'
 import { TEAM } from '../config/team'
 import { CloudPanel } from '../components/ui/CloudPanel'
+import { QuickLoginSettings } from '../components/ui/QuickLoginSettings'
 
 const STEPS = [
   { title: '下載總表', desc: '總表內含「單場-摘要 / 單場-打擊 / 單場-投球」模板，照原本習慣逐球紀錄。' },
@@ -157,6 +158,7 @@ export function ImportPage() {
         </Card>
         <div className="xl:col-span-2 flex flex-col gap-4 md:gap-5">
           <CloudPanel />
+          <QuickLoginSettings />
           <Card title="目前資料" subtitle={sourceLabel}>
             <dl className="grid grid-cols-3 gap-3">
               {[['比賽', base.games.length], ['打席', base.batting.length], ['球員', base.roster.length]].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
