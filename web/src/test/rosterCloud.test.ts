@@ -43,6 +43,8 @@ function builder(table: string, ops: Op[] = []): unknown {
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     from: (t: string) => builder(t),
+    // before 2026-10-13_save_games.sql: no save_games(), so games are saved piece by piece
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.save_games' } }),
     auth: { getUser: async () => ({ data: { user: { id: 'u', email: 'a@b.c' } } }), getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
     channel: () => { const ch = { on: () => ch, subscribe: () => ch }; return ch },
     removeChannel: async () => undefined,
@@ -66,7 +68,7 @@ describe('cloud mode without / with the rosters migration (fake client)', () => 
     const g2 = { id: 'G2', date: '2026-10-04', tournament: '大專盃', opponent: '政大', homeAway: '主' as const }
     calls.length = 0
     const r = await sb.pushCloudDataset({ roster: [], games: [g1, g2], batting: [], pitching: [], fielding: [] }, 'upsert')
-    expect(r.dropped).toEqual(['day_roster'])
+    expect(r.dropped).toEqual([sb.SAVE_GAMES_FN, 'day_roster'])
     const ups = calls.filter((c) => c.table === 'games' && c.ops[0][0] === 'upsert').map((c) => c.ops[0][1][0] as Array<Record<string, unknown>>)
     // first try with the roster, retry without, then the roster-less game in its own request, never with the key
     expect(ups.map((rows) => rows.map((x) => [x.id, 'day_roster' in x]))).toEqual([[['G1', true]], [['G1', false]], [['G2', false]]])

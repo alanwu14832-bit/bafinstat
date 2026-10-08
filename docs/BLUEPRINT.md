@@ -108,7 +108,7 @@
 6. **資料層**：`types.ts`（欄位 = 總表欄位）→ `stats.ts`（與 Excel 公式一對一）→ `filters.ts` → `xlsx.ts`（SheetJS 匯入／匯出）→ `store/data.ts`（localStorage 持久化）→ `demo.ts`（可關閉、有標籤的示範資料）；vitest 以 10/10 比賽驗證。
 7. **頁面**：總覽 → 打擊 → 投球 → 守備 → 球員 → 比賽（Box Score）→ 匯入 → 字典；全域篩選列接上 store。
 8. **驗證**：`npm run typecheck && npm test && npm run build`；headless Chromium 在 1366／390 寬、明暗兩主題截圖檢查（無水平捲軸、無 runtime error）。
-9. **部署**：`.github/workflows/deploy.yml`（GitHub Pages，`VITE_BASE=/bafinstat/`）；`npm run build:single` 產生單檔預覽。
+9. **部署**：`.github/workflows/deploy.yml`（GitHub Pages，`VITE_BASE=/bafinstat/`）。
 
 ---
 

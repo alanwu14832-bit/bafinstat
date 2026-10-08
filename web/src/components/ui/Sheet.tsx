@@ -98,16 +98,19 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
     return () => el.removeEventListener('dragstart', block, { capture: true })
   }, [mounted])
 
-  // body scroll lock, Escape, focus
+  // body scroll lock, Escape, focus — tied to opening and closing only: the caller's onClose is often a new function
+  // on every render (an inline arrow), and re-running this would pull the focus back to the panel mid-typing
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose })
   useEffect(() => {
     if (!mounted) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const previouslyFocused = document.activeElement as HTMLElement | null
     // focus the panel itself (keyboard users Tab from here); focusing a button would paint a ring on open
-    requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }))
+    const raf = requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }))
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return }
+      if (e.key === 'Escape') { closeRef.current(); return }
       if (e.key !== 'Tab' || !panelRef.current) return
       const els = Array.from(panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select, input, [tabindex="0"]'))
       if (!els.length) return
@@ -116,8 +119,8 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
     }
     document.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); previouslyFocused?.focus?.({ preventScroll: true }) }
-  }, [mounted, onClose])
+    return () => { cancelAnimationFrame(raf); document.body.style.overflow = prev; document.removeEventListener('keydown', onKey); previouslyFocused?.focus?.({ preventScroll: true }) }
+  }, [mounted])
 
   // ---- drag: pointer events on the handle / header; the same routine is reused by the content pull-down
   const drag = useRef<{ origin: number; samples: Array<[number, number]>; active: boolean } | null>(null)

@@ -65,6 +65,8 @@ npm run dev
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
 - `supabase/migrations/2026-09-26_rosters.sql`：**當日登錄名單與報名名單**。在 `games` 加 `day_roster` 欄（先發、板凳、替補紀錄、允許再上場），並建立 `registrations` 表（某年某杯賽的報名名單）。沒執行時比賽照常紀錄與儲存，只是登錄名單存不進雲端（存檔時會提醒）、比賽頁的「當日登錄名單」改由打席紀錄推定、球員頁的報名名單會提示尚未開通，先發陣容與紀錄比賽的候選名單則列出全隊。
+- `supabase/migrations/2026-10-07_play_events.sql`、`2026-10-08_security.sql`、`2026-10-09_baserunning_outs.sql`、`2026-10-10_quick_login.sql`、`2026-10-12_quick_login_fix.sql`：逐球跑壘、資料安全、壘死、快速登入（說明見各檔開頭與 `docs/SECURITY.md`）。
+- `supabase/migrations/2026-10-13_save_games.sql`：**存檔保護**。一場比賽（比賽資料＋打擊／投球／守備紀錄）由資料庫一次存完，中途失敗就整筆不算、舊紀錄還在；也加上快速登入的「解除暫停」。沒執行時照舊分段儲存（修改比賽後會提醒）。
 
 ## 誰能登入、誰能寫
 - 帳號：紀錄員在網站「資料匯入 → 紀錄員名單」新增 email，對方用邀請碼在登入框的「第一次使用」設定密碼（第一位紀錄員見上面第 3 節）。

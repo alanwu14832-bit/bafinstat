@@ -10,7 +10,14 @@ function cell<T>(c: Column<T>, row: T): string {
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : String(Math.round(v * 1000) / 1000)
   return String(v)
 }
-const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s)
+/** A number as text (a rate like .312, a negative WAR, 12%): left as it is so the spreadsheet still reads a number. */
+const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?%?$/i
+/**
+ * Text starting with = + - @ (or a tab / carriage return) would be read by Excel as a formula: a player name typed as
+ * =HYPERLINK(…) must stay text. Such cells get a leading apostrophe (OWASP's CSV injection advice); numbers are untouched.
+ */
+export const safeCell = (s: string) => (/^[=+\-@\t\r]/.test(s) && s !== '-' && !NUMBER.test(s) ? `'${s}` : s)
+const esc = (raw: string) => { const s = safeCell(raw); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s }
 
 /**
  * Download what a table shows as CSV (UTF-8 with BOM so Excel reads the Chinese). The first lines say what it covers —

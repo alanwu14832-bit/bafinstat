@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cx } from '../../lib/format'
 import { EmptyState } from './EmptyState'
 import { StatHint } from './StatHint'
+import { hintFor } from '../../data/glossary'
 
 export type Align = 'left' | 'center' | 'right'
 
@@ -114,7 +115,11 @@ export function DataTable<Row extends object>({
                   className={cx('text-[12px] font-medium h-9', active ? 'text-ink' : 'text-muted', cellPad, 'py-0', alignCls[align], i === 0 && 'sticky left-0 z-[1] bg-surface', i === 0 && 'pl-4', i === columns.length - 1 && 'pr-4',
                     sortable && 'cursor-pointer select-none hover:text-ink active:opacity-60')}
                   onClick={sortable ? () => toggleSort(col.key) : undefined}
-                  title={sortable ? '點擊排序' : undefined}
+                  // keyboard: Enter / Space on the focused header name (the stat hint) sorts too; a header without a
+                  // hint is focusable itself
+                  onKeyDown={sortable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort(col.key) } } : undefined}
+                  tabIndex={sortable && !hintFor(col.header) ? 0 : undefined}
+                  title={sortable ? '點擊（或按 Enter）排序' : undefined}
                 >
                   <span className={cx('inline-flex items-center gap-1', align === 'right' && 'flex-row-reverse')}>
                     <StatHint label={col.header}>{col.header}</StatHint>

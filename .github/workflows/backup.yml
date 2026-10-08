@@ -1,7 +1,9 @@
 name: 每日備份資料
 
 # 每天把資料庫裡的比賽資料存一份 JSON，放在這次執行的 Artifacts（保留 30 天，所以隨時有約 30 份）。
-# 用的是網站公開讀取的金鑰，備份內容和網站上任何人看得到的一樣，不含紀錄員帳號。
+# 用的是網站公開讀取的金鑰，備份內容和網站上任何人看得到的一樣：比賽、打擊／投球／守備紀錄、球員、相簿、報名名單、
+# 進行中的比賽。不含紀錄員名單、操作紀錄（audit_log）與快速登入設定（這些只有紀錄員讀得到）。
+# 任何一張表讀取失敗，這次執行會顯示紅叉，檔案名稱加上 -incomplete；manifest.json 記錄每張表的列數與是否完整。
 # 還原：GitHub → Actions → 每日備份資料 → 選一次執行 → Artifacts 下載；交給 Claude 寫回資料庫。
 on:
   schedule:
@@ -26,27 +28,54 @@ jobs:
           if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "::warning::沒有備份：GitHub → Settings → Secrets and variables → Actions 要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY"; exit 0; fi
           # 舊版 anon key（eyJ 開頭）也放進 Authorization；新版 publishable key 只放 apikey
           AUTH=(); case "$KEY" in eyJ*) AUTH=(-H "Authorization: Bearer $KEY");; esac
-          set -euo pipefail
+          set -uo pipefail
           mkdir -p backup
-          for t in games players batting_pa pitching_pa fielding_lines albums registrations; do
+          echo "started=1" >> "$GITHUB_OUTPUT"
+          complete=1
+          echo '{}' > tables.json
+          # 資料表與固定排序（分頁才不會漏列或重複）；record_drafts＝進行中的比賽
+          for spec in games:id players:name batting_pa:game_id,seq pitching_pa:game_id,seq fielding_lines:game_id,seq albums:id registrations:season,tournament record_drafts:game_id; do
+            t=${spec%%:*}; order=${spec#*:}
             echo '[]' > "backup/$t.json"
-            from=0
+            status=ok
+            offset=0
             while true; do
-              # PostgREST 一次最多回 1000 列，用 Range 分頁
-              curl -sS --fail "$URL/rest/v1/$t?select=*" -H "apikey: $KEY" "${AUTH[@]}" \
-                -H "Range-Unit: items" -H "Range: $from-$((from + 999))" > page.json || { echo "::warning::$t 讀不到（資料表不存在？）"; break; }
+              # PostgREST 一次最多回 1000 列；讀不到會重試 3 次
+              code=$(curl -sS --retry 3 --retry-all-errors -o page.json -w '%{http_code}' \
+                "$URL/rest/v1/$t?select=*&order=$order&limit=1000&offset=$offset" -H "apikey: $KEY" "${AUTH[@]}") || code=000
+              if [ "$code" != 200 ]; then
+                if [ "$code" = 404 ] && grep -qE 'PGRST205|42P01|does not exist|Could not find the table' page.json; then
+                  status=missing; echo "::warning::$t 這張表不存在（還沒執行對應的 migration），略過"
+                else
+                  status=failed; complete=0; echo "::error::$t 第 $((offset / 1000 + 1)) 頁讀取失敗（HTTP $code）：這份備份不完整"
+                fi
+                break
+              fi
               n=$(jq length page.json)
               jq -s '.[0] + .[1]' "backup/$t.json" page.json > merged.json && mv merged.json "backup/$t.json"
               [ "$n" -lt 1000 ] && break
-              from=$((from + 1000))
+              offset=$((offset + 1000))
             done
-            echo "$t: $(jq length "backup/$t.json") 列" | tee -a "$GITHUB_STEP_SUMMARY"
+            rows=$(jq length "backup/$t.json")
+            jq --arg t "$t" --arg s "$status" --argjson n "$rows" --arg sha "$(sha256sum "backup/$t.json" | cut -c1-64)" \
+              '.[$t] = {rows: $n, status: $s, sha256: $sha}' tables.json > t2.json && mv t2.json tables.json
+            echo "$t: $rows 列（$status）" | tee -a "$GITHUB_STEP_SUMMARY"
           done
-          echo "ok=1" >> "$GITHUB_OUTPUT"
+          # 備份清單：每張表的列數、狀態、校驗碼，以及這份備份是否完整
+          jq --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson complete "$([ $complete = 1 ] && echo true || echo false)" \
+            '{at: $at, complete: $complete, tables: .}' tables.json > backup/manifest.json
+          echo "complete=$complete" >> "$GITHUB_OUTPUT"
 
+      # 不完整的備份也上傳（還是有用），但下面一步會讓這次執行顯示紅叉
       - uses: actions/upload-artifact@v4
-        if: steps.dl.outputs.ok == '1'
+        if: always() && steps.dl.outputs.started == '1'
         with:
-          name: backup-${{ github.run_number }}
+          name: backup-${{ github.run_number }}${{ steps.dl.outputs.complete != '1' && '-incomplete' || '' }}
           path: backup/
           retention-days: 30
+
+      - name: 確認備份完整
+        if: steps.dl.outputs.started == '1' && steps.dl.outputs.complete != '1'
+        run: |
+          echo "::error::這次備份不完整（看上面哪張表讀取失敗）。下載的檔案裡 manifest.json 會寫 complete: false。"
+          exit 1

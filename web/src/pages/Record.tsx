@@ -11,7 +11,7 @@ import { Tabs } from '../components/ui/Tabs'
 import { CloudPanel } from '../components/ui/CloudPanel'
 import { BattingPlayByPlay, PitchingPlayByPlay, PitchPlays } from '../components/ui/PlayByPlay'
 import { Toast, type ToastData } from '../components/ui/Toast'
-import { useDataStore } from '../store/data'
+import { dropCloudCache, useDataStore } from '../store/data'
 import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
@@ -207,7 +207,8 @@ function RegistrationHint({ reg, everyone, onToggle, className }: { reg: Registr
 /* ------------------------------------------------------------------ live */
 /** Saving while recording: every play goes to the cloud by itself, so there is only a status line — and a button when
  *  that is not running (no cloud: save into this site) or the last automatic save failed (retry). */
-interface SaveState { status: string; button: string | null; saving: boolean; onSave: () => void }
+/** tone: ok = in the cloud (or saved on this device), pending = a change not synced yet, failed = not saved */
+interface SaveState { tone: 'ok' | 'pending' | 'failed'; status: string; button: string | null; saving: boolean; onSave: () => void }
 
 function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void }) {
   const base = useDataStore((s) => s.base)
@@ -355,8 +356,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const secondary = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-[12px] text-muted min-h-9">
-        <span role="status" className={cx('min-w-0', save.button === '重試儲存' && 'text-critical')}>{save.status}</span>
-        {save.button && <Button variant={save.button === '重試儲存' ? 'outline' : 'ghost'} size="sm" icon={<Save />} onClick={save.onSave} disabled={save.saving}>{save.saving ? '儲存中…' : save.button}</Button>}
+        <span role="status" className={cx('min-w-0 inline-flex items-center gap-1.5', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>
+          <span aria-hidden className={cx('size-2 rounded-full shrink-0', save.tone === 'failed' ? 'bg-critical' : save.tone === 'pending' ? 'bg-warning' : 'bg-good')} />{save.status}
+        </span>
+        {save.button && <Button variant={save.tone === 'failed' ? 'outline' : 'ghost'} size="sm" icon={<Save />} onClick={save.onSave} disabled={save.saving}>{save.saving ? '儲存中…' : save.button}</Button>}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
@@ -613,22 +616,56 @@ export function RecordPage() {
     return () => { document.removeEventListener('fullscreenchange', onChange); window.removeEventListener('keydown', onKey) }
   }, [focus])
   useEffect(() => { if (!state && focus) setFocus(false) }, [state, focus])
-  // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying)
-  useEffect(() => { writeDraft(state) }, [state])
-  // 2) in cloud mode, every completed play is pushed to Supabase a moment later, so nothing is lost even if the phone is lost
-  // substitutions, the pitcher and the re-entry switch are part of the key, so a lineup change syncs without waiting for the next play
-  const playsKey = state ? `${state.batting.length}/${state.pitching.length}/${state.inning}${state.half}/${state.outs}/${state.batting.map((p) => p.code ?? '').join('')}${state.pitching.map((p) => p.code ?? '').join('')}/${(state.subs ?? []).length}/${state.reentry ? 1 : 0}/${state.pitcher}/${state.lineup.map((l) => `${l.name}:${l.pos}`).join(',')}` : ''
+  // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying);
+  // if the browser refuses (storage full), the cloud copy of the stats is only a cache: drop it and try again
+  const [localOk, setLocalOk] = useState(true)
   useEffect(() => {
-    if (!state || !cloud.configured || !cloud.user || !cloud.isEditor || !(state.batting.length || state.pitching.length)) return
-    const t = window.setTimeout(() => {
-      void saveGame(toGameEdit(state))
-        .then(() => saveCloudDraft(state.game.id, state, cloud.user?.email))
-        .then((ok) => { if (ok === false) setDraftsSupported(false); setSaveFailed(false); setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })) })
-        .catch((e) => { setSaveFailed(true); setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`) })
-    }, 1500)
+    let ok = writeDraft(state)
+    if (!ok && cloud.configured) { dropCloudCache(); ok = writeDraft(state) }
+    setLocalOk(ok)
+  }, [state, cloud.configured])
+  // 2) in cloud mode every change is pushed a moment later: the progress (record_drafts: other devices and the 即時比分
+  // page see the count and the runners) each time, the game's rows (the stats everyone loads) only when they changed
+  const latest = useRef(state)
+  latest.current = state
+  const rowsSaved = useRef('')
+  const syncing = useRef<Promise<boolean> | null>(null)
+  const again = useRef(false)
+  const [synced, setSynced] = useState<string | null>(null)   // updatedAt of the last state fully in the cloud
+  /** true once the latest state is in the cloud */
+  const sync = (force = false): Promise<boolean> => {
+    if (force) rowsSaved.current = ''
+    if (syncing.current) { again.current = true; return syncing.current }
+    const run = (async () => {
+      await Promise.resolve()   // let syncing.current be set before anything below can finish
+      try {
+        do {
+          again.current = false
+          const s = latest.current
+          if (!s) break
+          const edit = toGameEdit(s)
+          const key = JSON.stringify(edit)
+          if ((s.batting.length || s.pitching.length) && key !== rowsSaved.current) { await saveGame(edit); rowsSaved.current = key }
+          if (latest.current?.game.id !== s.game.id) break   // finished or abandoned meanwhile: leave its progress gone
+          const ok = await saveCloudDraft(s.game.id, s, cloud.user?.email)
+          if (ok === false) setDraftsSupported(false)
+          setSaveFailed(false); setSynced(s.updatedAt ?? null)
+          setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
+        } while (again.current)
+        return true
+      } catch (e) { setSaveFailed(true); setMsg(`自動儲存失敗：${e instanceof Error ? e.message : String(e)}`); return false }
+      finally { syncing.current = null }
+    })()
+    syncing.current = run
+    return run
+  }
+  const cloudSync = !!state && cloud.configured && !!cloud.user && cloud.isEditor
+  useEffect(() => {
+    if (!cloudSync) return
+    const t = window.setTimeout(() => void sync(), 1000)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playsKey, cloud.user])
+  }, [state?.updatedAt, state?.game.id, cloudSync])
 
   const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return { ...fn(s), updatedAt: new Date().toISOString() } })
   // cloud drafts: what other devices left in progress
@@ -656,30 +693,39 @@ export function RecordPage() {
   const saveDraft = async (): Promise<boolean> => {
     if (!state) return false
     setMsg(null)
+    if (cloud.configured) {
+      // the autosave, now and in full (another device then gets the latest substitutions too)
+      const ok = await sync(true)
+      if (ok) setMsg('已儲存，全隊現在就看得到這場的進度')
+      return ok
+    }
     try {
       const w = await saveGame(toGameEdit(state))
-      // like the autosave, also refresh the resumable progress (another device then gets the latest substitutions too)
-      if (cloud.configured && cloud.user) { const ok = await saveCloudDraft(state.game.id, state, cloud.user.email).catch(() => null); if (ok === false) setDraftsSupported(false) }
-      setMsg(w.length ? `已儲存（${w.length} 則提醒，結束比賽時會列出）` : '已儲存，全隊現在就看得到這場的進度')
+      setMsg(w.length ? `已儲存（${w.length} 則提醒，結束比賽時會列出）` : '已儲存')
       return true
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); return false }
   }
   const abandon = () => {
     if (!state || !window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) return
-    if (cloud.configured) void deleteCloudDraft(state.game.id).catch(() => undefined)
-    writeDraft(null); setState(null); setHistory([]); void refreshDrafts()
+    const id = state.game.id
+    writeDraft(null); setState(null); setHistory([])
+    // after a save still on its way, so it cannot put the progress back
+    if (cloud.configured) void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined).then(() => refreshDrafts())
   }
   // with the cloud every play is saved by itself: a status line, and a button only to retry a failed save
+  const pending = !!state && state.updatedAt !== synced
   const save: SaveState = cloud.configured
-    ? { status: saveFailed ? '上一次自動儲存失敗' : autoSaved ? `已自動儲存到雲端 ${autoSaved}` : '每球送出後會自動存到雲端', button: saveFailed ? '重試儲存' : null, saving: cloud.pushing, onSave: () => { void saveDraft().then((ok) => { if (ok) setSaveFailed(false) }) } }
-    : { status: '進度存在這台裝置；關掉再打開這頁可以接續', button: '儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
+    ? saveFailed ? { tone: 'failed', status: localOk ? '同步失敗：最新進度只在這台裝置' : '同步失敗，這台裝置也存不下：先別關掉這頁', button: '重試儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
+      : { tone: pending ? 'pending' : 'ok', status: pending ? '尚未同步…' : autoSaved ? `已同步到雲端 ${autoSaved}` : '每次點選都會自動同步到雲端', button: null, saving: cloud.pushing, onSave: () => void saveDraft() }
+    : localOk ? { tone: 'ok', status: '進度存在這台裝置；關掉再打開這頁可以接續', button: '儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
+      : { tone: 'failed', status: '這台裝置的儲存空間已滿，進度沒有存起來：先別關掉這頁', button: '儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
   const complete = async () => {
     if (!state || !finish) return
     setMsg(null)
     try {
       const w = await saveGame(toGameEdit({ ...state, finished: true }, { winningPitcher: finish.w || undefined, losingPitcher: finish.l || undefined, savePitcher: finish.sv || undefined }))
       const id = state.game.id
-      if (cloud.configured) void deleteCloudDraft(id).catch(() => undefined)
+      if (cloud.configured) void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined)
       writeDraft(null); setState(null); setHistory([]); setFinish(null)
       navigate(`/games?game=${encodeURIComponent(id)}`)
       if (w.length) window.alert(`已儲存。請核對：\n${w.map((x) => `・${x.message}`).join('\n')}`)
