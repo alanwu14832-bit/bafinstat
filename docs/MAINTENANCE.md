@@ -91,6 +91,7 @@
 | 匯錯資料、一場記了兩次 | — | 「比賽」頁點那場 → 右上角垃圾桶刪除；或「資料匯入」選「以此檔取代雲端全部資料」用上個月的備份整份還原 |
 | 某個人的名字有兩種寫法、數據被拆開 | 打字不一致 | 「球員 → 編輯名單」把其中一個改名成另一個，所有紀錄會自動合併 |
 | Vercel 寄信「Deployment Storage」用了 75%／100% | 每次上線 Vercel 都存一份網站（含最多 30 個舊版本副本，一份約 60–90 MB），保留 30 天 | Vercel → 專案 → **Settings → Security → Deployment Retention Policy**：Canceled、Errored、Pre-Production 選最短，Production 選 1 週 → Save（舊的會在約 2 天內清掉；最新 3 個正式版一定保留，可以退回）。網站設定已經只讓 `main` 建置（`web/vercel.json` 的 `git.deploymentEnabled`），不再建預覽版 |
+| 某場比賽的紀錄突然變少或不見 | 例：2026-10-08 一支手機裡的舊紀錄進度蓋掉了 9/28 那場（之後網站已會擋：舊進度比雲端少時先不同步，跳出「這份紀錄進度比雲端舊」讓你選） | 先別再改那場；把畫面給 Claude。可用每日備份（GitHub → Actions → 每日備份資料 → Artifacts）還原，Claude 會產生一份 SQL（像 `supabase/restore/` 裡那份）讓你在 SQL Editor 執行 |
 | 網站整個打不開（404 或空白） | Vercel 部署失敗 | Vercel → Deployments 看最新一筆是否 Error；Promote 上一版；把錯誤訊息貼給 Claude |
 | 出現「Rate limit」或 Supabase 顯示流量超過 | 極不可能（見 SECURITY.md 第 6 節） | 升級 Supabase Pro（每月 25 美元）即解決，順便得到每日自動備份 |
 

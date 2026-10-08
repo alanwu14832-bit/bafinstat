@@ -207,6 +207,21 @@ function RegistrationHint({ reg, everyone, onToggle, className }: { reg: Registr
 /* ------------------------------------------------------------------ live */
 /** Saving while recording: every play goes to the cloud by itself, so there is only a status line — and a button when
  *  that is not running (no cloud: save into this site) or the last automatic save failed (retry). */
+/** A progress that would replace more plate appearances than it has (see RecordPage's sync). */
+interface StaleDraft { gameId: string; draftPAs: number; cloudPAs: number }
+/**
+ * May this progress write its game's rows? 'wait' while the cloud's games are loading; a StaleDraft when the cloud has
+ * more plate appearances of this game than the progress (writing would delete them); null when it may.
+ */
+export function staleAgainstCloud(s: RecordState, store: { base: { batting: { gameId: string }[]; pitching: { gameId: string }[] }; cloud: { configured: boolean; status: string } }): StaleDraft | 'wait' | null {
+  if (!store.cloud.configured) return null
+  if (store.cloud.status !== 'ready') return 'wait'
+  const id = s.game.id
+  const cloudPAs = store.base.batting.filter((p) => p.gameId === id).length + store.base.pitching.filter((p) => p.gameId === id).length
+  const draftPAs = s.batting.length + s.pitching.length
+  return cloudPAs > draftPAs ? { gameId: id, draftPAs, cloudPAs } : null
+}
+
 /** tone: ok = in the cloud (or saved on this device), pending = a change not synced yet, failed = not saved */
 interface SaveState { tone: 'ok' | 'pending' | 'failed'; status: string; button: string | null; saving: boolean; onSave: () => void }
 
@@ -643,6 +658,11 @@ export function RecordPage() {
   const syncing = useRef<Promise<boolean> | null>(null)
   const again = useRef(false)
   const [synced, setSynced] = useState<string | null>(null)   // updatedAt of the last state fully in the cloud
+  // A progress this page has not written yet (left on this device, or a cloud draft) never replaces a game the cloud
+  // has more plate appearances of: an old practice left on a phone wiped the 9/28 game that way (2026-10-08).
+  // Checked once per game; the recorder then decides (stale), and nothing syncs meanwhile.
+  const trustedFor = useRef<string | null>(null)
+  const [stale, setStale] = useState<StaleDraft | null>(null)
   /** true once the latest state is in the cloud */
   const sync = (force = false): Promise<boolean> => {
     if (force) rowsSaved.current = ''
@@ -654,6 +674,12 @@ export function RecordPage() {
           again.current = false
           const s = latest.current
           if (!s) break
+          if (trustedFor.current !== s.game.id) {
+            const verdict = staleAgainstCloud(s, useDataStore.getState())
+            if (verdict === 'wait') return false   // the cloud's games are still loading: the next change tries again
+            if (verdict) { setStale(verdict); return false }
+            trustedFor.current = s.game.id
+          }
           const edit = toGameEdit(s)
           const key = JSON.stringify(edit)
           if ((s.batting.length || s.pitching.length) && key !== rowsSaved.current) { await saveGame(edit); rowsSaved.current = key }
@@ -676,7 +702,8 @@ export function RecordPage() {
     const t = window.setTimeout(() => void sync(), 1000)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.updatedAt, state?.game.id, cloudSync])
+    // cloud.status: a progress that waited for the cloud's games to load syncs as soon as they are in
+  }, [state?.updatedAt, state?.game.id, cloudSync, cloud.status])
 
   const apply = (fn: (s: RecordState) => RecordState) => setState((s) => { if (!s) return s; setHistory((h) => [...h.slice(-59), s]); return { ...fn(s), updatedAt: new Date().toISOString() } })
   // cloud drafts: what other devices left in progress
@@ -688,7 +715,7 @@ export function RecordPage() {
   }
   useEffect(() => { void refreshDrafts() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [cloud.user])
   const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
-  const resume = (d: CloudDraft<RecordState>) => { setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
+  const resume = (d: CloudDraft<RecordState>) => { trustedFor.current = null; setStale(null); setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
   const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher)])].filter(Boolean) : []), [state])
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
@@ -774,7 +801,21 @@ export function RecordPage() {
       )}
       {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
       {cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
-      {!state ? <Setup onStart={(s) => { setState(s); setHistory([]); document.scrollingElement?.scrollTo?.({ top: 0 }) }} /> : (
+      {state && stale && stale.gameId === state.game.id ? (
+        <Card title="這份紀錄進度比雲端舊" subtitle={`${state.game.date} vs ${state.game.opponent}`}>
+          <div className="flex flex-col gap-3 text-[13px] text-ink-2 leading-relaxed">
+            <p>這台裝置留著這場的一份紀錄進度（<span className="tnum">{stale.draftPAs}</span> 個打席{state.updatedAt ? `，最後修改 ${new Date(state.updatedAt).toLocaleString('zh-TW')}` : ''}），但雲端這場已經有 <span className="font-medium text-ink tnum">{stale.cloudPAs}</span> 個打席。為了不蓋掉雲端的紀錄，這份進度沒有同步。</p>
+            <p>通常是以前開始記、後來沒記完的舊進度：選「丟掉這份舊進度」就好，雲端的紀錄不受影響。</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" size="sm" onClick={() => { writeDraft(null); setState(null); setHistory([]); setStale(null) }}>丟掉這份舊進度</Button>
+              <Button variant="outline" size="sm" onClick={() => {
+                if (!window.confirm(`確定用這台的 ${stale.draftPAs} 個打席取代雲端的 ${stale.cloudPAs} 個打席？雲端多出來的紀錄會不見。`)) return
+                trustedFor.current = state.game.id; setStale(null); void sync(true)
+              }}>用這台的進度取代雲端</Button>
+            </div>
+          </div>
+        </Card>
+      ) : !state ? <Setup onStart={(s) => { setState(s); setHistory([]); document.scrollingElement?.scrollTo?.({ top: 0 }) }} /> : (
         <>
           {focus ? createPortal(
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
