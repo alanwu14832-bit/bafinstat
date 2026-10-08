@@ -14,6 +14,7 @@ import type { Dataset, Registration } from '../data/types'
 import { useDataStore } from '../store/data'
 import { TEAM } from '../config/team'
 import { CloudPanel } from '../components/ui/CloudPanel'
+import { EditorsPanel } from '../components/ui/EditorsPanel'
 import { QuickLoginSettings } from '../components/ui/QuickLoginSettings'
 
 const STEPS = [
@@ -158,6 +159,7 @@ export function ImportPage() {
         </Card>
         <div className="xl:col-span-2 flex flex-col gap-4 md:gap-5">
           <CloudPanel />
+          <EditorsPanel />
           <QuickLoginSettings />
           <Card title="目前資料" subtitle={sourceLabel}>
             <dl className="grid grid-cols-3 gap-3">
@@ -172,7 +174,7 @@ export function ImportPage() {
           </Card>
           <Card title="計算參數" subtitle="與總表『設定』工作表相同">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="每場局數（ERA 換算）"><Input type="number" min={1} max={9} value={params.inningsPerGame} onChange={(e) => setParams({ inningsPerGame: Number(e.target.value) || 7 })} className="tnum" /></Field>
+              <Field label="每場局數（ERA 換算）"><Input type="number" min={1} max={12} value={params.inningsPerGame} onChange={(e) => setParams({ inningsPerGame: Number(e.target.value) || TEAM.innings })} className="tnum" /></Field>
               <Field label={params.fipAuto ? 'FIP 常數（自動）' : 'FIP 常數'}><Input type="number" step={0.001} value={params.fipAuto ? Number(autoFip.toFixed(3)) : params.fipConstant} disabled={params.fipAuto} onChange={(e) => setParams({ fipConstant: Number(e.target.value) || 3.135 })} className="tnum" /></Field>
               <Field label="用球數提醒（黃）"><Input type="number" min={1} value={params.pitchWarn} onChange={(e) => setParams({ pitchWarn: Number(e.target.value) || 80 })} className="tnum" /></Field>
               <Field label="用球數上限（紅）"><Input type="number" min={1} value={params.pitchMax} onChange={(e) => setParams({ pitchMax: Number(e.target.value) || 100 })} className="tnum" /></Field>

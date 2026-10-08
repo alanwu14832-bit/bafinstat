@@ -26,8 +26,8 @@
 ## 2. 管理員要做的設定（一次）
 
 1. **執行 `supabase/migrations/2026-10-08_security.sql`**（SQL Editor 全部貼上 → Run）。最後會列出紀錄員名單：`bound_via` 是 `existing` 的，是「這次自動綁定的舊帳號」，請確認每一個都是本人；不是的話在 Table Editor → `editors` 把那列的 `user_id` 清空。
-2. **關閉自行註冊**：Authentication → Sign In / Providers → 關閉 **Allow new users to sign up**（帳號都由管理員建立）。
-3. **密碼**：Authentication → Sign In / Providers → Email：Minimum password length 設 **8 以上**；有 Pro 方案的話開 **Leaked password protection**。
+2. **帳號設定**：Authentication → Sign In / Providers → Email：打開 **Allow new users to sign up**、關閉 **Confirm email**（網站的「第一次使用」要能建立帳號；沒有邀請碼的帳號只能瀏覽，所以開放註冊不會讓陌生人寫入）。
+3. **密碼**：同一頁 Minimum password length 設 **8 以上**；有 Pro 方案的話開 **Leaked password protection**。
 4. **URL Configuration**：Site URL 與 Redirect URLs 只留自己的網址（`https://bafinstat.vercel.app` 與自訂網域），不要有萬用字元。
 5. **Advisors → Security Advisor**：按一次 Refresh，應該沒有紅色項目；有的話把畫面給 Claude 看。
 6. **兩步驟驗證**：Supabase、Vercel、GitHub、共用 Gmail 全部開 2FA。後台帳號才是真正的最高權限。
@@ -40,11 +40,11 @@
 |---|---|---|---|
 | 瀏覽者（全隊、家長） | 看所有頁面、即時比分 | 不用做任何事 | — |
 | 快速登入 | 紀錄比賽、上傳、修改、刪除比賽（不能管理紀錄員名單） | 紀錄員在「資料匯入 → 快速登入」設一組密碼告訴他 | 換密碼或關閉快速登入，所有快速登入的裝置立即失效 |
-| 紀錄員 | 紀錄比賽、上傳、修改、刪除比賽 | ① Authentication → Users → **Add user**（email＋密碼、勾 Auto Confirm）② SQL Editor：`select admin_bind_editor('對方email', '名字');` | Table Editor → `editors` 刪掉那一列，立即失效 |
+| 紀錄員 | 紀錄比賽、上傳、修改、刪除比賽，管理紀錄員名單 | 紀錄員名單 → 新增 → 把邀請碼私下傳給對方，對方在登入框的「第一次使用」設定密碼（第一位：Authentication → Users → **Add user**，再 SQL Editor `select admin_bind_editor('對方email', '名字');`） | 紀錄員名單 → 移除，立即失效 |
 | 管理員 | 上述全部 + Supabase／Vercel／GitHub 後台 | 邀請進 Supabase 組織（Organization → Members） | 每學期檢查成員，畢業或卸任立刻移除 |
 
-- **忘記密碼／換帳號**：Authentication → Users 找到他 → 刪除帳號（紀錄員權限會自動解除綁定）→ 重新 Add user → 再跑一次 `admin_bind_editor`。
-- 也可以給邀請碼而不是自己設密碼：`select admin_issue_editor_code('對方email');` 會回傳一組 10 碼，對方用任何方式登入後，在「資料匯入」輸入邀請碼並設定自己的密碼即可（7 天內有效）。
+- **忘記密碼／換帳號**：紀錄員名單按他的「重發邀請碼」（舊帳號立刻失去寫入權），他用新的邀請碼在「第一次使用」重新設定密碼。邀請碼請**私下**傳。
+- 也可以給邀請碼而不是自己設密碼：`select admin_issue_editor_code('對方email');` 會回傳一組 10 碼，對方在登入框的「第一次使用」輸入 email、邀請碼並設定自己的密碼即可（7 天內有效）。
 - 建議：紀錄員 2 到 4 人；管理員至少 2 人，避免一人畢業後沒人能進後台。
 
 ## 4. 例行工作與事件處理
