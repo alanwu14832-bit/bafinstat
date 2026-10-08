@@ -8,7 +8,10 @@ import { Select } from './Select'
 import { fetchQuickLogin, saveQuickLogin, type QuickLoginStatus } from '../../data/supabase'
 import { useDataStore } from '../../store/data'
 
-const DAYS = [1, 7, 30, 90]
+// 0 = 永久: until the password is changed or quick login is turned off (supabase/migrations/2026-10-11_quick_login_forever.sql)
+const DAYS = [1, 7, 30, 90, 0]
+const daysLabel = (d: number) => (d === 0 ? '永久（不會過期）' : `有效 ${d} 天`)
+const howLong = (d: number) => (d === 0 ? '一直紀錄、修改比賽（直到換密碼或關閉快速登入）' : `紀錄、修改比賽 ${d} 天`)
 
 /**
  * 快速登入 settings: the shared password that makes a device a recorder for some days (登入框 → 快速登入). Only for
@@ -34,7 +37,7 @@ export function QuickLoginSettings() {
     try {
       await saveQuickLogin(next, days)
       setCode('')
-      setMsg(next ? `已設定。把這組密碼告訴要紀錄的人：登入框選「快速登入」輸入它，那台裝置就能紀錄 ${days} 天。` : '已關閉快速登入，用快速登入的裝置都已登出。')
+      setMsg(next ? `已設定。把這組密碼告訴要紀錄的人：登入框選「快速登入」輸入它，那台裝置就能${howLong(days)}。` : '已關閉快速登入，用快速登入的裝置都已登出。')
       await load()
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
@@ -51,14 +54,14 @@ export function QuickLoginSettings() {
           <>
             <p className="text-ink-2 leading-relaxed">
               {status.enabled
-                ? <>知道密碼的人在登入框選「快速登入」輸入它，那台裝置就能紀錄、修改比賽 {status.days} 天（不能管理紀錄員名單和這個設定）。目前 <span className="font-medium text-ink tnum">{status.active}</span> 個裝置用快速登入。</>
+                ? <>知道密碼的人在登入框選「快速登入」輸入它，那台裝置就能{howLong(status.days)}（不能管理紀錄員名單和這個設定）。目前 <span className="font-medium text-ink tnum">{status.active}</span> 個裝置用快速登入。</>
                 : '設一組密碼後，知道它的人不用帳號也能紀錄、修改比賽。'}
               {status.updated_at && <span className="text-muted">（{status.updated_by ?? '紀錄員'} 於 {new Date(status.updated_at).toLocaleDateString('zh-TW')} 設定）</span>}
             </p>
             {status.locked_until && <p role="alert" className="text-[12px] text-critical">有人輸錯太多次，快速登入暫停到 {new Date(status.locked_until).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}；重新設定密碼會解除。</p>}
             <div className="flex flex-col sm:flex-row gap-2">
               <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={status.enabled ? '新的快速登入密碼（至少 6 個字）' : '快速登入密碼（至少 6 個字）'} aria-label="快速登入密碼" autoComplete="off" spellCheck={false} className="w-full sm:flex-1" />
-              <Select aria-label="有效天數" value={String(days)} onChange={(e) => setDays(Number(e.target.value))} options={DAYS.map((d) => ({ value: String(d), label: `有效 ${d} 天` }))} />
+              <Select aria-label="有效天數" value={String(days)} onChange={(e) => setDays(Number(e.target.value))} options={DAYS.map((d) => ({ value: String(d), label: daysLabel(d) }))} />
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button size="sm" variant="primary" icon={<Zap />} disabled={busy || !code.trim()} onClick={() => void save(code)}>{status.enabled ? '換成這組密碼' : '開啟快速登入'}</Button>

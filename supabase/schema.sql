@@ -468,7 +468,7 @@ create extension if not exists pgcrypto with schema extensions;
 create table if not exists quick_login (
   id           int primary key default 1 check (id = 1),
   code_hash    text,                                        -- bcrypt; null = quick login off
-  days         int not null default 30 check (days between 1 and 365),
+  days         int not null default 30 check (days = 0 or days between 1 and 365),   -- 0 = 永久 (never expires)
   failures     int not null default 0,
   window_start timestamptz,
   locked_until timestamptz,
@@ -476,6 +476,9 @@ create table if not exists quick_login (
   updated_by   text
 );
 alter table quick_login enable row level security;     -- no policies: only the functions below touch it
+-- (2026-10-11: 0 = 永久; a table made before then gets the wider check here too)
+alter table quick_login drop constraint if exists quick_login_days_check;
+alter table quick_login add constraint quick_login_days_check check (days = 0 or days between 1 and 365);
 revoke all on quick_login from anon, authenticated;
 
 create table if not exists quick_sessions (
@@ -601,7 +604,8 @@ begin
     return case when n >= 10 then 'locked' else 'bad' end;
   end if;
   update quick_login set failures = 0, window_start = null, locked_until = null where id = 1;
-  insert into quick_sessions (user_id, expires_at) values (me, now() + make_interval(days => q.days))
+  -- 永久 (days 0): until the password is changed or quick login is turned off
+  insert into quick_sessions (user_id, expires_at) values (me, case when q.days = 0 then 'infinity'::timestamptz else now() + make_interval(days => q.days) end)
     on conflict (user_id) do update set expires_at = excluded.expires_at;
   -- tidy up: expired quick sessions, and throwaway accounts older than a day that are not a live quick session
   delete from quick_sessions where expires_at < now();
@@ -619,13 +623,14 @@ language sql volatile security definer set search_path = public as $$
   delete from quick_sessions where user_id = auth.uid()
 $$;
 
--- set (or, with null / '', turn off) the 快速登入密碼: own-account recorders on the site, or the admin here
+-- set (or, with null / '', turn off) the 快速登入密碼: own-account recorders on the site, or the admin here;
+-- p_days = how long a quick sign-in lasts, 0 = 永久
 create or replace function set_quick_login(p_code text, p_days int default 30) returns text
 language plpgsql volatile security definer set search_path = public, extensions as $$
 declare clean text := trim(coalesce(p_code, ''));
 begin
   if auth.uid() is not null and not is_bound_editor() then raise exception '只有用自己帳號登入的紀錄員可以設定快速登入' using errcode = '42501'; end if;
-  if p_days is null or p_days < 1 or p_days > 365 then raise exception '有效天數要在 1 到 365 天之間' using errcode = '22023'; end if;
+  if p_days is null or p_days < 0 or p_days > 365 then raise exception '有效天數要在 1 到 365 天之間（0 = 永久）' using errcode = '22023'; end if;
   if clean <> '' and char_length(clean) < 6 then raise exception '快速登入密碼至少要 6 個字' using errcode = '22023'; end if;
   insert into quick_login (id) values (1) on conflict (id) do nothing;
   update quick_login set code_hash = case when clean = '' then null else crypt(clean, gen_salt('bf', 10)) end,
