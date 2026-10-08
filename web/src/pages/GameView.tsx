@@ -15,6 +15,7 @@ import { sortNames } from '../data/rosterSort'
 import { useDataStore } from '../store/data'
 import { extractGame, reconcileFielding } from '../data/edit'
 import { applyStealRepairs, stealRepairs } from '../data/stealRepair'
+import { applyEarnedRepairs, earnedRepairs } from '../record/earned'
 import { auditGame } from '../data/audit'
 import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { gameRecap } from '../data/recap'
@@ -162,6 +163,19 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
       setNotice(warnings.length ? { kind: 'warn', lines: ['盜壘次數已修正並儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: [`盜壘次數已依跑壘紀錄修正（${repairs.length} 處），所有統計已重新計算。`] })
     } catch (e) { setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] }) }
   }
+  // 自責／非自責 that differ from what the rules say (games recorded before the rules, or calls made by hand): shown to
+  // recorders only, since a call by hand can be right (a muffed foul fly…); one confirmed click applies the rules
+  const earnedFixes = useMemo(() => (editable && canEdit ? earnedRepairs(pbpPit) : []), [editable, canEdit, pbpPit])
+  const earnedLabel = (c: 'R' | 'ER') => (c === 'ER' ? '自責' : '非自責')
+  const repairEarned = async () => {
+    if (!editable || !earnedFixes.length) return
+    const list = earnedFixes.map((f) => `第 ${f.inning} 局 ${f.name}：${earnedLabel(f.from)} → ${earnedLabel(f.to)}${f.why ? `（${f.why}）` : ''}`).join('\n')
+    if (!window.confirm(`依規則重新判定自責分：\n\n${list}\n\n確定要儲存嗎？`)) return
+    try {
+      const warnings = await saveGame({ ...editable, pitching: applyEarnedRepairs(editable.pitching, earnedFixes) })
+      setNotice(warnings.length ? { kind: 'warn', lines: ['自責分已重新判定並儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: [`自責分已依規則重新判定（${earnedFixes.length} 分），防禦率等統計已重新計算。`] })
+    } catch (e) { setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] }) }
+  }
   const flags = useMemo(() => {
     const bat = new Map<number, string[]>(), pit = new Map<number, string[]>()
     for (const i of issues) { const m = i.side === 'bat' ? bat : pit; m.set(i.index, [...(m.get(i.index) ?? []), i.message]) }
@@ -264,6 +278,16 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
                   </li>
                 )}
               </ul>
+            )}
+            {earnedFixes.length > 0 && (
+              <div className="rounded-[var(--radius-sm)] border border-border bg-surface-2/50 px-3 py-2.5 flex flex-col gap-2 text-[12px]">
+                <span className="font-medium text-ink">自責分判定：有 {earnedFixes.length} 分和規則判定不同</span>
+                <ul className="flex flex-col gap-0.5 text-ink-2">
+                  {earnedFixes.map((f) => <li key={f.index}>第 {f.inning} 局 {f.name}：目前{earnedLabel(f.from)}，依規則是<span className="font-medium text-ink">{earnedLabel(f.to)}</span>{f.why ? `（${f.why}）` : ''}</li>)}
+                </ul>
+                <span className="text-muted">系統依失誤、捕逸把這半局重建一次來判定（規則 9.16）。如果是你刻意的判定（例如漏接界外飛球讓打者多了機會），可以不用理會；這段只有紀錄員看得到。</span>
+                <Button size="sm" variant="outline" className="self-start" disabled={cloud.pushing} onClick={() => void repairEarned()}>依規則重新判定自責分</Button>
+              </div>
             )}
             <LineScore s={current} />
             {tab === 'summary' && (

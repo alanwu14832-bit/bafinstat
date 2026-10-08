@@ -80,7 +80,7 @@ STAT_DICTIONARY = [
     dict(key="pH", zh="被安打", en="Hits Allowed", group="投球", formula="", status="現有", priority="P0", note=""),
     dict(key="pHR", zh="被全壘打", en="Home Runs Allowed", group="投球", formula="", status="現有", priority="P0", note=""),
     dict(key="pR", zh="失分", en="Runs Allowed", group="投球", formula="結果代碼 R + ER", status="現有", priority="P0", note=""),
-    dict(key="ER", zh="責失分", en="Earned Runs", group="投球", formula="結果代碼 ER", status="現有", priority="P0", note=""),
+    dict(key="ER", zh="責失分", en="Earned Runs", group="投球", formula="結果代碼 ER", status="現有", priority="P0", note="規則 9.16：去掉失誤與捕逸重建半局，三出局前回本壘的才算；網站逐球紀錄自動判定，可手動改"),
     dict(key="WP", zh="暴投", en="Wild Pitches", group="投球", formula="暴投欄加總", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
     dict(key="PK", zh="牽制出局", en="Pickoffs", group="投球", formula="牽制出局欄加總", status="新增", priority="P2", note=""),
     dict(key="SBA", zh="被盜壘", en="Stolen Bases Allowed", group="投球", formula="被盜壘欄加總", status="新增", priority="P1", note=""),

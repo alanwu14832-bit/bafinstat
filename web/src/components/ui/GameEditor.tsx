@@ -18,6 +18,7 @@ import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, 
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
+import { applyEarned, earnedAll } from '../../record/earned'
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -172,6 +173,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     for (const i of auditGame(batRows, pitRows)) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
     return out
   }, [batRows, pitRows])
+  // 自責／非自責 that followed the rules before an edit of the opponent's plate appearances follow them after it;
+  // a call made by hand stays (record/earned.ts)
+  const earnedNow = useMemo(() => earnedAll(pitRows), [pitRows])
+  const withEarned = (next: PitchingPA[]) => applyEarned(next, earnedNow, earnedAll(next))
   const setRows = (side: PaSide, fn: <T>(rows: T[]) => T[]) => (side === 'bat' ? setBat((b) => fn(b)) : setPit((p) => fn(p)))
   const insertPa = (side: PaSide, at: number) => {
     if (side === 'bat') setBat((b) => [...b.slice(0, at), toBatDraft(blankBattingAt(b.map(fromBatDraft), at, game.id)), ...b.slice(at)])
@@ -208,7 +213,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // the counts follow the plays: the difference between the inning's plays before and after this edit
     const before = (side === 'bat' ? halves.bat : halves.pit).get(half.inning)
     if (side === 'bat') setBat(deriveHalf(applyPlayCounts(rows as BattingPA[], before, half, 'bat'), half, 'bat').map(toBatDraft))
-    else setPit(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit').map(toPitDraft))
+    else setPit(withEarned(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit')).map(toPitDraft))
     return null
   }
   const timelineFor = (side: PaSide, i: number): TimelineProps | undefined => {
@@ -308,12 +313,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           return k === i || k === rowOf(who) ? toBatDraft(r) : x
         }))
       } else {
-        // while we field it is our error (pick the fielder in 我隊守備失誤 below) and a run scored on it is unearned
-        setPit((p) => p.map((x, k) => {
-          let r = k === i ? patch(fromPitDraft(x)) : null
-          if (k === rowOf(who) && mark?.kind === 'err' && to === 'home' && x.code === 'ER') r = { ...(r ?? fromPitDraft(x)), code: 'R' }
-          return r ? toPitDraft(r) : x
-        }))
+        // while we field it is our error (pick the fielder in 我隊守備失誤 below); the rules then make a run scored on it unearned
+        setPit(withEarned(pitRows.map((x, k) => (k === i ? patch(x) : x))).map(toPitDraft))
       }
     }
     const onThrowUp = (who: number | 'batter') => {
@@ -351,7 +352,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {}
     return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut,
-      ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
+      ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', rule: (row: number) => earnedNow.get(row), toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
@@ -359,7 +360,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const i = sel.index
     return (
       <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames}
-        onChange={(pa) => (side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit((p) => p.map((x, k) => (k === i ? toPitDraft(pa as PitchingPA) : x))))}
+        onChange={(pa) => (side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x))).map(toPitDraft)))}
         onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
         onDelete={() => { setRows(side, (r) => r.filter((_, k) => k !== i)); setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null) }}
         onInsert={(at) => insertPa(side, at)}

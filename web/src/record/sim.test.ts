@@ -13,6 +13,7 @@ import { normalizeGameEdit } from '../data/edit'
 import { summarizeGame } from '../data/stats'
 import type { Game, Player } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf, type OnBase } from './timeline'
+import { earnedRepairs } from './earned'
 
 function rng(seed: number) {
   let a = seed >>> 0
@@ -103,6 +104,9 @@ describe('random games through the recording model', () => {
     const sum = summarizeGame(fragment, fragment.games[0])
     const live = score(s)
     expect([sum.runsUs, sum.runsOpp]).toEqual([live.us, live.opp])
+    // every opponent run was called by the rules as it was recorded: reading the saved game again agrees (but for
+    // a half that ended on the bases, whose last runner plays may have no row to sit on)
+    expect(earnedRepairs(s.pitching)).toEqual([])
   })
 })
 

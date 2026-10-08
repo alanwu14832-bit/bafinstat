@@ -65,7 +65,7 @@ describe('失誤進壘 on a hit', () => {
     let s = newGame({ ...game, homeAway: '主' }, ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name) => ({ name, pos: 'C' })), '壬')
     s = commitPA(s, defaultPlan(s, '一安'))                // their leadoff on first
     const plan = defaultPlan(s, '一安')
-    plan.runners[0] = 3; plan.batter = 2; plan.errAdv = [0, 'batter']; plan.errBy = ['RF']; plan.earned = false
+    plan.runners[0] = 3; plan.batter = 2; plan.errAdv = [0, 'batter']; plan.errBy = ['RF']
     const t = commitPA(s, plan)
     expect(t.pitching[1].errors).toEqual(['RF'])
     expect(t.pitching[1].events?.map((e) => e.kind)).toEqual(['err', 'err'])

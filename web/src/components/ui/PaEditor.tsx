@@ -177,8 +177,8 @@ export interface TimelineProps {
   onThrowUp: (who: number | 'batter') => void
   /** (we bat) 壘死 rather than 出局: a runner put out by his own baserunning mistake on the play */
   runningOut?: { of: (row: number) => boolean; set: (row: number, on: boolean) => void }
-  /** opponent runs: earned (ER) or not (R), on the row of whoever scored */
-  earned?: { of: (row: number) => boolean; toggle: (row: number) => void }
+  /** opponent runs: earned (ER) or not (R), on the row of whoever scored; `rule` is what the rules say (record/earned.ts) */
+  earned?: { of: (row: number) => boolean; rule?: (row: number) => { earned: boolean; why?: string } | undefined; toggle: (row: number) => void }
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
@@ -257,6 +257,15 @@ function EarnedChip({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   )
 }
 
+/** Why a run is (not) earned, or that the call differs from what the rules say (made by hand, or recorded before). */
+function EarnedNote({ tl, row }: { tl: TimelineProps; row: number }) {
+  const rule = tl.earned?.rule?.(row)
+  if (!tl.earned || !rule) return null
+  const on = tl.earned.of(row)
+  if (on === rule.earned) return rule.earned ? null : <span className="text-[11px] text-muted">非自責：{rule.why}</span>
+  return <span className="text-[11px] text-[color-mix(in_srgb,var(--warning)_60%,var(--ink))]">依規則判定是{rule.earned ? '自責分' : `非自責分（${rule.why}）`}；目前是手動判定，確定沒錯就不用改</span>
+}
+
 /** 我隊守備失誤 folded into one button; open when the result is an error or errors are already counted. */
 function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => void }) {
   const n = pa.errors?.length ?? 0
@@ -304,6 +313,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
                 <ThrowChip tl={tl} who={o.row} name={name} />
                 {tl.earned && tl.step.dest[o.row] === 'home' && <EarnedChip on={tl.earned.of(o.row)} onToggle={() => tl.earned!.toggle(o.row)} />}
               </div>
+              {tl.step.dest[o.row] === 'home' && <EarnedNote tl={tl} row={o.row} />}
               {tl.onPinchRunner && <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>}
             </li>
           )
@@ -322,6 +332,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
               </button>
             )}
           </div>
+          {step.batter === 'home' && <EarnedNote tl={tl} row={step.index} />}
           {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">他打完停在哪一壘；之後的盜壘、暴投等在下一個打席記</span>}
         </li>
       </ul>

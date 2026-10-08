@@ -15,7 +15,8 @@
  */
 import { HIT_BASE_COUNT, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
-import { leftMarks } from './timeline'
+import { inferHalf, leftMarks } from './timeline'
+import { earnedCalls } from './earned'
 
 export type Half = 'top' | 'bottom'
 export type Side = 'us' | 'opp'
@@ -61,6 +62,8 @@ export interface RecordState {
   reentry?: boolean
   /** every substitution, in the order it happened */
   subs?: DayRosterSub[]
+  /** opponent runs called by hand (earned or not), by pitching row; every other run follows the rules (record/earned.ts) */
+  earnedByHand?: Record<number, boolean>
 }
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
@@ -228,8 +231,9 @@ export interface PAPlan {
   /** destination per runner, keyed by that runner's row index */
   runners: Record<number, Dest>
   rbi: number
-  /** opponent runs on this play are earned (ER) rather than unearned (R) */
-  earned: boolean
+  /** opponent runs the recorder called by hand (earned true / false), by the scorer's row or 'batter'; the rest
+   *  follow the rules (record/earned.ts) */
+  earnedBy?: Record<string, boolean>
   /** 趁傳進壘: who took the bases beyond what the hit gave him on the throw (runner rows, or the batter) */
   throws?: Array<number | 'batter'>
   /** 失誤進壘 on the play: who took the extra bases on a fielding (throwing) error instead — no RBI for those runs */
@@ -283,7 +287,7 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   }
   // the trajectory the result already tells: grounders G, fly balls F (a hit or an error can be any of them)
   const traj = TRAJ_OF[result]
-  const plan: PAPlan = { result, batter, runners, rbi: 0, earned: true, ...(traj ? { traj } : {}) }
+  const plan: PAPlan = { result, batter, runners, rbi: 0, ...(traj ? { traj } : {}) }
   plan.rbi = defaultRbi(plan)
   return plan
 }
@@ -373,7 +377,8 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   }
   const markRun = (row: number, rside: Side) => {
     const r = rside === 'us' ? batting[row] : pitching[row]
-    if (rside === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = plan.earned ? 'ER' : 'R'
+    // an opponent run: worked out from the inning below; this is what stands when the inning cannot be followed
+    if (rside === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = UNEARNED_REACH.has(r.result) || errAdv.has(row === rowIndex ? 'batter' : row) ? 'R' : 'ER'
   }
   // runners first, lead runner first, then the batter
   const runners: Runner[] = []
@@ -387,6 +392,22 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   if (plan.batter === 'out') markOut(rowIndex, side, true)
   else if (plan.batter === 'home') markRun(rowIndex, side)
   else runners.push({ base: plan.batter, side, row: rowIndex, name: batterName })
+  if (side === 'opp') {
+    // 自責／非自責: the calls made on this play are kept by hand; every run of the inning that was not called by hand
+    // follows the rules on the inning as it now stands (a later home run can make an earlier run earned)
+    const byHand = { ...s.earnedByHand }
+    for (const [who, on] of Object.entries(plan.earnedBy ?? {})) byHand[who === 'batter' ? rowIndex : Number(who)] = on
+    next.earnedByHand = byHand
+    const idx = pitching.flatMap((p, i) => (p.inning === s.inning ? [i] : []))
+    const half = inferHalf(pitching, idx, 'pit')
+    const calls = half ? earnedCalls(pitching, half) : new Map<number, { earned: boolean }>()
+    for (const i of idx) {
+      const p = pitching[i]
+      if (p.code !== 'R' && p.code !== 'ER') continue
+      const on = byHand[i] ?? calls.get(i)?.earned
+      if (on !== undefined && p.code !== (on ? 'ER' : 'R')) pitching[i] = { ...p, code: on ? 'ER' : 'R' }
+    }
+  }
   next.outs = outs
   next.runners = runners.sort((a, b) => b.base - a.base)
   next.pitches = []
@@ -396,6 +417,10 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   else { next.oppOrder = (s.oppOrder % 9) + 1; next.oppBatter = '' }
   return outs >= 3 ? endHalf(next) : next
 }
+
+/** A run by someone who got on this way is never earned; one that came in on these plays most likely is not. */
+const UNEARNED_REACH = new Set(['失誤', '妨礙'])
+const AIDED_KINDS = new Set<string>(['pb', 'err'])
 
 /** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances */
 export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
@@ -438,7 +463,8 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   }
   let runners = s.runners.filter((x) => x !== runner)
   if (dest === 'out') { outs = Math.min(3, outs + 1); r.code = ROMAN[outs - 1] }
-  else if (dest === 'home') { if (side === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = 'ER' }
+  // (an opponent run between pitches: called again by the rules once this plate appearance is sent)
+  else if (dest === 'home') { if (side === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = (s.earnedByHand?.[row] ?? !(AIDED_KINDS.has(logAs ?? ev) || UNEARNED_REACH.has(r.result))) ? 'ER' : 'R' }
   else runners = [...runners, { ...runner, base: dest }]
   const plays = dest === at ? s.plays : [...(s.plays ?? []), { at: s.pitches.length, kind: logAs ?? ev, from: at, to: dest }]
   const next: RecordState = { ...s, batting, pitching, extras, outs, plays, runners: runners.sort((a, b) => b.base - a.base) }
@@ -464,8 +490,11 @@ export function setRbi(s: RecordState, index: number, rbi: number): RecordState 
 
 /** Flip an opponent run between earned (ER) and unearned (R). */
 export function toggleEarned(s: RecordState, row: number): RecordState {
-  const pitching = s.pitching.map((p, i) => (i === row && (p.code === 'R' || p.code === 'ER') ? { ...p, code: p.code === 'ER' ? 'R' : 'ER' } : p))
-  return { ...s, pitching }
+  const p = s.pitching[row]
+  if (!p || (p.code !== 'R' && p.code !== 'ER')) return s
+  const code = p.code === 'ER' ? 'R' : 'ER'
+  // called by hand: later plate appearances leave it alone
+  return { ...s, pitching: s.pitching.map((x, i) => (i === row ? { ...x, code } : x)), earnedByHand: { ...s.earnedByHand, [row]: code === 'ER' } }
 }
 
 /** End the half-inning: runners left on base get L, sides switch, inning advances after the bottom half. */
