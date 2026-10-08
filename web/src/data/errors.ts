@@ -17,9 +17,11 @@ export function cleanErrors(v: unknown): string[] {
     .filter((t) => VALID.has(t))
 }
 
-/** Errors charged on this plate appearance: the list when there is one, else a 失誤 result at its 落點 (unknown without one). */
+/** Errors charged on this plate appearance: the list when there is one, else a 失誤 result at its 落點 (unknown without
+ *  one); 妨礙 (catcher's interference) is the catcher's error. */
 export function errorsOf(p: PitchingPA): { positions: string[]; unknown: number } {
   if (p.errors?.length) return { positions: p.errors, unknown: 0 }
+  if (p.result === '妨礙') return { positions: ['C'], unknown: 0 }
   if (p.result !== '失誤') return { positions: [], unknown: 0 }
   const pos = p.loc ? POSITION_BY_NUMBER[p.loc] : undefined
   return pos ? { positions: [pos], unknown: 0 } : { positions: [], unknown: 1 }

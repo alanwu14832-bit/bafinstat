@@ -79,16 +79,21 @@ function fillInnings<T extends Seq>(rows: T[]): { rows: T[]; filled: number } {
 /** Fielding lines for a game that has none: everyone who took a fielding position in the batting log (subs included,
  *  pitchers come from the pitching log), errors attributed by the opponent's 失誤 batted-ball location. */
 export function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]): { lines: FieldingLine[]; unknownErrors: number } {
-  const errByPos: Record<string, number> = {}
+  // when: inning × 2 (+1 for the bottom half). We field the top half at home, the bottom half away.
+  const at = (inning: number, half: 'top' | 'bottom') => inning * 2 + (half === 'bottom' ? 1 : 0)
+  const fieldHalf = game.homeAway === '客' ? 'bottom' : 'top'
+  const batHalf = fieldHalf === 'top' ? 'bottom' : 'top'
+  const fieldErrors: Array<{ pos: string; when: number }> = []
   // a pitcher's error goes to whoever was pitching then
   const errByPitcher = new Map<string, number>()
   let unknownErrors = 0
+  let pitcherUnknown = 0   // a P error on a row without the pitcher's name: the starter's
   for (const p of pitching) {
     const e = errorsOf(p)
     unknownErrors += e.unknown
     for (const pos of e.positions) {
-      if (pos === 'P' && p.pitcher) errByPitcher.set(p.pitcher, (errByPitcher.get(p.pitcher) ?? 0) + 1)
-      else errByPos[pos] = (errByPos[pos] ?? 0) + 1
+      if (pos === 'P') { if (p.pitcher) errByPitcher.set(p.pitcher, (errByPitcher.get(p.pitcher) ?? 0) + 1); else pitcherUnknown++ }
+      else fieldErrors.push({ pos, when: at(p.inning, fieldHalf) })
     }
   }
   const innings = game.innings ?? Math.max(1, ...batting.map((p) => p.inning), ...pitching.map((p) => p.inning))
@@ -98,7 +103,21 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
   for (const p of batting) {
     if (!p.batter || seen.has(p.batter) || !p.pos || NON_FIELD.has(p.pos) || p.pos === 'P') continue
     seen.add(p.batter)
-    lines.push({ gameId: game.id, player: p.batter, pos: p.pos, innings, ...blank, e: errByPos[p.pos] ?? 0, note: errByPos[p.pos] ? '失誤依落點推定' : '由打席紀錄推定' })
+    lines.push({ gameId: game.id, player: p.batter, pos: p.pos, innings, ...blank, e: 0, note: '由打席紀錄推定' })
+  }
+  // each error to the one player at that position then (a 代守 shares the position with the starter, not the error):
+  // in from the start (先發) or from his substitution, out at the substitution that took him out; without the 當日登錄名單,
+  // from his first plate appearance
+  const subs = game.dayRoster?.subs ?? []
+  const starters = new Set(game.dayRoster?.starters.map((x) => x.name) ?? [])
+  const firstPA = (name: string) => Math.min(...batting.filter((b) => b.batter === name).map((b) => at(b.inning, batHalf)))
+  const entry = (name: string) => { if (starters.has(name)) return 0; const s = subs.find((x) => x.in === name); return s ? at(s.inning, s.half) : firstPA(name) }
+  const exit = (name: string) => { const s = subs.find((x) => x.out === name); return s ? at(s.inning, s.half) : Infinity }
+  for (const err of fieldErrors) {
+    const cands = lines.filter((l) => l.pos === err.pos)
+    const pick = cands.find((l) => entry(l.player) <= err.when && err.when < exit(l.player))
+      ?? [...cands].filter((l) => entry(l.player) <= err.when).sort((a, b) => entry(b.player) - entry(a.player))[0] ?? cands[0]
+    if (pick) { pick.e++; pick.note = '失誤依落點推定' }
   }
   const outs = new Map<string, number>()
   const order: string[] = []
@@ -108,7 +127,7 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
     if (!outs.has(p.pitcher)) { outs.set(p.pitcher, 0); order.push(p.pitcher) }
     outs.set(p.pitcher, outs.get(p.pitcher)! + (credited.get(p) ?? 0))
   }
-  order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: (errByPitcher.get(name) ?? 0) + (i === 0 ? errByPos.P ?? 0 : 0), note: i === 0 ? 'SP' : 'RP' }))
+  order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: (errByPitcher.get(name) ?? 0) + (i === 0 ? pitcherUnknown : 0), note: i === 0 ? 'SP' : 'RP' }))
   if (unknownErrors && lines.length) lines[0].note = `${lines[0].note ?? ''}；另有 ${unknownErrors} 次失誤未記落點，未歸屬個人`
   return { lines, unknownErrors }
 }
