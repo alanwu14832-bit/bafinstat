@@ -15,6 +15,7 @@
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
+import { outsCredited } from './stats'
 import { cleanErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
 
@@ -101,10 +102,11 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
   }
   const outs = new Map<string, number>()
   const order: string[] = []
+  const credited = outsCredited(pitching)   // each out once, to the pitcher on the mound (data/stats.ts)
   for (const p of pitching) {
     if (!p.pitcher) continue
     if (!outs.has(p.pitcher)) { outs.set(p.pitcher, 0); order.push(p.pitcher) }
-    if ((p.code ?? '') in OUT_CODES) outs.set(p.pitcher, outs.get(p.pitcher)! + (p.result === '雙殺' && (p.outsBefore ?? 0) <= 1 ? 2 : 1))
+    outs.set(p.pitcher, outs.get(p.pitcher)! + (credited.get(p) ?? 0))
   }
   order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: (errByPitcher.get(name) ?? 0) + (i === 0 ? errByPos.P ?? 0 : 0), note: i === 0 ? 'SP' : 'RP' }))
   if (unknownErrors && lines.length) lines[0].note = `${lines[0].note ?? ''}；另有 ${unknownErrors} 次失誤未記落點，未歸屬個人`
