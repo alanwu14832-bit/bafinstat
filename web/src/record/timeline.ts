@@ -539,3 +539,53 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
   }
   return { inning: rows[idx[0]].inning, steps }
 }
+
+type Counts = Record<string, number>
+/**
+ * What a half-inning's runner plays (between pitches) count: on the runner's own row for our side (盜壘 sb,
+ * 盜壘失敗 cs, 失誤進壘 advOnError, 壘上出局 outOnBase from 牽制／壘死, 壘死 baserunningOuts), on the plate appearance
+ * for the opponent (被盜壘 sba, 阻殺 cs, 牽制出局 pk; a wild pitch / passed ball once per pitch however many moved).
+ */
+export function playCounts(half: Half | null | undefined, side: Side): Map<number, Counts> {
+  const out = new Map<number, Counts>()
+  if (!half) return out
+  const add = (row: number, key: string, n = 1) => { const c = out.get(row) ?? {}; c[key] = (c[key] ?? 0) + n; out.set(row, c) }
+  for (const st of half.steps) {
+    if (side === 'bat') {
+      for (const m of st.moves) {
+        if (m.kind === 'sb') add(m.row, 'sb'); if (m.kind === 'cs') add(m.row, 'cs'); if (m.kind === 'err') add(m.row, 'advOnError')
+        if (m.kind === 'pk' || m.kind === 'out') add(m.row, 'outOnBase'); if (m.kind === 'out') add(m.row, 'baserunningOuts')
+      }
+    } else {
+      for (const m of st.moves) { if (m.kind === 'sb') add(st.index, 'sba'); if (m.kind === 'cs') add(st.index, 'cs'); if (m.kind === 'pk') add(st.index, 'pk') }
+      for (const k of ['wp', 'pb']) add(st.index, k, new Set(st.moves.filter((m) => m.kind === k).map((m) => m.at)).size)
+    }
+  }
+  return out
+}
+
+/**
+ * Keep the rows' baserunning counts in step with an edit of the runner plays: whatever the plays counted before and
+ * count now is added as a difference. A play the timeline drops on its own (a runner who is no longer on that base
+ * after an earlier change) is taken off its count too, so adding it back never counts it twice; numbers typed by
+ * hand for plays that are not in the timeline stay.
+ */
+export function applyPlayCounts<T extends Row>(rows: T[], before: Half | null | undefined, after: Half, side: Side): T[] {
+  const was = playCounts(before, side), now = playCounts(after, side)
+  const out = rows.slice()
+  for (const row of new Set([...was.keys(), ...now.keys()])) {
+    if (!out[row]) continue
+    const a = was.get(row) ?? {}, b = now.get(row) ?? {}
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+    let r: Record<string, unknown> | null = null
+    for (const k of keys) {
+      const d = (b[k] ?? 0) - (a[k] ?? 0)
+      if (!d) continue
+      r ??= { ...(out[row] as unknown as Record<string, unknown>) }
+      const v = Math.max(0, (Number(r[k]) || 0) + d)
+      if (k === 'baserunningOuts' && !v) delete r[k]; else r[k] = v
+    }
+    if (r) out[row] = r as unknown as T
+  }
+  return out
+}
