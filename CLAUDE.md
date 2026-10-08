@@ -23,7 +23,8 @@ A database change needs a migration in both repos, and the user must run it in b
   `site-archive` branch (last 30); `web/scripts/archive.mjs` (postbuild) serves them at /v/<id>/; `public/boot.js` hands
   deep links into a copy over to it. Archived copies never sign in (config/archive.ts).
 - `record/sim.test.ts` plays 150 random games through the recording model: keep it green when touching recording or the
-  runner timeline.
+  runner timeline. `tools/gamesim/` plays two scripted games through the real 紀錄比賽 screen (Playwright, local mode)
+  and checks the box score against a hand-scored answer key: rerun it after changes to recording or stats.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

@@ -418,7 +418,8 @@ export function summarizeGame(ds: Dataset, game: Game): GameSummary {
     hitsUs: bat.filter((p) => HIT_RESULTS.has(p.result)).length,
     hitsOpp: pit.filter((p) => HIT_RESULTS.has(p.result)).length,
     errorsUs: fld.reduce((a, f) => a + f.e, 0),
-    errorsOpp: bat.filter((p) => p.result === '失誤').length,
+    // their errors we know of: we reached on one (失誤), or on catcher's interference (妨礙, charged to the catcher)
+    errorsOpp: bat.filter((p) => p.result === '失誤' || p.result === '妨礙').length,
     lobUs: bat.filter((p) => p.code === 'L').length,
     lineUs, lineOpp,
     result: runsUs > runsOpp ? 'W' : runsUs < runsOpp ? 'L' : 'T',
