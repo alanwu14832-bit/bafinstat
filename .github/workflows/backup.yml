@@ -15,13 +15,15 @@ permissions:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    if: ${{ vars.VITE_SUPABASE_URL != '' }}
     steps:
       - name: 下載每張資料表
+        id: dl
         env:
-          URL: ${{ vars.VITE_SUPABASE_URL }}
-          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
+          # (Variables 或 Secrets 都可以；沒設定就不備份，只留提醒)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "::warning::沒有備份：GitHub → Settings → Secrets and variables → Actions 要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY"; exit 0; fi
           # 舊版 anon key（eyJ 開頭）也放進 Authorization；新版 publishable key 只放 apikey
           AUTH=(); case "$KEY" in eyJ*) AUTH=(-H "Authorization: Bearer $KEY");; esac
           set -euo pipefail
@@ -40,8 +42,10 @@ jobs:
             done
             echo "$t: $(jq length "backup/$t.json") 列" | tee -a "$GITHUB_STEP_SUMMARY"
           done
+          echo "ok=1" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
+        if: steps.dl.outputs.ok == '1'
         with:
           name: backup-${{ github.run_number }}
           path: backup/

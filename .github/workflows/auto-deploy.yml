@@ -64,13 +64,13 @@ jobs:
       - name: 保存這一版（網站版本）
         continue-on-error: true
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
           TOKEN: ${{ github.token }}
         run: |
           set -e
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::warning::這一版沒有保存：GitHub → Settings → Secrets and variables → Actions → Variables 要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY（舊版網站要讀雲端資料）"
+            echo "::warning::這一版沒有保存：GitHub → Settings → Secrets and variables → Actions 的 Variables（或 Secrets）要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY（舊版網站要讀雲端資料）"
             exit 0
           fi
           SHORT=$(git rev-parse --short=7 "$GITHUB_SHA")
