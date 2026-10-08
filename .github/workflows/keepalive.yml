@@ -2,7 +2,7 @@ name: 讓資料庫保持清醒
 
 # Supabase 免費方案連續 7 天沒人讀資料就會暫停（休賽季最常發生）。這裡每 3 天讀一筆資料，讓它不會睡著。
 # GitHub 會在公開 repo 60 天沒有更動後自動停用排程；所以每次執行也順手重新啟用自己和每日備份，避免休賽季失效。
-# 需要的設定：GitHub repo → Settings → Secrets and variables → Actions → Variables，
+# 需要的設定：GitHub repo → Settings → Secrets and variables → Actions → Variables（放在 Secrets 也可以），
 #   VITE_SUPABASE_URL、VITE_SUPABASE_ANON_KEY（和 Vercel 填的一樣）。
 on:
   schedule:
@@ -17,11 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 讀一筆資料
-        if: ${{ vars.VITE_SUPABASE_URL != '' }}
         env:
-          URL: ${{ vars.VITE_SUPABASE_URL }}
-          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
+          # (Variables 或 Secrets 都可以)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "::warning::沒有讀資料：GitHub → Settings → Secrets and variables → Actions 要有 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY"; exit 0; fi
           # 舊版 anon key（eyJ 開頭）也放進 Authorization；新版 publishable key 只放 apikey
           AUTH=(); case "$KEY" in eyJ*) AUTH=(-H "Authorization: Bearer $KEY");; esac
           code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL/rest/v1/games?select=id&limit=1" -H "apikey: $KEY" "${AUTH[@]}")
