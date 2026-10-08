@@ -57,6 +57,21 @@ jobs:
         working-directory: web
         run: npm run build
 
+      # 資料庫權限測試：在空的 Postgres 裡跑 schema.sql（兩次）和最新的 migration，檢查沒登入、一般帳號、紀錄員、
+      # 快速登入、被重設的紀錄員各自能做什麼（supabase/tests/permissions.sql）；和 Supabase 一樣裝上 pg-safeupdate
+      - name: 資料庫權限測試
+        run: |
+          set -e
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql > /dev/null
+          V=$(ls /usr/lib/postgresql | sort -V | tail -1)
+          sudo apt-get install -y -qq "postgresql-server-dev-$V" > /dev/null
+          git clone -q --depth 1 --branch 1.7 https://github.com/eradman/pg-safeupdate.git "$RUNNER_TEMP/safeupdate"
+          make -s -C "$RUNNER_TEMP/safeupdate" PG_CONFIG="/usr/lib/postgresql/$V/bin/pg_config" with_llvm=no
+          sudo make -s -C "$RUNNER_TEMP/safeupdate" PG_CONFIG="/usr/lib/postgresql/$V/bin/pg_config" with_llvm=no install
+          sudo systemctl start postgresql
+          PSQL="sudo -u postgres psql" supabase/tests/run.sh
+
       - name: 上線（推進 main）
         run: |
           git push origin HEAD:main

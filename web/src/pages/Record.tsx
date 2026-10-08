@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, CloudDownload, Flag, Maximize2, Minimize2, RefreshCw, Save, X } from 'lucide-react'
+import { ArrowRightLeft, CloudDownload, Flag, Maximize2, Minimize2, RefreshCw, Save, Type, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -210,7 +210,7 @@ function RegistrationHint({ reg, everyone, onToggle, className }: { reg: Registr
 /** tone: ok = in the cloud (or saved on this device), pending = a change not synced yet, failed = not saved */
 interface SaveState { tone: 'ok' | 'pending' | 'failed'; status: string; button: string | null; saving: boolean; onSave: () => void }
 
-function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void }) {
+function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus, large, onToggleLarge }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void; large: boolean; onToggleLarge: () => void }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
   const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
@@ -363,6 +363,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
+        <Button variant="ghost" size="sm" icon={<Type />} onClick={onToggleLarge} aria-pressed={large} title="按鈕和字放大一級，大太陽下比較好看（這台裝置會記住）">{large ? '一般字' : '大字'}</Button>
         <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
         <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>
         <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">結束比賽</Button>
@@ -372,8 +373,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
 
   return (
     <div className="flex flex-col gap-4 md:gap-5">
+      {/* the scoreboard keeps its size under 大字 (it is big already; the team name needs the width) */}
       <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undo} canUndo={canUndo} focus={focus} />
-      <div className="grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
+      <div className="record-zoom grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
         <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 min-w-0">
           <Card still bodyClassName="p-4 md:p-5 flex flex-col gap-4">
             {/* who is up */}
@@ -592,6 +594,7 @@ function DestRow({ label, value, onChange, min, batter, extra, mistake }: { labe
 }
 
 /* ------------------------------------------------------------------ page */
+const LARGE_KEY = 'bafin.record.large'
 export function RecordPage() {
   const navigate = useNavigate()
   const cloud = useDataStore((s) => s.cloud)
@@ -616,6 +619,14 @@ export function RecordPage() {
     return () => { document.removeEventListener('fullscreenchange', onChange); window.removeEventListener('keydown', onKey) }
   }, [focus])
   useEffect(() => { if (!state && focus) setFocus(false) }, [state, focus])
+  // 大字: the recording screen and its sheets one size up (for sunlight), remembered on this device
+  const [large, setLarge] = useState(() => { try { return localStorage.getItem(LARGE_KEY) === '1' } catch { return false } })
+  const toggleLarge = () => setLarge((v) => { try { localStorage.setItem(LARGE_KEY, v ? '0' : '1') } catch { /* storage unavailable */ } return !v })
+  const recording = !!state
+  useEffect(() => {
+    document.documentElement.classList.toggle('record-large', large && recording)
+    return () => document.documentElement.classList.remove('record-large')
+  }, [large, recording])
   // 1) every change is written to this device immediately (survives refresh, closing the tab, the phone dying);
   // if the browser refuses (storage full), the cloud copy of the stats is only a cache: drop it and try again
   const [localOk, setLocalOk] = useState(true)
@@ -768,14 +779,14 @@ export function RecordPage() {
           {focus ? createPortal(
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
-                <div className="flex items-center gap-3 text-[12px] text-muted"><span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className="truncate">{autoSaved ? `已自動儲存 ${autoSaved}` : '自動儲存中'}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
-                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus onToggleFocus={toggleFocus} />
+                <div className="flex items-center gap-3 text-[12px] text-muted"><span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className={cx('truncate', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
+                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} />
               </div>
             </div>, document.body)
-            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} />}
+            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={() => setFinish({ w: '', l: '', sv: '' })} focus={false} onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} />}
         </>
       )}
-      <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel="結束比賽" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md">
+      <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel="結束比賽" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom">
         {finish && state && (
           <div className="p-5 flex flex-col gap-4">
             <div><div className="text-[16px] font-semibold text-ink">結束比賽</div><div className="text-[13px] text-ink-2 mt-1 tnum">{TEAM_NAME} {score(state).us} : {score(state).opp} {state.game.opponent}・{state.inning} 局{state.runners.length ? '・壘上跑者會記為殘壘' : ''}</div></div>

@@ -66,7 +66,7 @@
 ## 5. 改網站怎麼改
 
 - 所有改動都走 GitHub：在 Claude Code 描述需求 → 它在開發分支上改好並推上去 → GitHub Actions（`.github/workflows/auto-deploy.yml`）自動跑測試與建置 → 通過就合併進 `main` → Vercel 約 1 分鐘後上線。**不用手動開 PR**。
-- 測試沒過就不會合併，網站維持原樣；到 GitHub → Actions 看那次紅色的紀錄就知道卡在哪。
+- 測試沒過就不會合併，網站維持原樣；到 GitHub → Actions 看那次紅色的紀錄就知道卡在哪。除了網站本身的測試，還會在一個空的資料庫檢查權限（「資料庫權限測試」：沒登入、一般帳號、紀錄員、快速登入各自能做什麼）；這一步失敗多半是改了資料庫規則，把紅色那段貼給 Claude。
 - 想改回「先看過再上線」：GitHub → Actions → 左邊選「測試通過就自動上線」→ 右上 ⋯ → Disable workflow。
 - 出問題想退回：Vercel → Deployments → 找上一個正常的版本 → **Promote to Production**，10 秒退回，不用改程式。
 - 資料庫結構有變動時（很少見），Claude 會附一個 `supabase/migrations/*.sql`，到 Supabase → SQL Editor 貼上執行一次。

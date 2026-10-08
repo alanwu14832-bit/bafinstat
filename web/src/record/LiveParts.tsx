@@ -143,7 +143,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
   const ours = runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base)
   const r = ours.find((x) => x.row === picked) ?? (ours.length === 1 ? ours[0] : null)
   return (
-    <Sheet open={open} onClose={onClose} ariaLabel="壘上跑者" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg">
+    <Sheet open={open} onClose={onClose} ariaLabel="壘上跑者" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-baseline justify-between gap-2"><h2 className="text-[17px] text-ink">壘上跑者</h2><span className="text-[12px] text-muted tnum">{context}</span></div>
         {ours.length > 1 && (
@@ -217,7 +217,7 @@ export function SubSheet(p: SubSheetProps) {
     ? (p.newPitcher ? `${p.newPitcher} 接替 ${state.pitcher}` : '選一位投手')
     : !slot ? '' : sub.name ? `${sub.name} ${sub.pos === 'PH' ? '代打' : sub.pos === 'PR' ? '代跑' : `換上，守 ${sub.pos || slot.pos}`}（換下第 ${sub.slot + 1} 棒 ${slot.name}）` : sub.pos && sub.pos !== slot.pos ? `第 ${sub.slot + 1} 棒 ${slot.name} 改守 ${sub.pos}` : '選換上的人，或只改守位'
   return (
-    <Sheet open={p.open} onClose={p.onClose} ariaLabel={p.mode === 'pitcher' ? '換投' : '換人'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-xl" contentClassName="max-h-[86vh] overflow-y-auto">
+    <Sheet open={p.open} onClose={p.onClose} ariaLabel={p.mode === 'pitcher' ? '換投' : '換人'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-xl" contentClassName="record-zoom max-h-[86vh] overflow-y-auto">
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="inline-flex self-start rounded-[var(--radius-sm)] bg-surface-2 p-0.5" role="tablist" aria-label="換人或換投">
