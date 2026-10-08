@@ -13,7 +13,8 @@ import { rosterNames } from '../components/ui/PlayerSelect'
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { sortNames } from '../data/rosterSort'
 import { useDataStore } from '../store/data'
-import { extractGame } from '../data/edit'
+import { extractGame, reconcileFielding } from '../data/edit'
+import { applyStealRepairs, stealRepairs } from '../data/stealRepair'
 import { auditGame } from '../data/audit'
 import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { gameRecap } from '../data/recap'
@@ -148,6 +149,19 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
   // from the unfiltered dataset: the 守位 filter would hide substitutes
   const appearances = useMemo(() => gameAppearances(s.dataset, current.game), [current.game, s.dataset])
   const recap = useMemo(() => gameRecap(current, s.dataset, TEAM_NAME), [current, s.dataset])
+  // 盜壘 counts higher than the runner plays show (left by an older editor): one confirmed click lowers them
+  const repairs = useMemo(() => stealRepairs(pbpBat, pbpPit), [pbpBat, pbpPit])
+  const repairSteals = async () => {
+    if (!editable || !repairs.length) return
+    const list = repairs.map((f) => `第 ${f.inning} 局 ${f.name}：${f.from} → ${f.to}`).join('\n')
+    if (!window.confirm(`依跑壘紀錄修正盜壘次數（只會調低、不會調高）：\n\n${list}\n\n確定要儲存嗎？`)) return
+    const fixed = applyStealRepairs(editable.batting, editable.pitching, repairs)
+    const fielding = reconcileFielding(editable.fielding, editable.game, { batting: editable.batting, pitching: editable.pitching }, fixed)
+    try {
+      const warnings = await saveGame({ ...editable, ...fixed, fielding })
+      setNotice(warnings.length ? { kind: 'warn', lines: ['盜壘次數已修正並儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: [`盜壘次數已依跑壘紀錄修正（${repairs.length} 處），所有統計已重新計算。`] })
+    } catch (e) { setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] }) }
+  }
   const flags = useMemo(() => {
     const bat = new Map<number, string[]>(), pit = new Map<number, string[]>()
     for (const i of issues) { const m = i.side === 'bat' ? bat : pit; m.set(i.index, [...(m.get(i.index) ?? []), i.message]) }
@@ -241,6 +255,14 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
             {showIssues && issues.length > 0 && (
               <ul className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[12px]">
                 {issues.map((i, k) => <li key={k} className="px-3 py-2 flex gap-2 items-start"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" /><button type="button" className="text-left text-ink hover:underline cursor-pointer" onClick={() => setTab(i.side)}>{i.message}</button></li>)}
+                {repairs.length > 0 && (
+                  <li className="px-3 py-2.5 flex flex-col gap-2 bg-surface-2/50">
+                    <span className="text-ink-2">盜壘次數比跑壘紀錄多 {repairs.length} 處：{repairs.map((f) => `${f.name} ${f.from}→${f.to}`).join('、')}。這通常是舊版「修改資料」重複計算造成的。</span>
+                    {editable && canEdit
+                      ? <Button size="sm" variant="outline" className="self-start" disabled={cloud.pushing} onClick={() => void repairSteals()}>依跑壘紀錄修正盜壘次數</Button>
+                      : <span className="text-muted">登入紀錄員帳號後可以一鍵修正。</span>}
+                  </li>
+                )}
               </ul>
             )}
             <LineScore s={current} />

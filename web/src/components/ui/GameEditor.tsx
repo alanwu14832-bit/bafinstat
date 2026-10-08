@@ -14,7 +14,7 @@ import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
-import { addPlay, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half, type Move } from '../../record/timeline'
+import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
@@ -205,8 +205,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       if (outs === 3 && j < half.steps.length - 1) { const m = '第三個出局之後這局還有打席，請先刪除或移動後面的打席'; setTlNotice(m); return m }
     }
     setTlNotice(null)
-    if (side === 'bat') setBat(deriveHalf(rows as BattingPA[], half, 'bat').map(toBatDraft))
-    else setPit(deriveHalf(rows as PitchingPA[], half, 'pit').map(toPitDraft))
+    // the counts follow the plays: the difference between the inning's plays before and after this edit
+    const before = (side === 'bat' ? halves.bat : halves.pit).get(half.inning)
+    if (side === 'bat') setBat(deriveHalf(applyPlayCounts(rows as BattingPA[], before, half, 'bat'), half, 'bat').map(toBatDraft))
+    else setPit(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit').map(toPitDraft))
     return null
   }
   const timelineFor = (side: PaSide, i: number): TimelineProps | undefined => {
@@ -230,36 +232,17 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       }
       commitHalf(side, next, setEnd(half, i, who, end))
     }
-    // a runner play between pitches; the counts follow it: on the runner's own row for us (盜壘, 盜壘失敗, 失誤進壘,
-    // 壘死), on this plate appearance for the opponent (被盜壘, 阻殺, 牽制出局; a wild pitch or passed ball once per pitch,
-    // however many runners moved on it). A wild pitch while we bat is the other team's: our runner just moves.
-    const count = (next: Array<BattingPA | PitchingPA>, m: Move, d: 1 | -1, again: boolean) => next.map((r, k) => {
-      const add = (v: number) => Math.max(0, v + d)
-      if (side === 'bat' && k === m.row) {
-        const b = { ...(r as BattingPA) }
-        if (m.kind === 'sb') b.sb = add(b.sb); if (m.kind === 'cs') b.cs = add(b.cs); if (m.kind === 'err') b.advOnError = add(b.advOnError); if (m.kind === 'pk' || m.kind === 'out') b.outOnBase = add(b.outOnBase); if (m.kind === 'out') { const v = add(b.baserunningOuts ?? 0); if (v) b.baserunningOuts = v; else delete b.baserunningOuts }
-        return b
-      }
-      if (side === 'pit' && k === i) {
-        const q = { ...(r as PitchingPA) }
-        if (m.kind === 'sb') q.sba = add(q.sba); if (m.kind === 'cs') q.cs = add(q.cs); if (m.kind === 'pk') q.pk = add(q.pk)
-        if (m.kind === 'wp' && !again) q.wp = add(q.wp); if (m.kind === 'pb' && !again) q.pb = add(q.pb)
-        return q
-      }
-      return r
-    })
+    // a runner play between pitches: its counts (盜壘 on the runner's row for us, 被盜壘 / 阻殺 / 牽制 / 暴投 / 捕逸 on this
+    // plate appearance for the opponent) follow from commitHalf, which counts every play the inning has before and after
     const onPlay = (pitch: number, kind: string, who: number[]) => {
       const { half: h, added } = addPlay(half, i, pitch, kind, who)
       if (!added.length) return
-      let next: Array<BattingPA | PitchingPA> = rows
-      added.forEach((m, n) => { next = count(next, m, 1, step.moves.some((x) => x.at === m.at && x.kind === m.kind) || added.slice(0, n).some((x) => x.kind === m.kind)) })
-      commitHalf(side, next, h)
+      commitHalf(side, rows, h)
     }
     const onRemovePlay = (n: number) => {
       const { half: h, removed } = removePlay(half, i, n)
       if (!removed) return
-      const left = h.steps.find((x) => x.index === i)!.moves
-      commitHalf(side, count(rows, removed, -1, left.some((x) => x.at === removed.at && x.kind === removed.kind)), h)
+      commitHalf(side, rows, h)
     }
     // a new result: the batter goes where it puts him, runners in his way are forced ahead (and those runs are his RBI)
     const onResult = (result: string) => {
