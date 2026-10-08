@@ -1,7 +1,9 @@
--- 2026-10-11 快速登入可以設成「永久」. Run once in Supabase → SQL Editor (safe to re-run), after 2026-10-10_quick_login.sql.
+-- 2026-10-12 修正：設定快速登入密碼時出現「DELETE requires a WHERE clause」. Run once in Supabase → SQL Editor (safe
+-- to re-run), after 2026-10-10_quick_login.sql. It also includes 2026-10-11 (快速登入可以設成「永久」), so it does not
+-- matter whether that one was run.
 --
--- 有效天數 0 = 永久: a device signed in with the 快速登入密碼 stays a recorder until the password is changed or quick
--- login is turned off (資料匯入 → 快速登入). Nothing else changes.
+-- Supabase refuses a DELETE without a WHERE clause in requests from the site; set_quick_login() signed every quick
+-- session out with one, so setting the password failed. Nothing was saved, so just set the password again afterwards.
 
 alter table quick_login drop constraint if exists quick_login_days_check;
 alter table quick_login add constraint quick_login_days_check check (days = 0 or days between 1 and 365);

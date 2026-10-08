@@ -187,8 +187,8 @@ begin
          days = p_days, failures = 0, window_start = null, locked_until = null,
          updated_at = now(), updated_by = coalesce(editor_label(), '管理員')
    where id = 1;
-  -- everyone who signed in with the old password signs in again
-  delete from quick_sessions;
+  -- everyone who signed in with the old password signs in again (Supabase refuses a DELETE without WHERE)
+  delete from quick_sessions where user_id is not null;
   return case when clean = '' then 'off' else 'on' end;
 end $$;
 
