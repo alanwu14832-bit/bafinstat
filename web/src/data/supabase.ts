@@ -365,6 +365,8 @@ export async function fetchQuickLogin(): Promise<QuickLoginStatus | null> {
 /** Sets the shared password (empty: turns quick login off). Every device signed in with the old one is signed out. */
 export async function saveQuickLogin(code: string, days: number) {
   const { error } = await supabase().rpc('set_quick_login', { p_code: code.trim() || null, p_days: days })
+  // 永久 (0) needs supabase/migrations/2026-10-11_quick_login_forever.sql
+  if (error && days === 0 && /1 到 365/.test(error.message) && !/永久/.test(error.message)) throw new Error('「永久」需要資料庫更新：請管理員在 Supabase 執行 supabase/migrations/2026-10-11_quick_login_forever.sql')
   if (error) throw new Error(quickMissing(error) ? QUICK_SQL : error.message)
 }
 /** The signed-in account's own password (8+ characters). */
