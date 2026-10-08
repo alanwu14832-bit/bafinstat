@@ -4,21 +4,37 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
+import { CloudPanel } from '../components/ui/CloudPanel'
 import { ARCHIVE, LIVE_BASE, type SiteVersion } from '../config/archive'
+import { useDataStore } from '../store/data'
 
-/** 網站版本: the saved copies of earlier versions of this site, newest first, each one openable (read-only). */
+/** 網站版本: the saved copies of earlier versions of this site, newest first, each one openable (read-only). Recorders only. */
 export function VersionsPage() {
+  const cloud = useDataStore((s) => s.cloud)
+  // (a saved copy never signs in: the list is on the live site)
+  const canSee = !ARCHIVE && (!cloud.configured || (!!cloud.user && cloud.isEditor))
   const [versions, setVersions] = useState<SiteVersion[] | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
+    if (!canSee) return
     let live = true
     fetch(`${LIVE_BASE}v/versions.json`, { cache: 'no-cache' })
       .then((r) => (r.ok ? r.json() : []))
       .then((v: unknown) => { if (live) setVersions(Array.isArray(v) ? (v as SiteVersion[]) : []) })
       .catch(() => { if (live) { setFailed(true); setVersions([]) } })
     return () => { live = false }
-  }, [])
+  }, [canSee])
 
+  if (!canSee) {
+    return (
+      <>
+        <PageHeader title="網站版本" description="只有紀錄員看得到：登入後可以打開以前的網站版本。" />
+        {ARCHIVE
+          ? <p className="text-[13px] text-ink-2">請到<a className="underline underline-offset-2 text-ink" href={`${LIVE_BASE}versions`}>正式網站</a>用紀錄員帳號登入後查看。</p>
+          : <div className="max-w-md"><CloudPanel /></div>}
+      </>
+    )
+  }
   return (
     <>
       <PageHeader title="網站版本" description="網站每次更新都會保存一份，可以打開以前的版本看（只能瀏覽，資料是現在的資料）。最多保留最近 30 版。" />

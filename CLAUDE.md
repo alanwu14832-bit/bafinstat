@@ -23,8 +23,11 @@ A database change needs a migration in both repos, and the user must run it in b
   runner timeline.
 
 ## Security (docs/SECURITY.md)
-- Writes are allowed only for the account bound to an `editors` row (`is_editor()` checks `user_id = auth.uid()`;
-  binding by the admin's `admin_bind_editor`, a 邀請碼 or an email code — `supabase/migrations/2026-10-08_security.sql`).
+- Writes are allowed only for the account bound to an `editors` row (`is_bound_editor()` checks `user_id = auth.uid()`;
+  binding by the admin's `admin_bind_editor`, a 邀請碼 or an email code — `supabase/migrations/2026-10-08_security.sql`),
+  or for a live 快速登入 session (anonymous sign-in + the shared password checked in the database, `quick_sessions`;
+  `supabase/migrations/2026-10-10_quick_login.sql`). `is_editor()` = either; the 紀錄員名單, `audit_log` and the quick
+  password itself stay with `is_bound_editor()`. Never check that password in the site.
 - Never write an email into a public table (`updated_by`/`created_by` are stamped by a trigger with the recorder's name).
 - Keep the Content-Security-Policy (`web/src/config/security.ts`, written into index.html at build) and the headers in
   `web/vercel.json`; no inline scripts in index.html (put them in `web/public/boot.js`). Run `npm audit` when adding packages.

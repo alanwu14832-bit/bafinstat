@@ -1,4 +1,5 @@
 -- 2026-10-08 資料安全強化. Run once in Supabase → SQL Editor (safe to re-run).
+-- (重跑這個檔之後，也要再跑一次 2026-10-10_quick_login.sql，快速登入才會繼續有效。)
 --
 -- 1) 紀錄員綁定帳號: write access belongs to one login account, not to whoever can sign up with the email.
 --    A recorder's account is bound on first use by an email code (proves they own the inbox) or by the one-time

@@ -41,7 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/import', label: '資料匯入', subtitle: '上傳比賽紀錄', icon: Upload, editorOnly: true },
       { to: '/dictionary', label: '數據字典', subtitle: '指標定義與計算方式', icon: BookOpen },
       { to: '/guide', label: '使用指南', subtitle: '比賽日紀錄與賽後流程', icon: CircleHelp },
-      { to: '/versions', label: '網站版本', subtitle: '打開以前的網站版本', icon: History },
+      { to: '/versions', label: '網站版本', subtitle: '打開以前的網站版本', icon: History, editorOnly: true },
     ],
   },
 ]

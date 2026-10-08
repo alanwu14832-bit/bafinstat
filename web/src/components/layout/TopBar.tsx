@@ -21,7 +21,7 @@ function CloudStatus() {
   if (!cloud.configured) return null
   const ok = cloud.status === 'ready'
   const err = cloud.status === 'error'
-  const title = ok ? (cloud.user ? `雲端已連線・${cloud.user.email}` : '雲端已連線（唯讀）') : err ? `雲端連線失敗：${cloud.error ?? ''}` : '雲端載入中'
+  const title = ok ? (cloud.user ? `雲端已連線・${cloud.user.is_anonymous ? '快速登入' : cloud.user.email}` : '雲端已連線（唯讀）') : err ? `雲端連線失敗：${cloud.error ?? ''}` : '雲端載入中'
   return (
     <span title={title} className="hidden md:inline-flex items-center gap-1.5 h-8 px-2 text-xs text-ink-2 whitespace-nowrap">
       {ok || err ? <span className={cx('size-1.5 rounded-full', ok ? 'bg-good' : 'bg-critical')} /> : <IconBaseball className="size-3.5 text-muted animate-spin [animation-duration:1.6s]" />}

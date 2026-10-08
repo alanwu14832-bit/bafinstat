@@ -14,8 +14,9 @@ export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; red
   const cloud = useDataStore((s) => s.cloud)
   const [open, setOpen] = useState(false)
   if (!cloud.configured || ARCHIVE) return null
-  const label = cloud.user ? (cloud.user.email ?? '已登入') : '紀錄員登入'
-  const sub = cloud.user ? (cloud.isEditor ? '紀錄員' : '瀏覽者（不在名單）') : '紀錄、上傳需要登入'
+  const quick = !!cloud.user?.is_anonymous
+  const label = cloud.user ? (quick ? '快速登入' : cloud.user.email ?? '已登入') : '紀錄員登入'
+  const sub = cloud.user ? (cloud.isEditor ? '紀錄員' : quick ? '已失效，請重新登入' : '瀏覽者（不在名單）') : '紀錄、上傳需要登入'
   return (
     <div className="px-3 pt-3 border-t border-border">
       <div className="flex items-center gap-1">

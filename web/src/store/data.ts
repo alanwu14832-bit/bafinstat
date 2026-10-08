@@ -70,6 +70,8 @@ interface DataState {
   setCloudUser: (user: User | null) => void
   /** 啟用紀錄員權限 with the one-time 邀請碼 */
   claimWithCode: (code: string) => Promise<EditorAccess>
+  /** Ask the database again whether the signed-in account may write (after 快速登入) */
+  recheckAccess: () => Promise<void>
   /** photo album links (see data/albums.ts) */
   albums: AlbumLink[]
   albumsSupported: boolean
@@ -252,6 +254,19 @@ export const useDataStore = create<DataState>((set, get) => ({
     }
   },
   setCloudUser: (user) => {
+    if (user?.is_anonymous) {
+      // a 快速登入 account counts as signed in only once the database says it is a live quick session: while the
+      // password is being checked, after a wrong one, or once it expired, the site shows the sign-in form
+      const c0 = get().cloud
+      if (c0.user?.id !== user.id) set({ cloud: { ...c0, user: null, isEditor: false, access: null } })
+      void claimEditor().then((a) => {
+        const c = get().cloud
+        if (a === 'ok') set({ cloud: { ...c, user, isEditor: true, access: null } })
+        // (an answer from before the password was accepted never takes it back)
+        else if (c.user?.id === user.id && !c.isEditor) set({ cloud: { ...c, user: null, isEditor: false, access: null } })
+      }, () => undefined)
+      return
+    }
     set({ cloud: { ...get().cloud, user, isEditor: false, access: null } })
     if (!user) return
     // the account must be the one bound to its listed email (a database without the security migration: email check)
@@ -260,6 +275,14 @@ export const useDataStore = create<DataState>((set, get) => ({
     void claimEditor()
       .then(async (a) => (a === null ? settle(await fetchIsEditor(user.email), 'not_listed') : settle(a === 'ok', a)))
       .catch(() => settle(false, null))
+  },
+  recheckAccess: async () => {
+    const user = get().cloud.user ?? (await currentUser())
+    if (!user) return
+    const a = await claimEditor()
+    if (a === null) return
+    if (user.is_anonymous) { if (a === 'ok') set({ cloud: { ...get().cloud, user, isEditor: true, access: null } }); return }
+    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: a === 'ok', access: a === 'ok' ? null : a } })
   },
   claimWithCode: async (code) => {
     const user = get().cloud.user
