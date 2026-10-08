@@ -97,8 +97,7 @@ export function PitchingPage() {
 
   return (
     <>
-      <PageHeader scoped title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
-        actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
+      <PageHeader scoped title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
       <StatGroup>
@@ -108,6 +107,8 @@ export function PitchingPage() {
         <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
       <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標「未達門檻」，不列入領先者與圖表`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}</span>}>
+        {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
+        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(s.pitchers, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={480} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">

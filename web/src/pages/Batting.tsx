@@ -103,11 +103,12 @@ export function BattingPage() {
 
   return (
     <>
-      <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}。`}
-        actions={<Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} />} />
+      <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}。`} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
       <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標「未達門檻」，不列入領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+        {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
+        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
