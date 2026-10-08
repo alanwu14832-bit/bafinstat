@@ -96,6 +96,14 @@ export function GuidePage() {
             <PitchLegend />
             <div className="text-xs font-medium text-ink mt-2">結果代碼（沿用原表）</div>
             <div className="text-xs text-ink-2 leading-relaxed">I／II／III 這個打席造成第 1／2／3 個出局・L 殘壘・R 得分（投球表：R 非自責、ER 自責）</div>
+            <div className="text-xs font-medium text-ink mt-2">自責分怎麼判定</div>
+            <div className="text-xs text-ink-2 leading-relaxed">
+              在「紀錄比賽」和「修改資料」裡，系統會自動判定（棒球規則 9.16）：把這半局「沒有失誤、沒有捕逸」重打一次，在三出局前回本壘的分才是自責分。所以
+              靠失誤、捕手妨礙上壘的打者，或靠捕逸、失誤才不死三振上壘的打者，得分都是非自責；靠失誤或捕逸多跑的壘才回本壘的，通常也是非自責；
+              失誤讓這局該結束卻沒結束（例如兩出局後的失誤），之後的失分全部非自責。暴投、盜壘、保送造成的失分仍算自責。
+              換投時，後援投手不能算前面錯過的出局機會；跑者算在讓他上壘的投手身上。
+              系統沒辦法知道的情況（例如漏接界外飛球讓打者多了機會），請自己點一下該分改成自責或非自責，系統之後不會再改它。
+            </div>
           </div>
         </Card>
 

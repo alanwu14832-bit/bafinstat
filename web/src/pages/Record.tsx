@@ -32,6 +32,7 @@ import {
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { describeChange } from '../record/summary'
+import { earnedAll } from '../record/earned'
 import { LiveBar, RunnerSheet, SubSheet } from '../record/LiveParts'
 
 import { readDraft, writeDraft } from '../record/draft'
@@ -274,7 +275,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // 失誤進壘 while we field needs whose error it was
   const needErrBy = !!plan && side === 'opp' && !!plan.errAdv?.length && !plan.errBy?.length
   // past where the result alone takes him: on the throw (趁傳進壘) or on a fielding error (失誤進壘, no RBI for that run;
-  // while we field it is our error, and a run that scores this way is unearned)
+  // while we field it is our error, and the rules make a run that scores this way unearned)
   const throwToggle = (who: number | 'batter', name: string) => {
     if (!plan || !beyondDefault(state, plan, who)) return undefined
     const kind = plan.errAdv?.includes(who) ? 'err' : plan.throws?.includes(who) ? 'throw' : null
@@ -282,13 +283,25 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       const next: PAPlan = { ...plan, throws: (plan.throws ?? []).filter((w) => w !== who), errAdv: (plan.errAdv ?? []).filter((w) => w !== who) }
       if (k === 'throw') next.throws!.push(who)
       if (k === 'err') next.errAdv!.push(who)
-      const home = (who === 'batter' ? plan.batter : plan.runners[who]) === 'home'
-      if (k === 'err' && home && side === 'opp') next.earned = false
       setPlan(rbiTouched ? next : { ...next, rbi: defaultRbi(next) })
     }
     return <AdvChoice name={name} kind={kind} onPick={pick} />
   }
   const confirm = () => { if (!plan || problems.length || needLoc || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null) }
+  // the opponent's runs on this play, called by the rules (record/earned.ts) on the inning as it would stand; tap one to call it by hand
+  const runCalls = (() => {
+    if (!plan || side !== 'opp') return []
+    const row = state.pitching.length
+    const who = [
+      ...state.runners.filter((r) => r.side === 'opp' && plan.runners[r.row] === 'home').map((r) => ({ key: String(r.row), row: r.row, name: r.name })),
+      ...(plan.batter === 'home' ? [{ key: 'batter', row, name: state.oppBatter || `對方第 ${state.oppOrder} 棒` }] : []),
+    ]
+    if (!who.length) return []
+    const after = commitPA(state, { ...plan, earnedBy: undefined })
+    const calls = earnedAll(after.pitching)
+    return who.map((w) => ({ ...w, earned: plan.earnedBy?.[w.key] ?? after.pitching[w.row]?.code === 'ER', why: calls.get(w.row)?.why, byHand: plan.earnedBy?.[w.key] !== undefined }))
+  })()
+  const liveCalls = logTab === 'pit' ? earnedAll(state.pitching) : new Map<number, { why?: string }>()
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
   // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
   // while fielding the 守位 box starts from the slot's position — except a P that is no longer the pitcher (after a fielder
@@ -481,8 +494,19 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                       <button type="button" onClick={() => { setRbiTouched(true); setPlan({ ...plan, rbi: plan.rbi + 1 }) }} className="size-9 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer">＋</button>
                     </div>
                   )}
-                  {side === 'opp' && (Object.values(plan.runners).includes('home') || plan.batter === 'home') && (
-                    <label className="inline-flex items-center gap-2 text-[13px] cursor-pointer"><input type="checkbox" checked={plan.earned} onChange={(e) => setPlan({ ...plan, earned: e.target.checked })} className="size-4 accent-[var(--ink)]" />失分為自責分（ER）</label>
+                  {runCalls.length > 0 && (
+                    <div className="flex flex-col gap-1.5 min-w-0">
+                      <span className="text-[12px] text-ink-2">失分（依規則判定，點一下可改）</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {runCalls.map((c) => (
+                          <button key={c.key} type="button" aria-pressed={c.earned} title={c.why} onClick={() => setPlan({ ...plan, earnedBy: { ...plan.earnedBy, [c.key]: !c.earned } })}
+                            className={cx('h-9 px-3 rounded-full border text-[12px] font-medium cursor-pointer', c.earned ? 'border-border bg-surface text-ink' : 'border-[color-mix(in_srgb,var(--warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-ink')}>
+                            {c.name}：{c.earned ? '自責分' : '非自責分'}{c.byHand ? '（手動）' : ''}
+                          </button>
+                        ))}
+                      </div>
+                      {runCalls.filter((c) => !c.earned && c.why && !c.byHand).map((c) => <span key={c.key} className="text-[11px] text-muted">{c.name} 非自責：{c.why}</span>)}
+                    </div>
                   )}
                   <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1">
                     {needLoc && <span className="text-[12px] text-critical">還沒點落點</span>}
@@ -521,7 +545,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
             {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
               <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">
                 <span>失分性質：</span>
-                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code}</span></button> : null)}
+                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} title={liveCalls.get(i)?.why ?? '點一下切換自責／非自責'} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code === 'ER' ? '自責' : '非自責'}</span></button> : null)}
               </div>
             )}
           </Card>
