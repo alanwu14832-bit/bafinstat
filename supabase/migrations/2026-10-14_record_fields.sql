@@ -1,16 +1,18 @@
--- 2026-10-13 存檔保護. Run once in Supabase → SQL Editor (safe to re-run).
+-- 2026-10-14 紀錄比賽的新欄位。到 Supabase → SQL Editor 貼上執行一次（重複執行也安全；系隊、校隊兩個 Supabase 專案各執行一次）。
 --
--- 1) 一場比賽一次存完: the site saves games (the game row and its 打擊／投球／守備紀錄) through save_games(), which runs
---    as one transaction — if anything fails halfway (connection lost, a size limit), nothing changes and the records
---    already in the cloud stay as they were. Before this the site deleted the old records and wrote the new ones in
---    separate requests, so a failure in between could leave a game without its records.
--- 2) 快速登入「解除暫停」: a recorder signed in with their own account can lift the pause that 10 wrong passwords
---    cause, without changing the password (unlock_quick_login, needs 2026-10-10_quick_login.sql first).
--- Until this runs the site keeps saving the old way.
+-- 1) 比賽時間：games.end_time（結束時間 'HH:MM'）。開賽時間沿用 games.time；比賽時間＝兩者相減，不另外存。
+-- 2) 對方投手：batting_pa.opp_pitcher（姓名，選填）、batting_pa.opp_hand（'L' 左投、'R' 右投）。紀錄比賽時對方換投點一下，
+--    之後我隊每個打席自動帶入，用來看「對左投／對右投」。
+-- 3) save_games() 也存 end_time（打擊／投球紀錄的新欄位它本來就整列照存）。2026-10-13_save_games.sql 裡的 save_games() 已改成
+--    同一版，兩個檔案不論先後執行，結果都一樣。
+-- 這一輪其他功能（突破僵局、投手犯規、對方打者姓名、中繼、比賽影片）都用現有欄位，不需要別的 SQL。
+-- 沒執行前網站照常運作：結束時間和對方投手只是不會存進雲端（紀錄頁不會問對方投手，存檔時會提醒）。
+-- 需要先執行過 2026-10-08_security.sql（is_editor()）。
 
--- the columns the site writes (added by earlier migrations; repeated so this file works on its own)
--- (end_time: 2026-10-14_record_fields.sql; added here too, so re-running this file after that one keeps the same save_games())
 alter table games add column if not exists end_time text;
+alter table batting_pa add column if not exists opp_pitcher text;
+alter table batting_pa add column if not exists opp_hand text;
+-- the columns save_games() writes that earlier migrations added (repeated so this file works on its own)
 alter table games add column if not exists status text;
 alter table games add column if not exists day_roster jsonb;
 alter table batting_pa add column if not exists runner text;
@@ -18,6 +20,14 @@ alter table batting_pa add column if not exists events jsonb;
 alter table batting_pa add column if not exists baserunning_outs smallint not null default 0;
 alter table pitching_pa add column if not exists errors text[];
 alter table pitching_pa add column if not exists events jsonb;
+
+-- limits on what can be written (the site writes only L / R, a short name and HH:MM); NULL always passes
+do $$
+begin
+  begin alter table batting_pa add constraint batting_pa_opp_hand check (opp_hand in ('L', 'R')) not valid; exception when duplicate_object then null; end;
+  begin alter table batting_pa add constraint batting_pa_opp_pitcher_size check (char_length(coalesce(opp_pitcher, '')) <= 40) not valid; exception when duplicate_object then null; end;
+  begin alter table games add constraint games_end_time_size check (char_length(coalesce(end_time, '')) <= 8) not valid; exception when duplicate_object then null; end;
+end $$;
 
 -- a JSON object without its null fields (so the column defaults apply)
 create or replace function _no_nulls(j jsonb) returns jsonb
@@ -74,19 +84,9 @@ begin
   return cardinality(ids);
 end $$;
 
--- 解除快速登入的暫停 (10 wrong passwords within an hour), keeping the password
-create or replace function unlock_quick_login() returns void
-language plpgsql volatile security definer set search_path = public as $$
-begin
-  if not is_bound_editor() then raise exception '只有用自己帳號登入的紀錄員可以解除暫停' using errcode = '42501'; end if;
-  update quick_login set failures = 0, window_start = null, locked_until = null where id = 1;
-end $$;
-
 revoke all on function _no_nulls(jsonb) from public, anon;
 revoke all on function save_games(jsonb, jsonb, jsonb, jsonb, boolean) from public, anon;
-revoke all on function unlock_quick_login() from public, anon;
 grant execute on function _no_nulls(jsonb) to authenticated;
 grant execute on function save_games(jsonb, jsonb, jsonb, jsonb, boolean) to authenticated;
-grant execute on function unlock_quick_login() to authenticated;
 
 notify pgrst, 'reload schema';

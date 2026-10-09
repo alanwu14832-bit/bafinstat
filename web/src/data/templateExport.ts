@@ -30,7 +30,7 @@ const textOf = (inner: string | undefined) => unesc([...(inner ?? '').matchAll(/
 
 /** Excel's serial day for 2026-10-07 (a date column), its fraction of a day for 08:30 (a time column). */
 const DATE_COLUMNS = new Set(['日期'])
-const TIME_COLUMNS = new Set(['時間'])
+const TIME_COLUMNS = new Set(['時間', '結束時間'])
 function serial(header: string, v: string | number): string | number {
   if (typeof v !== 'string') return v
   if (DATE_COLUMNS.has(header)) {

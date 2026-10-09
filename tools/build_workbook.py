@@ -94,7 +94,9 @@ def title(ws, text, span=8, sub=None):
 # ----------------------------------------------------------------------------- column specs
 PITCH_N = 12
 BAT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "棒次", "守位", "打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
-            ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "代跑", "盜壘", "盜壘失敗", "失誤進壘", "壘上出局", "壘死", "得分", "打點", "結果代碼", "備註", "跑壘事件"]
+            ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "代跑", "盜壘", "盜壘失敗", "失誤進壘", "壘上出局", "壘死", "得分", "打點", "結果代碼", "備註", "跑壘事件",
+             # 對方投手 (L 左投 / R 右投), at the end of the inputs so copy-paste ranges made before still line up
+             "對方投手", "對方投手慣用"]
 BAT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "一安", "二安", "三安", "全壘打", "壘打數", "保送", "故四", "觸身", "三振",
             "犧觸", "犧飛", "雙殺", "失誤上壘", "得點圈打數", "得點圈安打", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "壞球不揮", "內野飛球",
             "首球揮棒", "優質打席", "慣用手", "拉打", "中間", "反方向", "首打席", "上壘", "代跑首場"]
@@ -107,9 +109,11 @@ FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "首列"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
              "我隊失誤", "對手失誤", "我隊殘壘", "勝投", "敗投", "救援", "中繼", "備註",
              # schedule + 當日登錄名單 (same columns and formats as the website's backup export)
-             "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場"] + [f"我{i}" for i in range(1, 10)] + [f"對{i}" for i in range(1, 10)]
+             "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場",
+             # 時間 = 開賽時間; 比賽時間 is worked out from 結束時間 − 時間
+             "結束時間", "比賽時間"] + [f"我{i}" for i in range(1, 10)] + [f"對{i}" for i in range(1, 10)]
 GAME_INPUT = {"比賽ID", "日期", "時間", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝投", "敗投", "救援", "中繼", "備註",
-              "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場"}
+              "狀態", "先發名單", "板凳", "替補紀錄", "允許再上場", "結束時間"}
 
 def colmap(names):
     return {n: i + 1 for i, n in enumerate(names)}
@@ -171,8 +175,8 @@ lines = [
     ("", False),
     ("紀錄一場新比賽（三步驟）", True),
     ("1. 在『比賽清單』新增一列，填入比賽ID（格式 G+日期+場次，例如 G20251010-01）、日期、杯賽、對手、主客等。", False),
-    ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄；賽後在同一區塊填勝投／敗投／救援。", False),
-    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『備註』欄）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
+    ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄；賽後在同一區塊填勝投／敗投／救援／中繼和結束時間。", False),
+    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『對方投手慣用』欄，最後一個黃色欄；灰色自動欄不用）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
     ("   也可以把整個檔案上傳到網站版儀表板（資料匯入頁），網站會自動讀取這三張紀錄表。", False),
     ("", False),
     ("逐球代碼", True),
@@ -190,6 +194,8 @@ lines = [
     ("跑壘事件（可不填，網站逐球紀錄會自動寫）：這個打席投球之間的跑壘，依序用「；」分開，格式「第幾球 事件 起點-終點」，例如「2 暴投 1-2；3 盜壘 2-3」；H 是回本壘得分、X 是出局，0 是第一球前；安打時趁傳多推進的壘，在最後加「打者」或「跑者」，例如「3 趁傳進壘 1-2 打者」。", False),
     ("壘上出局：上壘後在壘上被刺殺、封殺、牽制出局的次數（盜壘失敗另外記）。壘死：其中因為自己跑壘失誤出局的次數（衝過頭、飛球被雙殺回不去、離壘被觸殺等），算這位跑者的。", False),
     ("代跑：打者上壘後被代跑換下時，填代跑者的名字；這一列的盜壘、盜壘失敗、得分算代跑者的，安打、打點仍算打者的。", False),
+    ("時間＝開賽時間；結束時間在比賽清單後面，比賽時間自動算。", False),
+    ("對方投手／對方投手慣用（L 左投、R 右投）：可不填；網站紀錄的比賽會自動填，用來算對左投／對右投。", False),
     ("", False),
     ("顏色說明", True),
     ("黃底 = 手動輸入格　　灰色標題 = 自動公式欄　　藍字 = 可調整參數　　綠字 = 連結其他工作表", False),
@@ -285,7 +291,7 @@ ws = wb.create_sheet("比賽清單")
 title(ws, "比賽清單", 12, "每場一列。黃底輸入；灰色欄自動計算。比賽ID 建議格式 G+YYYYMMDD+-場次，例如 G20251010-01。")
 widths = {"比賽ID": 14, "日期": 11, "時間": 7, "年度": 6, "杯賽": 12, "對手": 12, "主客": 6, "場地": 12, "天氣": 8, "紀錄者": 8, "局數": 6, "勝敗": 6,
           "勝投": 9, "敗投": 9, "救援": 9, "中繼": 12, "備註": 20,
-          "狀態": 8, "先發名單": 44, "板凳": 24, "替補紀錄": 44, "允許再上場": 10}
+          "狀態": 8, "先發名單": 44, "板凳": 24, "替補紀錄": 44, "允許再上場": 10, "結束時間": 7, "比賽時間": 7}
 for name, col in GM.items():
     hdr(ws, 3, col, name, auto=name not in GAME_INPUT, width=widths.get(name, 8))
 GAME_ROWS = 200
@@ -303,6 +309,8 @@ def game_formulas(rr):
     f["對手失誤"] = (f'=IF({A}="","",SUMIFS(打席紀錄!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${LAST},打席紀錄!$A$2:$A${LAST},{A})'
                      f'+COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["打擊結果"]}$2:${BL["打擊結果"]}${LAST},"妨礙"))')
     f["我隊殘壘"] = f'=IF({A}="","",COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["結果代碼"]}$2:${BL["結果代碼"]}${LAST},"L"))'
+    # 比賽時間 (a game past midnight wraps)
+    f["比賽時間"] = f'=IF(OR({GL["時間"]}{rr}="",{GL["結束時間"]}{rr}=""),"",MOD({GL["結束時間"]}{rr}-{GL["時間"]}{rr},1))'
     for i in range(1, 10):
         f[f"我{i}"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["得分"]}$2:${BL["得分"]}${LAST},打席紀錄!$A$2:$A${LAST},{A},打席紀錄!$B$2:$B${LAST},{i}))'
         f[f"對{i}"] = f'=IF({A}="","",SUMIFS(投球紀錄!${PL["失分"]}$2:${PL["失分"]}${LAST},投球紀錄!$A$2:$A${LAST},{A},投球紀錄!$B$2:$B${LAST},{i}))'
@@ -311,9 +319,9 @@ for rr in range(4, 4 + GAME_ROWS):
     fs = game_formulas(rr)
     for name, col in GM.items():
         if name in GAME_INPUT:
-            put(ws, rr, col, None, f_input, fill_input, "yyyy-mm-dd" if name == "日期" else ("hh:mm" if name == "時間" else None))
+            put(ws, rr, col, None, f_input, fill_input, "yyyy-mm-dd" if name == "日期" else ("hh:mm" if name in ("時間", "結束時間") else None))
         else:
-            put(ws, rr, col, fs[name], f_base, None, "0")
+            put(ws, rr, col, fs[name], f_base, None, "[h]:mm" if name == "比賽時間" else "0")
 dv(ws, "杯賽清單", f"{GL['杯賽']}4:{GL['杯賽']}{3 + GAME_ROWS}")
 dv(ws, "對手清單", f"{GL['對手']}4:{GL['對手']}{3 + GAME_ROWS}")
 dv(ws, "主客", f"{GL['主客']}4:{GL['主客']}{3 + GAME_ROWS}")
@@ -475,7 +483,7 @@ def fld_formulas(rr):
             # a player with two lines in one game (he moved to another position) played one game
             "首列": f'=IF(AND($B{rr}<>"",COUNTIFS($A$2:$A{rr},$A{rr},$B$2:$B{rr},$B{rr})=1),1,0)'}
 
-log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "守備失誤": 10, "跑壘事件": 18, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
+log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "守備失誤": 10, "跑壘事件": 18, "對方投手": 10, "對方投手慣用": 7, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
 ws_bat = build_log("打席紀錄", BAT_INPUT, BAT_AUTO, bat_formulas, log_widths, f"我隊每個打席一列。A–{L(len(BAT_INPUT))} 欄輸入（可從『單場-打擊』貼上值），{L(len(BAT_INPUT) + 1)} 以後為自動公式。")
 ws_pit = build_log("投球紀錄", PIT_INPUT, PIT_AUTO, pit_formulas, log_widths, f"我隊投手面對的每個打席一列。A–{L(len(PIT_INPUT))} 欄輸入（可從『單場-投球』貼上值），{L(len(PIT_INPUT) + 1)} 以後為自動公式。")
 ws_fld = build_log("守備紀錄", FLD_INPUT, FLD_AUTO, fld_formulas, log_widths, "每場每位球員一列。")
@@ -493,6 +501,7 @@ def add_log_validations(ws, cm, kind):
     if kind == "bat":
         dv(ws, "守位清單", f"{L(cm['守位'])}2:{L(cm['守位'])}{last}")
         d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['打者'])}2:{L(cm['打者'])}{last}"); d.add(f"{L(cm['代跑'])}2:{L(cm['代跑'])}{last}")
+        d = DataValidation(type="list", formula1='"L,R"', allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['對方投手慣用'])}2:{L(cm['對方投手慣用'])}{last}")
     else:
         d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['投手'])}2:{L(cm['投手'])}{last}")
 add_log_validations(ws_bat, BAT, "bat"); add_log_validations(ws_pit, PIT, "pit")
@@ -874,15 +883,16 @@ title(ws, "單場紀錄模板：比賽摘要", 20, "複製三張『單場-』工
 for col, w in zip("ABCDEFGHIJKLMNOPQRSTUV", [3, 10, 14, 10, 12, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8]):
     ws.column_dimensions[col].width = w
 meta = [("比賽ID", "G20251010-01"), ("日期", dt.datetime(2025, 10, 10)), ("時間", dt.time(11, 40)), ("杯賽", "友誼賽"), ("對手", "群風"), ("主客", "主"),
-        ("場地", "台大棒球場"), ("天氣", "大晴天"), ("紀錄者", "王廷宇"), ("局數", 5), ("人數", 13), ("",""),
+        ("場地", "台大棒球場"), ("天氣", "大晴天"), ("紀錄者", "王廷宇"), ("局數", 5), ("人數", 13), ("結束時間", None),
         ("勝投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "W"), None)),
         ("敗投", next((p["name"] for p in GAME["pitchers"] if p.get("decision") == "L"), None)), ("救援", None),
-        ("板凳", None), ("允許再上場", None)]   # 當日登錄名單: 到場沒先發的人（丙、丁）; 是 = 被換下的人可以再上場
+        ("板凳", None), ("允許再上場", None),   # 當日登錄名單: 到場沒先發的人（丙、丁）; 是 = 被換下的人可以再上場
+        ("中繼", None)]   # 中繼投手（子、丑）
 for i, (k, v) in enumerate(meta):
     if not k: continue
     rr = 2 + (i % 6); cc = 2 + (i // 6) * 3
-    put(ws, rr, cc, k, f_bold, fill_band); c = put(ws, rr, cc + 1, v, f_input, fill_input, "yyyy-mm-dd" if k == "日期" else ("hh:mm" if k == "時間" else None), center)
-    if k == "板凳": ws.merge_cells(start_row=rr, start_column=cc + 1, end_row=rr, end_column=cc + 5)   # room for several names
+    put(ws, rr, cc, k, f_bold, fill_band); c = put(ws, rr, cc + 1, v, f_input, fill_input, "yyyy-mm-dd" if k == "日期" else ("hh:mm" if k in ("時間", "結束時間") else None), center)
+    if k in ("板凳", "中繼"): ws.merge_cells(start_row=rr, start_column=cc + 1, end_row=rr, end_column=cc + 5)   # room for several names
     if k == "允許再上場": dv(ws, "是否", f"{L(cc + 1)}{rr}")
 GID = "$C$2"
 # line score
@@ -993,7 +1003,7 @@ def build_template_log(name, inputs, autos, formulas_fn, seed_fn, rows_data):
                 put(ws, rr, col, None, f_input, fill_input)
     ws.freeze_panes = "H2"
     seed_fn(ws, rows_data)
-    ws.cell(row=TROWS + 2, column=1, value="貼回總表時只複製 A 欄到『備註』欄（灰色自動欄不用）。").font = f_note
+    ws.cell(row=TROWS + 2, column=1, value=f"貼回總表時複製 A 欄到『{inputs[-1]}』欄（最後一個黃色欄；灰色自動欄不用）。").font = f_note
     return ws
 wt = build_template_log("單場-打擊", BAT_INPUT, BAT_AUTO, bat_formulas, seed_bat, GAME["batting"]); add_log_validations(wt, BAT, "bat")
 wt = build_template_log("單場-投球", PIT_INPUT, PIT_AUTO, pit_formulas, seed_pit, GAME["pitching"]); add_log_validations(wt, PIT, "pit")

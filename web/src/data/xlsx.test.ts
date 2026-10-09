@@ -141,3 +141,48 @@ describe('壘上出局 and 壘死 in Excel', () => {
     expect([old[0].outOnBase, old[0].baserunningOuts, old[1].outOnBase]).toEqual([1, undefined, 1])
   })
 })
+
+describe('結束時間, 中繼 and 對方投手 in Excel', () => {
+  const base = SEED_DATASET
+  const gid = base.games[0].id
+  const ds = {
+    ...base,
+    games: base.games.map((g, i) => (i === 0 ? { ...g, time: '13:07', endTime: '15:22', holds: ['子', '丑'] } : g)),
+    batting: base.batting.map((p, i) => (i === 0 ? { ...p, oppPitcher: '王', oppHand: 'R' as const } : i === 1 ? { ...p, oppHand: 'L' as const } : p)),
+  }
+  const roundTrip = (d: typeof ds) => parseWorkbook(XLSX.write(datasetToWorkbook(d), { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+  it('survive a backup round trip', () => {
+    const back = roundTrip(ds)
+    expect(back.games.find((g) => g.id === gid)).toMatchObject({ time: '13:07', endTime: '15:22', holds: ['子', '丑'] })
+    expect(back.batting[0]).toMatchObject({ oppPitcher: '王', oppHand: 'R' })
+    expect(back.batting[1].oppHand).toBe('L')
+    expect('oppPitcher' in back.batting[1]).toBe(false)
+    expect('oppHand' in back.batting[2] || 'oppPitcher' in back.batting[2]).toBe(false)
+  })
+  it('read 左投 / 右投 written out, and an old workbook without the columns gives no keys', () => {
+    const wb = datasetToWorkbook(ds)
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets['打席紀錄'])
+    rows[0]['對方投手慣用'] = '左投'
+    wb.Sheets['打席紀錄'] = XLSX.utils.json_to_sheet(rows)
+    expect(parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset.batting[0].oppHand).toBe('L')
+    // without the columns (a workbook from before)
+    const old = datasetToWorkbook(base)
+    const strip = (sheet: string, cols: string[]) => { const r = XLSX.utils.sheet_to_json<Record<string, unknown>>(old.Sheets[sheet]).map((x) => { const o = { ...x }; for (const c of cols) delete o[c]; return o }); old.Sheets[sheet] = XLSX.utils.json_to_sheet(r) }
+    strip('打席紀錄', ['對方投手', '對方投手慣用']); strip('比賽清單', ['結束時間'])
+    const back = parseWorkbook(XLSX.write(old, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+    expect(back.batting.some((p) => 'oppHand' in p || 'oppPitcher' in p)).toBe(false)
+    expect(back.games.some((g) => 'endTime' in g)).toBe(false)
+  })
+  it('the single-game template reads its 結束時間 and 中繼 cells', () => {
+    const wb = XLSX.read(new Uint8Array(readFileSync(resolve(process.cwd(), '..', 'data', 'BAFIN_棒球數據總表.xlsx'))), { type: 'array' })
+    const ws = wb.Sheets['單場-摘要']
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+    const cellNext = (label: string) => { for (let r = 0; r < 8; r++) { const c = (grid[r] ?? []).findIndex((v) => String(v).trim() === label); if (c >= 0) return XLSX.utils.encode_cell({ r, c: c + 1 }) } throw new Error(label) }
+    XLSX.utils.sheet_add_aoa(ws, [[922 / 1440]], { origin: cellNext('結束時間') })
+    XLSX.utils.sheet_add_aoa(ws, [['子、丑']], { origin: cellNext('中繼') })
+    for (const n of wb.SheetNames.filter((n) => !n.startsWith('單場-'))) { delete wb.Sheets[n] }
+    wb.SheetNames = wb.SheetNames.filter((n) => n.startsWith('單場-'))
+    const { dataset } = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(dataset.games[0]).toMatchObject({ endTime: '15:22', holds: ['子', '丑'] })
+  })
+})

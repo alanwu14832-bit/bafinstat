@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPitch, changePitcher, commitPA, defaultPlan, newGame, runnerEvent, wildPitch } from './model'
+import { addPitch, changePitcher, commitPA, defaultPlan, newGame, runnerEvent, setOppLineup, setOppNames, setOppPitcher, skipOppHand, wildPitch } from './model'
 import { describeChange } from './summary'
 import type { Game } from '../data/types'
 
@@ -166,5 +166,13 @@ describe('軌跡 the result already tells', () => {
   it('is filled in for grounders and fly balls, left to the recorder for hits and errors', () => {
     const s = send(start(), '一安')
     expect(['內滾', '雙殺', '犧觸', '野選', '內飛', '外飛', '界外飛', '犧飛', '一安', '失誤'].map((r) => defaultPlan(s, r).traj)).toEqual(['G', 'G', 'G', 'G', 'P', 'F', 'F', 'F', undefined, undefined])
+  })
+  it('says the opponent pitcher and their batting order when they change', () => {
+    const s = start()
+    expect(describeChange(s, setOppPitcher(s, { name: '王', hand: 'L' }))).toBe('對方投手：左投 王')
+    expect(describeChange(s, setOppPitcher(s, { hand: 'R' }))).toBe('對方投手：右投')
+    expect(describeChange(s, skipOppHand(s))).toContain('這場不記對方投手')
+    const on = setOppNames(s, true)
+    expect(describeChange(on, setOppLineup(on, ['A1']))).toBe('對方打序已更新')
   })
 })

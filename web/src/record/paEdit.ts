@@ -3,7 +3,7 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { isDouble, type BattingPA, type PitchingPA } from '../data/types'
+import { isDouble, type BattingPA, type OppHand, type PitchingPA } from '../data/types'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
 
@@ -66,13 +66,38 @@ export function blankBattingAt(rows: BattingPA[], at: number, gameId: string): B
   const after = order && !before ? rows.slice(at).find((p) => p.order === order) : undefined
   const batter = before ? before.runner || before.batter : after?.batter ?? ''
   const pos = before ? (before.runner ? undefined : before.pos) : after?.pos
-  return { gameId, inning: prev?.inning ?? rows[at]?.inning ?? 1, order, batter, ...(pos ? { pos } : {}), pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0 }
+  // the opponent pitcher of the plate appearance before it (or after it, at the top)
+  const near = prev ?? rows[at]
+  const opp = { ...(near?.oppPitcher ? { oppPitcher: near.oppPitcher } : {}), ...(near?.oppHand ? { oppHand: near.oppHand } : {}) }
+  return { gameId, inning: prev?.inning ?? rows[at]?.inning ?? 1, order, batter, ...(pos ? { pos } : {}), pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...opp }
 }
 /** A blank opponent row to insert at index `at`: inning and pitcher of the row before it, next batter in their order. */
 export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string): PitchingPA {
   const prev = rows[at - 1]
   const near = prev ?? rows[at]
-  return { gameId, inning: near?.inning ?? 1, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : prev ? undefined : 1, pitcher: near?.pitcher ?? '', pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+  const oppOrder = prev?.oppOrder ? (prev.oppOrder % 9) + 1 : prev ? undefined : 1
+  // that slot's batter the last time it came up (the names are only there when the recorder kept them)
+  const oppBatter = oppOrder ? [...rows.slice(0, at)].reverse().find((p) => p.oppOrder === oppOrder)?.oppBatter : undefined
+  return { gameId, inning: near?.inning ?? 1, oppOrder, pitcher: near?.pitcher ?? '', ...(oppBatter ? { oppBatter } : {}), pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+}
+
+/**
+ * 修改資料: the opponent pitcher of row `index` and of the rows after it that had the same one (until the next change),
+ * so fixing the first plate appearance of a pitcher's stint fixes the whole stint. Blank keys are dropped.
+ */
+export function applyOppPitcher(rows: BattingPA[], index: number, next: { oppPitcher?: string; oppHand?: OppHand }): BattingPA[] {
+  const at = rows[index]
+  if (!at) return rows
+  const key = (p: BattingPA) => `${p.oppPitcher ?? ''}\u0000${p.oppHand ?? ''}`
+  const was = key(at)
+  const name = next.oppPitcher?.trim()
+  const out = rows.slice()
+  for (let j = index; j < rows.length && rows[j].gameId === at.gameId && key(rows[j]) === was; j++) {
+    const { oppPitcher: _n, oppHand: _h, ...rest } = rows[j]
+    void _n; void _h
+    out[j] = { ...rest, ...(name ? { oppPitcher: name } : {}), ...(next.oppHand ? { oppHand: next.oppHand } : {}) }
+  }
+  return out
 }
 
 /* ------------------------------------------------ base running of our batter after he reached */

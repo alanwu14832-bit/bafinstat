@@ -63,7 +63,10 @@ export interface Game {
   id: string
   /** ISO date yyyy-mm-dd */
   date: string
+  /** 開賽時間 'HH:MM' */
   time?: string
+  /** 結束時間 'HH:MM'. 比賽時間 is always worked out from the two (data/gameTime.ts), never stored. */
+  endTime?: string
   tournament: string
   opponent: string
   homeAway: HomeAway
@@ -110,6 +113,10 @@ export const PLAY_EVENT_LABELS: Record<string, string> = {
   sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死',
 }
 
+/** The opponent pitcher's throwing hand: L 左投 · R 右投 */
+export type OppHand = 'L' | 'R'
+export const OPP_HAND_LABEL: Record<OppHand, string> = { L: '左投', R: '右投' }
+
 export interface BattingPA {
   gameId: string
   inning: number
@@ -141,6 +148,10 @@ export interface BattingPA {
   note?: string
   /** runner moves between this plate appearance's pitches, in order */
   events?: PlayEvent[]
+  /** 對方投手 (name, optional). Left out (not undefined) when unknown, like runner / events. */
+  oppPitcher?: string
+  /** 對方投手 throwing hand. Left out when unknown. */
+  oppHand?: OppHand
 }
 
 export interface PitchingPA {

@@ -67,6 +67,7 @@ npm run dev
 - `supabase/migrations/2026-09-26_rosters.sql`：**當日登錄名單與報名名單**。在 `games` 加 `day_roster` 欄（先發、板凳、替補紀錄、允許再上場），並建立 `registrations` 表（某年某杯賽的報名名單）。沒執行時比賽照常紀錄與儲存，只是登錄名單存不進雲端（存檔時會提醒）、比賽頁的「當日登錄名單」改由打席紀錄推定、球員頁的報名名單會提示尚未開通，先發陣容與紀錄比賽的候選名單則列出全隊。
 - `supabase/migrations/2026-10-07_play_events.sql`、`2026-10-08_security.sql`、`2026-10-09_baserunning_outs.sql`、`2026-10-10_quick_login.sql`、`2026-10-12_quick_login_fix.sql`：逐球跑壘、資料安全、壘死、快速登入（說明見各檔開頭與 `docs/SECURITY.md`）。
 - `supabase/migrations/2026-10-13_save_games.sql`：**存檔保護**。一場比賽（比賽資料＋打擊／投球／守備紀錄）由資料庫一次存完，中途失敗就整筆不算、舊紀錄還在；也加上快速登入的「解除暫停」。沒執行時照舊分段儲存（修改比賽後會提醒）。
+- `supabase/migrations/2026-10-14_record_fields.sql`：**比賽結束時間、對方投手**。在 `games` 加 `end_time`（結束時間；開賽時間沿用 `time`，比賽時間由兩者算出），在 `batting_pa` 加 `opp_pitcher`（對方投手姓名，選填）、`opp_hand`（L 左投／R 右投），並把 `save_games()` 更新成也存結束時間。沒執行時網站照常運作：結束時間和對方投手只是不會存進雲端，紀錄比賽頁不會問對方投手、會在上方提醒，存檔時也會提醒。重複執行也安全。**系隊、校隊兩個 Supabase 專案都要各執行一次**：Supabase → 選專案 → 左側「SQL Editor」→「New query」→ 貼上整個檔案 →「Run」。
 
 ## 誰能登入、誰能寫
 - 帳號：紀錄員在網站「資料匯入 → 紀錄員名單」新增 email，對方用邀請碼在登入框的「第一次使用」設定密碼（第一位紀錄員見上面第 3 節）。

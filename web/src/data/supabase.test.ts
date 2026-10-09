@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SEED_DATASET } from './seed'
-import { missingGameColumns, rowsToDataset, toBattingRow, toFieldingRow, toGameRow, toPitchingRow, toPlayerRow } from './supabase'
-import type { Game, GameDayRoster } from './types'
+import { missingGameColumns, missingRecordColumns, rowsToDataset, toBattingRow, toFieldingRow, toGameRow, toPitchingRow, toPlayerRow } from './supabase'
+import type { BattingPA, Game, GameDayRoster } from './types'
 
 describe('supabase row mapping', () => {
   it('round-trips the seed dataset through table rows', () => {
@@ -40,5 +40,31 @@ describe('supabase row mapping', () => {
     expect(missingGameColumns({ code: '42501', message: 'new row violates row-level security policy for table "games"' })).toEqual([])
     expect(missingGameColumns({ code: 'PGRST204', message: "Could not find the 'other' column of 'games' in the schema cache" })).toEqual([])
     expect(missingGameColumns(null)).toEqual([])
+  })
+
+  it('結束時間 and 對方投手 (2026-10-14): end_time always sent, opp_* only when set, read back', () => {
+    const plain: Game = { id: 'G1', date: '2026-01-01', tournament: '大專盃', opponent: '甲隊', homeAway: '主' }
+    expect(toGameRow(plain).end_time).toBeNull()
+    expect(toGameRow({ ...plain, endTime: '15:22' }).end_time).toBe('15:22')
+    const games = (g: ReturnType<typeof toGameRow>[]) => rowsToDataset({ players: [], games: g, batting: [], pitching: [], fielding: [] }).games
+    expect(games([toGameRow({ ...plain, endTime: '15:22' })])[0].endTime).toBe('15:22')
+    expect('endTime' in games([toGameRow(plain)])[0]).toBe(false)
+    const pa: BattingPA = { gameId: 'G1', inning: 1, batter: '甲', pitches: ['IP'], result: '一安', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0 }
+    const bare = toBattingRow(pa, 1)
+    expect('opp_hand' in bare || 'opp_pitcher' in bare).toBe(false)
+    const withOpp = toBattingRow({ ...pa, oppPitcher: '王', oppHand: 'L' }, 1)
+    expect([withOpp.opp_pitcher, withOpp.opp_hand]).toEqual(['王', 'L'])
+    const bat = (rows: ReturnType<typeof toBattingRow>[]) => rowsToDataset({ players: [], games: [], batting: rows, pitching: [], fielding: [] }).batting
+    expect(bat([withOpp])[0]).toMatchObject({ oppPitcher: '王', oppHand: 'L' })
+    const odd = bat([{ ...withOpp, opp_hand: 'Z' }])[0]
+    expect('oppHand' in odd).toBe(false)
+    expect(odd.oppPitcher).toBe('王')
+    expect('oppHand' in bat([bare])[0] || 'oppPitcher' in bat([bare])[0]).toBe(false)
+  })
+
+  it('tells which 2026-10-14 columns the cloud lacks from the rows it loaded', () => {
+    expect(missingRecordColumns({ games: [{ id: 'G1' }], batting: [{ game_id: 'G1' }] })).toEqual(['end_time', 'opp_hand'])
+    expect(missingRecordColumns({ games: [{ id: 'G1', end_time: null }], batting: [{ game_id: 'G1', opp_hand: null }] })).toEqual([])
+    expect(missingRecordColumns({ games: [], batting: [] })).toEqual([])
   })
 })

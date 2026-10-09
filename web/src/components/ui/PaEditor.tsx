@@ -10,7 +10,7 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { POSITIONS, type BattingPA, type PitchingPA } from '../../data/types'
+import { OPP_HAND_LABEL, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
 import { count } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
@@ -362,9 +362,44 @@ export interface PaPanelProps {
   timeline?: TimelineProps
   /** the inning's saved bases do not add up: lay its runners out again from the results */
   onRebuild?: () => void
+  /** (our plate appearances) change the opponent pitcher from this one to the end of that pitcher's stint */
+  onOppPitcher?: (next: { oppPitcher?: string; oppHand?: OppHand }) => void
 }
 
-export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild }: PaPanelProps) {
+/** 對方投手 of one of our plate appearances: one line, 修改 opens name + 左投／右投／不知道, applied once. */
+function OppPitcherEdit({ pa, onApply }: { pa: BattingPA; onApply: (next: { oppPitcher?: string; oppHand?: OppHand }) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [hand, setHand] = useState<OppHand | undefined>(undefined)
+  const start = () => { setName(pa.oppPitcher ?? ''); setHand(pa.oppHand); setOpen(true) }
+  const now = [pa.oppHand ? OPP_HAND_LABEL[pa.oppHand] : '', pa.oppPitcher ?? ''].filter(Boolean).join(' ')
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2 text-[13px] text-ink-2">
+        <span>對方投手：<span className={now ? 'text-ink font-medium' : 'text-muted'}>{now || '沒有記'}</span></span>
+        <button type="button" onClick={start} className="ml-auto -mr-2 h-9 min-w-9 px-2 pointer-fine:h-7 pointer-fine:min-w-0 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">修改</button>
+      </div>
+    )
+  }
+  const choice: Array<{ v: OppHand | undefined; l: string }> = [{ v: 'L', l: '左投' }, { v: 'R', l: '右投' }, { v: undefined, l: '不知道' }]
+  return (
+    <Section title="對方投手">
+      <div className="flex items-end gap-2 flex-wrap">
+        <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[160px]">姓名（可不填）<Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="例如 12號" /></label>
+        <div className="flex items-center gap-1.5" role="group" aria-label="左投或右投">
+          {choice.map((c) => <button key={c.l} type="button" aria-pressed={hand === c.v} onClick={() => setHand(c.v)} className={chipBtn(hand === c.v)}>{c.l}</button>)}
+        </div>
+      </div>
+      <p className="text-[12px] text-muted">會一起改到後面同一位投手的打席（到下一次換投為止）</p>
+      <div className="flex gap-2">
+        <Button size="sm" variant="primary" onClick={() => { onApply({ oppPitcher: name.trim() || undefined, oppHand: hand }); setOpen(false) }}>套用</Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+      </div>
+    </Section>
+  )
+}
+
+export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
   const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
@@ -428,7 +463,7 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
         <div className="flex items-center gap-2 text-[14px] text-ink">
           {bat ? <span><span className="text-muted tnum">{bat.order ? `第 ${bat.order} 棒` : '棒次—'}</span> <span className="font-semibold">{bat.batter}</span> <span className="text-muted">{bat.pos}</span></span>
             : <span>投手 <span className="font-semibold">{pit!.pitcher}</span><span className="text-muted">・對方{pit!.oppOrder ? `第 ${pit!.oppOrder} 棒` : ''}{pit!.oppBatter ? ` ${pit!.oppBatter}` : ''}</span></span>}
-          <button type="button" onClick={() => setWhoOpen(true)} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">修改</button>
+          <button type="button" onClick={() => setWhoOpen(true)} className="ml-auto -mr-2 h-9 min-w-9 px-2 pointer-fine:h-7 pointer-fine:min-w-0 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">修改</button>
         </div>
       ) : bat ? (
         <Section title="打者">
@@ -447,6 +482,8 @@ export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, o
           </div>
         </Section>
       )}
+
+      {bat && onOppPitcher && <OppPitcherEdit key={index} pa={bat} onApply={onOppPitcher} />}
 
       {/* pitches */}
       <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球或一個跑壘事件可刪除</span>}>

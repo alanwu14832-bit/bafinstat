@@ -3,6 +3,7 @@
  * not): 「蘇柏愷 一安・陳威儒 得分・2：0」「陳威儒 暴投 1B→2B」「三出局，換 3 局下」. Pitches alone say nothing.
  */
 import { playText } from '../data/plays'
+import { OPP_HAND_LABEL } from '../data/types'
 import { offense, score, type RecordState } from './model'
 
 const halfName = (s: RecordState) => `${s.inning} 局${s.half === 'top' ? '上' : '下'}`
@@ -34,6 +35,11 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
   for (const x of (b.subs ?? []).slice((a.subs ?? []).length)) {
     parts.push(x.kind === 'P' ? `換投：${x.in} 接替 ${x.out}` : `${x.in} ${x.kind === 'PH' ? '代打' : x.kind === 'PR' ? '代跑' : '換上'}（換下 ${x.out}${x.kind === 'DEF' && x.pos ? `，守 ${x.pos}` : ''}）`)
   }
+  // 對方投手 / 對方打序 (when a play went in at the same time, e.g. a change then the next plate appearance, it is said too)
+  const pa = a.oppPitcher, pb = b.oppPitcher
+  if ((pa?.name ?? '') !== (pb?.name ?? '') || (pa?.hand ?? '') !== (pb?.hand ?? '')) parts.push(`對方投手：${pb ? [pb.hand ? OPP_HAND_LABEL[pb.hand] : '', pb.name ?? ''].filter(Boolean).join(' ') : '未填'}`)
+  if (b.oppHandOff && !a.oppHandOff) parts.push('這場不記對方投手（之後可以按「對方投手」補記）')
+  if ((a.oppLineup ?? []).join('\u0000') !== (b.oppLineup ?? []).join('\u0000') && a.oppLineup) parts.push('對方打序已更新')
   const sa = score(a), sb = score(b)
   const runs = sb.us - sa.us + (sb.opp - sa.opp)
   if (runs > 0) parts.push(`${sb.us > sa.us ? '得' : '失'} ${runs} 分・${sb.us}：${sb.opp}`)

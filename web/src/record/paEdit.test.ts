@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
+import { applyOppPitcher, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
 import type { BattingPA, PitchingPA } from '../data/types'
 
 const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 1, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
@@ -93,5 +93,31 @@ describe('base running of our batter after he reached', () => {
     p = applyRunEvent({ ...p, code: 'II' }, 'stranded')
     expect(p).toMatchObject({ cs: 0, outOnBase: 0, code: 'L' })
     expect(runEnding(bat({ result: '一安' }))).toBeNull()
+  })
+})
+
+describe('對方投手 and 對方打者 in 修改資料', () => {
+  const R王 = { oppHand: 'R' as const, oppPitcher: '王' }, L林 = { oppHand: 'L' as const, oppPitcher: '林' }
+  const opp = (rows: BattingPA[]) => rows.map((r) => `${r.oppHand ?? '-'}${r.oppPitcher ?? '-'}`)
+  it('a change goes to the rest of that pitcher\'s stint, never past the next change', () => {
+    const rows = [bat(R王), bat(R王), bat(R王), bat(L林), bat(L林)]
+    expect(opp(applyOppPitcher(rows, 1, { oppHand: 'L', oppPitcher: '陳' }))).toEqual(['R王', 'L陳', 'L陳', 'L林', 'L林'])
+    expect(opp(rows)).toEqual(['R王', 'R王', 'R王', 'L林', 'L林'])
+  })
+  it('rows without one: every row of that game, not the next game\'s', () => {
+    const rows = [bat({}), bat({}), bat({ gameId: 'H' })]
+    expect(opp(applyOppPitcher(rows, 0, { oppHand: 'R' }))).toEqual(['R-', 'R-', '--'])
+  })
+  it('clearing removes the keys', () => {
+    const out = applyOppPitcher([bat(R王), bat(R王)], 0, { oppPitcher: ' ' })
+    expect(out.every((r) => !('oppHand' in r) && !('oppPitcher' in r))).toBe(true)
+  })
+  it('a new blank row takes the opponent pitcher of the row before (or after), and the batter of that slot', () => {
+    expect(blankBattingAt([bat(R王), bat(L林)], 1, 'G')).toMatchObject(R王)
+    expect(blankBattingAt([bat(L林)], 0, 'G')).toMatchObject(L林)
+    expect('oppHand' in blankBattingAt([bat({})], 1, 'G')).toBe(false)
+    const rows = [pit({ oppOrder: 1, oppBatter: 'A1' }), pit({ oppOrder: 2, oppBatter: 'A2' }), pit({ oppOrder: 9 })]
+    expect(blankPitchingAt(rows, 3, 'G')).toMatchObject({ oppOrder: 1, oppBatter: 'A1' })
+    expect('oppBatter' in blankPitchingAt([pit({ oppOrder: 1 })], 1, 'G')).toBe(false)
   })
 })

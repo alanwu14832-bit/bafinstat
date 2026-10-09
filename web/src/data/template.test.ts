@@ -33,6 +33,8 @@ describe('公版 Excel keeps up with the website', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')
     expect(labels).toContain('允許再上場')
+    expect(labels).toContain('結束時間')
+    expect(labels).toContain('中繼')
   })
   it('an empty 報名名單 sheet imports as no lists', () => {
     expect(parseWorkbook(arrayBuf(templateBuf())).registrations).toEqual([])

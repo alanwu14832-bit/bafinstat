@@ -13,7 +13,9 @@ import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
+import { applyOppPitcher, blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
+import { HoldPicker } from './HoldPicker'
+import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
 import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
@@ -121,6 +123,7 @@ const batCols: Col<BatDraft>[] = [
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
   { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '壘死', kind: 'int', w: 44 },
   { key: 'run', label: '得分', kind: 'int', w: 44 }, { key: 'rbi', label: '打點', kind: 'int', w: 44 }, { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
+  { key: 'oppPitcher', label: '對方投手', kind: 'text', w: 88 }, { key: 'oppHand', label: '對方左右', kind: 'select', options: ['L', 'R'], optionLabel: (v) => (v === 'L' ? '左投' : '右投'), w: 64 },
 ]
 const pitCols: Col<PitDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
@@ -367,6 +370,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
         timeline={timelineFor(side, i)}
+        onOppPitcher={side === 'bat' ? (next) => setBat((b) => applyOppPitcher(b.map(fromBatDraft), i, next).map(toBatDraft)) : undefined}
         onRebuild={() => {
           const rows = side === 'bat' ? batRows : pitRows
           const idx = inningsOf(rows).get(rows[i].inning) ?? []
@@ -395,6 +399,11 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     setStarters(out)
   }
   const pitcherNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher).filter(Boolean))]; return [...used, ...names.filter((n) => !used.includes(n))] }, [pit, names])
+  // 中繼: the pitchers after the first (the starter) in the rows being edited, plus any hold already saved
+  const holdNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher.trim()).filter(Boolean))].slice(1); return [...used, ...(game.holds ?? []).filter((h) => !used.includes(h))] }, [pit, game.holds])
+  const duration = durationMinutes(game.time, game.endTime)
+  // one pitcher gets only one of 勝投／中繼／救援: picking him as 勝投 or 救援 takes him off 中繼
+  const decide = (k: 'winningPitcher' | 'savePitcher', v: string) => setGame((s) => { const holds = (s.holds ?? []).filter((h) => h !== v); return { ...s, [k]: v || undefined, holds: holds.length ? holds : undefined } })
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   const text = (k: keyof Game) => (e: React.ChangeEvent<HTMLInputElement>) => g(k, (e.target.value || undefined) as never)
 
@@ -430,21 +439,27 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         <button type="button" aria-expanded={infoOpen} onClick={() => setInfoOpen(!infoOpen)} className="flex items-center gap-2 text-left cursor-pointer min-h-9 pointer-fine:min-h-7 group">
           <ChevronRight className={cx('size-4 text-muted transition-transform motion-reduce:transition-none', infoOpen && 'rotate-90')} />
           <span className="text-[13px] font-semibold text-ink">比賽資訊</span>
-          <span className="text-[12px] text-muted tnum truncate min-w-0">{game.id}{infoOpen ? '' : `・${game.date}・vs ${game.opponent}・${game.homeAway === '主' ? '主場' : '客場'}${game.winningPitcher ? `・勝投 ${game.winningPitcher}` : ''}`}</span>
+          <span className="text-[12px] text-muted tnum truncate min-w-0">{game.id}{infoOpen ? '' : `・${game.date}・vs ${game.opponent}・${game.homeAway === '主' ? '主場' : '客場'}${game.winningPitcher ? `・勝投 ${game.winningPitcher}` : ''}${game.holds?.length ? `・中繼 ${game.holds.join('、')}` : ''}`}</span>
           <span className="ml-auto text-[12px] text-ink-2 group-hover:text-ink underline underline-offset-2 shrink-0">{infoOpen ? '收起' : '修改'}</span>
         </button>
         {infoOpen && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
-          <Field label="時間"><Input type="time" value={game.time ?? ''} onChange={text('time')} className="tnum" /></Field>
+          <Field label="開賽時間"><Input type="time" value={game.time ?? ''} onChange={text('time')} className="tnum" /></Field>
+          <Field label="結束時間" hint={duration ? (isLongGame(duration) ? <span className="text-warning">{LONG_GAME_NOTE}</span> : `比賽時間 ${formatDuration(duration)}`) : undefined}><Input type="time" value={game.endTime ?? ''} onChange={text('endTime')} className="tnum" /></Field>
           <Field label="杯賽"><Input value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
           <Field label="對手"><Input value={game.opponent} onChange={(e) => g('opponent', e.target.value)} /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場' }, { value: '客', label: '客場' }]} className="w-full" /></Field>
           <Field label="場地"><Input value={game.venue ?? ''} onChange={text('venue')} /></Field>
           <Field label="天氣"><Input value={game.weather ?? ''} onChange={text('weather')} /></Field>
           <Field label="局數"><Input type="number" min={1} max={12} value={game.innings ?? ''} onChange={(e) => g('innings', e.target.value ? Number(e.target.value) : undefined)} className="tnum" /></Field>
-          <Field label="勝投"><PlayerSelect value={game.winningPitcher ?? ''} onChange={(v) => g('winningPitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
+          <Field label="勝投"><PlayerSelect value={game.winningPitcher ?? ''} onChange={(v) => decide('winningPitcher', v)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
           <Field label="敗投"><PlayerSelect value={game.losingPitcher ?? ''} onChange={(v) => g('losingPitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
-          <Field label="救援"><PlayerSelect value={game.savePitcher ?? ''} onChange={(v) => g('savePitcher', v || undefined)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
+          <Field label="救援"><PlayerSelect value={game.savePitcher ?? ''} onChange={(v) => decide('savePitcher', v)} names={pitcherNames} placeholder="—" className="w-full" /></Field>
+          {/* not a <label>: a click on its padding would press the first chip */}
+          <div className="col-span-2 md:col-span-4 flex flex-col gap-1.5 min-w-0">
+            <span className="text-xs font-medium text-ink-2">中繼（可複選）</span>
+            <HoldPicker names={holdNames} value={game.holds ?? []} onChange={(list) => g('holds', list.length ? list : undefined)} disabled={[game.winningPitcher, game.savePitcher]} />
+          </div>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>
         </div>}

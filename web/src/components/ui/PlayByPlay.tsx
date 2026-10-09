@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import type { BattingPA, PitchingPA, PlayEvent } from '../../data/types'
+import { OPP_HAND_LABEL, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
 import { playText, playWhen } from '../../data/plays'
 import { pitchTotals, isHitResult } from '../../data/stats'
 import { POSITION_BY_NUMBER } from '../../data/types'
@@ -90,8 +90,28 @@ const td = 'px-3 first:pl-4 last:pr-4 py-2 align-top'
 
 /** Pitch-by-pitch log of our batters for one game. */
 /** `onRbi` (紀錄比賽) adds 打點 −／＋ on every row, for a run that was entered after the plate appearance was sent. */
+/**
+ * The opponent pitcher each of these plate appearances was the first one against (keyed by row index): 「對方先發・右投 王」,
+ * later 「對方換投・左投 林」. Rows without any opponent pitcher are skipped (the next one with one starts a new stint).
+ */
+export function oppPitcherMarks(pas: BattingPA[]): Map<number, string> {
+  const out = new Map<number, string>()
+  const seen = new Map<string, string>()   // game → the last opponent pitcher key
+  pas.forEach((p, i) => {
+    if (!p.oppHand && !p.oppPitcher) return
+    const key = `${p.oppPitcher ?? ''}|${p.oppHand ?? ''}`
+    const was = seen.get(p.gameId)
+    if (was === key) return
+    const who = [p.oppHand ? OPP_HAND_LABEL[p.oppHand] : '', p.oppPitcher ?? ''].filter(Boolean).join(' ')
+    out.set(i, `${was === undefined ? '對方先發' : '對方換投'}・${who}`)
+    seen.set(p.gameId, key)
+  })
+  return out
+}
+
 export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
+  const marks = oppPitcherMarks(pas)
   let lastInning = 0
   return (
     <div className="overflow-x-auto scroll-x">
@@ -111,7 +131,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi }: { pas: BattingPA[]; fla
                 <tr className={cx('border-t border-border hover:bg-surface-2/60', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}{p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}</td>
                   <td className={td}>{p.order ?? ''}</td>
-                  <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}</td>
+                  <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}{marks.has(i) && <div className="mt-1"><Badge variant="outline">{marks.get(i)}</Badge></div>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
                   <td className={cx(td, 'text-muted whitespace-nowrap')} title="這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數">用球 {pt.pitches}（好球類 {pt.strikes}、壞球 {pt.balls}）</td>
                   <td className={cx(td, 'whitespace-nowrap', resultCls(p.result))}>{p.result || '—'}</td>

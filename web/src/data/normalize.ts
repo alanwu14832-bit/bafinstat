@@ -12,12 +12,14 @@
  *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
  *  - credits 被盜壘 / 阻殺 / 捕逸 to whoever was catching (當日登錄名單) when a game has none recorded
  *  - fills game.innings when blank, and returns human-readable warnings per game
+ *  - 對方投手 (L / R, name) and 對方打者 trimmed and dropped when blank, 結束時間 as 'HH:MM'
  */
-import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type PitchingPA, type Player } from './types'
+import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
 import { outsCredited } from './stats'
 import { cleanErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
+import { cleanTime } from './gameTime'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const REACH = new Set(['一安', '內安', '二安', '場地二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
@@ -43,6 +45,12 @@ export const cleanLoc = (v: unknown): number | undefined => {
   return first >= 1 && first <= 9 ? first : undefined
 }
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const HANDS: Record<string, OppHand> = { l: 'L', 左: 'L', 左投: 'L', 左手: 'L', lhp: 'L', left: 'L', r: 'R', 右: 'R', 右投: 'R', 右手: 'R', rhp: 'R', right: 'R' }
+/** 對方投手慣用: L / 左 / 左投 / LHP / left → 'L', the same for R; anything else is unknown (undefined). */
+export function cleanHand(v: unknown): OppHand | undefined {
+  if (typeof v !== 'string') return undefined
+  return HANDS[v.trim().toLowerCase()]
+}
 
 interface Seq { inning?: number; outsBefore?: number; code?: string; result: string; outOnBase?: number }
 
@@ -237,27 +245,36 @@ export function creditCatching(game: Game, lines: FieldingLine[], pitching: Pitc
   return n
 }
 
+/** 對方投手 on a batting row: the name trimmed (at most 40 characters, the database's limit), the hand L / R; each key
+ *  left out when there is nothing. */
+function oppOf(name: string | undefined, hand: unknown): Pick<BattingPA, 'oppPitcher' | 'oppHand'> {
+  const n = typeof name === 'string' ? [...name.trim()].slice(0, 40).join('').trim() : ''
+  const h = cleanHand(hand)
+  return { ...(n ? { oppPitcher: n } : {}), ...(h ? { oppHand: h } : {}) }
+}
+
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
-  const batting: BattingPA[] = input.batting.map(({ runner, ...p }) => ({
-    ...p, batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const batting: BattingPA[] = input.batting.map(({ runner, oppPitcher, oppHand, ...p }) => ({
+    ...p, ...oppOf(oppPitcher, oppHand), batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, ...p }) => ({
-    ...p, ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, ...p }) => ({
+    ...p, ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
   const fielding: FieldingLine[] = input.fielding.map((f) => ({ ...f, player: f.player.trim(), pos: f.pos.trim().toUpperCase() }))
-  const games: Game[] = input.games.map(({ dayRoster, ...g }) => {
+  const games: Game[] = input.games.map(({ dayRoster, endTime, ...g }) => {
     // the key is dropped when there is no (usable) roster, so games without one look exactly as before
     const r = parseDayRoster(dayRoster)
-    return { ...g, id: g.id.trim(), tournament: g.tournament?.trim() || '未分類', opponent: g.opponent?.trim() || '未知', ...(r ? { dayRoster: r } : {}) }
+    const end = cleanTime(endTime)
+    return { ...g, id: g.id.trim(), tournament: g.tournament?.trim() || '未分類', opponent: g.opponent?.trim() || '未知', ...(end ? { endTime: end } : {}), ...(r ? { dayRoster: r } : {}) }
   })
 
   for (const g of games) {
@@ -315,6 +332,11 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
       warn(`名單沒有 ${unknown.join('、')}，已自動加入球員名單`)
     }
     for (const n of [...new Set(pit.map((p) => p.pitcher).filter((n) => n && !names.has(n)))]) { roster.push({ name: n, primaryPos: 'P', status: '現役' }); names.add(n); warn(`名單沒有投手 ${n}，已自動加入`) }
+    // 中繼: someone who did not pitch in this game (only checked when the game has its pitching rows)
+    if (pit.length) {
+      const pitched = new Set(pit.map((p) => p.pitcher))
+      for (const h of [...new Set((g.holds ?? []).map((x) => x.trim()).filter(Boolean))]) if (!pitched.has(h)) warn(`中繼 ${h} 這場沒有投球紀錄，請核對`)
+    }
   }
   return { dataset: { roster, games, batting, pitching, fielding }, warnings }
 }

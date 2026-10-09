@@ -132,6 +132,13 @@ await opp({ steps: [{ run: 2, ev: '盜壘失敗' }, 'B', 'IP'], result: '界外�
 await opp({ steps: ['SS', 'SS', 'SS'], result: '三振' })
 await check('1上結束', '1下 0出局 0:0')
 // --- 1 下
+// 對方投手: this recorder does not keep it (不記), the question goes away for the game
+{
+  const strip = main.getByRole('group', { name: '對方投手' })
+  if (!(await strip.count())) notes.push('我隊打擊時沒有出現「對方投手是？」')
+  else { await strip.getByRole('button', { name: '不記', exact: true }).click(); await p.waitForTimeout(200) }
+  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「不記」後「對方投手是？」還在')
+}
 await us({ steps: ['B', 'B', 'B', 'CS', 'B'], result: '保送' })                                                // S1 保送
 await us({ steps: ['IP'], result: '一安', loc: 9, runners: { 1: 3 }, batter: 1, adv: { 1: '趁傳進壘' } })      // S2 一安，S1 趁傳上三
 await us({ steps: ['CS', 'SS', 'SS'], result: '三振', runners: { 3: 3, 1: 2 }, batter: 1 })                   // S3 三振但暴投上一壘（滿壘）
@@ -207,6 +214,14 @@ const lineText = (await dlg.locator('section, div').filter({ hasText: /^.*R.*H.*
 writeFileSync(`${S}/game2-shown.json`, JSON.stringify({ N, bat, pit, lineText, dialogs, notes, errs }, null, 1))
 const ds = await p.evaluate(() => JSON.parse(localStorage.getItem('bafin.dataset.v1') || 'null'))
 writeFileSync(`${S}/game2-dataset.json`, JSON.stringify(ds))
+// 不記: no plate appearance of ours has an opponent pitcher
+{
+  const saved = ds?.base?.games?.find((g) => g.opponent === '模擬隊二')
+  const rows = saved ? ds.base.batting.filter((x) => x.gameId === saved.id) : []
+  const withHand = rows.filter((x) => 'oppHand' in x || 'oppPitcher' in x)
+  if (!rows.length || withHand.length) { log(`✗ 不記對方投手，卻有 ${withHand.length} / ${rows.length} 個打席記了`); process.exitCode = 1 }
+  else log('不記對方投手: ok')
+}
 log('dialogs:', JSON.stringify(dialogs))
 log('notes while recording:', JSON.stringify(notes, null, 1))
 log('page errors:', JSON.stringify(errs))
