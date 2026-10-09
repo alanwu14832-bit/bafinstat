@@ -6,6 +6,7 @@ import { SEED_DATASET, TEAM_NAME } from '../data/seed'
 import { DEFAULT_FILTERS } from '../data/types'
 import { battingLines, summarizeGame } from '../data/stats'
 import { autoOrder, emptyLineup, writeLineup } from '../record/lineup'
+import { addPitch, commitPA, defaultPlan, newGame, type RecordState } from '../record/model'
 
 const at = (url: string) => render(<MemoryRouter initialEntries={[url]}><AppRoutes /></MemoryRouter>)
 const game = SEED_DATASET.games.find((g) => !g.status && SEED_DATASET.batting.some((p) => p.gameId === g.id))!
@@ -28,6 +29,33 @@ describe('print pages', () => {
     expect(within(ours).getAllByText('得分 R').some((el) => el.tagName === 'TD')).toBe(true)
     expect(screen.queryByRole('navigation', { name: '主選單' })).toBeNull()
     expect(screen.getByText(/請在列印設定選『橫向』/)).toBeInTheDocument()
+  })
+
+  it('draws each plate appearance from the scoresheet model: marks, counts and the diamond', async () => {
+    at(`/print/game/${game.id}?side=us`)
+    const [sheet] = await screen.findAllByTestId('scoresheet', {}, { timeout: 4000 })
+    const marks = [...sheet.querySelectorAll('.pa-mark')].map((m) => m.textContent ?? '')
+    expect(marks.some((m) => /^(1B|2B|3B|HR)/.test(m))).toBe(true)
+    expect(marks.some((m) => /^(K|G|F|P|L)/.test(m))).toBe(true)
+    expect([...sheet.querySelectorAll('.pa-count')].some((c) => /^\d-\d/.test(c.textContent ?? ''))).toBe(true)
+    expect(sheet.querySelectorAll('.cell svg polygon').length).toBeGreaterThan(0)
+  })
+
+  it('follows the runners of a game recorded on the site: no 「只畫上壘與得分」 note', async () => {
+    const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'P'][i] }))
+    let s: RecordState = newGame({ id: 'G20260301-01', date: '2026-03-01', tournament: '友誼賽', opponent: '測試隊', homeAway: '客', innings: 7 }, lineup, '壬')
+    const pa = (result: string, pitches: string[]) => { for (const c of pitches) s = addPitch(s, c); s = commitPA(s, defaultPlan(s, result)) }
+    pa('一安', ['B', 'IP']); pa('全壘打', ['IP']); for (let k = 0; k < 6; k++) pa('三振', ['S', 'S', 'S'])
+    useDataStore.setState({ base: { ...SEED_DATASET, games: [...SEED_DATASET.games, s.game], batting: [...SEED_DATASET.batting, ...s.batting], pitching: [...SEED_DATASET.pitching, ...s.pitching] } })
+    at('/print/game/G20260301-01?side=us')
+    const [sheet] = await screen.findAllByTestId('scoresheet', {}, { timeout: 4000 })
+    expect(sheet.textContent).not.toContain('只畫上壘與得分')
+    const lead = within(sheet).getAllByTestId('slot-row').find((r) => r.querySelector('td')!.textContent === '1')!
+    expect(lead.querySelector('.pa-mark')!.textContent).toBe('1B')
+    expect(lead.querySelector('.pa-count')!.textContent).toBe('1-0・2')
+    // he came home on the home run: the path all the way round, home filled
+    expect(lead.querySelector('polyline')!.getAttribute('points')!.split(' ')).toHaveLength(5)
+    expect(lead.querySelector('polygon')!.getAttribute('fill')).toBe('#222')
   })
 
   it('puts each team\'s own errors on its row of the line score', async () => {

@@ -83,6 +83,16 @@ describe('本半局看點', () => {
     expect(cards.slice(1).some((x) => x?.id === 'streak:甲')).toBe(false)
   })
 
+  it('連續安打: a game with no at bat (only walks) neither extends nor breaks it; a 犧飛 with no hit breaks it', () => {
+    const dates = ['2026-09-01', '2026-09-08', '2026-09-15', '2026-09-22']
+    const games = dates.map((d, i) => game(`G${d.replace(/-/g, '')}-01`, d, { opponent: `隊${i}` }))
+    const hit = (g: Game) => [bat(g.id, '甲', '一安'), bat(g.id, '甲', '外飛')]
+    const walks = ds(games, [...hit(games[0]), ...hit(games[1]), bat(games[2].id, '甲', '保送'), bat(games[2].id, '甲', '保送'), ...hit(games[3])])
+    expect(currentHalfCard(start(), liveContext(walks, LIVE, DEFAULT_PARAMS))).toMatchObject({ id: 'streak:甲', figure: '3', text: '1 棒 甲 前 3 場出賽都有安打' })
+    const sf = ds(games, [...hit(games[0]), ...hit(games[1]), bat(games[2].id, '甲', '犧飛', { rbi: 1 }), ...hit(games[3])])
+    expect(halfCandidates(liveContext(sf, LIVE, DEFAULT_PARAMS), start(), { inning: 1, half: 'top' }).some((c) => c.id === 'streak:甲')).toBe(false)
+  })
+
   it('連續解決: our pitcher, counting back over today\'s batters (a 不死三振 who reached ends it)', () => {
     const home = { ...LIVE, homeAway: '主' as const }
     const rows = (k2: string) => [

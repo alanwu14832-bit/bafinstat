@@ -42,6 +42,29 @@ describe('獲勝機率 on a game page', () => {
       expect(th.getAttribute('title')).toContain('描述這場發生了什麼，不代表預測能力')
     }
   })
+  it('the 逐球 filter has a 關鍵打席 chip that shows the key plays\' rows', () => {
+    useDataStore.setState({ base: SEED_DATASET, demo: false })
+    render(
+      <MemoryRouter initialEntries={['/games/G20251010-01']}>
+        <Routes><Route path="/games/:id" element={<GamePage />} /></Routes>
+      </MemoryRouter>,
+    )
+    const keyItems = within(screen.getByText('本場關鍵 5 打席').closest('section')!).getAllByRole('listitem').length
+    let shown = 0
+    for (const tab of [/逐球・打擊/, /逐球・投球/]) {
+      fireEvent.click(screen.getByRole('tab', { name: tab }))
+      const chip = screen.queryByRole('tab', { name: /關鍵打席/ })
+      if (!chip) continue
+      fireEvent.click(chip)
+      const m = screen.getByText(/只顯示：關鍵打席（\d+ 個打席）/).textContent!.match(/關鍵打席（(\d+) 個打席）/)!
+      const n = Number(m[1])
+      expect(n).toBeGreaterThan(0)
+      shown += n
+      fireEvent.click(screen.getByRole('tab', { name: '全部' }))
+    }
+    expect(shown).toBeGreaterThan(0)
+    expect(shown).toBeLessThanOrEqual(keyItems)
+  })
 })
 
 describe('the numbers next to each other add up', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { gameNotes, pitcherOrder } from './gameNotes'
 import { battedOutKind, summarizeGame } from './stats'
+import { addPitch, changePitcher, commitPA, defaultPlan, newGame, type RecordState } from '../record/model'
 import { SEED_DATASET } from './seed'
 import { EMPTY_DATASET, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 
@@ -24,7 +25,7 @@ describe('比賽附註', () => {
   it('pitchers in order of appearance', () => {
     expect(pitcherOrder([{ pitcher: '乙' }, { pitcher: '乙' }, { pitcher: '甲' }, { pitcher: '乙' }, { pitcher: '丙' }])).toEqual(['乙', '甲', '丙'])
   })
-  it('ground and air outs (stand-in for batch 4)', () => {
+  it('ground and air outs (stats.battedOutKind)', () => {
     expect(battedOutKind({ result: '內滾' })).toBe('GO')
     expect(battedOutKind({ result: '雙殺', traj: 'G' })).toBe('GO')
     expect(battedOutKind({ result: '雙殺', traj: 'L' })).toBe('AO')
@@ -38,8 +39,9 @@ describe('比賽附註', () => {
     expect(notes.map((s) => s.title)).toEqual(['打擊', '投球', '比賽'])
     expect(lineOf(notes, '投球', '用球數-好球數')).toBe('甲 12-8、乙 5-3')
     expect(lineOf(notes, '投球', '面對打者')).toBe('甲 4、乙 2')
-    expect(lineOf(notes, '投球', '滾地出局-飛球出局')).toBe('甲 2-1、乙 1-1')
-    expect(lineOf(notes, '投球', '繼承跑者-失分')).toBeUndefined()
+    expect(lineOf(notes, '投球', '滾地－飛球出局')).toBe('甲 2-1、乙 1-1')
+    expect(lineOf(notes, '投球', '繼承跑者－回來得分')).toBeUndefined()
+    expect(lineOf(notes, '投球', '救援失敗')).toBeUndefined()
     expect(lineOf(notes, '打擊', '二壘安打')).toBe('丙（第 2 局）')
     expect(lineOf(notes, '打擊', '全壘打')).toBe('丁（第 3 局，2 分）')
     expect(lineOf(notes, '打擊', '三壘安打')).toBeUndefined()
@@ -51,6 +53,37 @@ describe('比賽附註', () => {
     const timed = gameNotes(summarizeGame(ds, game), ds, { time: '11:40', endTime: '13:55' })
     expect(lineOf(timed, '比賽', '比賽時間')).toBe('2 小時 15 分（11:40–13:55）')
     expect(lineOf(timed, '比賽', '開賽')).toBeUndefined()
+  })
+  // home game, 壬 starts: 三振, 保送, 保送; 癸 comes in with two on and lets both score (二安), then 三振, 內滾
+  const relief = () => {
+    const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'P'][i] }))
+    let s: RecordState = newGame({ id: 'G2', date: '2026-03-01', tournament: 'A', opponent: 'B', homeAway: '主', innings: 7 }, lineup, '壬')
+    const pa = (result: string, pitches: string[], runners: Record<number, 'home'> = {}) => {
+      for (const c of pitches) s = addPitch(s, c)
+      const plan = defaultPlan(s, result)
+      s = commitPA(s, { ...plan, runners: { ...plan.runners, ...runners } })
+    }
+    pa('三振', ['S', 'S', 'S']); pa('保送', ['B', 'B', 'B', 'B']); pa('保送', ['B', 'B', 'B', 'B'])
+    s = changePitcher(s, '癸')
+    pa('二安', ['IP'], { 1: 'home', 2: 'home' }); pa('三振', ['S', 'S', 'S']); pa('內滾', ['IP'])
+    return s
+  }
+  const notesOf = (s: RecordState, pitching = s.pitching) => {
+    const d: Dataset = { ...EMPTY_DATASET, games: [s.game], batting: s.batting, pitching }
+    return gameNotes(summarizeGame(d, s.game), d)
+  }
+  it('繼承跑者 only for the reliever, in pitchingNotes\' wording', () => {
+    const notes = notesOf(relief())
+    expect(lineOf(notes, '投球', '繼承跑者－回來得分')).toBe('癸 2-2')
+    expect(lineOf(notes, '投球', '滾地－飛球出局')).toBe('癸 1-0')
+    expect(lineOf(notes, '投球', '換投紀錄')).toBeUndefined()
+    expect(notes.find((x) => x.title === '投球')!.lines.map((l) => l.label)).toEqual(['用球數-好球數', '滾地－飛球出局', '面對打者', '繼承跑者－回來得分'])
+  })
+  it('a pitching change without the runners recorded: the gap line instead of 繼承跑者', () => {
+    const s = relief()
+    const notes = notesOf(s, s.pitching.map(({ basesBefore: _b, outsBefore: _o, ...r }) => r as PitchingPA))
+    expect(lineOf(notes, '投球', '繼承跑者－回來得分')).toBeUndefined()
+    expect(lineOf(notes, '投球', '換投紀錄')).toBe('這場有 1 次換投的跑者紀錄不完整，繼承跑者與救援失敗沒有判斷')
   })
   it('two doubles by one batter, steals and errors', () => {
     const d: Dataset = { ...ds, batting: [b({ result: '二安' }), b({ inning: 5, result: '二安', sb: 2 })], fielding: [{ gameId: 'G1', player: '李', pos: 'SS', po: 0, a: 1, e: 1, dp: 0, pb: 0, sb: 0, cs: 0 }] }

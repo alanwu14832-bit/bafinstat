@@ -3,7 +3,8 @@
  * home runs and in which inning, RBIs, steals, errors, each pitcher's pitches-strikes, ground-fly outs and batters
  * faced, and the game's time, weather and field. Lines with nothing to say are left out, and so are empty sections.
  */
-import { battedOutKind, battingLines, fieldingLines, pitchingLines, teamBatting, type GameSummary, type PitchingLine } from './stats'
+import { battingLines, fieldingLines, pitchingLines, teamBatting, type GameSummary, type PitchingLine } from './stats'
+import { pitchingNotes } from './pitchingSituations'
 import { formatDuration, durationMinutes, cleanTime } from './gameTime'
 import { balksIn } from './plays'
 import { isDouble, isPA, DEFAULT_PARAMS, type BattingPA, type Dataset, type PitchingPA, type StatParams } from './types'
@@ -26,11 +27,10 @@ export function boxOrderOf(pas: BattingPA[]): (name: string) => number {
 }
 
 /**
- * PitchingLine with the situational counts of pitchingSituations (繼承跑者 ir / irs, 救援失敗 bs, 三上三下 inn123,
- * sitGaps): pitchingLines gets this game's runs by inning so it can tell a save situation.
+ * This game's pitching lines with the situational counts of pitchingSituations (繼承跑者 ir / irs, 救援失敗 bs, 三上三下
+ * inn123, sitGaps): pitchingLines gets this game's runs by inning so it can tell a save situation.
  */
-export type SituationalLine = PitchingLine
-export function gamePitchingLines(pit: PitchingPA[], summary: GameSummary, params: StatParams = DEFAULT_PARAMS): SituationalLine[] {
+export function gamePitchingLines(pit: PitchingPA[], summary: GameSummary, params: StatParams = DEFAULT_PARAMS): PitchingLine[] {
   return pitchingLines(pit, [summary.game], params, { ourRuns: new Map([[summary.game.id, summary.lineUs]]) })
 }
 
@@ -105,30 +105,22 @@ export function gameNotes(summary: GameSummary, ds: Dataset, clock?: { time?: st
   // 投球, in the order they pitched
   const order = pitcherOrder(pit)
   const pl = gamePitchingLines(pit, summary, params).sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name))
-  const goAo = new Map<string, { go: number; ao: number }>()
-  for (const p of pit) {
-    if (!isPA(p)) continue
-    const k = battedOutKind(p)
-    if (!k) continue
-    const v = goAo.get(p.pitcher) ?? { go: 0, ao: 0 }
-    if (k === 'GO') v.go++; else v.ao++
-    goAo.set(p.pitcher, v)
-  }
   const bk = new Map<string, number>()
   for (const p of pit) { const n = balksIn(p.events); if (n) bk.set(p.pitcher, (bk.get(p.pitcher) ?? 0) + n) }
-  const each = (f: (l: SituationalLine) => string | null) => join(pl.map((l) => f(l)).filter((x): x is string => !!x))
-  const gaps = pl.reduce((s, l) => s + (l.sitGaps ?? 0), 0)
+  const each = (f: (l: PitchingLine) => string | null) => join(pl.map((l) => f(l)).filter((x): x is string => !!x))
+  // 滾地－飛球出局, 繼承跑者－回來得分, 救援失敗, 三上三下 and the 換投紀錄 gap line: pitchingSituations' pitchingNotes, one wording for them
+  const sit = new Map(pitchingNotes(pl).map((n) => [n.label, n]))
   add('投球', [
     { label: '用球數-好球數', text: each((l) => (l.pc > 0 ? `${l.name} ${l.pc}-${l.strikes}` : null)) },
-    goAo.size > 0 && { label: '滾地出局-飛球出局', text: each((l) => { const v = goAo.get(l.name) ?? { go: 0, ao: 0 }; return `${l.name} ${v.go}-${v.ao}` }) },
+    sit.get('滾地－飛球出局'),
     { label: '面對打者', text: each((l) => (l.bf > 0 ? `${l.name} ${l.bf}` : null)) },
-    { label: '繼承跑者-失分', text: each((l) => (l.ir ? `${l.name} ${l.ir}-${l.irs ?? 0}` : null)) },
-    { label: '救援失敗', text: each((l) => (l.bs ? withCount(l.name, l.bs) : null)) },
-    { label: '三上三下', text: each((l) => (l.inn123 ? `${l.name} ${l.inn123} 局` : null)) },
+    sit.get('繼承跑者－回來得分'),
+    sit.get('救援失敗'),
+    sit.get('三上三下'),
     { label: '投手犯規', text: each((l) => (bk.get(l.name) ? withCount(l.name, bk.get(l.name)!) : null)) },
     { label: '暴投', text: each((l) => (l.wp ? withCount(l.name, l.wp) : null)) },
     { label: '觸身球', text: each((l) => (l.hbp ? withCount(l.name, l.hbp) : null)) },
-    gaps > 0 && { label: '說明', text: `有 ${gaps} 次換投發生在沒有記壘上跑者的半局，繼承跑者與救援失敗沒有算這幾次` },
+    sit.get('換投紀錄'),
   ])
 
   // 比賽

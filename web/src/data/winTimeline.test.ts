@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { battingLines, pitchingLines, summarizeGame } from './stats'
 import { isPA, isPlaced, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 import { buildRunModel, END, stateOf, type WinRules } from './winModel'
-import { buildWinData, eventText, keyPlays, paTransitions, situationText, teamWinBatting, withWinBatting, withWinPitching, type GameEvent } from './winTimeline'
+import { buildWinData, eventText, keyPlays, keyRowSets, paTransitions, rowWins, situationText, teamWinBatting, withWinBatting, withWinPitching, type GameEvent } from './winTimeline'
 import { normalizeGameEdit } from './edit'
 import { toGameEdit } from '../record/model'
 import { playGame, roster } from '../test/simGame'
 import { SEED_DATASET } from './seed'
+import { pbpFilterSets } from './pbpFilter'
 
 const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'H1', inning: 1, outsBefore: 0, basesBefore: '無', order: 1, batter: '甲', pitches: ['IP'], result: '內滾', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
 const pit = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'H1', inning: 1, outsBefore: 0, basesBefore: '無', oppOrder: 1, pitcher: '投', pitches: ['SS', 'SS', 'SS'], result: '三振', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
@@ -400,5 +401,28 @@ describe('the count before the result (KeyPlays wording)', () => {
     const dbl = evs.find((e) => e.side === 'bat' && e.kind === 'pa')!
     expect(eventText(dbl, rows, { count: true })).toBe('陳大文 1-1 後 二安')
     expect(eventText(dbl, rows)).toBe('陳大文 二安')
+  })
+})
+
+describe('本場關鍵打席 in the 逐球 filter (data/pbpFilter \'key\' set)', () => {
+  it('the key rows are the game rows of the key plays, so the chip shows exactly those plate appearances', () => {
+    const win = buildWinData(SEED_DATASET, SIM_RULES)
+    const id = 'G20251010-01'
+    const keys = keyPlays(win.events.get(id)!, 5)
+    expect(keys.length).toBe(5)
+    const sets = keyRowSets(keys)
+    expect(sets.bat.size + sets.pit.size).toBe(5)
+    const rows = { bat: SEED_DATASET.batting.filter((p) => p.gameId === id), pit: SEED_DATASET.pitching.filter((p) => p.gameId === id) }
+    for (const side of ['bat', 'pit'] as const) {
+      const wins = side === 'bat' ? rowWins(rows.bat, win.bat) : rowWins(rows.pit, win.pit)
+      // each key row is a real plate appearance and carries that key play's WPA
+      for (const e of keys.filter((k) => k.side === side)) {
+        expect(isPA(rows[side][e.row])).toBe(true)
+        expect(wins.get(e.row)!.wpa).toBeCloseTo(e.wpa, 12)
+      }
+      expect([...pbpFilterSets(rows[side], side, sets[side]).key].sort()).toEqual([...sets[side]].sort())
+    }
+    // without key rows the set stays empty (the chip is not offered)
+    expect(pbpFilterSets(rows.bat, 'bat').key.size).toBe(0)
   })
 })

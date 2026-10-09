@@ -462,8 +462,8 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
                 {current.game.opponent.trim() && <OpponentScoutCard ds={s.dataset} opponent={current.game.opponent} title={`歷來對 ${current.game.opponent}`} />}
               </>
             )}
-            {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} keyRows={keyRows.bat} /></Card>}
-            {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={pbpSubtitle(`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} keyRows={keyRows.pit} /></Card>}
+            {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
+            {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={pbpSubtitle(`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
             {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
           </>

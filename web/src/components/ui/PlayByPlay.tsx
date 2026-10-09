@@ -155,10 +155,10 @@ export function oppPitcherMarks(pas: BattingPA[]): Map<number, string> {
 
 /**
  * `visible` (the game page's filter chips) shows only those rows, by index; `wording` 'phrase' writes the result as
- * 「1-1 後 右外野安打」. `win` (game pages): a 「WPA」 column after 結果, by row index. `keyRows`: the 本場關鍵打席 rows
- * (the 逐球 filter's 關鍵打席 chip uses data/pbpFilter's 'key' set).
+ * 「1-1 後 右外野安打」. `win` (game pages): a 「WPA」 column after 結果, by row index (the 逐球 filter's 關鍵打席 chip
+ * passes its rows as `visible`, from data/pbpFilter's 'key' set).
  */
-export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin>; keyRows?: Set<number> }) {
+export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const marks = oppPitcherMarks(pas)
@@ -213,7 +213,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
 }
 
 /** Pitch-by-pitch log of our pitchers vs the opponent for one game. */
-export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin>; keyRows?: Set<number> }) {
+export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const placed = placedMap(pas)
