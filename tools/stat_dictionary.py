@@ -47,6 +47,9 @@ STAT_DICTIONARY = [
     dict(key="BABIP", zh="場內球安打率", en="Batting Avg on Balls In Play", group="打擊", formula="(H − HR) ÷ (AB − SO − HR + SF)", status="新增", priority="P1", note="判斷運氣成分"),
     dict(key="wOBA", zh="加權上壘率", en="Weighted On-Base Average", group="打擊", formula="(wBB×(BB−IBB) + wHBP×HBP + w1B×1B + w2B×2B + w3B×3B + wHR×HR) ÷ (AB + BB − IBB + SF + HBP)", status="新增", priority="P1", note="權重見『設定』工作表（FanGraphs 線性權重，可更新）"),
     dict(key="wRC+", zh="加權得分創造指數", en="Weighted Runs Created Plus", group="打擊", formula="100 × ((wOBA − 隊wOBA) ÷ 1.232 + 隊R/PA) ÷ 隊R/PA", status="新增", priority="P1", note="以同一篩選範圍的全隊為基準（100 = 隊平均，130 = 多創造三成得分）；1.232 為 FanGraphs 2025 wOBA scale；不做球場修正"),
+    # ---------------- 獲勝機率模型 (網站專屬) ----------------
+    dict(key="WPA", zh="獲勝機率增加值", en="Win Probability Added", group="打擊", formula="每個打席（含自己的盜壘、盜壘失敗、牽制出局、壘死）前後我隊獲勝機率的差，加總；投手是他投球期間的變化", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。+1.00 約等於多贏一場；描述發生了什麼，不代表預測能力"),
+    dict(key="RE24", zh="局面得分增值", en="Run Expectancy (24 base-out states)", group="打擊", formula="RE(打席後局面) − RE(打席前局面) + 這個打席的得分；投手取負號", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。RE 依本隊比賽 24 種壘上與出局局面推算，不看比分"),
     dict(key="K%", zh="三振率", en="Strikeout Rate", group="打擊", formula="SO ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB%", zh="保送率", en="Walk Rate", group="打擊", formula="BB ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB/K", zh="保送三振比", en="Walk-to-Strikeout", group="打擊", formula="BB ÷ SO", status="新增", priority="P2", note=""),
@@ -143,6 +146,9 @@ STAT_DICTIONARY = [
     dict(key="WinPct", zh="勝率", en="Winning %", group="球隊", formula="W ÷ (W + L)", status="新增", priority="P0", note=""),
     dict(key="RunDiff", zh="得失分差", en="Run Differential", group="球隊", formula="得分 − 失分", status="新增", priority="P0", note=""),
     dict(key="LOB", zh="殘壘", en="Left On Base", group="球隊", formula="結果代碼 L", status="現有", priority="P1", note=""),
+    # ---------------- 獲勝機率模型 (網站專屬) ----------------
+    dict(key="LI", zh="關鍵程度", en="Leverage Index", group="球隊", formula="這個局面下一個打席獲勝機率平均可能變動多少 ÷ 全部打席的平均（1.0 = 一般情況）", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。2 以上是很關鍵的時刻"),
+    dict(key="WE", zh="獲勝機率", en="Win Expectancy", group="球隊", formula="依局數、比分、出局、壘上，由本隊比賽建立的模型估計我隊最後贏球的機率（假設兩隊實力相當）", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。和「勝率」（勝 ÷（勝＋敗））不同"),
 ]
 
 # fix a stray typo guard above (kept simple on purpose)

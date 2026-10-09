@@ -46,9 +46,14 @@ async function box(p, id = G) {
   const dlg = p.getByRole('dialog').last()
   const rows = async (header) => {
     const t = dlg.locator('table', { has: p.locator('th', { hasText: new RegExp(`^${header}$`) }) }).first()
-    const heads = (await t.locator('thead th').allTextContents()).map((x) => x.trim())
+    const all = (await t.locator('thead th').allTextContents()).map((x) => x.trim())
+    // WPA comes from the win-probability model, rebuilt from every game on the site: a second copy of a game moves
+    // it a little, so it is left out of these "the same Box Score" comparisons (data/winTimeline.ts)
+    const skip = all.indexOf('WPA')
+    const keep = (cells) => cells.filter((_, i) => i !== skip)
+    const heads = keep(all)
     const out = []
-    for (const tr of await t.locator('tbody tr').all()) out.push((await tr.locator('td').allTextContents()).map((x) => x.trim()))
+    for (const tr of await t.locator('tbody tr').all()) out.push(keep((await tr.locator('td').allTextContents()).map((x) => x.trim())))
     return { heads, rows: out }
   }
   const text = await dlg.innerText()

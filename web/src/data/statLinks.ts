@@ -37,6 +37,8 @@ const L: Record<string, Link> = {
   'BBS%': ['pitching', 'advanced', 'bbScoredPct', 'asc'], 'LOO%': ['pitching', 'process', 'leadoffOutPct'], '123INN': ['pitching', 'process', 'inn123'],
   '13P%': ['pitching', 'process', 'inn13Pct'], QualPA: ['batting', '', 'pa'], QualIP: ['pitching', '', 'outs'],
   '6球以上': ['batting', 'process', 'longPA'], 兩好球纏鬥: ['batting', 'process', 'twoStrikeBattles'],
+  // 獲勝機率模型
+  WPA: ['batting', 'advanced', 'wpa'], RE24: ['batting', 'advanced', 're24'],
 }
 const TEAM: Record<string, string> = { WinPct: '/games?view=results', RunDiff: '/', LOB: '/games?view=results' }
 

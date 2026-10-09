@@ -25,7 +25,9 @@ import { DonutCard } from '../components/charts/DonutCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
 import { useStats } from '../hooks/useStats'
 import type { BattingLine } from '../data/stats'
-import { f2, f3, pct, signedPct } from '../lib/fmt'
+import { f2, f3, pct, signed1, signed2, signedPct } from '../lib/fmt'
+import { useWinData } from '../hooks/useWinData'
+import { teamWinBatting, withWinBatting } from '../data/winTimeline'
 
 type View = 'basic' | 'advanced' | 'process'
 
@@ -42,8 +44,11 @@ function columnsFor(view: View): Column<BattingLine>[] {
   const plus: Column<BattingLine> = { key: 'opsPlus', header: 'OPS+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
   const wrc: Column<BattingLine> = { key: 'wrcPlus', header: 'wRC+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
   const seager: Column<BattingLine> = { key: 'sSeager', header: 'sSeager', align: 'right', sortable: true, format: (v) => signedPct(v as number | null) }
+  // 獲勝機率模型 (data/winTimeline): site only, never in the Excel 總表
+  const wpa: Column<BattingLine> = { key: 'wpa', header: 'WPA', align: 'right', sortable: true, format: signed2 }
+  const re24: Column<BattingLine> = { key: 're24', header: 'RE24', align: 'right', sortable: true, format: signed1 }
   if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), n('baserunningOuts', '壘死'), frac('avg', 'AVG', (r) => [r.h, r.ab], f3), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS'), plus]
-  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
+  if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, wpa, re24, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
   // 兩好球纏鬥: the count, with the plate appearances that reached two strikes in small grey type (CSV: the count only)
   const battles: Column<BattingLine> = { key: 'twoStrikeBattles', header: '兩好球纏鬥', align: 'right', sortable: true, format: (v, r) => <span className="inline-flex items-baseline gap-1 justify-end">{String(v)}<span className="text-[11px] text-muted font-normal">/{r.twoStrikePA}</span></span>, text: (v) => String(v) }
   return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bip], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bip], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
@@ -63,7 +68,12 @@ export function BattingPage() {
   const [rule, setRule] = useQualRule()
   const college = rule === 'college'
   const minPA = minPlateAppearances(rule, s.summary.games)
-  const rows = useMemo(() => (qualifiedOnly ? s.batters.filter((b) => b.pa >= minPA) : s.batters), [s.batters, qualifiedOnly, minPA])
+    // WPA / RE24 from the win-probability model, on the filtered plate appearances
+  const win = useWinData()
+  const batters = useMemo(() => withWinBatting(s.batters, s.batting, win), [s.batters, s.batting, win])
+  const teamWin = useMemo(() => teamWinBatting(s.batting, win), [s.batting, win])
+  const winNote = `WPA、RE24 依獲勝機率模型估計，Excel 總表不計算${teamWin.approxPas ? `；其中 ${Math.round((100 * teamWin.approxPas) / teamWin.pas)}% 打席的壘上狀況是推估` : ''}；描述發生了什麼，不代表預測能力`
+  const rows = useMemo(() => (qualifiedOnly ? batters.filter((b) => b.pa >= minPA) : batters), [batters, qualifiedOnly, minPA])
 
   const opsRank = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA && b.ops !== null).sort((a, b) => (b.ops ?? 0) - (a.ops ?? 0)).slice(0, 12).map((b) => ({ name: b.name, ops: Number((b.ops ?? 0).toFixed(3)) })), [s.batters, minPA])
   const bbType = useMemo(() => [{ key: 'gb', label: '滾地球', value: s.team.gb }, { key: 'fb', label: '飛球', value: s.team.fb }, { key: 'ld', label: '平飛球', value: s.team.ld }], [s.team])
@@ -104,7 +114,7 @@ export function BattingPage() {
   const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
   const csvFilters = useDataStore((st) => st.filters)
-  const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`打擊成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 打擊成績`, scopeText(csvFilters, s.games), `OPS+、wRC+ 以篩選範圍的全隊為 100；未達門檻（${college ? '大專規程' : '隊內'}）：PA < ${minPA}`, `來源：${window.location.href}`])}>CSV</Button>
+  const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`打擊成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 打擊成績`, scopeText(csvFilters, s.games), `OPS+、wRC+ 以篩選範圍的全隊為 100；未達門檻（${college ? '大專規程' : '隊內'}）：PA < ${minPA}`, winNote, `來源：${window.location.href}`])}>CSV</Button>
 
   // 門檻: 隊內 (PA ≥ 1) or 大專規程 (PA ≥ 2.1 × games); remembered on this device and kept in the link
   const qualSelect = <Select size="sm" label="門檻" aria-label="排行門檻" value={rule} onChange={(e) => setRule(e.target.value === 'college' ? 'college' : 'team')}
@@ -118,7 +128,7 @@ export function BattingPage() {
   const printButton = <Button size="sm" variant="ghost" icon={<Printer />} to={`/print/stats${search}`} title="依目前篩選印出一頁累計成績表">列印</Button>
 
   const footer = useMemo(() => {
-    const t = s.team
+    const t = { ...s.team, wpa: teamWin.wpa, re24: teamWin.re24 }
     const f: Partial<Record<keyof BattingLine, ReactNode>> = { name: '球隊合計' }
     for (const c of columnsFor(view)) {
       if (c.key === 'name') continue
@@ -126,14 +136,14 @@ export function BattingPage() {
       f[c.key] = c.format ? c.format(v, t) : String(v ?? '')
     }
     return f
-  }, [s.team, view])
+  }, [s.team, view, teamWin])
 
   return (
     <>
       <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}${college ? '（大專規程）' : ''}。`} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
-      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}${view === 'advanced' ? `。${winNote}` : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
