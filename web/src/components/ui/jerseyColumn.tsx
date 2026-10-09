@@ -57,8 +57,9 @@ export function withFraction(text: string, num: number, den: number): ReactNode 
   return <span className="inline-flex items-baseline gap-1.5 justify-end">{text}{den > 0 && <span className="text-[11px] text-muted font-normal">{num}/{den}</span>}</span>
 }
 
-/** The small grey tag for a player below a ranking's minimum (his numbers are shown, but he is not ranked). */
-export const BelowMinimum = () => <span className="text-[10px] font-medium text-muted border border-border rounded px-1 leading-4">未達門檻</span>
+/** The small grey tag for a player below a ranking's minimum (his numbers are shown, but he is not ranked); with `gap`, how far
+ *  below (「差 3 打席」). */
+export const BelowMinimum = ({ gap }: { gap?: string } = {}) => <span title="未達門檻" className="text-[10px] font-medium text-muted border border-border rounded px-1 leading-4 whitespace-nowrap">{gap ? `差 ${gap}` : '未達門檻'}</span>
 
 /** Marks numbers the site worked out itself (守備 lines inferred from the plate appearances). */
 export const Inferred = () => <span className="text-[10px] font-medium text-[color-mix(in_srgb,var(--warning)_55%,var(--ink))] bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] rounded px-1 leading-4" title="這場沒有填守備紀錄，數字由打席紀錄推算">推定</span>

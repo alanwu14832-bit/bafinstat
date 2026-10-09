@@ -38,6 +38,11 @@ export const isDouble = (r: string) => r === '二安' || r === '場地二安'
 /** 內安 (infield single: the ball never left the infield) is a single in every stat; only forced runners move up. */
 export const isSingle = (r: string) => r === '一安' || r === '內安'
 
+/** 軌跡 a result implies when none was recorded (G 滾地 · P 內野飛球 · F 飛球). */
+export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
+/** Balls in play on which the batter is out (GO/AO count these; 三振, 犧觸, hits, 野選, 失誤 are neither). */
+export const BATTER_OUT_BIP = new Set(['內滾', '內飛', '外飛', '界外飛', '犧飛', '雙殺'])
+
 /** I/II/III = this PA produced the Nth out · L 殘壘 · R 得分（非自責） · ER 自責分 */
 export type OutcomeCode = 'I' | 'II' | 'III' | 'L' | 'R' | 'ER'
 

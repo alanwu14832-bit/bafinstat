@@ -12,6 +12,7 @@ import { isPA, isPlaced } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf } from './timeline'
 import { earnedRepairs } from './earned'
 import { playGame, roster } from '../test/simGame'
+import { pitcherSituations, reliefEntries } from '../data/pitchingSituations'
 
 describe('random games through the recording model', () => {
   const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
@@ -32,6 +33,26 @@ describe('random games through the recording model', () => {
     // 突破僵局 runners are no plate appearances
     expect([...s.batting, ...s.pitching].filter(isPlaced).every((p) => p.pitches.length === 0)).toBe(true)
     expect(battingLines(fragment, s.batting).reduce((a, l) => a + l.pa, 0)).toBe(s.batting.filter((p) => p.batter && isPA(p)).length)
+    // 繼承跑者／救援失敗／三上三下: every relief entry can be judged (runners are always recorded), and the counts add up
+    const game = fragment.games[0]
+    const sits = [...pitcherSituations(s.pitching, [game], new Map([[game.id, sum.lineUs]])).values()]
+    const total = (k: 'gaps' | 'ir' | 'irs' | 'leadoffBf') => sits.reduce((a, x) => a + x[k], 0)
+    expect(total('gaps')).toBe(0)
+    expect(total('irs')).toBeLessThanOrEqual(total('ir'))
+    for (const x of sits) { expect(x.inn13).toBeLessThanOrEqual(x.pitchInn); expect(x.pitchInn).toBeLessThanOrEqual(x.fullInn); expect(x.inn123).toBeLessThanOrEqual(x.fullInn) }
+    expect(total('leadoffBf')).toBe(new Set(s.pitching.filter(isPA).map((p) => p.inning)).size)
+    const firstOf = new Map<number, number>()
+    s.pitching.forEach((p, i) => { if (!firstOf.has(p.inning)) firstOf.set(p.inning, i) })
+    for (const e of reliefEntries(s.pitching, { homeAway: game.homeAway, ourLine: sum.lineUs })) {
+      expect(e.sure).toBe(true)
+      if (firstOf.get(e.inning) !== e.row) expect(e.runners, `entry at row ${e.row}`).toBe(s.start.pit.get(e.row)?.length)
+      else expect(e.ir).toBe(0)
+    }
+  })
+  it('some relievers come in mid-inning with runners on, and some of those runners score', () => {
+    const entries = seeds.slice(0, 60).map(playGame).flatMap((g) => reliefEntries(g.pitching))
+    expect(entries.filter((e) => e.ir > 0).length).toBeGreaterThan(3)
+    expect(entries.some((e) => e.irs > 0)).toBe(true)
   })
   it('some games go to extra innings with the tie-break, and some runners move on a balk', () => {
     const games = seeds.slice(0, 30).map(playGame)

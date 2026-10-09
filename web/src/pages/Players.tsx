@@ -29,6 +29,8 @@ import { Tabs } from '../components/ui/Tabs'
 import { seasonOf } from '../data/registrations'
 import { useDataStore } from '../store/data'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
+import { SplitsCard } from '../components/ui/SplitsCard'
+import { minOutsPitched, minPlateAppearances, outsGapText, paGapText } from '../data/qualify'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DemoBanner } from '../components/ui/DemoBanner'
@@ -38,7 +40,7 @@ import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { isPA, type BattingPA } from '../data/types'
-import { battingLines, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
+import { battingLines, ipDisplay, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
 import { cx } from '../lib/format'
 
@@ -269,6 +271,15 @@ export function PlayersPage() {
   }, [pitchLog, s.pitching, selected, statParams])
   // where the batters he faced hit the ball
   const pitchSpray = useMemo(() => sprayCounts(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
+  // 情境拆分: only his own plate appearances (not the ones he pinch-ran on) / the batters he faced
+  const splitBat = useMemo(() => s.batting.filter((p) => p.batter === selected), [s.batting, selected])
+  const splitPit = useMemo(() => s.pitching.filter((p) => p.pitcher === selected), [s.pitching, selected])
+  // 大專規程 minimums for the games in the filter, and how far he is from them
+  const games = s.summary.games
+  const needPA = minPlateAppearances('college', games)
+  const needOuts = minOutsPitched('college', games)
+  const qualPA = `大專規程：規定打席 ${needPA}（2.1 × ${games} 場，依目前篩選），${bat && bat.pa >= needPA ? '已達規定打席' : `還差 ${paGapText(bat?.pa ?? 0, needPA)}`}`
+  const qualIP = `大專規程：規定投球局 ${ipDisplay(needOuts).replace(/\.0$/, '')}（1 × ${games} 場），${pit && pit.outs >= needOuts ? '已達規定投球局' : `還差 ${outsGapText(pit?.outs ?? 0, needOuts)}`}`
   // 打擊／投球 tabs: from the link (?tab=pitching from the 投球 page), else what he has numbers for
   const tabParam = params.get('tab')
   const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' ? tabParam : !bat && pit ? 'pitching' : 'batting'
@@ -458,6 +469,7 @@ export function PlayersPage() {
           {tab === 'batting' ? (
             !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <p className="text-[12px] text-muted -mb-1">{qualPA}</p>
             <StatGroup columns="grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
               <StatTile label="打擊率 AVG" to={rank('/batting?sort=avg')} toLabel="全隊排行" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
               <StatTile label="上壘率 OBP" to={rank('/batting?sort=obp')} toLabel="全隊排行" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
@@ -487,6 +499,7 @@ export function PlayersPage() {
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          <SplitsCard side="bat" rows={splitBat} who={player.name} />
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
             <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
@@ -495,6 +508,7 @@ export function PlayersPage() {
           ) : (
             !pit ? <Card><EmptyState compact title="目前篩選條件下沒有投球紀錄" description={bat ? '這位球員有打擊紀錄：點上面的「打擊」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <p className="text-[12px] text-muted -mb-1">{qualIP}</p>
             <StatGroup>
               <StatTile label="防禦率 ERA" to={rank('/pitching?view=basic&sort=era&dir=asc')} toLabel="全隊排行" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP・${pit.w} 勝 ${pit.l} 敗${pit.sv ? `・${pit.sv} 救援` : ''}`} />
               <StatTile label="FIP" to={rank('/pitching?view=advanced&sort=fip&dir=asc')} toLabel="全隊排行" value={pit.fip ?? 0} format="era" note="只看三振、保送、全壘打" />
@@ -504,6 +518,10 @@ export function PlayersPage() {
               <StatTile label="被打擊率" to={rank('/pitching?view=advanced&sort=oppAvg&dir=asc')} toLabel="全隊排行" value={pit.oppAvg ?? 0} format="decimal3" display={f3(pit.oppAvg)} note={`${pit.h} H / ${pit.ab} AB・${pit.hr} HR`} />
               <StatTile label="好球率 / 首球好球" to={rank('/pitching?view=process&sort=strikePct')} toLabel="全隊排行" value={(pit.strikePct ?? 0) * 100} format="pct" display={`${pct0(pit.strikePct)}/${pct0(pit.fStrikePct)}`} note={`${pit.pc} 球・每局 ${pit.pPerIP === null ? '—' : pit.pPerIP.toFixed(1)} 球`} />
               <StatTile label="Whiff% / CSW%" to={rank('/pitching?view=process&sort=cswPct')} toLabel="全隊排行" value={(pit.cswPct ?? 0) * 100} format="pct" display={`${pct0(pit.whiffPct)}/${pct0(pit.cswPct)}`} note="揮空率 / 好球＋揮空占比" />
+              <StatTile label="繼承失分" to={rank('/pitching?view=advanced&sort=irsPct&dir=asc')} toLabel="全隊排行" value={pit.irs} display={pit.ir ? `${pit.irs}/${pit.ir}` : '—'} note={`IRS% ${pct0(pit.irsPct)}・救援 ${pit.g - pit.gs} 場`} />
+              <StatTile label="救援失敗" to={rank('/pitching?view=advanced&sort=bs')} toLabel="全隊排行" value={pit.bs} display={String(pit.bs)} note={`救援 ${pit.sv}・中繼 ${pit.hld}`} />
+              <StatTile label="三上三下" to={rank('/pitching?view=process&sort=inn123')} toLabel="全隊排行" value={pit.inn123} display={String(pit.inn123)} note={`13 球內 ${pit.inn13}/${pit.pitchInn} 局`} />
+              <StatTile label="首打出局" to={rank('/pitching?view=process&sort=leadoffOutPct')} toLabel="全隊排行" value={(pit.leadoffOutPct ?? 0) * 100} display={pct0(pit.leadoffOutPct)} note={`${pit.leadoffOuts}/${pit.leadoffBf}・滾飛比 ${f2(pit.goAo)}`} />
             </StatGroup>
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
@@ -515,6 +533,7 @@ export function PlayersPage() {
               : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
             <SprayChart title="被擊球落點" subtitle="面對的打者：安打 / 場內球" counts={pitchSpray.all} secondary={pitchSpray.hits} />
           </div>
+          <SplitsCard side="pit" rows={splitPit} who={player.name} title="情境拆分（面對的打者）" />
           <Card title="逐場投球" subtitle="點一列看那一場" flush>
             <DataTable columns={pitchCols} rows={pitchLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>

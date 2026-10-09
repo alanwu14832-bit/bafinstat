@@ -97,7 +97,7 @@ export function GuidePage() {
           <div className="mb-4 rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2 leading-relaxed"><span className="font-medium text-ink">不想用 Excel？</span>紀錄員登入後，直接到「<PageLink to="/record">紀錄比賽</PageLink>」頁逐球點按：局數、出局、壘上、得分、結果代碼都會自動寫好，賽後按「結束比賽」就存進資料庫，全隊即時看到。</div>
           <ol className="flex flex-col gap-4">
             <Step n={1} title="我隊進攻 → 單場-打擊">每個打席一列：局、棒次、打者、逐球（球1…球12 填 SS/CS/F/IP/B）、打擊結果、落點 1–9、軌跡 G/F/L、強度 強/中/弱、盜壘、得分、打點、結果代碼。</Step>
-            <Step n={2} title="對方進攻 → 單場-投球">同樣每個打席一列，主角是我方投手；多了被盜壘、暴投、捕逸、牽制出局。結果代碼 R = 非自責失分、ER = 自責分。</Step>
+            <Step n={2} title="對方進攻 → 單場-投球">同樣每個打席一列，主角是我方投手；多了被盜壘、暴投、捕逸、牽制出局。結果代碼 R = 非自責分、ER = 自責分。</Step>
             <Step n={3} title="新欄位（可選，但很值得）">「出局(前)」「壘上(前)」：打席開始時幾出局、壘上有誰（無／1／2／3／12／13／23／123）。有了它才能算得點圈打擊率與優質打席。</Step>
           </ol>
           <div className="mt-5 pt-4 border-t border-border flex flex-col gap-2">

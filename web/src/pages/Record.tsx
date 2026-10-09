@@ -30,6 +30,7 @@ import { lastOppLineup, oppBatterNames, oppPitcherOptions } from '../data/oppone
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../data/gameTime'
 import { hhmm, localDate } from '../lib/dates'
 import { HoldPicker } from '../components/ui/HoldPicker'
+import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSituations'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
@@ -799,6 +800,8 @@ export function RecordPage() {
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
   const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher)])].filter(Boolean) : []), [state])
   const relievers = useMemo(() => (state ? reliefPitchers(state) : []), [state])
+  // 中繼 the score suggests (MLB's hold: came in with a save situation, got an out, left still ahead); never picked for him
+  const reliefs = useMemo(() => (state ? reliefEntries(state.pitching, { homeAway: state.game.homeAway, ourLine: runsByInning(state.batting) }) : []), [state])
   const openFinish = () => { if (state) setFinish({ w: '', l: '', sv: '', holds: [], ...finishTimes(state) }) }
   // one pitcher gets only one of 勝投／中繼／救援: picking him as 勝投 or 救援 takes him off 中繼
   const pickDecision = (k: 'w' | 'l' | 'sv', v: string) => setFinish((f) => (f ? { ...f, [k]: v, holds: k === 'l' ? f.holds : f.holds.filter((h) => h !== v) } : f))
@@ -938,8 +941,8 @@ export function RecordPage() {
             {relievers.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-ink-2">中繼（可複選，選填）</span>
-                <HoldPicker names={relievers} value={finish.holds} onChange={(holds) => setFinish({ ...finish, holds })} disabled={[finish.w, finish.sv]} />
-                <span className="text-[12px] text-muted">勝投、中繼、救援只能擇一</span>
+                <HoldPicker names={relievers} value={finish.holds} onChange={(holds) => setFinish({ ...finish, holds })} disabled={[finish.w, finish.sv]} suggested={holdCandidates(reliefs, [finish.w, finish.sv])} />
+                <span className="text-[12px] text-muted">建議：救援情境上場、拿到至少 1 個出局、退場時仍領先（勝投、救援不算）。勝投、中繼、救援只能擇一</span>
               </div>
             )}
             <p className="text-[12px] text-muted">儲存後會跳到這場比賽的頁面；之後仍可用「修改資料」調整。</p>
