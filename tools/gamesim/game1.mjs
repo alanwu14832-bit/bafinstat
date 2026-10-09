@@ -1,7 +1,9 @@
 // 模擬比賽: play a scripted 5-inning game through the real 紀錄比賽 screen (local mode, nothing goes to the cloud),
 // then read what the site shows (line score, box score) and compare it with the answer key written below by hand,
 // the way a recorder would check the stats against the game video.
-import { chromium } from 'playwright'
+import { createRequire } from 'node:module'
+// playwright from next to this script, or from the folder it is run in (npm i --no-save playwright there)
+const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
 const S = process.argv[2] ?? '.'
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
