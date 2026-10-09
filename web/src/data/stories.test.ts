@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { currentStreak, hitStreak, playerStories, teamStories } from './stories'
+import { buildHistory } from './history'
 import { summarizeGame } from './stats'
 import { EMPTY_DATASET, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 
@@ -78,5 +79,66 @@ describe('突破僵局 runners are no at bats', () => {
     const stories = teamStories(input({ ...ds, batting }), 10)
     expect(stories.find((s) => s.id === 'hit-甲')?.figure).toBe('3')
     expect(hitStreak([{ h: 1 }, { h: 1 }, { h: 1 }])).toBe(3)
+  })
+})
+
+describe('連續安打：沒有打數的比賽（MLB 9.23(b)）', () => {
+  it('skips a game with no at bat and no sacrifice fly, but not a lone sacrifice fly', () => {
+    expect(hitStreak([{ h: 1, ab: 2 }, { h: 0, ab: 0 }, { h: 1, ab: 3 }])).toBe(2)
+    expect(hitStreak([{ h: 1, ab: 2 }, { h: 0, ab: 0, sf: 1 }])).toBe(0)
+    // plain {h} lists behave as before
+    expect(hitStreak([{ h: 1 }, { h: 0 }, { h: 2 }, { h: 1 }])).toBe(2)
+  })
+})
+
+describe('數據故事：隊史（里程碑、連續安打排名）', () => {
+  // 甲 hits in all 4 games; 丙 has a 二安 in games 2 and 4
+  const ds = season([[3, 1], [4, 2], [5, 0], [2, 1]])
+  const all = input(ds)
+  const history = buildHistory(ds)
+  it('adds nothing all-time without the history', () => {
+    const plain = teamStories(all, 10)
+    expect(plain.some((x) => x.kicker.startsWith('里程碑'))).toBe(false)
+    expect(plain.find((x) => x.id === 'hit-甲')!.text).toBe('甲 連續 4 場有安打')
+  })
+  it('ranks a hitting streak against everyone’s longest', () => {
+    const st = teamStories({ ...all, history }, 10)
+    expect(st.find((x) => x.id === 'hit-甲')!.text).toBe('甲 連續 4 場有安打，有紀錄以來隊上最長')
+  })
+  it('says nothing all-time about a streak the filter cuts short or stitches together', () => {
+    // 甲 hits in games 1–5 (the team record, 5); 乙 in games 1–4 only (4, then hitless)
+    const g5 = Array.from({ length: 5 }, (_, i) => ({ ...game(i + 1), tournament: i % 2 ? '盃B' : '盃A' }))
+    const batting: BattingPA[] = []
+    g5.forEach((g, i) => { batting.push(bat(g.id, '甲', '一安'), bat(g.id, '乙', i < 4 ? '一安' : '三振')) })
+    const ds: Dataset = { ...EMPTY_DATASET, games: g5, batting, pitching: g5.map((g) => pit(g.id, '丁', '三振', 'I')) }
+    const h = buildHistory(ds)
+    const slice = (keep: (g: Game) => boolean) => { const ids = new Set(ds.games.filter(keep).map((g) => g.id)); const sub = { ...ds, batting: ds.batting.filter((p) => ids.has(p.gameId)) }; return { ...input(sub), summaries: ds.games.filter(keep).map((g) => summarizeGame(ds, g)), history: h } }
+    // all games: his real streak, the longest
+    expect(teamStories(slice(() => true), 10).find((x) => x.id === 'hit-甲')!.text).toBe('甲 連續 5 場有安打，有紀錄以來隊上最長')
+    // a date filter from game 3: the slice shows 3 of his 5 — no 「第 2 長」
+    expect(teamStories(slice((g) => g.date >= '2026-10-03'), 10).find((x) => x.id === 'hit-甲')!.text).toBe('甲 連續 3 場有安打')
+    // 甲 hitless in the 盃B games (2, 4): a 盃A filter would stitch games 1, 3, 5 into a 「3 場」 run that never happened
+    const broken = { ...ds, batting: ds.batting.map((p) => (p.batter === '甲' && ds.games.find((g) => g.id === p.gameId)!.tournament === '盃B' ? { ...p, result: '三振' } : p)) }
+    const hb = buildHistory(broken)
+    const ids = new Set(broken.games.filter((g) => g.tournament === '盃A').map((g) => g.id))
+    const cup = { ...input({ ...broken, batting: broken.batting.filter((p) => ids.has(p.gameId)) }), summaries: broken.games.filter((g) => ids.has(g.id)).map((g) => summarizeGame(broken, g)), history: hb }
+    expect(teamStories(cup, 10).find((x) => x.id === 'hit-甲')!.text).toBe('甲 連續 3 場有安打')
+  })
+  it('tells one milestone, only when the latest game is on screen', () => {
+    // 丁 (9 K a game) passed 25 K in game 3, not the latest; 乙 hits his first home run in the latest game
+    const last = ds.games[3].id
+    const withHr = { ...ds, batting: [...ds.batting, bat(last, '乙', '全壘打', 1)] }
+    const h = buildHistory(withHr)
+    const full = input(withHr)
+    const st = teamStories({ ...full, history: h }, 10)
+    const ms = st.filter((x) => x.kicker.startsWith('里程碑'))
+    expect(ms).toHaveLength(1)
+    expect(ms[0]).toMatchObject({ kicker: '里程碑達成', player: '乙' })
+    expect(ms[0].text).toContain('生涯第一支全壘打')
+    // a slice without the latest game says nothing all-time
+    const past = { ...full, summaries: full.summaries.slice(0, 3), batting: full.batting.filter((p) => p.gameId !== last), pitching: full.pitching.filter((p) => p.gameId !== last) }
+    expect(teamStories({ ...past, history: h }, 10).some((x) => x.kicker.startsWith('里程碑'))).toBe(false)
+    // the player card gets its own
+    expect(playerStories('乙', { ...full, history: h }, 5).find((x) => x.kicker === '里程碑達成')?.text).toMatch(/^10\/04 對對手敲出生涯第一支全壘打$/)
   })
 })

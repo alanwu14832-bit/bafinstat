@@ -21,6 +21,12 @@ import { GameCard, gameStar } from '../components/ui/GameCard'
 import { teamStories } from '../data/stories'
 import { scheduledGames } from '../data/schedule'
 import { TEAM } from '../config/team'
+import { useHistory } from '../hooks/useHistory'
+import { teamSeasons } from '../data/history'
+import { seasonNote } from '../data/seasons'
+import { TeamSeasonsTable } from '../components/ui/TeamSeasonsTable'
+import { DEFAULT_FILTERS } from '../data/types'
+import { scopeText } from '../components/layout/FilterChips'
 
 export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 
@@ -40,7 +46,12 @@ export function OverviewPage() {
   const opponentFilter = useDataStore((st) => st.filters.opponent)
   const tournamentFilter = useDataStore((st) => st.filters.tournament)
   const params = s.params
-  const stories = useMemo(() => teamStories({ dataset: s.dataset, summaries, batting: s.batting, pitching: s.pitching, params }), [s.dataset, summaries, s.batting, s.pitching, params])
+  const history = useHistory()
+  const stories = useMemo(() => teamStories({ dataset: s.dataset, summaries, batting: s.batting, pitching: s.pitching, params, history }), [s.dataset, summaries, s.batting, s.pitching, params, history])
+  // 逐季戰績: the filtered games, one row per season
+  const seasonRows = useMemo(() => teamSeasons(summaries, s.batting, s.pitching, s.dataset, params), [summaries, s.batting, s.pitching, s.dataset, params])
+  const setFilters = useDataStore((st) => st.setFilters)
+  const filters = useDataStore((st) => st.filters)
   const next = useMemo(() => { const today = new Date().toISOString().slice(0, 10); return scheduledGames(s.dataset.games).find((g) => g.date >= today) }, [s.dataset.games])
   const resetFilters = useDataStore((st) => st.resetFilters)
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
@@ -121,6 +132,11 @@ export function OverviewPage() {
           </div>
         </section>
       </div>
+      <TeamSeasonsTable title="逐季戰績" subtitle={`依上方篩選；勝率 = 勝 ÷（勝＋敗）${seasonNote() ? `；${seasonNote()}` : ''}。點一列把篩選設成那一季`} rows={seasonRows}
+        total={{ avg: team.avg, ops: team.ops, era: teamPitch.era }}
+        onPick={(r) => { if (r.from) setFilters({ ...DEFAULT_FILTERS, from: r.from, to: r.to }) }}
+        action={<Button variant="ghost" size="sm" to="/recordbook?view=team">紀錄簿 →</Button>}
+        csvMeta={[`${TEAM_NAME} 逐季戰績`, scopeText(filters, s.games), `來源：${window.location.href}`]} />
     </>
   )
 }

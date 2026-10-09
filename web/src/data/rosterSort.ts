@@ -13,7 +13,9 @@ const collator = new Intl.Collator('zh-Hant')
 export const compareNames = (a: string, b: string) => collator.compare(a, b)
 
 const jersey = (n?: string) => { const v = Number(n); return n !== undefined && n !== '' && Number.isFinite(v) ? v : Infinity }
-const isActive = (p?: Pick<Player, 'status'>) => !p?.status || p.status === '現役'
+/** A current player: blank status or 現役 (畢業／離隊 are not). */
+export const isActivePlayer = (p?: Pick<Player, 'status'>) => !p?.status || p.status === '現役'
+const isActive = isActivePlayer
 
 /** Compare two players: by number (no number last, ties by name) or by name (stroke order). */
 export function comparePlayers(mode: RosterSort, a: { name: string; number?: string }, b: { name: string; number?: string }): number {

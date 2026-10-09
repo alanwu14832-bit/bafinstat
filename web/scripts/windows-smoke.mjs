@@ -7,7 +7,7 @@ import { chromium } from 'playwright-core'
 
 const PORT = 4173
 const BASE = `http://localhost:${PORT}`
-const PAGES = ['/', '/batting', '/pitching', '/fielding', '/players', '/games', '/games?view=schedule', '/live', '/photos', '/lineup', '/record', '/import', '/dictionary', '/guide']
+const PAGES = ['/', '/batting', '/pitching', '/fielding', '/players', '/games', '/games?view=schedule', '/live', '/recordbook', '/photos', '/lineup', '/record', '/import', '/dictionary', '/guide']
 const SIZES = [{ width: 1366, height: 768, scale: 1 }, { width: 1536, height: 864, scale: 1.25 }, { width: 1920, height: 1080, scale: 1 }]
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { shell: true, stdio: 'ignore' })

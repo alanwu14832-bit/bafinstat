@@ -34,6 +34,9 @@ STAT_DICTIONARY = [
     dict(key="CS", zh="盜壘失敗", en="Caught Stealing", group="打擊", formula="盜壘失敗欄加總", status="新增", priority="P1", note="舊表只記『壘死』，無法算盜壘成功率"),
     dict(key="壘死", zh="壘死", en="Outs on Bases (baserunning mistakes)", group="打擊", formula="壘死欄加總：自己跑壘失誤出局", status="新增", priority="P2", note="衝過頭、飛球被雙殺回不去、離壘被觸殺等；被守備封殺／刺殺不算（記在壘上出局）"),
     dict(key="SB%", zh="盜壘成功率", en="Stolen Base %", group="打擊", formula="SB ÷ (SB + CS)", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
+    # 紀錄簿・生涯 (batch 5): streaks over every game, computed on the website only
+    dict(key="HitStreak", zh="連續安打", en="Hitting Streak", group="打擊", formula="連續幾場出賽都有安打（依比賽日期）", status="新增", priority="P2", note="MLB 9.23(b)：沒有打數也沒有犧飛的那場（只有保送、觸身、犧觸、妨礙或代跑）不算也不中斷；只有犧飛的那場會中斷。網站計算，總表不算"),
+    dict(key="OBStreak", zh="連續上壘", en="On-Base Streak", group="打擊", formula="連續幾場出賽都有上壘（H + BB + HBP > 0）", status="新增", priority="P2", note="只代跑、沒有打席的那場不算也不中斷。網站計算，總表不算"),
     # ---------------- 打擊 rate ----------------
     dict(key="AVG", zh="打擊率", en="Batting Average", group="打擊", formula="H ÷ AB", status="新增", priority="P0", note="舊表未計算"),
     dict(key="OBP", zh="上壘率", en="On-Base Percentage", group="打擊", formula="(H + BB + HBP) ÷ (AB + BB + HBP + SF)", status="新增", priority="P0", note=""),
@@ -120,6 +123,8 @@ STAT_DICTIONARY = [
     dict(key="QualPA", zh="規定打席", en="Qualifying Plate Appearances", group="打擊", formula="隊內：PA ≥ 1；大專規程：PA ≥ 2.1 × 球隊場數（小數進位）", status="新增", priority="P1", note="網站計算（Excel 總表沒有）；大專規程同率時：打擊率比長打率、再比上壘率；打點比打數少、再比壘打數；全壘打比打數少、再比打點"),
     dict(key="QualIP", zh="規定投球局", en="Qualifying Innings", group="投球", formula="隊內：IP ≥ 0.7 × 場數（進位，至少 1）；大專規程：IP ≥ 1 × 場數", status="新增", priority="P1", note="網站計算（Excel 總表沒有）；大專規程防禦率同率時：比投球局數（多的優先）、再比被安打（少的優先）"),
     dict(key="QS", zh="優質先發", en="Quality Start", group="投球", formula="先發且 IP ≥ 每場局數×2/3 且 ER ≤ 3", status="新增", priority="P2", note="依 7 局賽制調整為 IP ≥ 5"),
+    # 紀錄簿・生涯 (batch 5)
+    dict(key="ScorelessIP", zh="連續無失分局數", en="Scoreless Innings Streak", group="投球", formula="依比賽、局數順序，沒有被記失分（R／ER）的局把投出的出局數加起來；被記失分的局歸零", status="新增", priority="P2", note="逐局計算：被記失分那一局在失分前投出的出局數也不算，所以可能比實際略少。網站計算，總表不算"),
     # ---------------- 守備 ----------------
     dict(key="fG", zh="守備出賽", en="Games", group="守備", formula="守備紀錄列數", status="新增", priority="P1", note=""),
     dict(key="Inn", zh="守備局數", en="Innings", group="守備", formula="", status="新增", priority="P1", note=""),

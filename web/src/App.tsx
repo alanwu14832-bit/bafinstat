@@ -16,6 +16,7 @@ const PAGES = {
   notFound: () => import('./pages/NotFound'),
   // batch 3: 投手休息表, 紀錄員小抄
   pitcherRest: () => import('./pages/PitcherRest'), cheatSheet: () => import('./pages/CheatSheet'),
+  records: () => import('./pages/Records'),
 }
 const page = <M,>(load: () => Promise<M>, name: keyof M) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType })))
 const OverviewPage = page(PAGES.overview, 'OverviewPage')
@@ -36,6 +37,7 @@ const VersionsPage = page(PAGES.versions, 'VersionsPage')
 const NotFoundPage = page(PAGES.notFound, 'NotFoundPage')
 const PitcherRestPage = page(PAGES.pitcherRest, 'PitcherRestPage')
 const CheatSheetPage = page(PAGES.cheatSheet, 'CheatSheetPage')
+const RecordsPage = page(PAGES.records, 'RecordsPage')
 
 /** Fetch every page in the background once the first one has had its turn. */
 function usePrefetchPages() {
@@ -75,6 +77,7 @@ export function AppRoutes() {
         <Route path="/pitching/rest" element={<PitcherRestPage />} />
         <Route path="/fielding" element={<FieldingPage />} />
         <Route path="/players" element={<PlayersPage />} />
+        <Route path="/recordbook" element={<RecordsPage />} />
         <Route path="/games" element={<GamesPage />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/live" element={<LivePage />} />

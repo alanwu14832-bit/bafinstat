@@ -209,7 +209,7 @@ function totalsVsSite(label, ds, loFile) {
     }
   }
   const ov = Object.fromEntries(grid[12].map((h, i) => [String(h).trim(), grid[13][i]]))
-  for (const [h, v] of [['場次', site.team.games], ['勝', site.team.w], ['敗', site.team.l], ['得分', site.team.rs], ['失分', site.team.ra], ['團隊AVG', site.tb.avg], ['團隊OBP', site.tb.obp], ['團隊SLG', site.tb.slg], ['團隊ERA', site.tp.era], ['團隊WHIP', site.tp.whip], ['盜壘', site.tb.sb]]) same(`球隊總覽 ${h}`, ov[h], v)
+  for (const [h, v] of [['場次', site.team.games], ['勝', site.team.w], ['敗', site.team.l], ['得分', site.team.rs], ['失分', site.team.ra], ['團隊AVG', site.tb.avg], ['團隊OBP', site.tb.obp], ['團隊SLG', site.tb.slg], ['團隊ERA', site.tp.era], ['團隊WHIP', site.tp.whip], ['盜壘', site.tb.sb], ['勝率', site.team.winPct]]) same(`球隊總覽 ${h}`, ov[h], v)
   for (let i = 0; i < 9; i++) { same(`逐局 我隊第${i + 1}局`, grid[17][2 + i], site.team.runsByInningUs[i] ?? 0); same(`逐局 對手第${i + 1}局`, grid[18][2 + i], site.team.runsByInningOpp[i] ?? 0) }
   const gl = X.utils.sheet_to_json(lwb.Sheets['比賽清單'], { header: 1, defval: '' }); const gh = gl.find((r) => r.includes('比賽ID')).map(String)
   for (const s of site.sums) {

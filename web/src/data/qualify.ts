@@ -34,3 +34,14 @@ export const COLLEGE_TIES = {
 } as const
 
 export const QUAL_RULE_LABEL: Record<QualRule, string> = { team: '隊內', college: '大專規程' }
+
+// ---------------------------------------------------------------- batch 5: career minimums (紀錄簿, 生涯)
+/** 生涯 rate lists: 2.1 打席 per game over every game, capped at 100 打席. */
+export function careerMinPA(totalGames: number): number {
+  return Math.min(100, minPlateAppearances('college', totalGames))
+}
+
+/** 生涯 rate lists: 1 局 per game over every game, capped at 30 局 (90 outs). */
+export function careerMinOuts(totalGames: number): number {
+  return Math.min(90, 3 * Math.max(1, totalGames))
+}

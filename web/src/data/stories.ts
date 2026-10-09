@@ -5,8 +5,10 @@
  * appearances / innings, a hot streak needs at-bats behind it.
  */
 import { battingLines, isHitResult, NON_AB_RESULTS, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from './stats'
-import type { BattingPA, Dataset, PitchingPA, StatParams } from './types'
+import type { BattingPA, Dataset, PitchingPA, Player, StatParams } from './types'
 import { DEFAULT_PARAMS, isPA } from './types'
+import { hitStreaks, hitTest, historyPlayers, streakRuns, type HistoryIndex } from './history'
+import { milestoneCandidates, milestoneFigure } from './milestones'
 
 export type StoryTone = 'good' | 'bad' | 'neutral'
 export interface Story {
@@ -33,28 +35,38 @@ export function currentStreak(summaries: GameSummary[]): { result: 'W' | 'L'; n:
   return { result: last.result, n }
 }
 
-/** Per game (in order) a player's hits, for the games they batted in. */
-function hitsByGame(pas: BattingPA[], gameOrder: string[]): Map<string, Array<{ gameId: string; h: number; ab: number }>> {
-  const per = new Map<string, Map<string, { h: number; ab: number }>>()
+/** Per game (in order) a player's hits, at bats and sacrifice flies, for the games they batted in. */
+export function hitsByGame(pas: BattingPA[], gameOrder: string[]): Map<string, Array<{ gameId: string; h: number; ab: number; sf: number }>> {
+  const per = new Map<string, Map<string, { h: number; ab: number; sf: number }>>()
   for (const p of pas) {
     // (a tie-break runner's row is no at bat)
     if (!p.batter || !isPA(p)) continue
     let m = per.get(p.batter)
     if (!m) { m = new Map(); per.set(p.batter, m) }
-    const g = m.get(p.gameId) ?? { h: 0, ab: 0 }
+    const g = m.get(p.gameId) ?? { h: 0, ab: 0, sf: 0 }
     if (isHitResult(p.result)) g.h++
     if (!NON_AB_RESULTS.has(p.result)) g.ab++
+    if (p.result === '犧飛') g.sf++
     m.set(p.gameId, g)
   }
-  const out = new Map<string, Array<{ gameId: string; h: number; ab: number }>>()
+  const out = new Map<string, Array<{ gameId: string; h: number; ab: number; sf: number }>>()
   for (const [name, m] of per) out.set(name, gameOrder.filter((id) => m.has(id)).map((id) => ({ gameId: id, ...m.get(id)! })))
   return out
 }
 
-/** Games in a row (ending with the player's latest game) with at least one hit. */
-export function hitStreak(games: Array<{ h: number }>): number {
+/**
+ * Games in a row (ending with the player's latest game) with at least one hit. A game with no at bat and no
+ * sacrifice fly (only walks, HBP, sacrifice bunts, interference — MLB 9.23(b)) neither extends nor breaks it; that
+ * only applies when `ab` is given (plain {h} lists count every game, as before).
+ */
+export function hitStreak(games: Array<{ h: number; ab?: number; sf?: number }>): number {
   let n = 0
-  for (let i = games.length - 1; i >= 0 && games[i].h > 0; i--) n++
+  for (let i = games.length - 1; i >= 0; i--) {
+    const g = games[i]
+    if (g.h > 0) { n++; continue }
+    if (g.ab !== undefined && g.ab === 0 && !g.sf) continue
+    break
+  }
   return n
 }
 
@@ -71,10 +83,64 @@ const top = <T,>(xs: T[], key: (x: T) => number | null, dir: 'max' | 'min' = 'ma
   return ok.filter((x) => key(x) === key(best)).length === 1 ? best : undefined
 }
 
-export interface StoryInput { dataset: Dataset; summaries: GameSummary[]; batting: BattingPA[]; pitching: PitchingPA[]; params?: StatParams }
+export interface StoryInput {
+  dataset: Dataset; summaries: GameSummary[]; batting: BattingPA[]; pitching: PitchingPA[]; params?: StatParams
+  /** every game (data/history.ts): adds 里程碑 stories and the all-time rank of a hitting streak, but only when the
+   *  filtered games include the team's latest game (a past slice gets no 「再 2 支」 about today) */
+  history?: HistoryIndex
+}
+
+/** The history, when the slice on screen reaches the team's latest game (else nothing all-time is said). */
+const liveHistory = (history: HistoryIndex | undefined, summaries: GameSummary[]): HistoryIndex | undefined => {
+  const last = history?.games[history.games.length - 1]
+  return last && summaries.some((s) => s.game.id === last.id) ? history : undefined
+}
+
+/**
+ * Where a current hitting streak of n games stands among everyone's longest (all games): 1 + other players whose best
+ * is longer, + 1 if his own earlier best is longer.
+ */
+export function streakRank(h: HistoryIndex, name: string, n: number): number {
+  let rank = 1
+  for (const other of h.batGames.keys()) if (other !== name && (hitStreaks(h, other).best?.n ?? 0) > n) rank++
+  const runs = streakRuns(h.batGames.get(name) ?? [], hitTest)
+  const cur = hitStreaks(h, name).current
+  if (runs.some((r) => r.toId !== cur?.toId && r.n > n)) rank++
+  return rank
+}
+/**
+ * The filtered streak (games in `order`, the filter bar's slice) is his real one only when it is the same run as his
+ * all-game current streak: same first and last game, same length. A date, tournament, opponent or result filter can
+ * cut a streak short or skip the hitless games that broke it, and then nothing all-time may be said about it.
+ */
+export function isWholeStreak(h: HistoryIndex, name: string, games: Array<{ gameId: string; h: number; ab?: number; sf?: number }>, n: number): boolean {
+  const all = hitStreaks(h, name).current
+  if (!all || all.n !== n || !n) return false
+  const ids: string[] = []
+  for (let i = games.length - 1; i >= 0 && ids.length < n; i--) {
+    const g = games[i]
+    if (g.h > 0) ids.push(g.gameId)
+    else if (!(g.ab !== undefined && g.ab === 0 && !g.sf)) break
+  }
+  return ids.length === n && ids[0] === all.toId && ids[n - 1] === all.fromId
+}
+const rankNote = (rank: number) => (rank === 1 ? '，有紀錄以來隊上最長' : rank <= 3 ? `，有紀錄以來隊上第 ${rank} 長` : '')
+
+/** 里程碑 stories (「里程碑達成」 in the team's latest game first, then 「里程碑在望」), from every game; `player` narrows to one person. */
+export function milestoneStories(h: HistoryIndex, roster: Player[], { player, max = 1 }: { player?: string; max?: number } = {}): Story[] {
+  // (current players only for 在望; 達成 needs the latest game — milestones.ts checks both)
+  const names = player ? [player] : historyPlayers(h)
+  const known = new Set(roster.map((p) => p.name))
+  return milestoneCandidates(h, names.filter((n) => !roster.length || known.has(n) || !!player)).slice(0, max).map((m) => ({
+    id: `milestone-${m.player}-${m.key}`, kicker: m.kind === 'reached' ? '里程碑達成' : '里程碑在望', figure: milestoneFigure(m.key, m.target), tone: 'good' as const, player: m.player,
+    // on the player's own card the name is already the headline
+    text: player && m.text.startsWith(`${m.player} `) ? m.text.slice(m.player.length + 1) : m.text,
+  }))
+}
 
 /** Up to `max` team stories, most interesting first, at most one per player. */
-export function teamStories({ dataset, summaries, batting, pitching, params = DEFAULT_PARAMS }: StoryInput, max = 4): Story[] {
+export function teamStories({ dataset, summaries, batting, pitching, params = DEFAULT_PARAMS, history }: StoryInput, max = 4): Story[] {
+  const h = liveHistory(history, summaries)
   const out: Story[] = []
   const used = new Set<string>()
   const add = (s: Story) => { if (out.length >= max || (s.player && used.has(s.player))) return; out.push(s); if (s.player) used.add(s.player) }
@@ -89,8 +155,11 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
   }
 
   const byGame = hitsByGame(batting, order)
-  const streaks = [...byGame].map(([name, g]) => ({ name, n: hitStreak(g) })).filter((s) => s.n >= 3).sort((a, b) => b.n - a.n)
-  for (const s of streaks.slice(0, 1)) add({ id: `hit-${s.name}`, kicker: '連續安打', figure: String(s.n), tone: 'good', player: s.name, text: `${s.name} 連續 ${s.n} 場有安打` })
+  const streaks = [...byGame].map(([name, g]) => ({ name, g, n: hitStreak(g) })).filter((s) => s.n >= 3).sort((a, b) => b.n - a.n)
+  // (the all-time rank only when the slice holds his whole current streak)
+  for (const s of streaks.slice(0, 1)) add({ id: `hit-${s.name}`, kicker: '連續安打', figure: String(s.n), tone: 'good', player: s.name, text: `${s.name} 連續 ${s.n} 場有安打${h && isWholeStreak(h, s.name, s.g, s.n) ? rankNote(streakRank(h, s.name, s.n)) : ''}` })
+  // one 里程碑 (reached in the latest game, or in reach), for someone not already in a story
+  if (h) { const m = milestoneStories(h, dataset.roster, { max: 20 }).find((x) => !x.player || !used.has(x.player)); if (m) add(m) }
 
   // hot over the last 5 team games
   if (games >= 6) {
@@ -127,7 +196,8 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
 }
 
 /** Up to `max` sentences about one player, from the same slice the player page shows. */
-export function playerStories(name: string, { dataset, summaries, batting, pitching, params = DEFAULT_PARAMS }: StoryInput, max = 3): Story[] {
+export function playerStories(name: string, { dataset, summaries, batting, pitching, params = DEFAULT_PARAMS, history }: StoryInput, max = 3): Story[] {
+  const h = liveHistory(history, summaries)
   const out: Story[] = []
   const add = (s: Story) => { if (out.length < max) out.push(s) }
   const games = summaries.length
@@ -140,6 +210,7 @@ export function playerStories(name: string, { dataset, summaries, batting, pitch
   const mine = hitsByGame(batting, order).get(name) ?? []
   const streak = hitStreak(mine)
   if (streak >= 2) add({ id: 'streak', kicker: '連續安打', figure: String(streak), tone: 'good', text: `連續 ${streak} 場有安打` })
+  if (h) for (const m of milestoneStories(h, dataset.roster, { player: name, max: 1 })) add({ ...m, player: undefined })
 
   if (me && q.some((l) => l.name === name)) {
     const rank = (key: (l: BattingLine) => number | null, dir: 'max' | 'min' = 'max') => {
