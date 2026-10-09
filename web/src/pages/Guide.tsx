@@ -4,10 +4,13 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { TEAM, teamAsset } from '../config/team'
 import { Card } from '../components/ui/Card'
 import { PitchLegend } from '../components/ui/PlayByPlay'
+import { RESULT_HELP } from '../data/recordingHelp'
 
 const TEMPLATE_URL = (import.meta.env.VITE_TEMPLATE_URL as string | undefined) ?? `${import.meta.env.BASE_URL}BAFIN_棒球數據總表.xlsx`
 
-const PAGES: Record<string, string> = { 相簿: '/photos', 比賽: '/games', 先發陣容: '/lineup', 紀錄比賽: '/record', 球員: '/players', 即時比分: '/live', 資料匯入: '/import', 數據字典: '/dictionary', 總覽: '/', 打擊: '/batting', 投球: '/pitching', 守備: '/fielding' }
+const PAGES: Record<string, string> = { 相簿: '/photos', 比賽: '/games', 先發陣容: '/lineup', 紀錄比賽: '/record', 球員: '/players', 即時比分: '/live', 資料匯入: '/import', 數據字典: '/dictionary', 總覽: '/', 打擊: '/batting', 投球: '/pitching', 守備: '/fielding',
+  // batch 3: 投手休息表, 練習紀錄, 紀錄員小抄
+  投手休息表: '/pitching/rest', 練習紀錄: '/record?practice=1', 紀錄員小抄: '/guide/cheatsheet' }
 const pageLink = 'text-ink underline decoration-[color-mix(in_srgb,var(--ink)_30%,transparent)] underline-offset-2 hover:decoration-[var(--ink)] transition-colors motion-reduce:transition-none'
 
 /** A page name in running text, as a link to that page. */
@@ -17,7 +20,7 @@ function PageLink({ to, children }: { to: string; children: ReactNode }) {
 
 /** Turns 「相簿」-style page names (and 資料匯入頁) in an FAQ answer into links; sheet names such as 「設定」 stay text. */
 function withPageLinks(text: string): ReactNode {
-  const parts = text.split(/(「(?:相簿|比賽|先發陣容|紀錄比賽|球員|即時比分)」|資料匯入(?=頁))/)
+  const parts = text.split(/(「(?:相簿|比賽|先發陣容|紀錄比賽|球員|即時比分|投手休息表|練習紀錄|紀錄員小抄)」|資料匯入(?=頁))/)
   return parts.map((part, i) => {
     const name = part.replace(/[「」]/g, '')
     if (i % 2 === 0 || !PAGES[name]) return <Fragment key={i}>{part}</Fragment>
@@ -43,13 +46,6 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   )
 }
 
-const CODES: Array<[string, string]> = [
-  ['一安 / 二安 / 三安 / 全壘打', '安打'], ['內安', '內野安打：球沒出內野就安全上壘，算一壘安打；預設只有被迫的跑者進壘'], ['場地二安', '球落地後彈出全壘打牆或卡在牆上：算二壘安打，所有跑者都只能進兩個壘'], ['保送 / 故四 / 觸身', '四壞、故意四壞、觸身球（不算打數）'], ['三振', '含不死三振'],
-  ['內滾 / 內飛 / 外飛', '出局；軌跡欄填 G 滾地、F 飛球、L 平飛'], ['界外飛', '界外飛球被接殺；落點填接球的守備員，最後一球記 IP'], ['野選', '野手選擇，讓壘上跑者出局'], ['失誤', '靠對方失誤上壘（不算安打）'],
-  ['犧觸 / 犧飛', '犧牲觸擊、犧牲飛球（不算打數）'], ['雙殺', '打成雙殺打（這一列算 2 個出局）'], ['妨礙', '捕手妨礙上壘'],
-  ['突破僵局', '延長賽照規則放上壘的跑者，不是打席（不算打席、打數）'],
-]
-
 const FAQ: Array<[string, string]> = [
   ['比賽照片放哪裡？', '照片放在攝影師自己的 Google Drive：建一個資料夾、共用設成「知道連結的使用者：檢視者」，把連結給紀錄員；紀錄員到「相簿」頁「新增相簿連結」選那場比賽貼上。隊員不用登入，點「開啟相簿」就能看、單張或整個資料夾下載原檔。'],
   ['賽程怎麼排？', '紀錄員登入後到「比賽」頁切到「賽程」分頁，按「新增賽程」填日期、時間、對手、主客、場地與集合備註。隊員在同一個分頁看得到接下來的比賽並可加到 Google 日曆；打完的比賽在「成績」分頁。比賽當天紀錄員在「紀錄比賽」用「從賽程帶入」選這場，資料自動填好、比賽ID 沿用。排定但還沒記錄的比賽不會算進任何統計。'],
@@ -67,6 +63,9 @@ const FAQ: Array<[string, string]> = [
   ['暴投、盜壘這種投球之間的跑壘怎麼記？', '點計分條上的壘包（或「壘上跑者」）打開跑者面板，點跑者、再點發生的事（盜壘、暴投進壘、牽制出局…），一下就完成；暴投、捕逸讓所有跑者都進一壘的話，直接按投球按鈕下方的「暴投」「捕逸」。每一筆都會記在第幾球之後，逐球紀錄裡看得到「B  暴投 1B→2B  S  盜壘 2B→3B」。賽後在「比賽」→「修改資料」點一個打席，也能在「逐球」選第幾球後、哪位跑者、發生什麼來補記或刪除。安打時跑者（或打者）趁傳多跑的壘：在「跑者去向」把他設到比預設更遠的壘，旁邊會出現「趁傳？」，點一下標成趁傳進壘（修改資料的壘上跑者也一樣）。'],
   ['延長賽突破僵局怎麼記？', `預設從第 ${TEAM.innings + 1} 局起（規定局數的下一局），每個半局一開始一、二壘有人、無人出局；一壘跑者是這局第一位打者的前一棒，二壘是前兩棒。打到那一局時，紀錄畫面會先出現「延長賽突破僵局」卡片列出誰上哪一壘，按「放上跑者」就排好（按「復原」可以收回）；這局不用就按「這局不用」。從第幾局開始、放哪幾壘（一、二壘／二壘／滿壘），開賽前在比賽資訊的「突破僵局」「放哪幾壘」改，比賽中在卡片上按「改規則」。這些跑者不算打席；他跑回來算他的得分，打回他的人照算打點；對方的突破僵局跑者回來得分，一律算非自責分（也不算失誤）。賽後在「修改資料」延長局的標題按「＋ 突破僵局跑者」可以補上（按鈕出現在第 5 局之後、平手打進來的局），點那位跑者可以改名字、代跑或刪除。`],
   ['投手犯規怎麼記？', '壘上有人時才有投手犯規（壘上沒人時的違規投球照規則記一個壞球）。點計分條上的壘包打開跑者面板，按最上面的「投手犯規・全部進壘」：所有跑者各進一壘，這一球不算好壞球，打席繼續。我隊投手的投手犯規次數（BK）在「投球」頁的「進階」看得到；被投手犯規推進回來的分算自責分，沒有打點，也不算盜壘。賽後在「修改資料」的「逐球」選「投手犯規」補記，會一次移動所有跑者。'],
+  // batch 3: 投手休息表, 練習紀錄, 紀錄員小抄
+  ['投手要休幾天？', `看「投手休息表」：依 MLB Pitch Smart 19–22 歲的建議（不是聯盟規定），列出每位投手最近出賽的日期與用球數、要休幾天、最早哪天可以再投，以及單日超過 ${TEAM.pitchRest.dailyMax} 球、連續 ${TEAM.pitchRest.maxConsecutiveDays + 1} 天出賽等提醒；可以選「看哪一天」（例如下一場比賽的日期）。紀錄比賽時投手用球數下面也會寫「需休 N 天」，快到下一級時提醒「再投 X 球就要多休一天」，休息還沒滿就上場的投手會先寫「休息未滿，MM/DD 起才建議出賽」；換投名單會標出誰還在休息。這些只是提醒，不會擋住換投。`],
+  ['怎麼練習記錄？', '「紀錄比賽」頁上方按「練習紀錄」（還沒登入的話，按登入框下面的「開始練習」；沒有紀錄員帳號也能用）：畫面和正式紀錄一樣，但練習只存在這台裝置，不會同步到雲端、不會出現在即時比分、也不算進任何數據；記錯也沒關係。「紀錄員小抄」整理了每個按鈕和代碼（包括強／中／弱怎麼判斷），可以印成一張 A4 帶到球場。'],
   ['讀取錯誤或記錯了，要怎麼改？', '到「比賽」點那一場，按右上角「修改資料」：比賽資訊、每個打席、守備都能直接改、增刪列，儲存後所有統計立即重算。雲端模式需先登入。也可以改總表後重傳（取代模式）。'],
   ['同一場比賽改了資料要重傳？', '上傳時選「以此檔取代雲端全部資料」會用總表覆蓋雲端；「合併」只會加入新的比賽ID。'],
   ['球員名字打錯了、要加新人或有人離隊？', '紀錄員登入後到「球員」頁展開名單，按「編輯名單」：可以新增、改背號守位、改名（所有紀錄會一起改）、把狀態改成離隊或畢業，或按「匯入 Excel」整份名冊套進來（同名以檔案為準、空白欄位保留舊值，會先顯示差異再套用）。'],
@@ -94,7 +93,8 @@ export function GuidePage() {
         </Card>
 
         <Card title="2. 比賽中" subtitle="用哪一張表">
-          <div className="mb-4 rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2 leading-relaxed"><span className="font-medium text-ink">不想用 Excel？</span>紀錄員登入後，直接到「<PageLink to="/record">紀錄比賽</PageLink>」頁逐球點按：局數、出局、壘上、得分、結果代碼都會自動寫好，賽後按「結束比賽」就存進資料庫，全隊即時看到。</div>
+          <div className="mb-4 rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2 leading-relaxed"><span className="font-medium text-ink">不想用 Excel？</span>紀錄員登入後，直接到「<PageLink to="/record">紀錄比賽</PageLink>」頁逐球點按：局數、出局、壘上、得分、結果代碼都會自動寫好，賽後按「結束比賽」就存進資料庫，全隊即時看到。
+            <span className="block mt-1.5">第一次記？先用『<PageLink to="/record?practice=1">練習紀錄</PageLink>』記半局看看（不會存檔），並印一張『<PageLink to="/guide/cheatsheet">紀錄員小抄</PageLink>』。</span></div>
           <ol className="flex flex-col gap-4">
             <Step n={1} title="我隊進攻 → 單場-打擊">每個打席一列：局、棒次、打者、逐球（球1…球12 填 SS/CS/F/IP/B）、打擊結果、落點 1–9、軌跡 G/F/L、強度 強/中/弱、盜壘、得分、打點、結果代碼。</Step>
             <Step n={2} title="對方進攻 → 單場-投球">同樣每個打席一列，主角是我方投手；多了被盜壘、暴投、捕逸、牽制出局。結果代碼 R = 非自責失分、ER = 自責分。</Step>
@@ -128,7 +128,7 @@ export function GuidePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <Card title="打擊結果怎麼填" subtitle="「打擊結果」欄的固定用詞（有下拉選單）">
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-            {CODES.map(([k, v]) => (<div key={k}><dt className="text-[13px] font-medium text-ink">{k}</dt><dd className="text-xs text-ink-2 mt-0.5">{v}</dd></div>))}
+            {RESULT_HELP.map(([k, v]) => (<div key={k}><dt className="text-[13px] font-medium text-ink">{k}</dt><dd className="text-xs text-ink-2 mt-0.5">{v}</dd></div>))}
           </dl>
         </Card>
         <Card title="賽後怎麼看數據">

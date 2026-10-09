@@ -22,6 +22,10 @@ describe('team config', () => {
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '0' }).tiebreak).toBe('')
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '9' }).tiebreak).toBe('12')
   })
+  it('carries the pitch-rest rules (投手休息表) as they are', () => {
+    expect(resolveTeam({}).pitchRest).toEqual(TEAM_DEFAULTS.pitchRest)
+    expect(resolveTeam({}).pitchRest.dailyMax).toBe(120)
+  })
   it('resolves assets against the base path, leaving URLs alone', () => {
     expect(assetUrl('mark.png', '/bafinstat/')).toBe('/bafinstat/mark.png')
     expect(assetUrl('/team/mark.png', '/')).toBe('/team/mark.png')

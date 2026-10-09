@@ -217,6 +217,11 @@ export interface Dataset {
   fielding: FieldingLine[]
 }
 
+/** 練習紀錄 (紀錄比賽 ?practice=1): its game id starts with this. Such a game lives only on the device that practised:
+ *  never saved, synced or counted (the page, store/data.ts saveGame and data/supabase.ts saveCloudDraft all refuse it). */
+export const PRACTICE_PREFIX = 'PRACTICE-'
+export const isPracticeId = (id: string) => id.startsWith(PRACTICE_PREFIX)
+
 export const EMPTY_DATASET: Dataset = { roster: [], games: [], batting: [], pitching: [], fielding: [] }
 
 export interface Filters {

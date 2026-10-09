@@ -89,6 +89,8 @@ export interface RecordState {
   tiebreak?: TiebreakRule | null
   /** extra half-innings where the recorder pressed 「這局不用」, as `${inning}${half}` ('8top') */
   tiebreakSkip?: string[]
+  /** 練習紀錄: a practice game, kept only on this device (record/draft.ts PRACTICE_KEY); never saved or synced */
+  practice?: boolean
 }
 /** 突破僵局: from which inning on, and the bases the runners are put on. */
 export interface TiebreakRule { from: number; bases: Base[] }

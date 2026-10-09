@@ -14,6 +14,8 @@ const PAGES = {
   lineup: () => import('./pages/Lineup'), record: () => import('./pages/Record'), import: () => import('./pages/Import'),
   dictionary: () => import('./pages/Dictionary'), guide: () => import('./pages/Guide'), versions: () => import('./pages/Versions'),
   notFound: () => import('./pages/NotFound'),
+  // batch 3: 投手休息表, 紀錄員小抄
+  pitcherRest: () => import('./pages/PitcherRest'), cheatSheet: () => import('./pages/CheatSheet'),
 }
 const page = <M,>(load: () => Promise<M>, name: keyof M) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType })))
 const OverviewPage = page(PAGES.overview, 'OverviewPage')
@@ -32,6 +34,8 @@ const DictionaryPage = page(PAGES.dictionary, 'DictionaryPage')
 const GuidePage = page(PAGES.guide, 'GuidePage')
 const VersionsPage = page(PAGES.versions, 'VersionsPage')
 const NotFoundPage = page(PAGES.notFound, 'NotFoundPage')
+const PitcherRestPage = page(PAGES.pitcherRest, 'PitcherRestPage')
+const CheatSheetPage = page(PAGES.cheatSheet, 'CheatSheetPage')
 
 /** Fetch every page in the background once the first one has had its turn. */
 function usePrefetchPages() {
@@ -68,6 +72,7 @@ export function AppRoutes() {
         <Route path="/" element={<OverviewPage />} />
         <Route path="/batting" element={<BattingPage />} />
         <Route path="/pitching" element={<PitchingPage />} />
+        <Route path="/pitching/rest" element={<PitcherRestPage />} />
         <Route path="/fielding" element={<FieldingPage />} />
         <Route path="/players" element={<PlayersPage />} />
         <Route path="/games" element={<GamesPage />} />
@@ -80,6 +85,7 @@ export function AppRoutes() {
         <Route path="/import" element={<ImportPage />} />
         <Route path="/dictionary" element={<DictionaryPage />} />
         <Route path="/guide" element={<GuidePage />} />
+        <Route path="/guide/cheatsheet" element={<CheatSheetPage />} />
         <Route path="/versions" element={<VersionsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

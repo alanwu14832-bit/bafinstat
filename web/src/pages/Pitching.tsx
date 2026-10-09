@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { Download } from 'lucide-react'
+import { BedDouble, Download } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
@@ -97,7 +97,8 @@ export function PitchingPage() {
 
   return (
     <>
-      <PageHeader scoped title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`} />
+      <PageHeader scoped title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}。`}
+        actions={<Button variant="outline" size="sm" icon={<BedDouble />} to="/pitching/rest" title="依 Pitch Smart 建議看每位投手要休幾天、哪天可以再投">投手休息表</Button>} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
       <StatGroup>

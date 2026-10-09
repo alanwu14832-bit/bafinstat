@@ -42,6 +42,13 @@ export interface LiveBarProps {
   canUndo: boolean
   /** in the full-screen overlay the bar sticks to the very top */
   focus: boolean
+  /** 練習紀錄: a 「練習」 tag next to 我隊打擊／我隊守備, always in sight */
+  practice?: boolean
+}
+
+/** The 「練習」 tag of a practice game. */
+export function PracticeTag({ className }: { className?: string }) {
+  return <span className={cx('inline-flex items-center h-5 px-1.5 rounded-[5px] text-[11px] font-semibold bg-[var(--warning)] text-black shrink-0', className)}>練習</span>
 }
 
 /**
@@ -49,7 +56,7 @@ export interface LiveBarProps {
  * Its second line says what is being recorded (我隊打擊 / 我隊守備) — the colour of that pill changes with the half.
  * Anything that changes the game situation makes the bar flash once, so a mistaken tap is noticed.
  */
-export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, onUndo, canUndo, focus }: LiveBarProps) {
+export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, onUndo, canUndo, focus, practice }: LiveBarProps) {
   const reduced = usePrefersReducedMotion()
   const sig = `${us}:${opp}:${state.outs}:${state.inning}${state.half}:${state.runners.map((r) => `${r.base}${r.row}`).join(',')}:${state.batting.length}/${state.pitching.length}`
   const first = useRef(sig)
@@ -92,9 +99,12 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
           </button>
           {/* wide screens: what is being recorded sits in the same row */}
           <div className="hidden sm:flex flex-col gap-1 min-w-0 flex-1 pl-4 border-l text-[13px]" style={{ borderColor: BOARD.line }}>
+            <span className="inline-flex items-center gap-1.5 self-start">
             <span className={cx('inline-flex self-start items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold', side === 'us' ? 'bg-[var(--accent-board,var(--accent))] text-[var(--accent-board-ink,var(--accent-ink))]' : 'ring-1 ring-white/30')}>
               {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
               {side === 'us' ? '我隊打擊' : '我隊守備'}
+            </span>
+            {practice && <PracticeTag />}
             </span>
             <span className="truncate" style={{ color: BOARD.muted }}>{who}</span>
           </div>
@@ -108,6 +118,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
             {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
             {side === 'us' ? '我隊打擊' : '我隊守備'}
           </span>
+          {practice && <PracticeTag />}
           <span className="truncate min-w-0" style={{ color: BOARD.muted }}>{who}</span>
         </div>
       </div>
@@ -209,6 +220,8 @@ export interface SubSheetProps {
   onConfirmPitcher: () => void
   /** 允許再上場, 報名名單 */
   extras: ReactNode
+  /** 投手休息表 reminder after a pitcher's 「N 球」 (休息中・10/12 起 / 10/08 投 20 球 / 今天另一場 35 球); never disables him */
+  restNote?: (name: string) => { text: string; tone: 'muted' | 'warning' } | undefined
   fieldPos: (slot: number) => string
 }
 
@@ -266,10 +279,12 @@ export function SubSheet(p: SubSheetProps) {
             <div className="flex flex-wrap gap-1.5">
               {p.pitchers.names.filter((n) => n !== state.pitcher).map((n) => {
                 const c = p.pitchCount.get(n)
+                const note = p.restNote?.(n)
                 return (
                   <button key={n} type="button" aria-pressed={p.newPitcher === n} disabled={p.pitchers.disabled.has(n)} onClick={() => p.setNewPitcher(p.newPitcher === n ? '' : n)} className={chip(p.newPitcher === n)}>
                     {n}{p.pitchers.tag(n) && <span className="text-[11px] opacity-60 ml-0.5">{p.pitchers.tag(n)}</span>}
                     {c ? <span className={cx('ml-1 text-[11px] tnum', p.pitchTone(c) === 'critical' ? 'text-critical' : p.pitchTone(c) === 'warning' ? 'text-warning' : 'opacity-60')}>{c} 球</span> : null}
+                    {note && <span className={cx('ml-1 text-[11px] tnum', note.tone === 'warning' && p.newPitcher !== n ? 'text-warning' : 'opacity-60')}>{note.text}</span>}
                   </button>
                 )
               })}
