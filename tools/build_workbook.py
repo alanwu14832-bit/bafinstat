@@ -97,13 +97,13 @@ BAT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "棒次", "守位"
             ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "代跑", "盜壘", "盜壘失敗", "失誤進壘", "壘上出局", "壘死", "得分", "打點", "結果代碼", "備註", "跑壘事件"]
 BAT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "一安", "二安", "三安", "全壘打", "壘打數", "保送", "故四", "觸身", "三振",
             "犧觸", "犧飛", "雙殺", "失誤上壘", "得點圈打數", "得點圈安打", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "壞球不揮", "內野飛球",
-            "首球揮棒", "優質打席", "慣用手", "拉打", "中間", "反方向", "首打席", "上壘"]
+            "首球揮棒", "優質打席", "慣用手", "拉打", "中間", "反方向", "首打席", "上壘", "代跑首場"]
 PIT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "對方棒次", "投手", "對方打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
             ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "被盜壘", "阻殺", "暴投", "捕逸", "牽制出局", "守備失誤", "結果代碼", "備註", "跑壘事件"]
 PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "二安", "三安", "全壘打", "保送", "故四", "觸身", "三振", "犧飛",
-            "出局數", "失分", "自責", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "首球好球", "首人次", "先發", "內野飛球"]
+            "出局數", "失分", "自責", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "首球好球", "首人次", "先發", "內野飛球", "累計出局(前)", "累計出局碼"]
 FLD_INPUT = ["比賽ID", "球員", "守位", "局數", "刺殺PO", "助殺A", "失誤E", "雙殺DP", "捕逸PB", "被盜壘SB", "阻殺CS", "備註"]
-FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗"]
+FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "首列"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
              "我隊失誤", "對手失誤", "我隊殘壘", "勝投", "敗投", "救援", "中繼", "備註",
              # schedule + 當日登錄名單 (same columns and formats as the website's backup export)
@@ -299,7 +299,9 @@ def game_formulas(rr):
     f["我隊安打"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["安打"]}$2:${BL["安打"]}${LAST},打席紀錄!$A$2:$A${LAST},{A}))'
     f["對手安打"] = f'=IF({A}="","",SUMIFS(投球紀錄!${PL["安打"]}$2:${PL["安打"]}${LAST},投球紀錄!$A$2:$A${LAST},{A}))'
     f["我隊失誤"] = f'=IF({A}="","",SUMIFS(守備紀錄!${FL["失誤E"]}$2:${FL["失誤E"]}${LAST},守備紀錄!$A$2:$A${LAST},{A}))'
-    f["對手失誤"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${LAST},打席紀錄!$A$2:$A${LAST},{A}))'
+    # the opponent's errors: our batters reaching on one, and 妨礙 (their catcher's interference is his error)
+    f["對手失誤"] = (f'=IF({A}="","",SUMIFS(打席紀錄!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${LAST},打席紀錄!$A$2:$A${LAST},{A})'
+                     f'+COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["打擊結果"]}$2:${BL["打擊結果"]}${LAST},"妨礙"))')
     f["我隊殘壘"] = f'=IF({A}="","",COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["結果代碼"]}$2:${BL["結果代碼"]}${LAST},"L"))'
     for i in range(1, 10):
         f[f"我{i}"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["得分"]}$2:${BL["得分"]}${LAST},打席紀錄!$A$2:$A${LAST},{A},打席紀錄!$B$2:$B${LAST},{i}))'
@@ -415,6 +417,10 @@ def bat_formulas(rr):
     f["反方向"] = f'=IF({c("場內球")}=0,0,IF({H}="L",IF({left},1,0),IF({right},1,0)))'
     f["首打席"] = f'=IF(AND({G}<>"",COUNTIFS($A$2:$A{rr},$A{rr},${BL["打者"]}$2:${BL["打者"]}{rr},{G})=1),1,0)'
     f["上壘"] = f'={c("安打")}+{c("保送")}+{c("觸身")}'
+    # 代跑 who has no plate appearance of his own in that game: his first time running there counts as a game played
+    RN = f"${BL['代跑']}{rr}"
+    f["代跑首場"] = (f'=IF({RN}="",0,IF(COUNTIFS($A$2:$A${LAST},$A{rr},${BL["打者"]}$2:${BL["打者"]}${LAST},{RN})>0,0,'
+                     f'IF(COUNTIFS($A$2:$A{rr},$A{rr},${BL["代跑"]}$2:${BL["代跑"]}{rr},{RN})=1,1,0)))')
     return f
 
 def pit_formulas(rr):
@@ -432,7 +438,23 @@ def pit_formulas(rr):
         f[k] = f'=IF({X}="{v}",1,0)'
     f["二安"] = f'=IF(OR({X}="二安",{X}="場地二安"),1,0)'
     f["保送"] = f'=IF(OR({X}="保送",{X}="故四"),1,0)'
-    f["出局數"] = f'=IF(OR({CODE}="I",{CODE}="II",{CODE}="III"),IF(AND({X}="雙殺",OR(${PL["出局(前)"]}{rr}="",${PL["出局(前)"]}{rr}<=1)),2,1),0)'
+    # 出局數: outs made while this batter was up, credited to the pitcher on the mound (the website's rule). With 出局(前)
+    # filled in, that is the next row's 出局(前) minus this one's (the half inning's last row: its highest out code minus
+    # this one's), so a runner thrown out after a pitching change is the new pitcher's out and a 雙殺 recorded live (the
+    # lead runner's out on his own row) is 2 outs, not 3. 出局(前) is taken as the most so far in the half inning (a row
+    # typed out of order cannot add outs). Without 出局(前): the row's own code, a 雙殺 adding the out before it when no
+    # row of that inning has that code.
+    O = f"${PL['出局(前)']}{rr}"; nO = f"${PL['出局(前)']}{rr + 1}"
+    same_prev = f'AND($A{rr}<>"",$A{rr}=$A{rr - 1},$B{rr}=$B{rr - 1})'
+    same_next = f"AND($A{rr + 1}=$A{rr},$B{rr + 1}=$B{rr})"
+    prev_code = f'IF({CODE}="III","II","I")'
+    EO = PL["累計出局(前)"]; EK = PL["累計出局碼"]
+    f["累計出局(前)"] = f'=IF(ISNUMBER({O}),MAX({O},IF({same_prev},N({EO}{rr - 1}),0)),"")'
+    f["累計出局碼"] = f'=MAX(IF({CODE}="III",3,IF({CODE}="II",2,IF({CODE}="I",1,0))),IF({same_prev},N({EK}{rr - 1}),0))'
+    f["出局數"] = (f'=IF($A{rr}="",0,IF(AND(ISNUMBER({O}),OR(NOT({same_next}),ISNUMBER({nO}))),'
+                   f'MAX(0,IF({same_next},MIN({EO}{rr + 1},3),{EK}{rr})-{EO}{rr}),'
+                   f'IF(OR({CODE}="I",{CODE}="II",{CODE}="III"),IF(AND({X}="雙殺",OR({O}="",{O}<=1),{CODE}<>"I",'
+                   f'COUNTIFS($A$2:$A${LAST},$A{rr},$B$2:$B${LAST},$B{rr},${PL["結果代碼"]}$2:${PL["結果代碼"]}${LAST},{prev_code})=0),2,1),0)))')
     f["失分"] = f'=IF(OR({CODE}="R",{CODE}="ER"),1,0)'
     f["自責"] = f'=IF({CODE}="ER",1,0)'
     f["場內球"] = f'=IF(AND({c("打席")}=1,OR({Z}="G",{Z}="F",{Z}="L",{Z}="P")),1,0)'
@@ -449,7 +471,9 @@ def pit_formulas(rr):
 
 def fld_formulas(rr):
     return {"日期": game_lookup(GL["日期"], rr, as_text=False), "杯賽": game_lookup(GL["杯賽"], rr), "對手": game_lookup(GL["對手"], rr),
-            "主客": game_lookup(GL["主客"], rr), "勝敗": game_lookup(GL["勝敗"], rr)}
+            "主客": game_lookup(GL["主客"], rr), "勝敗": game_lookup(GL["勝敗"], rr),
+            # a player with two lines in one game (he moved to another position) played one game
+            "首列": f'=IF(AND($B{rr}<>"",COUNTIFS($A$2:$A{rr},$A{rr},$B$2:$B{rr},$B{rr})=1),1,0)'}
 
 log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "守備失誤": 10, "跑壘事件": 18, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
 ws_bat = build_log("打席紀錄", BAT_INPUT, BAT_AUTO, bat_formulas, log_widths, f"我隊每個打席一列。A–{L(len(BAT_INPUT))} 欄輸入（可從『單場-打擊』貼上值），{L(len(BAT_INPUT) + 1)} 以後為自動公式。")
@@ -650,7 +674,7 @@ def bat_stat_cols():
     br = lambda col: f'({S("打席紀錄", BL, col, "打者", n, True, extra=nr)}+{S("打席紀錄", BL, col, "代跑", n, True)})'
     cols = [
         ("姓名", None, None), ("主守位", '=IF($B{r}="","",IFERROR(""&INDEX(球員名單!$C$4:$C$' + str(3 + ROSTER_ROWS) + ',MATCH($B{r},' + ROSTER_NAME + ',0)),""))', None),
-        ("G", "=" + b("首打席"), "0"), ("PA", "=" + b("打席"), "0"), ("AB", "=" + b("打數"), "0"), ("R", "=" + br("得分"), "0"), ("H", "=" + b("安打"), "0"),
+        ("G", "=" + b("首打席") + "+" + S("打席紀錄", BL, "代跑首場", "代跑", n, True), "0"), ("PA", "=" + b("打席"), "0"), ("AB", "=" + b("打數"), "0"), ("R", "=" + br("得分"), "0"), ("H", "=" + b("安打"), "0"),
         ("1B", "=" + b("一安"), "0"), ("2B", "=" + b("二安"), "0"), ("3B", "=" + b("三安"), "0"), ("HR", "=" + b("全壘打"), "0"), ("TB", "=" + b("壘打數"), "0"),
         ("RBI", "=" + b("打點"), "0"), ("BB", "=" + b("保送"), "0"), ("IBB", "=" + b("故四"), "0"), ("HBP", "=" + b("觸身"), "0"), ("SO", "=" + b("三振"), "0"),
         ("SH", "=" + b("犧觸"), "0"), ("SF", "=" + b("犧飛"), "0"), ("GIDP", "=" + b("雙殺"), "0"), ("ROE", "=" + b("失誤上壘"), "0"),
@@ -709,6 +733,7 @@ for i, (name, fml, fmt) in enumerate(BATC):
     col = 2 + i; let = L(col)
     if name in ("姓名", "主守位", "OPS排名"): put(ws, tr, col, None, f_bold, fill_total); continue
     if name in ("OPS+", "wRC+"): put(ws, tr, col, 100, f_bold, fill_total, "0", center); continue
+    if name == "G": put(ws, tr, col, "=$B$14", f_bold, fill_total, fmt, center); continue
     if fmt == "0":
         put(ws, tr, col, f"=SUM({let}{first}:{let}{last})", f_bold, fill_total, fmt, center)
     else:
@@ -790,6 +815,7 @@ put(ws, ptr, 2, "球隊合計", f_bold, fill_total)
 for i, (name, fml, fmt) in enumerate(PITC):
     col = 2 + i; let = L(col)
     if name in ("姓名", "ERA排名"): put(ws, ptr, col, None, f_bold, fill_total); continue
+    if name == "G": put(ws, ptr, col, "=$B$14", f_bold, fill_total, fmt, center); continue
     if fmt == "0" and "SUMIFS" in (fml or "") or name in ("G", "GS", "W", "L", "SV", "HLD"):
         put(ws, ptr, col, f"=SUM({let}{pfirst}:{let}{plast})", f_bold, fill_total, fmt, center); continue
     refs = {n: f"{PIT_LET[n]}{ptr}" for n in PIT_LET}; refs["r"] = ptr
@@ -810,7 +836,7 @@ def fld_stat_cols():
     q = lambda col: S("守備紀錄", FL, col, "球員", n, True)
     cnt = f'COUNTIFS(守備紀錄!${FL["球員"]}$2:${FL["球員"]}${LAST},{n}{crit("守備紀錄", FL, True)})'
     return [
-        ("姓名", None, None), ("G", "=" + cnt, "0"), ("Inn", "=" + q("局數"), "0.0"), ("PO", "=" + q("刺殺PO"), "0"), ("A", "=" + q("助殺A"), "0"),
+        ("姓名", None, None), ("G", f'=IF({CR["守位"]}="<>|ALL|",{S("守備紀錄", FL, "首列", "球員", n)},{cnt})', "0"), ("Inn", "=" + q("局數"), "0.0"), ("PO", "=" + q("刺殺PO"), "0"), ("A", "=" + q("助殺A"), "0"),
         ("E", "=" + q("失誤E"), "0"), ("DP", "=" + q("雙殺DP"), "0"), ("TC", "={PO}+{A}+{E}", "0"), ("FPCT", '=IFERROR(({PO}+{A})/{TC},"")', "0.000"),
         ("RF/G", '=IFERROR(({PO}+{A})/{G},"")', "0.00"), ("PB", "=" + q("捕逸PB"), "0"), ("SB", "=" + q("被盜壘SB"), "0"), ("CS", "=" + q("阻殺CS"), "0"),
         ("CS%", '=IFERROR({CS}/({SB}+{CS}),"")', "0.0%"),
@@ -833,6 +859,7 @@ put(ws, ftr, 2, "球隊合計", f_bold, fill_total)
 for i, (name, fml, fmt) in enumerate(FLDC):
     col = 2 + i; let = L(col)
     if name == "姓名": continue
+    if name == "G": put(ws, ftr, col, "=$B$14", f_bold, fill_total, fmt, center); continue
     if fmt in ("0", "0.0"):
         put(ws, ftr, col, f"=SUM({let}{ffirst}:{let}{flast})", f_bold, fill_total, fmt, center)
     else:
@@ -871,7 +898,7 @@ for i in range(1, 10):
     put(ws, LS + 2, 2 + i, f'=SUMIFS({BP}!${BL["得分"]}$2:${BL["得分"]}${TROWS},{BP}!$B$2:$B${TROWS},{i})', f_base, None, "0", center)
 put(ws, LS + 1, 12, f"=SUM(C{LS + 1}:K{LS + 1})", f_bold, None, "0", center); put(ws, LS + 2, 12, f"=SUM(C{LS + 2}:K{LS + 2})", f_bold, None, "0", center)
 put(ws, LS + 1, 13, f'=SUM({PP}!${PL["安打"]}$2:${PL["安打"]}${TROWS})', f_base, None, "0", center); put(ws, LS + 2, 13, f'=SUM({BP}!${BL["安打"]}$2:${BL["安打"]}${TROWS})', f_base, None, "0", center)
-put(ws, LS + 1, 14, f'=SUM({BP}!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${TROWS})', f_base, None, "0", center); put(ws, LS + 2, 14, f"=SUM(G{LS + 22}:G{LS + 37})", f_base, None, "0", center)
+put(ws, LS + 1, 14, f'=SUM({BP}!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${TROWS})+COUNTIF({BP}!${BL["打擊結果"]}$2:${BL["打擊結果"]}${TROWS},"妨礙")', f_base, None, "0", center); put(ws, LS + 2, 14, f"=SUM(G{LS + 22}:G{LS + 37})", f_base, None, "0", center)
 put(ws, LS + 1, 15, f'=COUNTIF({PP}!${PL["結果代碼"]}$2:${PL["結果代碼"]}${TROWS},"L")', f_base, None, "0", center); put(ws, LS + 2, 15, f'=COUNTIF({BP}!${BL["結果代碼"]}$2:${BL["結果代碼"]}${TROWS},"L")', f_base, None, "0", center)
 put(ws, LS + 3, 2, "勝敗", f_bold, fill_band); put(ws, LS + 3, 3, f'=IF(L{LS + 2}>L{LS + 1},"W",IF(L{LS + 2}<L{LS + 1},"L","T"))', f_bold, None, None, center)
 # lineup + batting line
@@ -957,7 +984,7 @@ def build_template_log(name, inputs, autos, formulas_fn, seed_fn, rows_data):
                 who = BL["打者"] if name == "單場-打擊" else PL["投手"]
                 put(ws, rr, col, f"=IF({who}{rr}=\"\",\"\",'單場-摘要'!$C$2)", f_base, None, None, center)
             elif h in fs and i >= len(inputs):
-                if h in ("日期", "杯賽", "對手", "主客", "勝敗", "首打席", "首人次", "先發"):
+                if h in ("日期", "杯賽", "對手", "主客", "勝敗", "首打席", "首人次", "先發", "代跑首場"):
                     continue  # not meaningful in a single-game sheet
                 put(ws, rr, col, fs[h], f_base, None, "0")
             elif h in fs:

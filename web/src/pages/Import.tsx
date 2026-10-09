@@ -49,7 +49,7 @@ export function ImportPage() {
     setError(null); setDone(null); setPending(null)
     try {
       const buf = await file.arrayBuffer()
-      const parsed = parseWorkbook(buf, file.name)
+      const parsed = parseWorkbook(buf, file.name, base.roster)
       setPending({ ...parsed, file: file.name })
       if (parsed.report.legacy) { setLegacyId(parsed.report.legacy.game_id); setLegacyDate(parsed.report.legacy.date); setLegacyTournament(opts.tournaments[0] ?? '友誼賽') }
     } catch (e) {
@@ -63,8 +63,12 @@ export function ImportPage() {
     setError(null)
     try {
       const ds = pending.report.legacy ? legacyToDataset(pending.report.legacy, { id: legacyId, tournament: legacyTournament, date: legacyDate }) : pending.dataset
+      // 合併 skips the games already here (same 比賽ID): count only what it really adds
+      const had = new Set(base.games.map((g) => g.id))
+      const added = mode === 'append' ? new Set(ds.games.map((g) => g.id).filter((id) => !had.has(id))) : null
       const r = mode === 'replace' ? await replaceDataset(ds) : await appendDataset(ds)
       const where = cloud.configured && cloud.user ? '已寫入雲端' : mode === 'replace' ? '已取代本地資料' : '已合併到本地資料'
+      const games = r ? r.games : pending.report.games
       const skipped = r?.skipped ? `（略過 ${r.skipped} 場已存在的比賽）` : ''
       // e.g. the cloud has no day_roster column yet: the games are saved, their 當日登錄名單 is not
       const lost = r?.warnings.length ? ` ${[...new Set(r.warnings.map((w) => w.message))].join('；')}` : ''
@@ -74,7 +78,11 @@ export function ImportPage() {
         try { for (const reg of pending.registrations) await saveRegistration(reg); regs = `、${pending.registrations.length} 份報名名單` }
         catch (e) { regs = `；報名名單沒有匯入：${e instanceof Error ? e.message : String(e)}` }
       }
-      setDone(`${where}：${r ? r.games : pending.report.games} 場比賽${skipped}、${pending.report.batting} 個打席、${pending.report.pitching} 個投球打席${regs}。${lost}`)
+      const nBat = added ? ds.batting.filter((p) => added.has(p.gameId)).length : pending.report.batting
+      const nPit = added ? ds.pitching.filter((p) => added.has(p.gameId)).length : pending.report.pitching
+      setDone(mode === 'append' && r && !r.games && r.skipped
+        ? `沒有新的比賽：檔案裡的 ${r.skipped} 場比賽都已經在網站上（比賽ID 相同），合併時略過${regs.startsWith('、') ? `；已匯入${regs.slice(1)}` : regs}。要改這幾場，請到比賽頁按「修改資料」，或用總表的「以此檔取代全部資料」。${lost}`
+        : `${where}：${games} 場比賽${skipped}、${nBat} 個打席、${nPit} 個投球打席${regs}。${lost}`)
       setPending(null)
       if (demo) setDemo(false)
     } catch (e) {

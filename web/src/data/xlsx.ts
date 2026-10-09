@@ -5,7 +5,7 @@
  * workbook saved without cached formula values still imports correctly.
  */
 import * as XLSX from 'xlsx'
-import { cleanErrors, errorsText } from './errors'
+import { cleanErrors, errorsOf, errorsText } from './errors'
 import { parsePlays, playsText } from './plays'
 import type { BattingPA, Dataset, DayRosterSub, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player, Registration } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
@@ -352,7 +352,8 @@ export function legacyToDataset(raw: RawGame, overrides: { id: string; tournamen
   return normalizeDataset(rawGameToDataset(g)).dataset
 }
 
-export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: Dataset; report: ImportReport; registrations?: Registration[] } {
+/** `known`: the site's 球員名單, so a single-game file (which has none) only adds, and warns about, players new to it. */
+export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Player[] = []): { dataset: Dataset; report: ImportReport; registrations?: Registration[] } {
   const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
   const warnings: string[] = []
@@ -386,9 +387,15 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string): { dataset: 
       const rows = XLSX.utils.sheet_to_json<Row>(ws, { range: hdrIdx, defval: '' })
       fielding = parseFielding(rows.filter((r) => str(r['球員'])), game.id)
     }
-    const norm = normalizeDataset({ roster: [], games: [game], batting, pitching, fielding })
+    // the template comes with an example game's 守備紀錄: rows left in from it carry errors this game never had
+    const logged = pitching.reduce((n, p) => { const e = errorsOf(p); return n + e.positions.length + e.unknown }, 0)
+    const recorded = fielding.reduce((n, f) => n + f.e, 0)
+    if (recorded > logged) warnings.push(`『單場-摘要』的守備紀錄共 ${recorded} 次失誤，『單場-投球』卻只記到 ${logged} 次（對方靠失誤上壘、捕手妨礙、守備失誤欄）：模板的範例列刪掉了嗎？請核對守備紀錄`)
+    const norm = normalizeDataset({ roster: known, games: [game], batting, pitching, fielding })
     warnings.push(...norm.warnings.map((w) => w.message))
-    return { dataset: norm.dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings } }
+    const had = new Set(known.map((p) => p.name.trim()))
+    const dataset = { ...norm.dataset, roster: norm.dataset.roster.filter((p) => !had.has(p.name)) }
+    return { dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: dataset.fielding.length, roster: dataset.roster.length, warnings } }
   }
   if (names.includes(LEGACY_SUMMARY)) {
     const raw = parseLegacyGame(wb, filename)

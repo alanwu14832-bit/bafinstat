@@ -56,6 +56,22 @@ describe('all import formats agree with the seed', () => {
     expect(report.mode).toBe('single')
     expect(dataset.games[0]).toMatchObject({ id: 'G20251010-01', date: '2025-10-10', opponent: '群風', tournament: '友誼賽', homeAway: '主' })
     expect(fingerprint(dataset, 'G20251010-01')).toEqual(seedPrint['G20251010-01'])
+    // uploaded next to the site's own 球員名單: only players new to it are added (and warned about)
+    const withRoster = parseWorkbook(wbToBuf(wb), undefined, SEED_DATASET.roster.filter((p) => p.name !== '蘇柏愷'))
+    expect(withRoster.dataset.roster.map((p) => p.name)).toEqual(['蘇柏愷'])
+    expect(withRoster.report.warnings.filter((w) => w.startsWith('名單沒有'))).toEqual(['名單沒有 蘇柏愷，已自動加入球員名單'])
+    expect(fingerprint(withRoster.dataset, 'G20251010-01')).toEqual(seedPrint['G20251010-01'])
+  }, 30_000)
+
+  it('single-game template: warns when the 守備紀錄 has more errors than the plate appearances (example rows left in)', () => {
+    const master = XLSX.read(new Uint8Array(loadFile('BAFIN_棒球數據總表.xlsx')), { type: 'array' })
+    const wb = XLSX.utils.book_new()
+    for (const n of ['單場-摘要', '單場-打擊', '單場-投球']) XLSX.utils.book_append_sheet(wb, master.Sheets[n], n)
+    expect(parseWorkbook(wbToBuf(wb)).report.warnings.join()).not.toContain('範例列')
+    // a new game typed over the example plate appearances, without a single error, the example 守備紀錄 kept
+    const ws = wb.Sheets['單場-投球']
+    for (const ref of Object.keys(ws)) if (ws[ref]?.v === '失誤') ws[ref] = { t: 's', v: '內滾' }
+    expect(parseWorkbook(wbToBuf(wb)).report.warnings.join()).toContain('模板的範例列刪掉了嗎')
   }, 30_000)
 
   it('legacy single-game sheets (舊格式)', () => {

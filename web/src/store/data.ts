@@ -161,10 +161,12 @@ export const useDataStore = create<DataState>((set, get) => ({
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
     }
     const merged = mergeDatasets(get().base, ds)
+    // games whose 比賽ID is already here are skipped
+    const games = merged.games.length - get().base.games.length
     const importedAt = new Date().toISOString()
     keepLocal({ base: merged, importedAt })
     set({ base: merged, source: 'imported', importedAt })
-    return null
+    return { games, skipped: ds.games.length - games, dropped: [], warnings: [] }
   },
   resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: STARTER, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
   canEdit: () => { const { cloud } = get(); return !cloud.configured || (!!cloud.user && cloud.isEditor) },

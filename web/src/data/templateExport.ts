@@ -136,7 +136,9 @@ export function fillTemplate(template: Uint8Array, tables: BackupTable[]): Templ
   const wbXml = strFromU8(files['xl/workbook.xml'])
   const rels = strFromU8(files['xl/_rels/workbook.xml.rels'])
   const target = (rid: string) => { const m = new RegExp(`<Relationship[^>]*Target="([^"]+)"[^>]*Id="${rid}"|<Relationship[^>]*Id="${rid}"[^>]*Target="([^"]+)"`).exec(rels); const t = m?.[1] ?? m?.[2]; return t ? t.replace(/^\//, '').replace(/^(?!xl\/)/, 'xl/') : undefined }
-  const pathOf = new Map([...wbXml.matchAll(/<sheet name="([^"]+)"[^>]*r:id="([^"]+)"/g)].map((m) => [unesc(m[1]), target(m[2])]))
+  // <sheet name="…" sheetId="…" r:id="…"/>, its attributes in any order (openpyxl with lxml puts an xmlns:r first)
+  const attr = (el: string, a: string) => new RegExp(`\\s${a}="([^"]*)"`).exec(el)?.[1]
+  const pathOf = new Map([...wbXml.matchAll(/<sheet\b[^>]*>/g)].map((m) => [unesc(attr(m[0], 'name') ?? ''), target(attr(m[0], 'r:id') ?? '')]))
   const sheets = new Map<string, Sheet>()
   const sheet = (name: string) => {
     if (sheets.has(name)) return sheets.get(name)!
@@ -147,6 +149,9 @@ export function fillTemplate(template: Uint8Array, tables: BackupTable[]): Templ
     return s
   }
   const warnings: string[] = []
+  // a backup missing a sheet of data is no backup: the caller then hands out the plain workbook instead
+  const lost = tables.filter((t) => t.rows.length && !sheet(t.sheet)).map((t) => t.sheet)
+  if (lost.length) throw new Error(`範本沒有「${lost.join('、')}」工作表`)
   for (const t of tables) {
     const ws = sheet(t.sheet)
     if (!ws) { warnings.push(`範本沒有「${t.sheet}」工作表，這部分沒有匯出`); continue }
