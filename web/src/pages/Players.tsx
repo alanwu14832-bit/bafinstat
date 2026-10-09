@@ -3,11 +3,14 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { median, previousSeason, sameGroup } from '../data/radar'
+import { SEASON_START, seasonHeader } from '../data/seasons'
+import { useHistory } from '../hooks/useHistory'
+import { PlayerCareer } from '../components/ui/PlayerCareer'
 import { filterGames } from '../data/filters'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { activeFilterCount } from '../components/layout/FilterBar'
-import { scopeText } from '../components/layout/FilterChips'
+import { scopeText, useNavigateWithFilters } from '../components/layout/FilterChips'
 import { downloadPlayerImage } from '../lib/shareImage'
 import { TEAM_NAME } from '../data/seed'
 import { StoryRow } from '../components/ui/SeasonHero'
@@ -48,7 +51,7 @@ const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runne
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
 /** One game on the mound: that game's line, with the season ERA after it. */
 interface PitchLogRow { id: string; date: string; opponent: string; dec: string; outs: number; ip: string; bf: number; h: number; r: number; er: number; bb: number; k: number; pc: number; era: string; isDemo: boolean }
-type PlayerTab = 'batting' | 'pitching'
+type PlayerTab = 'batting' | 'pitching' | 'career'
 
 const hand = (b?: string) => (b ? (b === 'L' ? '左打' : b === 'S' ? '左右開弓' : '右打') : '')
 
@@ -138,6 +141,9 @@ export function PlayersPage() {
   const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
   const filters = useDataStore((st) => st.filters)
+  const goWithFilters = useNavigateWithFilters()
+  // every game, for the 生涯 tab, the 里程碑 story and the all-time streak rank
+  const history = useHistory()
   const resetFilters = useDataStore((st) => st.resetFilters)
   const statParams = s.params
   const cloud = useDataStore((st) => st.cloud)
@@ -186,8 +192,8 @@ export function PlayersPage() {
   const group = useMemo(() => sameGroup(s.dataset.roster, selected), [s.dataset.roster, selected])
   const groupPool = useMemo(() => (group ? pool.filter((b) => group.names.has(b.name)) : []), [group, pool])
   const prev = useMemo(() => previousSeason(s.games[s.games.length - 1]?.date), [s.games])
-  // When the filter already covers that year (e.g. 全部), "last season" would overlap what is on screen.
-  const spansPrev = !!prev && s.games.some((g) => g.date.startsWith(String(prev.year)))
+  // When the filter already covers that season (e.g. 全部), "last season" would overlap what is on screen.
+  const spansPrev = !!prev && s.games.some((g) => g.date >= prev.from && g.date <= prev.to)
   const lastBat = useMemo(() => {
     if (!prev || spansPrev) return undefined
     // same filters as the page, with the date range moved to the season before
@@ -205,7 +211,7 @@ export function PlayersPage() {
       line: group && groupPool.length >= 3 ? Object.fromEntries(AXES.map((a) => [a.key, median(groupPool.map((b) => b[a.key] as number | null))])) : undefined,
       why: group ? `${group.group}不到 3 人達 3 打席` : '名單沒填主守位', note: (v) => `${v}（${groupPool.length} 人中位）`,
     },
-    { value: 'last', label: prev ? `上一季（${prev.year} 年）` : '上一季', short: prev ? `${prev.year} 年` : '上一季', line: lastBat, why: spansPrev ? '篩選跨年，先在上方選單一年份' : '沒有上一季的資料', note: (v) => `${v}（${prev?.year} 年）` },
+    { value: 'last', label: prev ? `上一季（${prev.label}）` : '上一季', short: prev ? prev.label : '上一季', line: lastBat, why: spansPrev ? (SEASON_START === 1 ? '篩選跨年，先在上方選單一年份' : `篩選跨${seasonHeader()}，先在上方選單一個${seasonHeader()}`) : '沒有上一季的資料', note: (v) => `${v}（${prev?.label}）` },
     { value: 'team', label: '全隊平均', short: '全隊平均', line: s.team, why: '', note: (v) => `全隊 ${v}` },
   ]
   const [basisPick, setBasisPick] = useState<Basis | ''>('')
@@ -271,20 +277,25 @@ export function PlayersPage() {
   const pitchSpray = useMemo(() => sprayCounts(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
   // 打擊／投球 tabs: from the link (?tab=pitching from the 投球 page), else what he has numbers for
   const tabParam = params.get('tab')
-  const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' ? tabParam : !bat && pit ? 'pitching' : 'batting'
+  const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' || tabParam === 'career' ? tabParam : !bat && pit ? 'pitching' : 'batting'
   const setTab = (t: PlayerTab) => setParams((prev) => { const n = new URLSearchParams(prev); n.set('tab', t); if (selected) n.set('player', selected); return n }, { replace: true })
-  const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams])
+  const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams, history }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams, history])
 
   // 成績卡: a share image of the numbers on screen, with the period and sample written on it
   const sharePlayer = () => {
     if (!player) return
+    const filteredBat = byName.get(selected), filteredPit = pitchByName.get(selected)
     const lines: string[] = []
+    const career = tab === 'career'
+    const bat = career ? careerBat : filteredBat
+    const pit = career ? careerPit : filteredPit
     if (bat) lines.push(`打擊：${bat.g} 場 ${bat.pa} 打席、${bat.ab} 打數 ${bat.h} 安，${bat.hr} 全壘打、${bat.rbi} 打點、${bat.sb} 盜壘`, `OBP ${f3(bat.obp)}・SLG ${f3(bat.slg)}・OPS ${f3(bat.ops)}${bat.wrcPlus === null ? '' : `・wRC+ ${Math.round(bat.wrcPlus)}`}`)
     if (pit) lines.push(`投球：${pit.g} 場 ${pit.ipDisplay} 局，${pit.k} 三振、${pit.bb} 保送，ERA ${f2(pit.era)}・WHIP ${f2(pit.whip)}`)
     downloadPlayerImage({
       name: player.name, number: player.number, meta: [posLabel(player.primaryPos), player.bats && hand(player.bats)].filter(Boolean).join('・'),
-      period: scopeText(filters, s.games), big: headline, lines,
-      footer: `${TEAM_NAME} 數據平台・wRC+ 以同期間全隊為 100・樣本少時僅供參考`,
+      // (the 生涯 tab's headline covers every game, not the filter)
+      period: tab === 'career' ? `所有比賽（生涯 ${history.games.length} 場）` : scopeText(filters, s.games), big: headline, lines,
+      footer: career ? `${TEAM_NAME} 數據平台・生涯 = 所有比賽，不受篩選影響` : `${TEAM_NAME} 數據平台・wRC+ 以同期間全隊為 100・樣本少時僅供參考`,
     })
   }
   // a player without numbers in the filtered games: widen the period, or pick someone else
@@ -297,7 +308,13 @@ export function PlayersPage() {
   // a tile opens the team ranking of that stat with this player marked (?hl=), which its label says
   const rank = (path: string) => `${path}&hl=${encodeURIComponent(selected)}`
   // the three numbers on the 球員卡, for the tab being read
-  const headline = tab === 'pitching'
+  const careerBat = history.batCareer.get(selected)
+  const careerPit = history.pitCareer.get(selected)
+  const careerSeasons = new Set([...(history.batSeasons.get(selected) ?? []), ...(history.pitSeasons.get(selected) ?? [])].map((x) => x.season)).size
+  const headline = tab === 'career'
+    ? (careerBat && careerBat.pa > 0 ? [{ label: '生涯 AVG', value: f3(careerBat.avg) }, { label: '生涯 OPS', value: f3(careerBat.ops) }, { label: '生涯安打', value: String(careerBat.h) }]
+      : careerPit ? [{ label: '生涯 ERA', value: f2(careerPit.era) }, { label: '生涯局數', value: careerPit.ipDisplay }, { label: '生涯三振', value: String(careerPit.k) }] : [])
+    : tab === 'pitching'
     ? (pit ? [{ label: 'ERA', value: f2(pit.era) }, { label: 'WHIP', value: f2(pit.whip) }, { label: '三振', value: String(pit.k) }] : [])
     : (bat ? [{ label: 'AVG', value: f3(bat.avg) }, { label: 'OPS', value: f3(bat.ops) }, { label: 'wRC+', value: bat.wrcPlus === null ? '—' : String(Math.round(bat.wrcPlus)) }] : [])
 
@@ -453,9 +470,15 @@ export function PlayersPage() {
         <>
           {/* 打擊 and 投球 each get their own page of numbers */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }]} />
+            <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }, { value: 'career', label: careerSeasons ? `生涯・${careerSeasons} ${seasonHeader()}` : '生涯' }]} />
           </div>
-          {tab === 'batting' ? (
+          {tab === 'career' ? (
+            <PlayerCareer h={history} name={selected} onPickSeason={(r) => {
+              // the tab and the filter in one step (a separate setTab would be undone by the filter sync)
+              const keep = new URLSearchParams(params); keep.set('tab', 'batting'); keep.set('player', selected)
+              goWithFilters(null, r, { keep, replace: true })
+            }} />
+          ) : tab === 'batting' ? (
             !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} action={noDataActions} /></Card> : (
               <>
             <StatGroup columns="grid-cols-2 md:grid-cols-4 xl:grid-cols-5">

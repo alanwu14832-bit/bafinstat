@@ -7,13 +7,24 @@ import { POSITION_LABEL } from '../../lib/fmt'
 import { useFilterOptions } from '../../hooks/useStats'
 import { useDataStore } from '../../store/data'
 import { DEFAULT_FILTERS, type Filters } from '../../data/types'
+import { SEASON_START, seasonLabel, seasonOfDate, seasonRange } from '../../data/seasons'
 
-type Preset = 'all' | 'year' | 'last90'
+type Preset = 'all' | 'season' | 'last90'
+
+/**
+ * The 「本季」 button: from the first day of the season the latest game is in (data/seasons.ts). With calendar years
+ * (the default) it reads 「2026年」 and starts on 01-01; with 學年 it reads 「115 學年」 and starts on 08-01.
+ */
+export function seasonPreset(maxDate: string, start = SEASON_START): { from: string; label: string } {
+  const season = seasonOfDate(maxDate, start)
+  if (!season) return { from: '', label: start === 1 ? '本年' : '本季' }
+  return { from: seasonRange(season, start).from, label: start === 1 ? `${season}年` : seasonLabel(season, start) }
+}
 
 function presetRange(p: Preset, maxDate: string): Pick<Filters, 'from' | 'to'> {
   if (p === 'all' || !maxDate) return { from: '', to: '' }
   const end = new Date(maxDate)
-  if (p === 'year') return { from: `${maxDate.slice(0, 4)}-01-01`, to: '' }
+  if (p === 'season') return { from: seasonPreset(maxDate).from, to: '' }
   const start = new Date(end); start.setDate(end.getDate() - 90)
   return { from: start.toISOString().slice(0, 10), to: '' }
 }
@@ -46,8 +57,9 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
   const stack = layout === 'stack'
   const size = stack ? 'md' : 'sm'
 
-  const activePreset: Preset = !filters.from && !filters.to ? 'all' : filters.from === `${opts.maxDate.slice(0, 4)}-01-01` && !filters.to ? 'year' : filters.from === presetRange('last90', opts.maxDate).from ? 'last90' : 'all'
-  const presets: Array<{ value: Preset; label: string }> = [{ value: 'all', label: '全部' }, { value: 'year', label: `${opts.maxDate.slice(0, 4) || '本'}年` }, { value: 'last90', label: '近 90 天' }]
+  const season = seasonPreset(opts.maxDate)
+  const activePreset: Preset = !filters.from && !filters.to ? 'all' : season.from && filters.from === season.from && !filters.to ? 'season' : filters.from === presetRange('last90', opts.maxDate).from ? 'last90' : 'all'
+  const presets: Array<{ value: Preset; label: string }> = [{ value: 'all', label: '全部' }, { value: 'season', label: season.label }, { value: 'last90', label: '近 90 天' }]
   const dateCls = cx(inputCls(size), stack ? 'w-full' : 'w-[126px]', 'tnum')
 
   const presetsEl = (

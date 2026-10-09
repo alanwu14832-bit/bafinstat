@@ -7,7 +7,7 @@ import { PitchLegend } from '../components/ui/PlayByPlay'
 
 const TEMPLATE_URL = (import.meta.env.VITE_TEMPLATE_URL as string | undefined) ?? `${import.meta.env.BASE_URL}BAFIN_棒球數據總表.xlsx`
 
-const PAGES: Record<string, string> = { 相簿: '/photos', 比賽: '/games', 先發陣容: '/lineup', 紀錄比賽: '/record', 球員: '/players', 即時比分: '/live', 資料匯入: '/import', 數據字典: '/dictionary', 總覽: '/', 打擊: '/batting', 投球: '/pitching', 守備: '/fielding' }
+const PAGES: Record<string, string> = { 相簿: '/photos', 比賽: '/games', 先發陣容: '/lineup', 紀錄比賽: '/record', 球員: '/players', 即時比分: '/live', 資料匯入: '/import', 數據字典: '/dictionary', 總覽: '/', 打擊: '/batting', 投球: '/pitching', 守備: '/fielding', 紀錄簿: '/recordbook' }
 const pageLink = 'text-ink underline decoration-[color-mix(in_srgb,var(--ink)_30%,transparent)] underline-offset-2 hover:decoration-[var(--ink)] transition-colors motion-reduce:transition-none'
 
 /** A page name in running text, as a link to that page. */
@@ -133,10 +133,11 @@ export function GuidePage() {
         </Card>
         <Card title="賽後怎麼看數據">
           <ul className="text-[13px] text-ink-2 flex flex-col gap-3 leading-relaxed">
-            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="總覽" /></span><span>戰績、得失分、OPS 走勢、逐局得失分、落點熱區。上方篩選列可以只看某個杯賽、某段期間、某個對手或主客場。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="總覽" /></span><span>戰績、得失分、OPS 走勢、逐局得失分、落點熱區，最下面是「逐季戰績」（每季的戰績、得失分、AVG、OPS、ERA，點一列就只看那一季）。上方篩選列可以只看某個杯賽、某段期間、某個對手或主客場。</span></li>
             <li className="flex gap-2.5"><span className="mt-px shrink-0 inline-flex gap-1"><PageChip name="打擊" /><PageChip name="投球" /></span><span>三組欄位：基本（AVG/OBP/SLG）、進階（wOBA、ISO、BABIP、得點圈）、過程（Whiff%、CSW%、GB/FB/LD%、Hard%）。點欄位標題排序，點球員進個人檔案。</span></li>
             <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="比賽" /></span><span>點任一場：逐局比分、Box Score、當日登錄名單（先發／替補上場／未上場），以及「逐打席・打擊／投球」完整的逐球紀錄。</span></li>
-            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="球員" /></span><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢；展開名單可看各杯賽的報名名單。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="球員" /></span><span>個人數據、隊內百分位雷達、落點分佈、逐場紀錄與累積走勢；「生涯」分頁有逐季成績、生涯合計、個人最佳（單場最多安打、最長連續安打…）和里程碑（例如「再 2 支安打就生涯 50 安」），不受上方篩選影響。展開名單可看各杯賽的報名名單。</span></li>
+            <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="紀錄簿" /></span><span>所有比賽的單場、單季、生涯與球隊紀錄前幾名，不受上方篩選影響；打擊率、防禦率這類率值要達大專規程的規定打席或規定局數才列入。</span></li>
             <li className="flex gap-2.5"><span className="mt-px shrink-0"><PageChip name="數據字典" /></span><span>每一項指標的定義與公式，和總表的「數據字典」工作表一致。</span></li>
           </ul>
         </Card>

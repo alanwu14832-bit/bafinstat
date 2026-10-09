@@ -22,6 +22,10 @@ export const TEAM_DEFAULTS = {
   /** VITE_TEAM_TIEBREAK: 延長賽突破僵局 — the bases the rule puts runners on from the inning after regulation (WBSC:
    *  '12' 一、二壘; '2' 二壘 only; '123' 滿壘; '' = the team does not use it). Each game can still change it on 紀錄比賽. */
   tiebreak: '12' as string,
+  /** VITE_TEAM_SEASON_START: the month a 「季」 starts (1–12). 1 = calendar year (「2026 年」, the default); 8 = 學年度,
+   *  August to July (「115 學年」). 紀錄簿, 生涯逐季, 逐季戰績, the filter bar's season button and 上一季 follow it;
+   *  報名名單 always use calendar years. */
+  seasonStart: 1,
   /** VITE_TEAM_SEED: '0' starts empty instead of with BaFiN's recorded games (every other team). */
   seed: true,
   /** VITE_TEAM_FILE_PREFIX: start of downloaded backup file names. */
@@ -48,6 +52,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
   const seed = str('VITE_TEAM_SEED', '')
   const tb = str('VITE_TEAM_TIEBREAK', '').toLowerCase()
   const tiebreak = ['2', '12', '123'].includes(tb) ? tb : ['0', 'off', 'false', 'no'].includes(tb) ? '' : TEAM_DEFAULTS.tiebreak
+  const seasonStart = Number(str('VITE_TEAM_SEASON_START', ''))
   return {
     name: str('VITE_TEAM_NAME', TEAM_DEFAULTS.name),
     org: str('VITE_TEAM_ORG', TEAM_DEFAULTS.org),
@@ -57,6 +62,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     logo: str('VITE_TEAM_LOGO', TEAM_DEFAULTS.logo),
     innings: Number.isInteger(innings) && innings >= 1 && innings <= 12 ? innings : TEAM_DEFAULTS.innings,
     tiebreak,
+    seasonStart: Number.isInteger(seasonStart) && seasonStart >= 1 && seasonStart <= 12 ? seasonStart : TEAM_DEFAULTS.seasonStart,
     seed: seed ? !['0', 'false', 'no', 'off'].includes(seed.toLowerCase()) : TEAM_DEFAULTS.seed,
     filePrefix: str('VITE_TEAM_FILE_PREFIX', TEAM_DEFAULTS.filePrefix),
     accent: color('VITE_TEAM_ACCENT', TEAM_DEFAULTS.accent),

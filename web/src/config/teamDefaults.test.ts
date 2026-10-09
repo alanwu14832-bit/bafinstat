@@ -22,6 +22,14 @@ describe('team config', () => {
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '0' }).tiebreak).toBe('')
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '9' }).tiebreak).toBe('12')
   })
+  it('reads the season start month (VITE_TEAM_SEASON_START), calendar year by default', () => {
+    expect(resolveTeam({}).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '8' }).seasonStart).toBe(8)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '1' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '13' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: 'x' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '8.5' }).seasonStart).toBe(1)
+  })
   it('resolves assets against the base path, leaving URLs alone', () => {
     expect(assetUrl('mark.png', '/bafinstat/')).toBe('/bafinstat/mark.png')
     expect(assetUrl('/team/mark.png', '/')).toBe('/team/mark.png')

@@ -240,6 +240,26 @@
   "note": "CPBL 官方紀錄項目"
  },
  {
+  "key": "HitStreak",
+  "zh": "連續安打",
+  "en": "Hitting Streak",
+  "group": "打擊",
+  "formula": "連續幾場出賽都有安打（依比賽日期）",
+  "status": "新增",
+  "priority": "P2",
+  "note": "MLB 9.23(b)：沒有打數也沒有犧飛的那場（只有保送、觸身、犧觸、妨礙或代跑）不算也不中斷；只有犧飛的那場會中斷。網站計算，總表不算"
+ },
+ {
+  "key": "OBStreak",
+  "zh": "連續上壘",
+  "en": "On-Base Streak",
+  "group": "打擊",
+  "formula": "連續幾場出賽都有上壘（H + BB + HBP > 0）",
+  "status": "新增",
+  "priority": "P2",
+  "note": "只代跑、沒有打席的那場不算也不中斷。網站計算，總表不算"
+ },
+ {
   "key": "AVG",
   "zh": "打擊率",
   "en": "Batting Average",
@@ -938,6 +958,16 @@
   "status": "新增",
   "priority": "P2",
   "note": "依 7 局賽制調整為 IP ≥ 5"
+ },
+ {
+  "key": "ScorelessIP",
+  "zh": "連續無失分局數",
+  "en": "Scoreless Innings Streak",
+  "group": "投球",
+  "formula": "依比賽、局數順序，沒有被記失分（R／ER）的局把投出的出局數加起來；被記失分的局歸零",
+  "status": "新增",
+  "priority": "P2",
+  "note": "逐局計算：被記失分那一局在失分前投出的出局數也不算，所以可能比實際略少。網站計算，總表不算"
  },
  {
   "key": "fG",
