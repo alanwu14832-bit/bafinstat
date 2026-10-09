@@ -4,14 +4,16 @@
  * to flag, saving raises no review warnings, and the saved game shows the same score as the live scoreboard.
  */
 import { describe, expect, it } from 'vitest'
-import { score, toGameEdit } from './model'
+import { offense, score, toGameEdit, type RecordState } from './model'
 import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
 import { battingLines, summarizeGame } from '../data/stats'
-import { isPA, isPlaced } from '../data/types'
+import { DEFAULT_PARAMS, EMPTY_DATASET, isPA, isPlaced, type Dataset } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf } from './timeline'
 import { earnedRepairs } from './earned'
-import { playGame, roster } from '../test/simGame'
+import { playGame, playGameWith, roster } from '../test/simGame'
+import { onDeckOf } from './upNext'
+import { halfCards, liveContext } from '../data/liveFacts'
 
 describe('random games through the recording model', () => {
   const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
@@ -91,3 +93,34 @@ describe('what the recorder adds on the side', () => {
   })
 })
 
+describe('the live board over random games', () => {
+  // three earlier games of the same season (same date, smaller ids), so the cards have something to say
+  const earlier = [201, 202, 203].map((seed, i) => {
+    const { fragment } = normalizeGameEdit(roster, toGameEdit(playGame(seed)))
+    const id = `G20260100-0${i + 1}`
+    return { ...fragment, games: fragment.games.map((g) => ({ ...g, id })), batting: fragment.batting.map((p) => ({ ...p, gameId: id })), pitching: fragment.pitching.map((p) => ({ ...p, gameId: id })) }
+  })
+  const base: Dataset = { ...EMPTY_DATASET, roster, games: earlier.flatMap((d) => d.games), batting: earlier.flatMap((d) => d.batting), pitching: earlier.flatMap((d) => d.pitching) }
+  it.each(Array.from({ length: 150 }, (_, i) => i + 1))('game %i: 準備打擊 is never the batter at the plate; one card per half, none twice', (seed) => {
+    const wrong: string[] = []
+    const s = playGameWith(seed, (st: RecordState) => {
+      const { onDeck, inHole } = onDeckOf(st)
+      const us = offense(st) === 'us'
+      const atPlate = us ? st.slot + 1 : st.oppOrder
+      for (const b of [onDeck, inHole]) if (!b || b.us !== us || b.order === atPlate) wrong.push(`${st.inning}${st.half} ${JSON.stringify(b)}`)
+    })
+    expect(wrong).toEqual([])
+    for (const ctx of [liveContext(EMPTY_DATASET, s.game, DEFAULT_PARAMS), liveContext(base, s.game, DEFAULT_PARAMS)]) {
+      const cards = halfCards(s, ctx)
+      const halves = (s.inning - 1) * 2 + (s.half === 'bottom' ? 2 : 1)
+      expect(cards).toHaveLength(halves)
+      const ids = cards.flatMap((c) => (c ? [c.id] : []))
+      expect(new Set(ids).size).toBe(ids.length)
+      expect(cards.flatMap((c) => (c ? [c.text, c.figure ?? '', c.kicker] : [])).join('|')).not.toMatch(/undefined|NaN/)
+    }
+  })
+  it('the cards do have something to say', () => {
+    const s = playGame(7)
+    expect(halfCards(s, liveContext(base, s.game, DEFAULT_PARAMS)).filter(Boolean).length).toBeGreaterThan(2)
+  })
+})

@@ -34,7 +34,7 @@ export function currentStreak(summaries: GameSummary[]): { result: 'W' | 'L'; n:
 }
 
 /** Per game (in order) a player's hits, for the games they batted in. */
-function hitsByGame(pas: BattingPA[], gameOrder: string[]): Map<string, Array<{ gameId: string; h: number; ab: number }>> {
+export function hitsByGame(pas: BattingPA[], gameOrder: string[]): Map<string, Array<{ gameId: string; h: number; ab: number }>> {
   const per = new Map<string, Map<string, { h: number; ab: number }>>()
   for (const p of pas) {
     // (a tie-break runner's row is no at bat)
