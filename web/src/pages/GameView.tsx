@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Camera, CheckCircle2, Download, Maximize2, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Download, Maximize2, Pencil, Printer, Trash2, X } from 'lucide-react'
 import { LineScoreBoard, PlateBadge, Stitches } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -230,6 +230,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end -mr-2 sm:mr-0">
             {!page && <Button variant="ghost" size="sm" icon={<Maximize2 />} to={`/games/${encodeURIComponent(id)}`} title="開啟完整比賽頁（可分享、可直接連到某一局）">完整頁</Button>}
             <Button variant="ghost" size="sm" icon={<Download />} onClick={shareImage} title="下載這場的戰報圖（PNG）">戰報圖</Button>
+            <Button variant="ghost" size="sm" icon={<Printer />} to={`/print/game/${encodeURIComponent(id)}`} title="印出這場的傳統記分表（A4 橫式），也能存成 PDF">列印</Button>
             {gameAlbums.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={gameAlbums[0].url} title="開啟這場的相簿">相簿</Button> : gameAlbums.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {gameAlbums.length}</Button> : null}
             {editable && !editing && canEdit && (
               <>

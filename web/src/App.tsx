@@ -14,6 +14,7 @@ const PAGES = {
   lineup: () => import('./pages/Lineup'), record: () => import('./pages/Record'), import: () => import('./pages/Import'),
   dictionary: () => import('./pages/Dictionary'), guide: () => import('./pages/Guide'), versions: () => import('./pages/Versions'),
   notFound: () => import('./pages/NotFound'),
+  print: () => import('./pages/Print'),
 }
 const page = <M,>(load: () => Promise<M>, name: keyof M) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType })))
 const OverviewPage = page(PAGES.overview, 'OverviewPage')
@@ -32,6 +33,7 @@ const DictionaryPage = page(PAGES.dictionary, 'DictionaryPage')
 const GuidePage = page(PAGES.guide, 'GuidePage')
 const VersionsPage = page(PAGES.versions, 'VersionsPage')
 const NotFoundPage = page(PAGES.notFound, 'NotFoundPage')
+const PrintPage = page(PAGES.print, 'PrintPage')
 
 /** Fetch every page in the background once the first one has had its turn. */
 function usePrefetchPages() {
@@ -57,8 +59,8 @@ function PageLoading() {
 /** GitHub Pages serves from a sub-path; strip the trailing slash for the router basename. */
 export const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '')
 
-export function AppRoutes() {
-  usePrefetchPages()
+/** The site: every page inside the shell (sidebar, top bar, filters). */
+function ShellRoutes() {
   const { pathname } = useLocation()
   return (
     <AppShell>
@@ -86,6 +88,28 @@ export function AppRoutes() {
       </Suspense>
       </PageErrorBoundary>
     </AppShell>
+  )
+}
+
+/** /print/…: a sheet of paper and its toolbar, without the shell (nothing else may end up on the printout). */
+function PrintRoutes() {
+  const { pathname } = useLocation()
+  return (
+    <PageErrorBoundary resetKey={pathname}>
+      <Suspense fallback={<div className="p-6"><PageLoading /></div>}>
+        <PrintPage />
+      </Suspense>
+    </PageErrorBoundary>
+  )
+}
+
+export function AppRoutes() {
+  usePrefetchPages()
+  return (
+    <Routes>
+      <Route path="/print/*" element={<PrintRoutes />} />
+      <Route path="*" element={<ShellRoutes />} />
+    </Routes>
   )
 }
 

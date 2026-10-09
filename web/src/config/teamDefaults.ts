@@ -32,6 +32,15 @@ export const TEAM_DEFAULTS = {
   accentDark: '#e2a03a',
   accentInk: '#1a1207',
   accentInkDark: '#1a1207',
+  /** VITE_TEAM_SITE_URL: the site's full address (http(s), no trailing /; include the path when the site lives under
+   *  one, e.g. https://x.github.io/bafinstat), so link previews (LINE, Facebook…) get an absolute picture URL. A build
+   *  whose base path differs from it keeps a relative picture. Set it after moving to your own domain. */
+  siteUrl: 'https://bafinstat.vercel.app',
+  /** VITE_TEAM_OG_IMAGE: the 1200×630 link-preview picture: a file in web/public or a full URL. Without the file the
+   *  build uses the logo and a small preview card. */
+  ogImage: 'og.png',
+  /** VITE_TEAM_DESCRIPTION: the text under link previews; '' = 「{org}（{name}）的比賽紀錄、即時比分與球員數據…」. */
+  description: '',
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
@@ -63,7 +72,15 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     accentDark: color('VITE_TEAM_ACCENT_DARK', TEAM_DEFAULTS.accentDark),
     accentInk: color('VITE_TEAM_ACCENT_INK', TEAM_DEFAULTS.accentInk),
     accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
+    siteUrl: siteUrl(str('VITE_TEAM_SITE_URL', '')) ?? TEAM_DEFAULTS.siteUrl,
+    ogImage: str('VITE_TEAM_OG_IMAGE', TEAM_DEFAULTS.ogImage),
+    description: str('VITE_TEAM_DESCRIPTION', TEAM_DEFAULTS.description),
   }
+}
+
+/** An http(s) address without its trailing slash, or null for anything else (javascript:, a bare host…). */
+function siteUrl(v: string): string | null {
+  return /^https?:\/\/[^\s"'<>]+$/i.test(v) ? v.replace(/\/+$/, '') : null
 }
 
 /** The team colour as CSS variables: :root for light mode, dark mode the same way tokens.css switches. `html:root` outranks

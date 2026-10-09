@@ -29,6 +29,11 @@
   --series-7: #3c8fc4;
   --series-8: #c94444;
 
+  /* 隊內百分位 (PR): red = better than the team's middle, blue = worse, grey = PR 50 (lib/fmt prMix) */
+  --pr-hot: #d0383d;
+  --pr-mid: #a9a9b0;
+  --pr-cold: #3a6fb8;
+
   /* sequential scale (spray charts): the team colour, from faint to full */
   --seq-100: color-mix(in srgb, var(--accent) 10%, var(--surface));
   --seq-150: color-mix(in srgb, var(--accent) 16%, var(--surface));
@@ -121,6 +126,9 @@
     --series-6: #5ca343;
     --series-7: #3f93c4;
     --series-8: #d65c5c;
+    --pr-hot: #e8615f;
+    --pr-mid: #5f5f66;
+    --pr-cold: #5d93dc;
 
     --seq-100: color-mix(in srgb, var(--accent) 14%, var(--surface));
     --seq-150: color-mix(in srgb, var(--accent) 20%, var(--surface));
@@ -174,6 +182,9 @@
   --series-6: #5ca343;
   --series-7: #3f93c4;
   --series-8: #d65c5c;
+  --pr-hot: #e8615f;
+  --pr-mid: #5f5f66;
+  --pr-cold: #5d93dc;
 
   --seq-100: color-mix(in srgb, var(--accent) 14%, var(--surface));
   --seq-150: color-mix(in srgb, var(--accent) 20%, var(--surface));

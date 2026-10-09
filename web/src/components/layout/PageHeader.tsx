@@ -21,7 +21,8 @@ export function PageHeader({ title, description, actions, scoped }: PageHeaderPr
         <h1 className="text-display text-ink">{title}</h1>
         {description && <p className="text-[15px] text-muted mt-2.5 prose-max leading-relaxed">{description}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {/* max-w-full: on a phone a wide action row wraps inside the page instead of pushing it sideways */}
+      {actions && <div className="flex items-center gap-2 shrink-0 max-w-full">{actions}</div>}
     </div>
   )
   if (!scoped) return head

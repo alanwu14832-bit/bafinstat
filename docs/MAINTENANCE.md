@@ -113,6 +113,19 @@
   1. 最快：Vercel → 專案 → **Deployments** → 找到那個時間的部署 → 右邊 ⋯ → **Instant Rollback**。之後要恢復自動更新，到同一頁按 **Undo Rollback**（或把新版 Promote 回來）。
   2. 或請 Claude「把網站退回 2026-10-07 23:00 那一版」，它會把程式退回並重新上線。
 
+## 連結預覽（LINE、FB 貼網址時出現的圖和介紹）
+- 在 LINE、Facebook、Messenger、Discord 貼本站任何網址，都會出現同一張預覽圖（`web/public/og.png`，深色記分板底、隊徽、隊名、網址）、標題「NTU BaFiN Stats — 台大工管財金系棒數據平台」和一句介紹。網站畫面本身沒有任何變化。
+- **LINE、FB 會把預覽記住好幾天**：之前貼過的連結不會馬上換新圖。Facebook 可以到「分享偵錯工具」（developers.facebook.com/tools/debug）貼上網址 → 按「再次抓取」；LINE 通常幾天後自己更新。
+- **換了隊徽或隊名**：請 Claude「重新產生連結預覽圖」（它會跑 `tools/og/make-og.mjs`，產生新的 `web/public/og.png` 再上線）。
+- **買了自己的網域**：Vercel → 專案 → **Settings** → **Environment Variables** → 新增 `VITE_TEAM_SITE_URL`，值填完整網址（例如 `https://stats.example.org`，結尾不要 `/`），Production、Preview 都勾 → 到 **Deployments** 對最新一筆按 **Redeploy**。沒設的話預覽圖用 https://bafinstat.vercel.app 的網址。
+- 舊版網站（`/v/…`）的預覽也指向正式網站的那張圖，不另外保存。
+
+## 列印（記分表、累計成績表、陣容卡）
+- 比賽頁標題列的「列印」→ 傳統記分表（A4 橫式，一隊一頁）；打擊頁、投球頁的「列印」→ 照目前篩選印一頁累計成績表（A4 直式）；先發陣容頁的「列印陣容卡」→ 先發名單（可一張印 2 份，中間虛線裁開）。
+- 列印頁上方按「列印／存成 PDF」：列印視窗裡選「另存為 PDF」就能存檔。手機若印成直的，請在列印設定選「橫向」。
+- 在 LINE 裡打開網站時，LINE 的瀏覽器可能叫不出列印：先點右上角 ⋯ →「用瀏覽器開啟」，再按列印。
+- 深色模式印出來也是白紙黑字；側邊欄、上方列不會印出來。
+
 ## 把 GitHub repo 改成私人（不公開）
 1. GitHub → repo → **Settings** → 最下面 **Danger Zone** → **Change repository visibility** → **Make private**。
 2. 網站本身（Vercel）照常更新，不用改。

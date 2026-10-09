@@ -26,6 +26,9 @@ Authentication → URL Configuration：
 ## 3. 自訂網域（選用）
 Vercel → Project → Settings → Domains → Add，照指示在網域商加 CNAME。Supabase Redirect URLs 也加上該網域。
 
+## 4. 連結預覽的網址（換網域時）
+LINE、FB 的連結預覽圖要用完整網址，預設是 `https://bafinstat.vercel.app`。綁了自訂網域之後：Vercel → Project → **Settings** → **Environment Variables** → 新增 `VITE_TEAM_SITE_URL`（例如 `https://stats.example.org`，結尾不要 `/`，Production、Preview 都勾）→ **Deployments** → 最新一筆 → ⋯ → **Redeploy**。LINE、FB 會記住舊預覽幾天，Facebook 可用「分享偵錯工具」重新抓取。
+
 ## 注意
 - GitHub Pages 與 Vercel 可以並存；`vite.config.ts` 的 `base` 由 `VITE_BASE` 決定，Vercel 不設定即為 `/`，GitHub Pages 的 workflow 會設成 `/bafinstat/`。
 - 「下載總表範本」連結：`npm run build` 前會自動把 `data/BAFIN_棒球數據總表.xlsx` 複製到 `public/`（`web/scripts/prebuild.mjs`）。Vercel 的 Root Directory 設為 `web` 時仍能讀到上層的 `data/`（預設開啟「Include source files outside of the Root Directory」）。

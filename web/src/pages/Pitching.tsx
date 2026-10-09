@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
@@ -48,7 +48,8 @@ export function PitchingPage() {
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
   // a player's tile linked here (球員頁「全隊排行」): mark his row
-  const hl = new URLSearchParams(useLocation().search).get('hl') ?? undefined
+  const { search } = useLocation()
+  const hl = new URLSearchParams(search).get('hl') ?? undefined
   const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=pitching`)
   const minIP = Math.max(1, Math.ceil(s.summary.games * 0.7))
 
@@ -87,6 +88,8 @@ export function PitchingPage() {
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
   const csvFilters = useDataStore((st) => st.filters)
   const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`投手成績.csv`, full, withNumbers(s.pitchers, s.dataset.roster), [`${TEAM_NAME} 投手成績`, scopeText(csvFilters, s.games), `ERA、FIP 以每場 ${params.inningsPerGame} 局換算；FIP 常數 ${params.fipConstant.toFixed(3)}；未達門檻：IP < ${minIP}`, `來源：${window.location.href}`])}>CSV</Button>
+  // 列印: one A4 page of the batting and pitching totals in the current filter (the filters travel in the link)
+  const printButton = <Button size="sm" variant="ghost" icon={<Printer />} to={`/print/stats${search}`} title="依目前篩選印出一頁累計成績表">列印</Button>
 
   const footer = useMemo(() => {
     const t = s.teamPitch
@@ -106,7 +109,7 @@ export function PitchingPage() {
         <StatTile label="CSW%" to="?view=process&sort=cswPct#stats" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
         <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
-      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標「未達門檻」，不列入領先者與圖表`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}</span>}>
+      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標「未達門檻」，不列入領先者與圖表`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}</span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(s.pitchers, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={480} />

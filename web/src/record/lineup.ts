@@ -157,3 +157,24 @@ export function lineupIssues(l: Lineup, roster: Player[], ctx: LineupContext = {
   if (ctx.eligible) for (const n of everyone) if (n && names.has(n) && !ctx.eligible.has(n)) out.push(`${n} 不在報名名單`)
   return [...new Set(out)]
 }
+
+/** One line of the printed 陣容卡. */
+export interface LineupCardRow { order: number; number?: string; name: string; pos: string }
+export interface LineupCardData {
+  /** batting order 1–9 (a blank slot keeps its row with an empty name) */
+  rows: LineupCardRow[]
+  /** under a DH, the pitcher who does not bat */
+  pitcher?: { number?: string; name: string }
+  /** 板凳 (never a starter) */
+  bench: Array<{ number?: string; name: string }>
+}
+
+/** The printed 陣容卡 (our own dugout's card, not an official form): batting order with numbers and positions, the
+ *  pitcher who does not bat under a DH, and the bench. Numbers come from the roster (undefined when it has none). */
+export function lineupCard(l: Lineup, roster: Player[]): LineupCardData {
+  const num = new Map(roster.map((p) => [p.name, p.number || undefined]))
+  const rows = l.order.map((name, i) => ({ order: i + 1, number: name ? num.get(name) : undefined, name, pos: positionOf(l, name) }))
+  const p = l.field.P
+  const pitcher = p && l.dh && !l.order.includes(p) ? { number: num.get(p), name: p } : undefined
+  return { rows, pitcher, bench: withoutStarter(l.bench, l).map((name) => ({ number: num.get(name), name })) }
+}
