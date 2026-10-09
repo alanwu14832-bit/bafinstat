@@ -91,7 +91,7 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
   }, [])
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-[color-mix(in_srgb,var(--bg)_72%,transparent)] backdrop-blur-xl backdrop-saturate-150" style={{ WebkitBackdropFilter: 'blur(20px) saturate(150%)' }}>
+    <header className="print:hidden sticky top-0 z-30 border-b border-border bg-[color-mix(in_srgb,var(--bg)_72%,transparent)] backdrop-blur-xl backdrop-saturate-150" style={{ WebkitBackdropFilter: 'blur(20px) saturate(150%)' }}>
       {/* a little wider than the page content: the one-row filters need ~1,100px next to the toggles */}
       <div className="max-w-[calc(var(--content-max)+240px)] mx-auto px-4 md:px-8 h-14 flex items-center gap-3">
         <button type="button" aria-label="開啟選單" onClick={() => setMobileNavOpen(true)}

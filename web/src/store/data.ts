@@ -24,7 +24,7 @@ import { DAY_ROSTER_UNSUPPORTED, ERRORS_UNSUPPORTED, EVENTS_UNSUPPORTED, RUNNER_
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import { ALL_RECORD_FIELDS, recordFieldWarnings, type RecordFields } from '../data/recordFields'
 import type { GameWarning } from '../data/normalize'
-import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
+import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, isPracticeId, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
 
 const DATA_KEY = 'bafin.dataset.v1'
 const DEMO_KEY = 'bafin.demo'
@@ -179,6 +179,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   resetToSeed: () => { writeJSON(DATA_KEY, null); set({ base: STARTER, source: 'seed', importedAt: null, filters: DEFAULT_FILTERS }) },
   canEdit: () => { const { cloud } = get(); return !cloud.configured || (!!cloud.user && cloud.isEditor) },
   saveGame: async (edit) => {
+    if (isPracticeId(edit.game.id)) throw new Error('練習比賽不會存檔')
     const { cloud, base } = get()
     const { fragment, warnings } = normalizeGameEdit(base.roster, edit)
     if (cloud.configured) {

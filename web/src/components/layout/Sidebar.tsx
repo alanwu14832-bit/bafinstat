@@ -134,7 +134,7 @@ export function Sidebar() {
       initial={false}
       animate={{ width }}
       transition={reduced ? { duration: 0 } : WIDTH_TRANSITION}
-      className="hidden lg:flex flex-col sticky top-0 h-screen shrink-0 bg-bg z-40"
+      className="hidden lg:flex print:hidden flex-col sticky top-0 h-screen shrink-0 bg-bg z-40"
       style={{ width }}
     >
       <Brand collapsed={collapsed} reduced={reduced} />
@@ -169,7 +169,7 @@ export function MobileDrawer() {
   const { pathname } = useLocation()
   useEffect(() => { setOpen(false) }, [pathname, setOpen])
   return (
-    <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="主選單" side="left" desktopFrom="never" className="lg:hidden">
+    <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="主選單" side="left" desktopFrom="never" className="lg:hidden print:hidden">
       <div className="flex items-center justify-between pr-3">
         <Brand collapsed={false} reduced={reduced} />
         <button type="button" onClick={() => setOpen(false)} aria-label="關閉選單" className="size-9 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer">

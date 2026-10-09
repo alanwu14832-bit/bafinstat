@@ -18,6 +18,8 @@ import { registrationByKey, registrationFor, registrationKey, unscheduledRegistr
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { POSITION_LABEL } from '../lib/fmt'
 import { cx } from '../lib/format'
+import { localDate } from '../lib/dates'
+import { RestHint } from '../components/ui/RestHint'
 import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
 
 /** Where each position's dropdown sits on the field (percent of the diagram box). */
@@ -189,6 +191,8 @@ export function LineupPage() {
         <Card className="xl:col-span-7" title="守備陣容" subtitle="每個守位選一個人；同一人只會站一個位置" bodyClassName="p-3 sm:p-5">
           <div className="sm:hidden"><PositionList lineup={lineup} names={names} onPick={pick} /></div>
           <div className="hidden sm:block"><FieldDiagram lineup={lineup} names={names} onPick={pick} /></div>
+          {/* 投手休息表: is the pitcher picked rested enough for this game's date (Pitch Smart 建議, a reminder only) */}
+          {lineup.field.P && <RestHint name={lineup.field.P} asOf={game?.date ?? localDate()} excludeGameId={game && !game.status ? game.id : undefined} className="mt-3" />}
           <div className="mt-4 pt-4 border-t border-border flex items-center gap-3 flex-wrap">
             <span className="text-[12px] font-medium text-ink-2">指定打擊 DH</span>
             <PlayerSelect size="sm" aria-label="DH 指定打擊" value={lineup.dh} onChange={setDh} names={names} placeholder="不用 DH" className="w-[160px]" />

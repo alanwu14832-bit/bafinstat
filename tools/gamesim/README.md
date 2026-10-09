@@ -12,6 +12,7 @@ Box Score、局分表拿去和手算的正確答案逐項比對——就像賽�
   二安帶回兩分；3 下先換投（放上去的跑者跟著算新投手的）→ 放上跑者 → 我隊投手犯規 → 犧飛回來 1 分（非自責）→ 兩個三振，2：1。
   `check3.mjs` 核對：突破僵局跑者不算打席、那位投手 BF 3／R 1／ER 0、「投球」頁進階 BK 1、逐球有「突破僵局」「投手犯規」。
   先跑 game3 再跑 excel 的話，X7 也會拿這場的總表和網站比對。
+- `practice.mjs`：練習紀錄（`/record?practice=1`）記 3 個打席再「結束練習」：這台裝置的正式進度、資料集都不能變，比賽頁不能出現 PRACTICE- 的比賽。
 - `check1.mjs`／`check2.mjs`：正確答案（打者 PA AB R H 2B HR RBI BB SO SB；投手 IP BF PC 好球 K BB HBP H R ER ERA；局分表）。
 - `edit1.mjs`：接在 game1 後面，在比賽頁「修改資料」改 5 個地方（失誤上壘改內安、表格補一顆壞球、投球逐球重按、
   我隊失誤改成安打、場地），存檔後和改過的正確答案比對（含用球數、自責分、守備失誤）。
@@ -26,6 +27,7 @@ node tools/gamesim/game1.mjs /tmp/out && node tools/gamesim/check1.mjs /tmp/out/
 node tools/gamesim/game2.mjs /tmp/out && node tools/gamesim/check2.mjs /tmp/out/game2-shown.json
 node tools/gamesim/game3.mjs /tmp/out && node tools/gamesim/check3.mjs /tmp/out/game3-shown.json
 node tools/gamesim/edit1.mjs /tmp/out && LANG=C.UTF-8 node tools/gamesim/excel.mjs /tmp/out   # excel 的 X3、X7 要有 soffice
+node tools/gamesim/practice.mjs
 ```
 `CHROMIUM=/path/to/chromium` 指定瀏覽器，`GAMESIM_URL` 指定網址。2026-10-08 第一次跑時找到：雙殺把 2 個出局算成 3 個、
 換投後的出局算給前一任投手、代守時同一次失誤算給兩個人、捕手妨礙沒算成失誤（都已修正）。

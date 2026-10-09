@@ -32,6 +32,21 @@ export const TEAM_DEFAULTS = {
   accentDark: '#e2a03a',
   accentInk: '#1a1207',
   accentInkDark: '#1a1207',
+  /** 投手休息表 (no VITE_ variable: edit here, per team). MLB Pitch Smart 19–22 歲建議 — a recommendation, not a league
+   *  rule, and the site never blocks a pitching change with it. tiers = [most pitches that day, rest days]; past the last
+   *  tier rest `over` days (the 2017 MLB/USA Baseball update; the live table leaves out 106–120). dailyMax = most pitches
+   *  in a day; maxConsecutiveDays = no 3rd day in a row; oneGamePerDay = one game a day; warnWithin = warn this many
+   *  pitches before a tier / the daily max on 紀錄比賽; windowDays = how far back the rest table looks. */
+  pitchRest: {
+    source: 'MLB Pitch Smart 19–22 歲建議',
+    tiers: [[30, 0], [45, 1], [60, 2], [80, 3], [105, 4]] as Array<[number, number]>,
+    over: 5,
+    dailyMax: 120,
+    maxConsecutiveDays: 2,
+    oneGamePerDay: true,
+    warnWithin: 5,
+    windowDays: 30,
+  },
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
@@ -63,6 +78,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     accentDark: color('VITE_TEAM_ACCENT_DARK', TEAM_DEFAULTS.accentDark),
     accentInk: color('VITE_TEAM_ACCENT_INK', TEAM_DEFAULTS.accentInk),
     accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
+    pitchRest: TEAM_DEFAULTS.pitchRest,
   }
 }
 

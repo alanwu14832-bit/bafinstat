@@ -54,14 +54,14 @@ export function AppShell({ children, filters }: AppShellProps) {
   }, [toggleSidebar, setMobileNavOpen])
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] bg-bg text-ink">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] print:block bg-bg text-ink">
       <Sidebar />
       <MobileDrawer />
       <div className="min-w-0 flex flex-col">
         {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
         <main className="flex-1 min-w-0">
           {ARCHIVE && (
-            <div role="status" className="max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
+            <div role="status" className="print:hidden max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
               <div className="flex items-center gap-2 flex-wrap rounded-[12px] bg-[color-mix(in_srgb,var(--warning)_14%,var(--surface))] px-3 py-2 text-[13px] text-ink">
                 <History className="size-4 shrink-0" />
                 <span className="min-w-0 flex-1">你在看<span className="font-medium">舊版網站</span>（{ARCHIVE.date || ARCHIVE.id}）：只能瀏覽，資料是現在的資料。</span>
@@ -70,7 +70,7 @@ export function AppShell({ children, filters }: AppShellProps) {
             </div>
           )}
           {stale && (
-            <div role="status" className="max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
+            <div role="status" className="print:hidden max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
               <div className="flex items-center gap-2 rounded-[12px] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2 text-[13px] text-ink">
                 <CloudOff className="size-4 text-critical shrink-0" />
                 <span className="min-w-0 flex-1">顯示的是上次同步的資料{cloud.lastSync ? `（${new Date(cloud.lastSync).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}）` : ''}，雲端目前連不上。</span>
@@ -78,7 +78,7 @@ export function AppShell({ children, filters }: AppShellProps) {
               </div>
             </div>
           )}
-          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-10 md:py-10"><PageTransition id={pathname}>{children}</PageTransition></div>
+          <div className="max-w-[var(--content-max)] mx-auto px-4 py-6 md:px-10 md:py-10 print:max-w-none print:p-0"><PageTransition id={pathname}>{children}</PageTransition></div>
         </main>
       </div>
     </div>
