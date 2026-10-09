@@ -18,7 +18,8 @@ create table if not exists players (
 create table if not exists games (
   id              text primary key,
   date            date not null,
-  time            text,
+  time            text,           -- 開賽時間 'HH:MM'
+  end_time        text,           -- 結束時間 'HH:MM'（比賽時間＝兩者相減，不另外存）
   tournament      text not null default '未分類',
   opponent        text not null default '未知',
   home_away       text not null default '主',
@@ -60,6 +61,8 @@ create table if not exists batting_pa (
   code          text,
   note          text,
   events        jsonb,          -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
+  opp_pitcher   text,           -- 對方投手（姓名，選填）
+  opp_hand      text,           -- 對方投手 L 左投 / R 右投
   primary key (game_id, seq)
 );
 
@@ -666,6 +669,19 @@ grant execute on function quick_logout() to authenticated;
 grant execute on function set_quick_login(text, int) to authenticated;
 grant execute on function quick_login_status() to authenticated;
 
+-- ---------------------------------------------------------------- 2026-10-14 比賽時間、對方投手（舊資料庫補欄位）
+-- 新建的已在上面。說明見 migrations/2026-10-14_record_fields.sql。限制放在這裡（不在上面的 4) limits），因為舊資料庫
+-- 跑到那裡時這些欄位還不存在。
+alter table games add column if not exists end_time text;
+alter table batting_pa add column if not exists opp_pitcher text;
+alter table batting_pa add column if not exists opp_hand text;
+do $$
+begin
+  begin alter table batting_pa add constraint batting_pa_opp_hand check (opp_hand in ('L', 'R')) not valid; exception when duplicate_object then null; end;
+  begin alter table batting_pa add constraint batting_pa_opp_pitcher_size check (char_length(coalesce(opp_pitcher, '')) <= 40) not valid; exception when duplicate_object then null; end;
+  begin alter table games add constraint games_end_time_size check (char_length(coalesce(end_time, '')) <= 8) not valid; exception when duplicate_object then null; end;
+end $$;
+
 -- ---------------------------------------------------------------- 2026-10-13 存檔保護
 -- 一場比賽（比賽資料＋打擊／投球／守備紀錄）由 save_games() 一次存完：中途失敗就整筆不算，舊紀錄不會不見。
 -- 也在這裡：快速登入「解除暫停」（unlock_quick_login）。說明見 migrations/2026-10-13_save_games.sql。
@@ -691,15 +707,15 @@ begin
   end if;
   if cardinality(ids) = 0 then return 0; end if;
 
-  insert into games as t (id, date, time, tournament, opponent, home_away, venue, weather, recorder, innings,
+  insert into games as t (id, date, time, end_time, tournament, opponent, home_away, venue, weather, recorder, innings,
                           winning_pitcher, losing_pitcher, save_pitcher, holds, note, status, day_roster)
-  select r.id, r.date, r.time, coalesce(r.tournament, '未分類'), coalesce(r.opponent, '未知'), coalesce(r.home_away, '主'),
+  select r.id, r.date, r.time, r.end_time, coalesce(r.tournament, '未分類'), coalesce(r.opponent, '未知'), coalesce(r.home_away, '主'),
          r.venue, r.weather, r.recorder, r.innings, r.winning_pitcher, r.losing_pitcher, r.save_pitcher, r.holds, r.note,
          r.status, r.day_roster
     from jsonb_populate_recordset(null::games, p_games) r
    where r.id = any(ids)
   on conflict (id) do update set
-    date = excluded.date, time = excluded.time, tournament = excluded.tournament, opponent = excluded.opponent,
+    date = excluded.date, time = excluded.time, end_time = excluded.end_time, tournament = excluded.tournament, opponent = excluded.opponent,
     home_away = excluded.home_away, venue = excluded.venue, weather = excluded.weather, recorder = excluded.recorder,
     innings = excluded.innings, winning_pitcher = excluded.winning_pitcher, losing_pitcher = excluded.losing_pitcher,
     save_pitcher = excluded.save_pitcher, holds = excluded.holds, note = excluded.note, status = excluded.status,

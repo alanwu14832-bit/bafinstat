@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { Sheet } from '../components/ui/Sheet'
 import { AuthDialog } from '../components/ui/AuthDialog'
+import { OppLineupSheet } from '../record/OppParts'
 
 const frame = () => act(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
 
@@ -40,5 +41,25 @@ describe('focus', () => {
     expect(root.hasAttribute('inert')).toBe(false)
     expect(document.activeElement).toBe(opener)
     cleanup(); root.remove()
+  })
+  it('對方打序 opens with the batter now up focused, and closing gives the focus back to the opener', async () => {
+    const opener = document.createElement('button'); opener.textContent = '改姓名／代打'
+    document.body.appendChild(opener); opener.focus()
+    const props = { onClose: () => undefined, lineup: Array(9).fill(''), current: 3, names: [], last: null, opponent: '模擬隊', onDone: () => undefined }
+    const { rerender } = render(<OppLineupSheet open={false} {...props} />)
+    rerender(<OppLineupSheet open {...props} />)
+    await frame(); await frame()
+    expect(document.activeElement).toBe(screen.getByLabelText('對方第 3 棒'))
+    rerender(<OppLineupSheet open={false} {...props} />)
+    await act(() => new Promise<void>((r) => setTimeout(r, 400)))
+    expect(document.activeElement).toBe(opener)
+    cleanup(); opener.remove()
+  })
+  it('a plain sheet still focuses its own panel on open', async () => {
+    render(<Sheet open onClose={() => undefined} ariaLabel="篩選"><button type="button">套用</button></Sheet>)
+    await frame(); await frame()
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: '套用' }))
+    cleanup()
   })
 })

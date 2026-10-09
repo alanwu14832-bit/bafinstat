@@ -14,6 +14,14 @@ describe('team config', () => {
     expect(resolveTeam({ VITE_TEAM_INNINGS: 'nine' }).innings).toBe(7)
     expect(resolveTeam({ VITE_TEAM_SEED: 'yes' }).seed).toBe(true)
   })
+  it('reads the tie-break bases (VITE_TEAM_TIEBREAK), keeping the default for anything else', () => {
+    expect(resolveTeam({}).tiebreak).toBe('12')
+    expect(resolveTeam({ VITE_TEAM_TIEBREAK: '2' }).tiebreak).toBe('2')
+    expect(resolveTeam({ VITE_TEAM_TIEBREAK: '123' }).tiebreak).toBe('123')
+    expect(resolveTeam({ VITE_TEAM_TIEBREAK: 'off' }).tiebreak).toBe('')
+    expect(resolveTeam({ VITE_TEAM_TIEBREAK: '0' }).tiebreak).toBe('')
+    expect(resolveTeam({ VITE_TEAM_TIEBREAK: '9' }).tiebreak).toBe('12')
+  })
   it('resolves assets against the base path, leaving URLs alone', () => {
     expect(assetUrl('mark.png', '/bafinstat/')).toBe('/bafinstat/mark.png')
     expect(assetUrl('/team/mark.png', '/')).toBe('/team/mark.png')

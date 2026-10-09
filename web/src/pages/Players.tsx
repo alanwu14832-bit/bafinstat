@@ -37,7 +37,7 @@ import { SprayChart } from '../components/charts/SprayChart'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
-import type { BattingPA } from '../data/types'
+import { isPA, type BattingPA } from '../data/types'
 import { battingLines, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
 import { cx } from '../lib/format'
@@ -125,8 +125,8 @@ export function PlayersPage() {
   // filtered games, not on whoever is first on the roster and may have no numbers at all
   const busiest = useMemo(() => {
     const n = new Map<string, number>()
-    for (const p of s.batting) if (p.batter) n.set(p.batter, (n.get(p.batter) ?? 0) + 1)
-    for (const p of s.pitching) if (p.pitcher) n.set(p.pitcher, (n.get(p.pitcher) ?? 0) + 1)
+    for (const p of s.batting) if (p.batter && isPA(p)) n.set(p.batter, (n.get(p.batter) ?? 0) + 1)
+    for (const p of s.pitching) if (p.pitcher && isPA(p)) n.set(p.pitcher, (n.get(p.pitcher) ?? 0) + 1)
     return [...n.entries()].filter(([name]) => names.includes(name)).sort((a, b) => b[1] - a[1])[0]?.[0]
   }, [s.batting, s.pitching, names])
   const [selected, setSelected] = useState<string>(requested && names.includes(requested) ? requested : busiest ?? names[0] ?? '')

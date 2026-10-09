@@ -119,6 +119,14 @@ const check = async (label, want) => {
 // ================================================================ the game (the "video")
 // --- 1 上
 await us({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 8, batter: 1 })                                  // S1 一安
+// 對方投手: the strip asks while we bat; answered after the first batter, so his plate appearance gets it too
+{
+  const strip = main.getByRole('group', { name: '對方投手' })
+  if (!(await strip.count())) notes.push('我隊打擊時沒有出現「對方投手是？」')
+  else { await strip.getByRole('button', { name: '右投', exact: true }).click(); await p.waitForTimeout(200) }
+  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「右投」後「對方投手是？」還在')
+  if (!(await main.getByRole('button', { name: '對方 右投', exact: true }).count())) notes.push('點了「右投」後沒有「對方 右投」按鈕')
+}
 await us({ steps: ['B', 'B', { run: 1, ev: '盜壘' }, 'CS', 'IP'], result: '犧觸', loc: 1, runners: { 2: 3 }, batter: 'out' })  // S1 盜二；S2 犧觸 送上三
 await us({ steps: ['IP'], result: '犧飛', loc: 9, runners: { 3: 'home' }, batter: 'out', rbi: 1 })            // S3 犧飛 1 分
 await us({ steps: ['B', 'B', 'B', 'B'], result: '保送' })                                                   // S4 保送
@@ -197,7 +205,11 @@ await p.screenshot({ path: `${S}/game1-live.png`, fullPage: true })
 
 // ---------------------------------------------------------------- finish and read what the site shows
 await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
-await p.getByLabel('勝投').selectOption(B4)
+// (the only reliever, B4, gets the 中繼 here, so the win goes to the starter: W and HLD both have a value for excel.mjs)
+await p.getByLabel('勝投').selectOption(S9)
+const holdChip = p.getByRole('group', { name: '中繼' }).getByRole('button', { name: B4 })
+if (!(await holdChip.count())) notes.push('結束比賽沒有可選的中繼')
+else await holdChip.click()
 await p.getByRole('button', { name: '儲存並結束' }).click(); await p.waitForTimeout(1200)
 log('url', p.url())
 const dlg = p.getByRole('dialog').last()
@@ -214,6 +226,22 @@ const lineText = (await dlg.locator('section, div').filter({ hasText: /^.*R.*H.*
 writeFileSync(`${S}/game1-shown.json`, JSON.stringify({ N, bat, pit, lineText, dialogs, notes, errs }, null, 1))
 const ds = await p.evaluate(() => JSON.parse(localStorage.getItem('bafin.dataset.v1') || 'null'))
 writeFileSync(`${S}/game1-dataset.json`, JSON.stringify(ds))
+// 中繼 on the game page, 對方投手 on every saved plate appearance of ours, and the badge in 逐球・打擊
+const fails = []
+const header = await dlg.innerText()
+if (!header.includes(`中繼 ${B4}`)) fails.push(`比賽頁沒有顯示「中繼 ${B4}」`)
+const saved = ds?.base?.games?.find((g) => g.opponent === '模擬隊')
+if (!saved) fails.push('找不到存好的比賽')
+else {
+  if (JSON.stringify(saved.holds) !== JSON.stringify([B4])) fails.push(`存下的中繼是 ${JSON.stringify(saved.holds)}，應為 [${B4}]`)
+  const rows = ds.base.batting.filter((x) => x.gameId === saved.id)
+  const notR = rows.filter((x) => x.oppHand !== 'R')
+  if (!rows.length || notR.length) fails.push(`${notR.length} / ${rows.length} 個我隊打席沒有記成對方右投`)
+}
+await dlg.getByRole('tab', { name: /逐球・打擊/ }).click(); await p.waitForTimeout(300)
+if (!(await dlg.getByText('對方先發・右投', { exact: true }).count())) fails.push('逐球・打擊沒有「對方先發・右投」')
+log('對方投手／中繼:', fails.length ? JSON.stringify(fails) : 'ok')
+if (fails.length) process.exitCode = 1
 log('dialogs:', JSON.stringify(dialogs))
 log('notes while recording:', JSON.stringify(notes, null, 1))
 log('page errors:', JSON.stringify(errs))

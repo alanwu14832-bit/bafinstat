@@ -11,7 +11,7 @@ run() { $PSQL -q -d "$DB" -v ON_ERROR_STOP=1 -c 'set client_min_messages = error
 run tests/supabase_stub.sql
 run schema.sql
 run schema.sql
-for f in migrations/2026-10-08_security.sql migrations/2026-10-10_quick_login.sql migrations/2026-10-12_quick_login_fix.sql migrations/2026-10-13_save_games.sql; do run "$f"; done
+for f in migrations/2026-10-08_security.sql migrations/2026-10-10_quick_login.sql migrations/2026-10-12_quick_login_fix.sql migrations/2026-10-13_save_games.sql migrations/2026-10-14_record_fields.sql; do run "$f"; done
 out=$(mktemp)
 status=0
 $PSQL -q -d "$DB" -v ON_ERROR_STOP=1 -f - < tests/permissions.sql > "$out" 2>&1 || status=$?

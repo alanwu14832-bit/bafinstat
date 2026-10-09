@@ -19,6 +19,7 @@ import { applyEarnedRepairs, earnedRepairs } from '../record/earned'
 import { auditGame } from '../data/audit'
 import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { gameRecap } from '../data/recap'
+import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
 import { f2, f3, pct } from '../lib/fmt'
@@ -211,16 +212,17 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
       <div className={cx('sticky z-[3] bg-surface border-b border-border px-5 md:px-6 pt-3 sm:pt-5 pb-3 flex flex-col gap-3', page ? 'top-[var(--topbar-h)] -mx-4 md:-mx-10 md:px-10 rounded-none' : 'top-0')}>
         <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
           <div className="min-w-0">
-            <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}</div>
+            <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
             <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
               <span>{TEAM_NAME} <span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
               <span className="inline-flex gap-1.5">{resultBadge(current.result)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
             </h2>
-            {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.recorder) && (
+            {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
               <p className="text-[12px] text-ink-2 mt-1.5 flex flex-wrap gap-x-3">
                 {current.game.winningPitcher && <span><span className="text-muted">勝投</span> {current.game.winningPitcher}</span>}
                 {current.game.losingPitcher && <span><span className="text-muted">敗投</span> {current.game.losingPitcher}</span>}
                 {current.game.savePitcher && <span><span className="text-muted">救援</span> {current.game.savePitcher}</span>}
+                {!!current.game.holds?.length && <span><span className="text-muted">中繼</span> {current.game.holds.join('、')}</span>}
                 {current.game.recorder && <span><span className="text-muted">紀錄</span> {current.game.recorder}</span>}
               </p>
             )}

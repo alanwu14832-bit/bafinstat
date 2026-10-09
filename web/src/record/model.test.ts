@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
   setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
+  finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
 } from './model'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
@@ -320,5 +321,242 @@ describe('one runner moves on a wild pitch / passed ball; RBI corrected afterwar
     expect(setRbi(s, 0, 9).batting[0].rbi).toBe(4)
     expect(setRbi(s, 0, -1).batting[0].rbi).toBe(0)
     expect(setRbi(s, 5, 1)).toBe(s)
+  })
+})
+
+describe('比賽時間: first pitch and last plate appearance', () => {
+  const T = (h: number, m: number, d = 9) => new Date(2026, 9, d, h, m).toISOString()
+  const g = { ...game, date: '2026-10-09', time: '13:00' }
+  it('stamps the first pitch once, and the last plate appearance whenever rows grow', () => {
+    const s0 = newGame(g, lineup, '壬')
+    expect(stampTimes(s0, s0, T(13, 0)).firstPitchAt).toBeUndefined()
+    const s1 = stampTimes(s0, addPitch(s0, 'B'), T(13, 7))
+    expect(s1.firstPitchAt).toBe(T(13, 7))
+    expect(s1.lastPlayAt).toBeUndefined()
+    const s2 = stampTimes(s1, addPitch(s1, 'B'), T(13, 8))
+    expect(s2.firstPitchAt).toBe(T(13, 7))
+    const s3 = stampTimes(s2, commitPA(s2, { ...defaultPlan(s2, '一安'), loc: 7 }), T(13, 9))
+    expect([s3.firstPitchAt, s3.lastPlayAt]).toEqual([T(13, 7), T(13, 9)])
+    // a pitch does not move the last plate appearance
+    expect(stampTimes(s3, addPitch(s3, 'B'), T(13, 10)).lastPlayAt).toBe(T(13, 9))
+    // a plate appearance sent without any pitch also counts as the start
+    const p = stampTimes(s0, commitPA(s0, defaultPlan(s0, '觸身')), T(14, 0))
+    expect([p.firstPitchAt, p.lastPlayAt]).toEqual([T(14, 0), T(14, 0)])
+  })
+  it('the 結束比賽 dialog starts from them when the game was recorded live', () => {
+    const s = { ...newGame(g, lineup, '壬'), batting: [], firstPitchAt: T(13, 7), lastPlayAt: T(15, 22) }
+    expect(finishTimes(s)).toEqual({ start: '13:07', end: '15:22', live: true })
+    // a 10-minute test game: not live, the game's own time
+    expect(finishTimes({ ...s, lastPlayAt: T(13, 17) })).toEqual({ start: '13:00', end: '', live: false })
+    // recorded the next day from the video
+    expect(finishTimes({ ...s, firstPitchAt: T(13, 7, 10), lastPlayAt: T(15, 22, 10) }).live).toBe(false)
+    // a draft from before these fields: the time it was set up, and its last change
+    const old = commitPA(newGame(g, lineup, '壬'), defaultPlan(newGame(g, lineup, '壬'), '觸身'))
+    expect(finishTimes({ ...old, startedAt: T(13, 2), updatedAt: T(15, 0) })).toEqual({ start: '13:02', end: '15:00', live: true })
+  })
+})
+
+describe('對方投手 on our plate appearances', () => {
+  it('the first entry fills this half so far; later changes start from the next plate appearance', () => {
+    let s = newGame({ ...game, homeAway: '客' }, lineup, '壬')   // away: we bat first
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7 })
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect('oppHand' in s.batting[0]).toBe(false)
+    s = setOppPitcher(s, { hand: 'R' })
+    expect(s.batting.map((b) => b.oppHand)).toEqual(['R', 'R'])
+    expect('oppPitcher' in s.batting[0]).toBe(false)
+    s = commitPA(s, defaultPlan(s, '保送'))
+    expect(s.batting[2].oppHand).toBe('R')
+    s = setOppPitcher(s, { name: ' 林 ', hand: 'L' })
+    expect(s.oppPitcher).toEqual({ name: '林', hand: 'L' })
+    expect(s.batting.map((b) => b.oppHand)).toEqual(['R', 'R', 'R'])
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect(s.batting[3]).toMatchObject({ oppHand: 'L', oppPitcher: '林' })
+  })
+  it('without it the rows have neither key, and a first entry in the 3rd inning leaves innings 1–2 alone', () => {
+    let s = newGame({ ...game, homeAway: '客' }, lineup, '壬')
+    const out3 = () => { for (let i = 0; i < 3; i++) s = commitPA(s, defaultPlan(s, '三振')) }
+    out3(); out3(); out3(); out3()   // 1上, 1下, 2上, 2下
+    expect(s.batting.every((b) => !('oppHand' in b) && !('oppPitcher' in b))).toBe(true)
+    s = commitPA(s, defaultPlan(s, '三振'))   // 3上, one out
+    s = setOppPitcher(s, { hand: 'L', name: '王' })
+    expect(s.batting.filter((b) => b.inning < 3).every((b) => !b.oppHand)).toBe(true)
+    expect(s.batting.filter((b) => b.inning === 3).map((b) => b.oppHand)).toEqual(['L'])
+  })
+  it('a blank entry clears it; 不記 hides the question', () => {
+    const s = newGame(game, lineup, '壬')
+    expect(setOppPitcher(setOppPitcher(s, { hand: 'R' }), { name: '  ' }).oppPitcher).toBeUndefined()
+    expect(skipOppHand(s).oppHandOff).toBe(true)
+  })
+})
+
+describe('對方打者姓名', () => {
+  it('names come from their batting order; a slot changed mid-game is a pinch hitter', () => {
+    let s = newGame(game, lineup, '壬', { oppNames: true, oppLineup: ['A1', 'A2', 'A3'] })   // home: they bat first
+    expect(s.oppLineup).toEqual(['A1', 'A2', 'A3', '', '', '', '', '', ''])
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7 })
+    expect(s.pitching[0].oppBatter).toBe('A1')
+    expect(s.runners[0].name).toBe('A1')
+    expect(oppBatterOf(s)).toBe('A2')
+    s = setOppLineup(s, ['A1', '代打B', 'A3'])
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect([s.pitching[0].oppBatter, s.pitching[1].oppBatter]).toEqual(['A1', '代打B'])
+    // a one-off name typed for this batter still wins
+    s = commitPA({ ...s, oppBatter: '12號' }, defaultPlan(s, '三振'))
+    expect(s.pitching[2].oppBatter).toBe('12號')
+    // a blank slot: 對方 N 棒 as before
+    s = commitPA(s, defaultPlan(s, '保送'))
+    expect(s.pitching[3].oppBatter).toBeUndefined()
+    expect(s.runners.find((r) => r.row === 3)?.name).toBe('對方 4 棒')
+  })
+  it('off: nothing changes, even with a lineup typed', () => {
+    let s = setOppNames(newGame(game, lineup, '壬', { oppLineup: ['A1'] }), false)
+    s = commitPA(s, defaultPlan(s, '保送'))
+    expect(s.pitching[0].oppBatter).toBeUndefined()
+    expect(s.runners[0].name).toBe('對方 1 棒')
+    expect(setOppNames(newGame(game, lineup, '壬'), true).oppLineup).toEqual(Array(9).fill(''))
+  })
+  it('a draft without the new fields commits exactly as before', () => {
+    const fresh = newGame(game, lineup, '壬')
+    const { firstPitchAt: _a, lastPlayAt: _b, oppPitcher: _c, oppHandOff: _d, oppNames: _e, oppLineup: _f, ...old } = fresh
+    void _a; void _b; void _c; void _d; void _e; void _f
+    const draft = JSON.parse(JSON.stringify(old)) as RecordState
+    const a = commitPA(addPitch(draft, 'IP'), { ...defaultPlan(draft, '一安'), loc: 7 })
+    expect(a.pitching[0].oppBatter).toBeUndefined()
+    expect('oppHand' in a.pitching[0]).toBe(false)
+    expect(a.runners[0].name).toBe('對方 1 棒')
+    expect(a.oppLineup).toBeUndefined()
+  })
+})
+
+describe('中繼 candidates', () => {
+  it('the pitchers after the starter, in the order they pitched', () => {
+    let s = newGame(game, lineup, '壬')
+    expect(reliefPitchers(s)).toEqual([])
+    s = commitPA(s, defaultPlan(s, '三振'))
+    s = changePitcher(s, '子'); s = commitPA(s, defaultPlan(s, '三振'))
+    s = changePitcher(s, '丑'); s = commitPA(s, defaultPlan(s, '三振'))
+    expect(reliefPitchers(s)).toEqual(['子', '丑'])
+  })
+})
+
+describe('延長賽突破僵局 and 投手犯規 in the live model', () => {
+  const away = { ...game, homeAway: '客' as const }
+  it('a placed runner scores on a double: his run, the batter\'s RBI, and no plate appearance for him', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    let s: RecordState = { ...newGame(away, lineup, '壬'), inning: 8, slot: 6 }
+    s = placeTiebreak(s)
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '二安'), loc: 8, traj: 'F' })
+    expect(s.batting[0]).toMatchObject({ run: 1, code: 'R' })
+    expect(s.runners.find((r) => r.row === 1)?.base).toBe(3)
+    expect(s.batting[2]).toMatchObject({ basesBefore: '12', rbi: 1, batter: '庚' })
+    const lines = battingLines({ ...SEED_DATASET, roster: [] }, s.batting)
+    expect(lines.find((l) => l.name === '戊')).toMatchObject({ pa: 0, ab: 0, r: 1, g: 1 })
+    expect(lines.find((l) => l.name === '庚')).toMatchObject({ pa: 1, ab: 1, rbi: 1 })
+  })
+  it('a pitching change before the half\'s first pitch takes over the placed runners', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    const s = placeTiebreak({ ...newGame(game, lineup, '壬'), inning: 8, oppOrder: 3 })
+    expect(changePitcher(s, '子').pitching.map((p) => p.pitcher)).toEqual(['子', '子'])
+    expect(changePitcher(addPitch(s, 'B'), '子').pitching.map((p) => p.pitcher)).toEqual(['壬', '壬'])
+  })
+  it('a balk moves every runner up one, lead runner first; the run is earned and BK is counted from the plays', async () => {
+    const { balk } = await import('./model')
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '三安'), loc: 9, traj: 'L' })                     // row 0 on 3B
+    s = commitPA(addPitch(s, 'B'), { ...defaultPlan(s, '保送'), runners: { 0: 3 } })                         // row 1 on 1B
+    // (rows: 0 = 三安 on third, 1 = 保送 on first)
+    expect(s.runners.map((r) => [r.row, r.base])).toEqual([[0, 3], [1, 1]])
+    s = addPitch(s, 'B')
+    const t = balk(s)
+    expect(t.plays).toEqual([{ at: 1, kind: 'bk', from: 3, to: 'home' }, { at: 1, kind: 'bk', from: 1, to: 2 }])
+    expect(t.pitching[0].code).toBe('ER')
+    expect(t.extras.wp).toBe(0)
+    const u = commitPA(addPitch(addPitch(addPitch(t, 'SS'), 'SS'), 'SS'), defaultPlan(t, '三振'))
+    expect(u.pitching[2].events).toEqual([{ at: 1, kind: 'bk', from: 3, to: 'home' }, { at: 1, kind: 'bk', from: 1, to: 2 }])
+    expect(pitchingLines(u.pitching, [])[0].bk).toBe(1)
+    expect(pitchingLines(u.pitching, [])[0].er).toBe(1)
+    const empty = newGame(game, lineup, '壬')
+    expect(balk(empty)).toBe(empty)
+  })
+  it('a balk with the spec\'s rows: runners on first (row 0) and third (row 1)', async () => {
+    const { balk } = await import('./model')
+    let t = newGame(game, lineup, '壬')
+    t = commitPA(addPitch(t, 'IP'), { ...defaultPlan(t, '一安'), loc: 9, traj: 'L' })                       // row 0 on 1B
+    t = { ...t, runners: [{ base: 3, side: 'opp', row: 1, name: '對方 2 棒' }, { base: 1, side: 'opp', row: 0, name: '對方 1 棒' }], pitching: [...t.pitching, { ...t.pitching[0], oppOrder: 2, result: '三安', basesBefore: '1' }] }
+    t = balk(t)
+    expect(t.plays).toEqual([{ at: 0, kind: 'bk', from: 3, to: 'home' }, { at: 0, kind: 'bk', from: 1, to: 2 }])
+    expect(t.pitching[1].code).toBe('ER')
+  })
+  it('a walk-off balk is kept: the game ends before that plate appearance is sent, BK goes on the last row', async () => {
+    const { balk } = await import('./model')
+    const { placeTiebreak } = await import('./tiebreak')
+    const { inferHalf, deriveHalf } = await import('./timeline')
+    let s = placeTiebreak({ ...newGame({ ...game, homeAway: '客' as const }, lineup, '壬', { tiebreak: { from: 8, bases: [1, 2] } }), inning: 8, half: 'bottom' as const, oppOrder: 3 })
+    expect(s.runners.map((r) => [r.row, r.base])).toEqual([[0, 2], [1, 1]])
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '犧觸'), runners: { 0: 3, 1: 2 }, loc: 1, traj: 'G' })
+    expect(s.outs).toBe(1)
+    s = balk(addPitch(s, 'B'))
+    expect(score(s).opp).toBe(1)
+    const edit = toGameEdit({ ...s, finished: true })
+    expect(edit.pitching[2].events).toEqual([{ at: 1, kind: 'bk', from: 3, to: 'home', play: true }, { at: 1, kind: 'bk', from: 2, to: 3, play: true }])
+    expect(pitchingLines(edit.pitching, [])[0]).toMatchObject({ name: '壬', bk: 1, r: 1, er: 0 })
+    // the inning still reads back, and an edit of it keeps the balk
+    const idx = [0, 1, 2]
+    const half = inferHalf(edit.pitching, idx, 'pit')
+    expect(half).not.toBeNull()
+    expect(deriveHalf(edit.pitching, half!, 'pit')[2].events?.filter((e) => e.kind === 'bk')).toHaveLength(2)
+    // (still in progress: nothing moves yet)
+    expect(toGameEdit(s).pitching[2].events).toBeUndefined()
+  })
+  it('a balk, then the third out on the bases: BK and the caught stealing go on the half\'s last row', async () => {
+    const { balk } = await import('./model')
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 9, traj: 'L' })
+    s = commitPA(addPitch(addPitch(addPitch(s, 'SS'), 'SS'), 'SS'), defaultPlan(s, '三振'))
+    s = commitPA(addPitch(addPitch(addPitch(s, 'SS'), 'SS'), 'SS'), defaultPlan(s, '三振'))
+    s = balk(addPitch(s, 'B'))
+    s = runnerEvent(addPitch(s, 'B'), 0, 'opp', 'cs')
+    expect(s.half).toBe('bottom')
+    expect(s.pitching[2]).toMatchObject({ cs: 1, events: [{ at: 3, kind: 'bk', from: 1, to: 2, play: true }] })
+    expect(pitchingLines(s.pitching, [])[0]).toMatchObject({ bk: 1, cs: 1, outs: 3 })
+  })
+  it('a reliever balks, then a pickoff ends the half: nothing is charged to the pitcher he replaced', async () => {
+    const { balk } = await import('./model')
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 9, traj: 'L' })
+    s = commitPA(addPitch(addPitch(addPitch(s, 'SS'), 'SS'), 'SS'), defaultPlan(s, '三振'))
+    s = commitPA(addPitch(addPitch(addPitch(s, 'SS'), 'SS'), 'SS'), defaultPlan(s, '三振'))
+    s = changePitcher(s, '子')
+    s = balk(addPitch(s, 'B'))
+    s = runnerEvent(s, 0, 'opp', 'pk')
+    expect(s.half).toBe('bottom')
+    expect(s.pitching[2]).toMatchObject({ pitcher: '壬', pk: 0 })
+    expect(s.pitching[2].events).toBeUndefined()
+    expect(pitchingLines(s.pitching, [])).toEqual([expect.objectContaining({ name: '壬', bk: 0, pk: 0, outs: 3 })])
+  })
+  it('a walk-off wild pitch by a reliever who came in during the plate appearance is not the old pitcher\'s', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    let s = placeTiebreak({ ...newGame({ ...game, homeAway: '客' as const }, lineup, '壬', { tiebreak: { from: 8, bases: [1, 2] } }), inning: 8, half: 'bottom' as const, oppOrder: 3 })
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '犧觸'), runners: { 0: 3, 1: 2 }, loc: 1, traj: 'G' })
+    s = changePitcher(addPitch(s, 'B'), '子')
+    s = wildPitch(addPitch(s, 'B'), 'wp')
+    expect(score(s).opp).toBe(1)
+    const edit = toGameEdit({ ...s, finished: true })
+    expect(edit.pitching[2]).toMatchObject({ pitcher: '壬', wp: 0 })
+    expect(pitchingLines(edit.pitching, []).find((l) => l.name === '壬')).toMatchObject({ wp: 0, bk: 0 })
+  })
+  it('a pitching change after a pickoff before the first pitch leaves the placed runners with the old pitcher', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    let s = placeTiebreak({ ...newGame(game, lineup, '壬'), inning: 8, oppOrder: 3 })
+    s = runnerEvent(s, 0, 'opp', 'pk')
+    s = changePitcher(s, '子')
+    expect(s.pitching.map((p) => p.pitcher)).toEqual(['壬', '壬'])
+  })
+  it('a 突破僵局 runner of ours never gets an RBI', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    const s = placeTiebreak({ ...newGame(game, lineup, '壬'), inning: 8, half: 'bottom' as const })
+    expect(s.batting.length).toBeGreaterThan(0)
+    expect(setRbi(s, 0, 1)).toBe(s)
   })
 })

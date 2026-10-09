@@ -82,6 +82,12 @@ select pg_temp.ok(pg_temp.val($q$select updated_by from games where id = 'G1'$q$
 select pg_temp.ok(not exists (select 1 from games where updated_by like '%@%'), 'no email on the public games table');
 select pg_temp.refused($q$select save_games('[{"id":"G1","date":"2026-10-02","opponent":"改過"}]', ('[{"game_id":"G1","seq":1,"inning":1,"batter":"甲","note":"' || repeat('x', 1200) || '"}]')::jsonb)$q$, 'a save that breaks a limit is refused');
 select pg_temp.ok(pg_temp.val($q$select opponent from games where id = 'G1'$q$) = '台大' and pg_temp.val($q$select count(*) from batting_pa where game_id = 'G1'$q$)::int = 1, 'and leaves the game and its records as they were');
+-- 2026-10-14: 結束時間 and 對方投手 (opp_pitcher / opp_hand) go through save_games too
+select pg_temp.ok(save_games('[{"id":"G3","date":"2026-10-04","time":"13:07","end_time":"15:22"}]', '[{"game_id":"G3","seq":1,"inning":1,"batter":"甲","pitches":["IP"],"result":"一安","opp_pitcher":"王","opp_hand":"L"}]') = 1, 'A saves a game with an end time and the opponent pitcher');
+select pg_temp.ok(pg_temp.val($q$select end_time from games where id = 'G3'$q$) = '15:22', 'end_time reads back');
+select pg_temp.ok(pg_temp.val($q$select opp_hand || opp_pitcher from batting_pa where game_id = 'G3'$q$) = 'L王', 'opp_hand and opp_pitcher read back');
+select pg_temp.refused($q$select save_games('[{"id":"G3","date":"2026-10-04","time":"13:07","end_time":"16:00"}]', '[{"game_id":"G3","seq":1,"inning":1,"batter":"甲","result":"一安","opp_hand":"左"}]')$q$, 'an opp_hand other than L / R is refused');
+select pg_temp.ok(pg_temp.val($q$select end_time from games where id = 'G3'$q$) = '15:22', 'and the game keeps its end time');
 select pg_temp.ok(pg_temp.val('select count(*) from editors')::int >= 3, 'A sees the 紀錄員名單');
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'A sees the 操作紀錄');
 select pg_temp.ok(length(add_editor('e@x.com', '新人')) = 10, 'A adds a recorder and gets a 10-character 邀請碼');

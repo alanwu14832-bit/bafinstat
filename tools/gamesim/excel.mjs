@@ -8,6 +8,7 @@
 //   X6 單場模板 filled in by hand — warned when the template's example 守備紀錄 is left in; the same Box Score without it
 //   X7 the 總表 sheet, recalculated by LibreOffice, against the site's own 打擊／投球／守備 numbers and game list
 //   node tools/gamesim/excel.mjs /tmp/out     (reads game1-shown.json + edit1-dataset.json or game1-dataset.json)
+//   X7 also runs on game3-dataset.json (延長賽突破僵局、投手犯規) when game3.mjs has run before it
 // X3 and X7 need LibreOffice (soffice); they are skipped without it.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -179,11 +180,10 @@ log('X6 單場模板：', (await importFile(H, `${S}/single.xlsx`, 'append')).do
 sameBox('X6 單場模板（和原本那場比）', boxA, await box(H, `${G}8`))
 
 // ================================================================ X7 總表（LibreOffice 重算）對網站
-if (lo) {
-  execFileSync(`${WEB}node_modules/.bin/esbuild`, [fileURLToPath(new URL('sitestats.ts', import.meta.url)), '--bundle', '--platform=node', '--format=esm', `--outfile=${S}/sitestats.mjs`, '--define:import.meta.env={"BASE_URL":"/"}', '--log-level=warning'])
-  writeFileSync(`${S}/export-dataset.json`, JSON.stringify(dsA))
+function totalsVsSite(label, ds, loFile) {
+  writeFileSync(`${S}/export-dataset.json`, JSON.stringify(ds))
   const site = JSON.parse(execFileSync('node', [`${S}/sitestats.mjs`, `${S}/export-dataset.json`], { maxBuffer: 1 << 26 }).toString())
-  const lwb = X.readFile(lo)
+  const lwb = X.readFile(loFile)
   const grid = X.utils.sheet_to_json(lwb.Sheets['總表'], { header: 1, defval: '' })
   const MAP = {
     bat: { G: 'g', PA: 'pa', AB: 'ab', R: 'r', H: 'h', '1B': 'h1', '2B': 'h2', '3B': 'h3', HR: 'hr', TB: 'tb', RBI: 'rbi', BB: 'bb', IBB: 'ibb', HBP: 'hbp', SO: 'so', SH: 'sh', SF: 'sf', GIDP: 'gidp', ROE: 'roe', SB: 'sb', CS: 'cs', 壘死: 'baserunningOuts', 'SB%': 'sbPct', AVG: 'avg', OBP: 'obp', SLG: 'slg', OPS: 'ops', 'OPS+': 'opsPlus', ISO: 'iso', BABIP: 'babip', wOBA: 'woba', 'wRC+': 'wrcPlus', 'K%': 'kPct', 'BB%': 'bbPct', 'RISP AVG': 'rispAvg', 'QAB%': 'qabPct', 'P/PA': 'pPerPA', sSeager: 'sSeager' },
@@ -196,7 +196,7 @@ if (lo) {
     cells++
     const none = want === null || want === undefined || Number.isNaN(want)
     if (none && (got === '' || got === null)) return
-    if (typeof got !== 'number' || none || Math.abs(got - want) > (Math.abs(want) > 10 ? 0.06 : Number.isInteger(want) ? 0.5 : 0.0015)) problem(`X7 ${what}：總表 ${got === '' ? '(空白)' : got}，網站 ${none ? '(空白)' : +(+want).toFixed(4)}`)
+    if (typeof got !== 'number' || none || Math.abs(got - want) > (Math.abs(want) > 10 ? 0.06 : Number.isInteger(want) ? 0.5 : 0.0015)) problem(`${label} ${what}：總表 ${got === '' ? '(空白)' : got}，網站 ${none ? '(空白)' : +(+want).toFixed(4)}`)
   }
   for (const [kind, title, lines, team] of [['bat', '打擊成績', site.bat, site.tb], ['pit', '投球成績', site.pit, site.tp], ['fld', '守備成績', site.fld, { g: site.team.games }]]) {
     const hr = grid.findIndex((r, i) => String(r[1]).trim() === '姓名' && grid[i - 1]?.some((v) => String(v).startsWith(title)))
@@ -216,7 +216,19 @@ if (lo) {
     const row = gl.find((r) => r[0] === s.game.id); const c = (h) => row[gh.indexOf(h)]
     for (const [h, v] of [['我隊得分', s.runsUs], ['對手得分', s.runsOpp], ['我隊安打', s.hitsUs], ['對手安打', s.hitsOpp], ['我隊失誤', s.errorsUs], ['對手失誤', s.errorsOpp], ['我隊殘壘', s.lobUs]]) same(`比賽清單 ${s.game.id} ${h}`, c(h), v)
   }
-  log(`✓ X7 總表與網站比對 ${cells} 格`)
+  log(`✓ ${label} 總表與網站比對 ${cells} 格`)
+}
+if (lo) {
+  execFileSync(`${WEB}node_modules/.bin/esbuild`, [fileURLToPath(new URL('sitestats.ts', import.meta.url)), '--bundle', '--platform=node', '--format=esm', `--outfile=${S}/sitestats.mjs`, '--define:import.meta.env={"BASE_URL":"/"}', '--log-level=warning'])
+  totalsVsSite('X7', dsA, lo)
+  // the tie-break game: placed runners are no plate appearances in the 總表 either (打席 helper), their runs count
+  if (existsSync(`${S}/game3-dataset.json`)) {
+    const T = await fresh(JSON.parse(readFileSync(`${S}/game3-dataset.json`, 'utf8')))
+    const ds3 = await dataset(T)
+    log('X7 突破僵局那場匯出：', await exportFile(T, `${S}/export3.xlsx`))
+    totalsVsSite('X7 突破僵局', ds3, recalc(`${S}/export3.xlsx`, `${S}/lo3`))
+    if (T.errs.length) problem(`網頁錯誤：${T.errs.join(' / ')}`)
+  } else log('－ X7 突破僵局略過（還沒跑 game3.mjs）')
 } else log('－ X7 略過（沒有 LibreOffice）')
 
 for (const p of [A, B, D, H]) if (p.errs.length) problem(`網頁錯誤：${p.errs.join(' / ')}`)

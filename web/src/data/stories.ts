@@ -6,7 +6,7 @@
  */
 import { battingLines, isHitResult, NON_AB_RESULTS, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from './stats'
 import type { BattingPA, Dataset, PitchingPA, StatParams } from './types'
-import { DEFAULT_PARAMS } from './types'
+import { DEFAULT_PARAMS, isPA } from './types'
 
 export type StoryTone = 'good' | 'bad' | 'neutral'
 export interface Story {
@@ -37,7 +37,8 @@ export function currentStreak(summaries: GameSummary[]): { result: 'W' | 'L'; n:
 function hitsByGame(pas: BattingPA[], gameOrder: string[]): Map<string, Array<{ gameId: string; h: number; ab: number }>> {
   const per = new Map<string, Map<string, { h: number; ab: number }>>()
   for (const p of pas) {
-    if (!p.batter || !p.result) continue
+    // (a tie-break runner's row is no at bat)
+    if (!p.batter || !isPA(p)) continue
     let m = per.get(p.batter)
     if (!m) { m = new Map(); per.set(p.batter, m) }
     const g = m.get(p.gameId) ?? { h: 0, ab: 0 }

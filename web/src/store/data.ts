@@ -13,7 +13,7 @@ import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
 import { ARCHIVE } from '../config/archive'
-import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
+import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, END_TIME_COLUMN, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, OPP_HAND_COLUMN, OPP_PITCHER_COLUMN, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
@@ -22,6 +22,7 @@ import {
 } from '../data/registrations'
 import { DAY_ROSTER_UNSUPPORTED, ERRORS_UNSUPPORTED, EVENTS_UNSUPPORTED, RUNNER_UNSUPPORTED } from '../data/gameRoster'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
+import { ALL_RECORD_FIELDS, recordFieldWarnings, type RecordFields } from '../data/recordFields'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
 
@@ -86,6 +87,8 @@ interface DataState {
   deleteAlbum: (id: string) => Promise<void>
   /** false once a cloud save reported that games.day_roster is missing (supabase/migrations/2026-09-26_rosters.sql not run) */
   dayRosterSupported: boolean
+  /** whether the cloud has the 2026-10-14 columns (結束時間, 對方投手); refreshed on every loadCloud, always true without the cloud */
+  recordFields: RecordFields
   /** tournament registration lists (報名名單, see data/registrations.ts), sorted season desc */
   registrations: Registration[]
   /** false when the cloud has no registrations table yet (show REGISTRATIONS_UNSUPPORTED instead of the editor) */
@@ -107,14 +110,18 @@ const storedDemo = readJSON<boolean>(DEMO_KEY)
 const initialDemo = cloudConfigured ? (storedDemo ?? false) : (storedDemo ?? initialBase.games.length < 3)
 
 const denied = (cloud: DataState['cloud']) => new Error(cloud.user ? '你的帳號不在紀錄員名單，無法寫入' : '請先登入才能修改雲端資料')
-/** Turn the cloud's missing day_roster column into a warning the save UIs already show. */
-const droppedWarnings = (dropped: string[], gameId = ''): GameWarning[] => [
+/** Turn the cloud's missing columns into warnings the save UIs already show. 結束時間／對方投手 only when what was saved
+ *  had them: toGameRow always sends end_time (null when blank), so the old schema drops it on every save. */
+const droppedWarnings = (dropped: string[], saved: Parameters<typeof recordFieldWarnings>[1], gameId = ''): GameWarning[] => [
   ...(dropped.includes('day_roster') ? [{ gameId, message: DAY_ROSTER_UNSUPPORTED }] : []),
   ...(dropped.includes(RUNNER_COLUMN) ? [{ gameId, message: RUNNER_UNSUPPORTED }] : []),
   ...(dropped.includes(ERRORS_COLUMN) ? [{ gameId, message: ERRORS_UNSUPPORTED }] : []),
   ...(dropped.includes(EVENTS_COLUMN) ? [{ gameId, message: EVENTS_UNSUPPORTED }] : []),
   ...(dropped.includes(SAVE_GAMES_FN) ? [{ gameId, message: SAVE_GAMES_UNSUPPORTED }] : []),
+  ...recordFieldWarnings({ endTime: !dropped.includes(END_TIME_COLUMN), oppPitcher: !dropped.includes(OPP_PITCHER_COLUMN) && !dropped.includes(OPP_HAND_COLUMN) }, saved, gameId),
 ]
+/** The same warning once (a dropped column and the columns check can both report it). */
+const dedupe = (ws: GameWarning[]): GameWarning[] => { const seen = new Set<string>(); return ws.filter((w) => !seen.has(w.message) && !!seen.add(w.message)) }
 let registrationsLive = false
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -135,9 +142,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try {
         const r = await pushCloudDataset(ds, 'replace')
-        result = { ...r, warnings: droppedWarnings(r.dropped) }
         if (r.dropped.includes('day_roster')) set({ dayRosterSupported: false })
         await get().loadCloud()
+        // (the columns check runs on what was just loaded back)
+        result = { ...r, warnings: dedupe([...droppedWarnings(r.dropped, ds), ...recordFieldWarnings(get().recordFields, ds)]) }
       }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
       set({ cloud: { ...get().cloud, pushing: false } })
@@ -156,7 +164,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         const r = await pushCloudDataset(ds, 'append')
         if (r.dropped.includes('day_roster')) set({ dayRosterSupported: false })
         await get().loadCloud(); set({ cloud: { ...get().cloud, pushing: false } })
-        return { ...r, warnings: droppedWarnings(r.dropped) }
+        return { ...r, warnings: dedupe([...droppedWarnings(r.dropped, ds), ...recordFieldWarnings(get().recordFields, ds)]) }
       }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
     }
@@ -179,12 +187,14 @@ export const useDataStore = create<DataState>((set, get) => ({
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try {
         const { dropped } = await pushCloudDataset(fragment, 'upsert')
-        warnings.push(...droppedWarnings(dropped, game.id))
+        warnings.push(...droppedWarnings(dropped, fragment, game.id))
         if (dropped.includes('day_roster')) set({ dayRosterSupported: false })
         else if (game.dayRoster) set({ dayRosterSupported: true })
         // the upsert leaves day_roster out when the game has none, so a roster removed in the editor is cleared explicitly
         else if (base.games.find((g) => g.id === game.id)?.dayRoster) await updateGameDayRosters([{ id: game.id, day_roster: null }])
         await get().loadCloud()
+        const lost = recordFieldWarnings(get().recordFields, fragment, game.id).filter((w) => !warnings.some((x) => x.message === w.message))
+        warnings.push(...lost)
       }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
       set({ cloud: { ...get().cloud, pushing: false } })
@@ -258,10 +268,14 @@ export const useDataStore = create<DataState>((set, get) => ({
     if (!cloudConfigured) return
     set({ cloud: { ...get().cloud, status: get().base.games.length ? get().cloud.status : 'loading', error: null } })
     try {
-      const ds = await fetchCloudDataset()
+      const { dataset: ds, missing } = await fetchCloudDataset()
       const lastSync = new Date().toISOString()
       writeJSON(DATA_KEY, { base: ds, importedAt: lastSync } satisfies Persisted)
-      set({ base: ds, source: 'cloud', importedAt: lastSync, cloud: { ...get().cloud, status: 'ready', error: null, lastSync } })
+      // the 2026-10-14 columns: read off the rows just loaded, so the notes go away right after the admin runs the SQL
+      const recordFields: RecordFields = { endTime: !missing.includes(END_TIME_COLUMN), oppPitcher: !missing.includes(OPP_HAND_COLUMN) }
+      const was = get().recordFields
+      set({ base: ds, source: 'cloud', importedAt: lastSync, cloud: { ...get().cloud, status: 'ready', error: null, lastSync },
+        ...(was.endTime !== recordFields.endTime || was.oppPitcher !== recordFields.oppPitcher ? { recordFields } : {}) })
     } catch (e) {
       set({ cloud: { ...get().cloud, status: 'error', error: e instanceof Error ? e.message : String(e) } })
     }
@@ -331,6 +345,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     set({ albums: get().albums.filter((x) => x.id !== id) })
   },
   dayRosterSupported: true,
+  recordFields: ALL_RECORD_FIELDS,
   registrations: cloudConfigured ? [] : readLocalRegistrations(),
   registrationsSupported: true,
   loadRegistrations: async () => {

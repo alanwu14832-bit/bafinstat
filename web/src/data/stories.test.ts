@@ -68,3 +68,15 @@ describe('數據故事：個人', () => {
     expect(s.find((x) => x.id === 'era')).toMatchObject({ kicker: '防禦率隊內最佳', text: '投 9.0 局' })
   })
 })
+
+describe('突破僵局 runners are no at bats', () => {
+  it('a player whose only row in his latest game is a placed runner keeps his hitting streak', () => {
+    const ds = season([[1, 0], [1, 0], [1, 0], [1, 0]])
+    // 甲 hits in games 1–3; in game 4 he only ran as the tie-break runner
+    const id4 = ds.games[3].id
+    const batting = ds.batting.filter((p) => !(p.gameId === id4 && p.batter === '甲')).concat({ ...bat(id4, '甲', '突破僵局', 1), pitches: [], inning: 8, code: 'R' })
+    const stories = teamStories(input({ ...ds, batting }), 10)
+    expect(stories.find((s) => s.id === 'hit-甲')?.figure).toBe('3')
+    expect(hitStreak([{ h: 1 }, { h: 1 }, { h: 1 }])).toBe(3)
+  })
+})

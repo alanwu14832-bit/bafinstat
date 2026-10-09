@@ -9,6 +9,8 @@
 -- Until this runs the site keeps saving the old way.
 
 -- the columns the site writes (added by earlier migrations; repeated so this file works on its own)
+-- (end_time: 2026-10-14_record_fields.sql; added here too, so re-running this file after that one keeps the same save_games())
+alter table games add column if not exists end_time text;
 alter table games add column if not exists status text;
 alter table games add column if not exists day_roster jsonb;
 alter table batting_pa add column if not exists runner text;
@@ -39,15 +41,15 @@ begin
   end if;
   if cardinality(ids) = 0 then return 0; end if;
 
-  insert into games as t (id, date, time, tournament, opponent, home_away, venue, weather, recorder, innings,
+  insert into games as t (id, date, time, end_time, tournament, opponent, home_away, venue, weather, recorder, innings,
                           winning_pitcher, losing_pitcher, save_pitcher, holds, note, status, day_roster)
-  select r.id, r.date, r.time, coalesce(r.tournament, '未分類'), coalesce(r.opponent, '未知'), coalesce(r.home_away, '主'),
+  select r.id, r.date, r.time, r.end_time, coalesce(r.tournament, '未分類'), coalesce(r.opponent, '未知'), coalesce(r.home_away, '主'),
          r.venue, r.weather, r.recorder, r.innings, r.winning_pitcher, r.losing_pitcher, r.save_pitcher, r.holds, r.note,
          r.status, r.day_roster
     from jsonb_populate_recordset(null::games, p_games) r
    where r.id = any(ids)
   on conflict (id) do update set
-    date = excluded.date, time = excluded.time, tournament = excluded.tournament, opponent = excluded.opponent,
+    date = excluded.date, time = excluded.time, end_time = excluded.end_time, tournament = excluded.tournament, opponent = excluded.opponent,
     home_away = excluded.home_away, venue = excluded.venue, weather = excluded.weather, recorder = excluded.recorder,
     innings = excluded.innings, winning_pitcher = excluded.winning_pitcher, losing_pitcher = excluded.losing_pitcher,
     save_pitcher = excluded.save_pitcher, holds = excluded.holds, note = excluded.note, status = excluded.status,

@@ -690,6 +690,16 @@
   "note": "CPBL 官方紀錄項目"
  },
  {
+  "key": "BK",
+  "zh": "投手犯規",
+  "en": "Balks",
+  "group": "投球",
+  "formula": "跑壘事件裡的投手犯規（一次犯規壘上跑者各進一壘，算一次）",
+  "status": "新增",
+  "priority": "P2",
+  "note": "CPBL 官方紀錄項目；只在網站計算，Excel 總表不算（公式數不出次數）"
+ },
+ {
   "key": "PK",
   "zh": "牽制出局",
   "en": "Pickoffs",

@@ -102,13 +102,21 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
   // on every render (an inline arrow), and re-running this would pull the focus back to the panel mid-typing
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose })
+  // who had the focus before the sheet opened: read in a layout effect, before the content's own effects can move the
+  // focus into the panel
+  const openerRef = useRef<HTMLElement | null>(null)
+  useLayoutEffect(() => { if (mounted) openerRef.current = document.activeElement as HTMLElement | null }, [mounted])
   useEffect(() => {
     if (!mounted) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const previouslyFocused = document.activeElement as HTMLElement | null
-    // focus the panel itself (keyboard users Tab from here); focusing a button would paint a ring on open
-    const raf = requestAnimationFrame(() => panelRef.current?.focus({ preventScroll: true }))
+    const previouslyFocused = openerRef.current
+    // focus the panel itself (keyboard users Tab from here); focusing a button would paint a ring on open. A field the
+    // content focused on purpose when it mounted (e.g. the batter now up in 對方打序) keeps the focus.
+    const raf = requestAnimationFrame(() => {
+      const panel = panelRef.current
+      if (panel && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true })
+    })
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { closeRef.current(); return }
       if (e.key !== 'Tab' || !panelRef.current) return

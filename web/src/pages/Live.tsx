@@ -14,11 +14,13 @@ import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
 import { EASE } from '../components/motion/Reveal'
 import { readDraft } from '../record/draft'
-import { count, offense, score, type RecordState } from '../record/model'
+import { count, offense, oppBatterOf, score, type RecordState } from '../record/model'
+import { oppPitcherText } from '../record/OppParts'
+import { hhmm } from '../lib/dates'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
-import { HIT_BASE_COUNT } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced } from '../data/types'
 import { cx } from '../lib/format'
 
 const POLL_MS = 5000
@@ -150,14 +152,15 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
 
   // who is up, with his line so far today
   const slot = s.lineup[s.slot]
-  const mine = slot ? s.batting.filter((p) => p.batter === slot.name) : []
+  // (a tie-break runner's row is no plate appearance)
+  const mine = slot ? s.batting.filter((p) => p.batter === slot.name && isPA(p)) : []
   const ab = mine.filter((p) => !NON_AB.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length, rbi = mine.reduce((a, p) => a + (p.rbi ?? 0), 0)
   // our pitcher's pitch count (finished plate appearances plus the one in progress)
   const pitcherRows = s.pitching.filter((p) => p.pitcher === s.pitcher)
   const pc = pitcherRows.reduce((a, p) => a + p.pitches.filter((x) => x !== 'IP').length, 0) + (side === 'opp' ? s.pitches.length : 0)
   const ks = pitcherRows.filter((p) => p.result === '三振').length
   // the last finished plate appearance (either side)
-  const lastBat = s.batting[s.batting.length - 1], lastPit = s.pitching[s.pitching.length - 1]
+  const lastBat = s.batting.filter(isPA).at(-1), lastPit = s.pitching.filter(isPA).at(-1)
   const last = !lastPit || (lastBat && (lastBat.inning > lastPit.inning || (lastBat.inning === lastPit.inning && (weTop ? side === 'opp' : side === 'us')))) ? (lastBat ? { who: lastBat.batter, result: lastBat.result, rbi: lastBat.rbi, us: true } : null) : { who: lastPit.oppBatter || `對方 ${lastPit.oppOrder ?? ''} 棒`, result: lastPit.result, rbi: 0, us: false }
 
   // a run or a home run flashes across the board for a few seconds
@@ -200,6 +203,8 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
           <span className="relative inline-flex size-2"><span className={cx('absolute inset-0 rounded-full', !reduced && 'animate-ping')} style={{ background: BOARD.out, opacity: 0.6 }} /><span className="relative size-2 rounded-full" style={{ background: BOARD.out }} /></span>LIVE
         </span>
         <span className={cx('truncate min-w-0 flex-1', big ? 'text-[15px]' : 'text-[12px] md:text-[13px]')} style={{ color: BOARD.muted }}>{[s.game.tournament, s.game.venue, live.by && `紀錄 ${live.by}`].filter(Boolean).join('・')}</span>
+        {/* (its own span: at the end of the truncated line above a phone never showed it) */}
+        {s.firstPitchAt && <span className="figure text-[12px] tabular-nums shrink-0" style={{ color: BOARD.muted }}>{hhmm(s.firstPitchAt)} 開賽</span>}
         <span className="figure text-[12px] tabular-nums" style={{ color: BOARD.muted }}>{error ? '重新連線中…' : `更新 ${updated}`}</span>
         <button type="button" onClick={big ? closeBig : openBig} className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-[8px] text-[12px] font-medium cursor-pointer transition-colors hover:bg-white/10" style={{ color: BOARD.ink, boxShadow: `inset 0 0 0 1px ${BOARD.line}` }}>
           {big ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}{big ? '離開大螢幕' : '大螢幕'}
@@ -235,10 +240,11 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
         <InfoPanel label={side === 'us' ? '打擊' : '對方打擊'} big={big}>
           <div className="flex items-center gap-2 min-w-0">
             <span className="figure inline-flex items-center justify-center shrink-0 size-7 rounded-[6px] text-[14px] font-bold" style={{ background: BOARD_ACCENT, color: BOARD.bg }}>{side === 'us' ? s.slot + 1 : s.oppOrder}</span>
-            <span className={cx('font-semibold truncate', big ? 'text-[26px]' : 'text-[18px]')}>{side === 'us' ? slot?.name ?? '' : s.oppBatter || `第 ${s.oppOrder} 棒`}</span>
+            <span className={cx('font-semibold truncate', big ? 'text-[26px]' : 'text-[18px]')}>{side === 'us' ? slot?.name ?? '' : oppBatterOf(s) || `第 ${s.oppOrder} 棒`}</span>
             {side === 'us' && slot?.pos && <span className="text-[12px] shrink-0" style={{ color: BOARD.muted }}>{slot.pos}</span>}
           </div>
           {side === 'us' && <div className="figure text-[13px] tabular-nums" style={{ color: BOARD.muted }}>{mine.length ? `今日 ${ab} 打數 ${hits} 安${rbi ? `・${rbi} 打點` : ''}` : '今日第一個打席'}</div>}
+          {side === 'us' && s.oppPitcher && <div className="text-[12px]" style={{ color: BOARD.muted }}>對 {oppPitcherText(s.oppPitcher)}</div>}
           <div className="text-[12px] mt-0.5"><BoardPitches pitches={s.pitches} /></div>
         </InfoPanel>
         <InfoPanel label={side === 'opp' ? '我隊投手' : '壘上'} big={big}>
@@ -292,7 +298,7 @@ function RecentPlays({ s, side }: { s: RecordState; side: 'us' | 'opp' }) {
             className="px-4 py-2 flex items-center gap-3">
             <span className="text-muted tnum w-8 shrink-0">{p.inning}局</span>
             <span className="font-medium text-ink truncate flex-1">{'batter' in p ? p.batter : (p.oppBatter || `對方 ${p.oppOrder} 棒`)}</span>
-            <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : 'text-ink-2')}>{p.result || '—'}</span>
+            <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : isPlaced(p) ? 'text-muted' : 'text-ink-2')}>{p.result || '—'}</span>
             {p.code && <Badge variant={p.code === 'R' || p.code === 'ER' ? 'good' : 'neutral'}>{p.code}</Badge>}
           </motion.li>
         ))}

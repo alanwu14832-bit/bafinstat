@@ -2,7 +2,7 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { HIT_BASE_COUNT, isHoleLoc, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
 import { pitchTotals } from './stats'
 
 export interface Issue { side: 'bat' | 'pit'; index: number; message: string }
@@ -59,6 +59,15 @@ function checkSequence<T extends { inning: number; code?: string; result: string
       break
     }
   }
+  // 突破僵局 runners: no pitches, first in their inning (before any real plate appearance), no RBI
+  const realSeen = new Set<number>()
+  rows.forEach((p, i) => {
+    if (!isPlaced(p)) { if (isPA(p)) realSeen.add(p.inning); return }
+    const where = whereOf(p)
+    if (p.pitches.length) out.push({ side, index: i, message: `${where}：突破僵局跑者不是打席，不應該有逐球` })
+    if (realSeen.has(p.inning)) out.push({ side, index: i, message: `${where}：突破僵局跑者要排在這局最前面` })
+    if (side === 'bat' && ((p as unknown as BattingPA).rbi ?? 0) > 0) out.push({ side, index: i, message: `${where}：突破僵局跑者不會有打點` })
+  })
   rows.forEach((p, i) => {
     const where = whereOf(p)
     const code = p.code ?? ''

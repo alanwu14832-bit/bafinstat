@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { auditGame } from './audit'
 import { SEED_DATASET } from './seed'
+import type { BattingPA } from './types'
 
 describe('row-level audit', () => {
   it('is quiet on a clean game and finds the known problems in the other', () => {
@@ -31,5 +32,29 @@ describe('落點 gap codes', () => {
     expect(ok).toEqual([])
     const bad = auditGame([{ ...row, result: '內滾', loc: 56, code: 'I' }], [])
     expect(bad.map((i) => i.message).join()).toContain('三游')
+  })
+})
+
+describe('突破僵局 runners', () => {
+  const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 8, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
+  const clean = [
+    bat({ batter: '戊', result: '突破僵局', basesBefore: '無', outsBefore: 0, run: 1, code: 'R' }),
+    bat({ batter: '己', result: '突破僵局', basesBefore: '2', outsBefore: 0, code: 'L' }),
+    bat({ batter: '庚', result: '二安', pitches: ['IP'], loc: 8, traj: 'F', basesBefore: '12', outsBefore: 0, rbi: 1, code: 'L' }),
+    bat({ batter: '辛', result: '三振', pitches: ['SS', 'SS', 'SS'], basesBefore: '23', outsBefore: 0, code: 'I' }),
+    bat({ batter: '壬', result: '外飛', pitches: ['IP'], loc: 8, traj: 'F', basesBefore: '23', outsBefore: 1, code: 'II' }),
+    bat({ batter: '甲', result: '內滾', pitches: ['IP'], loc: 6, traj: 'G', basesBefore: '23', outsBefore: 2, code: 'III' }),
+  ]
+  it('a clean tie-break inning has nothing to flag', () => {
+    expect(auditGame(clean, [])).toEqual([])
+  })
+  it('flags pitches, a placed runner after a plate appearance, and an RBI', () => {
+    const rows = clean.map((r) => ({ ...r }))
+    rows[0] = { ...rows[0], pitches: ['B'] }
+    rows[1] = { ...rows[1], rbi: 1 }
+    const msgs = auditGame([...rows, bat({ inning: 8, batter: '乙', result: '突破僵局', code: 'L' })], []).map((i) => i.message)
+    expect(msgs).toContain('第 8 局・戊：突破僵局跑者不是打席，不應該有逐球')
+    expect(msgs).toContain('第 8 局・己：突破僵局跑者不會有打點')
+    expect(msgs).toContain('第 8 局・乙：突破僵局跑者要排在這局最前面')
   })
 })

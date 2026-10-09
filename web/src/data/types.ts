@@ -20,6 +20,17 @@ export const PA_RESULTS = [
   '一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
 ] as const
 export type PAResult = (typeof PA_RESULTS)[number] | '犧牲'
+/**
+ * 突破僵局 (WBSC tie-break): a runner the rule puts on base at the start of an extra half-inning. He is a row of his
+ * own on the batting side's rows (result 突破僵局, no pitches), lead runner first, before the inning's first plate
+ * appearance — but he is NOT a plate appearance: no PA / AB / BF, only his run, steals and outs on the bases count, and
+ * an opponent's placed runner who scores is never an earned run. Deliberately not in PA_RESULTS (never a result chip).
+ */
+export const TIEBREAK = '突破僵局'
+/** A runner placed by the tie-break rule (not a plate appearance). */
+export const isPlaced = (r: { result: string }) => r.result === TIEBREAK
+/** A real plate appearance: has a result and is not a tie-break runner. Everything that counts PAs goes through it. */
+export const isPA = (r: { result: string }) => !!r.result && !isPlaced(r)
 /** Bases of each hit (內安 = 內野安打 is a single). 場地二安 (ground-rule double: over the fence on a bounce, or stuck in it) is a double in every
  * stat; the batter gets second and every runner exactly two bases. */
 export const HIT_BASE_COUNT: Record<string, 1 | 2 | 3 | 4> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 4 }
@@ -63,7 +74,10 @@ export interface Game {
   id: string
   /** ISO date yyyy-mm-dd */
   date: string
+  /** 開賽時間 'HH:MM' */
   time?: string
+  /** 結束時間 'HH:MM'. 比賽時間 is always worked out from the two (data/gameTime.ts), never stored. */
+  endTime?: string
   tournament: string
   opponent: string
   homeAway: HomeAway
@@ -107,8 +121,12 @@ export interface PlayEvent {
   batter?: true
 }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
-  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死',
+  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規',
 }
+
+/** The opponent pitcher's throwing hand: L 左投 · R 右投 */
+export type OppHand = 'L' | 'R'
+export const OPP_HAND_LABEL: Record<OppHand, string> = { L: '左投', R: '右投' }
 
 export interface BattingPA {
   gameId: string
@@ -141,6 +159,10 @@ export interface BattingPA {
   note?: string
   /** runner moves between this plate appearance's pitches, in order */
   events?: PlayEvent[]
+  /** 對方投手 (name, optional). Left out (not undefined) when unknown, like runner / events. */
+  oppPitcher?: string
+  /** 對方投手 throwing hand. Left out when unknown. */
+  oppHand?: OppHand
 }
 
 export interface PitchingPA {

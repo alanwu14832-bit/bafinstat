@@ -21,7 +21,7 @@ const L: Record<string, Link> = {
   IP: ['pitching', '', 'outs'], BF: ['pitching', '', 'bf'], PC: ['pitching', '', 'pc'], pK: ['pitching', '', 'k'], pBB: ['pitching', '', 'bb'],
   pHBP: ['pitching', '', 'hbp'], pH: ['pitching', '', 'h'], pHR: ['pitching', '', 'hr'], pR: ['pitching', '', 'r'], ER: ['pitching', '', 'er'],
   ERA: ['pitching', '', 'era', 'asc'], WHIP: ['pitching', '', 'whip', 'asc'],
-  WP: ['pitching', 'advanced', 'wp'], PK: ['pitching', 'advanced', 'pk'], SBA: ['pitching', 'advanced', 'sba'],
+  WP: ['pitching', 'advanced', 'wp'], BK: ['pitching', 'advanced', 'bk'], PK: ['pitching', 'advanced', 'pk'], SBA: ['pitching', 'advanced', 'sba'],
   'K/9': ['pitching', 'advanced', 'k9'], 'BB/9': ['pitching', 'advanced', 'bb9', 'asc'], 'H/9': ['pitching', 'advanced', 'h9', 'asc'],
   'K/BB': ['pitching', 'advanced', 'kbb'], 'pK%': ['pitching', 'advanced', 'kPct'], 'pBB%': ['pitching', 'advanced', 'bbPct', 'asc'],
   OppAVG: ['pitching', 'advanced', 'oppAvg', 'asc'], OppOBP: ['pitching', 'advanced', 'oppObp', 'asc'], pBABIP: ['pitching', 'advanced', 'babip', 'asc'],

@@ -100,4 +100,14 @@ describe('save_games', () => {
     expect(kinds.indexOf('rpc')).toBeLessThan(kinds.indexOf('delete'))
     expect([...cloudIds]).toEqual(['G1'])
   })
+  it('sends the end time and the opponent pitcher (2026-10-14 columns)', async () => {
+    const d = ds(['G1'])
+    const withNew = { ...d, games: [{ ...d.games[0], time: '13:07', endTime: '15:22' }], batting: [{ ...d.batting[0], oppHand: 'L' as const, oppPitcher: '王' }, d.batting[1]] }
+    await pushCloudDataset(withNew, 'upsert')
+    const args = calls[0].args!
+    expect((args.p_games as Array<Record<string, unknown>>)[0].end_time).toBe('15:22')
+    const rows = args.p_batting as Array<Record<string, unknown>>
+    expect([rows[0].opp_hand, rows[0].opp_pitcher]).toEqual(['L', '王'])
+    expect('opp_hand' in rows[1]).toBe(false)
+  })
 })

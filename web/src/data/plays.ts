@@ -1,6 +1,7 @@
 /**
  * 逐球跑壘: runner plays between pitches (第 2 球暴投 1B→2B). Saved on the plate appearance they happened in as
- * `events`; in a spreadsheet they are one text column, e.g. 「2 暴投 1-2；3 盜壘 2-3」.
+ * `events`; in a spreadsheet they are one text column, e.g. 「2 暴投 1-2；3 盜壘 2-3」. A balk moves every runner up
+ * one base and is logged once per runner, lead runner first: 「2 投手犯規 3-H；2 投手犯規 1-2」.
  */
 import { PLAY_EVENT_LABELS, type PlayEvent } from './types'
 
@@ -34,4 +35,20 @@ export function parsePlays(v: unknown): PlayEvent[] {
     out.push({ at: Number(m[1]), kind, from: Number(m[3]) as 1 | 2 | 3, to: t === 'H' ? 'home' : t === 'X' ? 'out' : (Number(t) as 1 | 2 | 3), ...(m[5] ? { play: true as const, ...(m[5] === '打者' ? { batter: true as const } : {}) } : {}) })
   }
   return out
+}
+
+/**
+ * How many balks (投手犯規) the plays hold. One balk is logged as one play per runner, lead runner first (「2 投手犯規
+ * 1-2」 with a man on first only), so its `from` values go down; a bk play starts a new balk when the play before it is
+ * not a bk play, was at another pitch, or did not come from a base further on.
+ */
+export function balksIn(events?: PlayEvent[]): number {
+  let n = 0
+  const list = events ?? []
+  list.forEach((e, i) => {
+    if (e.kind !== 'bk') return
+    const prev = list[i - 1]
+    if (!prev || prev.kind !== 'bk' || prev.at !== e.at || e.from >= prev.from) n++
+  })
+  return n
 }

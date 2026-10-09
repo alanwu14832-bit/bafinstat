@@ -69,4 +69,14 @@ describe('匯出備份 in the 總表 layout', () => {
     const settings = sheetXml(file, 12)
     expect(settings).toContain('測試盃'); expect(settings).toContain('新對手')
   }, SLOW)
+
+  it('writes 結束時間 as a time of day and reads it back', () => {
+    const ds: Dataset = { ...SEED_DATASET, games: SEED_DATASET.games.map((g, i) => (i === 0 ? { ...g, time: '13:07', endTime: '15:22' } : g)) }
+    const { file, warnings } = fillTemplate(template, backupTables(ds))
+    expect(warnings).toEqual([])
+    // 比賽清單 is sheet3: the end time cell holds the fraction of a day
+    expect(sheetXml(file, 3)).toContain(`<v>${922 / 1440}</v>`)
+    const { dataset } = parseWorkbook(toBuf(file), 'backup.xlsx')
+    expect(dataset.games[0]).toMatchObject({ time: '13:07', endTime: '15:22' })
+  }, SLOW)
 })

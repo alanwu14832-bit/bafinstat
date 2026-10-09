@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addPitch, commitPA, defaultPlan, newGame, runnerEvent, toggleEarned, type PAPlan, type RecordState } from './model'
-import { applyEarned, earnedAll, earnedRepairs } from './earned'
+import { applyEarned, earnedAll, earnedRepairs, TIEBREAK_WHY } from './earned'
+import { placeTiebreak } from './tiebreak'
 
 // we are the home team, so the opponent bats first and every plate appearance here is theirs
 const game = { id: 'G20260301-01', date: '2026-03-01', tournament: '友誼賽', opponent: '測試隊', homeAway: '主' as const, innings: 7 }
@@ -133,5 +134,38 @@ describe('自責分 by the rules (errorless inning)', () => {
     expect(earnedRepairs(old)).toEqual([{ index: 0, inning: 1, name: '對方第 1 棒（投手 壬）', from: 'ER', to: 'R', why: '上壘靠我隊失誤' }])
     // the same inning not finished yet: the home run's plate appearance is the last one so far, its runs are left alone
     expect(earnedRepairs(old.slice(0, 2))).toEqual([])
+  })
+})
+
+describe('突破僵局: a placed runner\'s run is never earned', () => {
+  // the opponent bats the top of the 8th, two runners placed (rows 0 and 1)
+  const placed = () => placeTiebreak({ ...start(), inning: 8, oppOrder: 3 })
+  it('his run is unearned; the batters\' runs are judged as usual', () => {
+    let s = pa(placed(), '二安')
+    expect(codes(s)[0]).toBe('R')
+    expect(earnedAll(s.pitching).get(0)?.why).toContain('突破僵局')
+    expect(earnedAll(s.pitching).get(0)?.why).toBe(TIEBREAK_WHY)
+    s = pa(s, '全壘打')
+    expect(codes(s)).toEqual(['R', 'R', 'ER', 'ER'])
+  })
+  it('his real out counts in the errorless inning', () => {
+    let s = runnerEvent(placed(), 0, 'opp', 'pk')         // out 1: the runner on second picked off
+    s = k(s)                                              // out 2
+    s = pa(s, '失誤')                                     // errorless out 3
+    s = pa(s, '全壘打')
+    expect(codes(s)[1]).toBe('R')                         // placed
+    expect(codes(s)[3]).toBe('R')                         // reached on the error
+    expect(codes(s)[4]).toBe('R')
+    expect(earnedAll(s.pitching).get(4)?.why).toBe('沒有失誤的話，這局在他回本壘前已經三出局')
+  })
+  it('a finished tie-break inning needs no repairs, and a call by hand on a placed run stays', () => {
+    let s = pa(placed(), '二安')
+    s = k(k(k(s)))
+    expect(earnedRepairs(s.pitching)).toEqual([])
+    let t = pa(placed(), '二安')
+    t = toggleEarned(t, 0)
+    expect(t.pitching[0].code).toBe('ER')
+    t = pa(t, '全壘打')
+    expect(t.pitching[0].code).toBe('ER')
   })
 })

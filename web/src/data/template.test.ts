@@ -33,6 +33,23 @@ describe('公版 Excel keeps up with the website', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')
     expect(labels).toContain('允許再上場')
+    expect(labels).toContain('結束時間')
+    expect(labels).toContain('中繼')
+  })
+  it('does not count a 突破僵局 runner as a plate appearance (打席 helper), and offers it in the 打擊結果 list', () => {
+    // formula cells without a cached value are stubs
+    const withFormulas = XLSX.read(new Uint8Array(templateBuf()), { type: 'array', sheetStubs: true })
+    for (const [sheet, key] of [['打席紀錄', '打者'], ['投球紀錄', '投手']] as const) {
+      const ws = withFormulas.Sheets[sheet]
+      const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+      const r = grid.slice(0, 12).findIndex((row) => row.some((c) => String(c).trim() === key))
+      const c = grid[r].findIndex((v) => String(v).trim() === '打席')
+      const cell = ws[XLSX.utils.encode_cell({ r: r + 1, c })]
+      expect(cell?.f, `${sheet} 打席`).toContain('突破僵局')
+    }
+    const lists = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['設定'], { header: 1, defval: '' })
+    const col = lists.flatMap((row) => row.map((v, i) => [String(v).trim(), i] as const)).find(([v]) => v === '打擊結果')![1]
+    expect(lists.map((row) => String(row[col] ?? '').trim())).toContain('突破僵局')
   })
   it('an empty 報名名單 sheet imports as no lists', () => {
     expect(parseWorkbook(arrayBuf(templateBuf())).registrations).toEqual([])
