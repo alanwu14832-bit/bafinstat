@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Camera, ExternalLink, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Camera, ExternalLink, Pencil, Plus, Trash2, Video, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -8,7 +8,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Field, Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
-import { albumDate, albumProvider, albumTitle, isValidAlbumUrl, type AlbumLink } from '../data/albums'
+import { albumDate, albumProvider, albumTitle, ALBUMS_SETUP_NOTE, isValidAlbumUrl, isVideoLink, isVideoUrl, VIDEO_TITLE, type AlbumLink } from '../data/albums'
 import { summarizeGame } from '../data/stats'
 import { playedGames } from '../data/filters'
 import { cx } from '../lib/format'
@@ -24,6 +24,10 @@ function AlbumForm({ initial, presetGameId, onSave, onCancel, onDelete }: { init
   const [title, setTitle] = useState(initial?.title ?? '')
   const [date, setDate] = useState(initial?.date ?? new Date().toISOString().slice(0, 10))
   const [url, setUrl] = useState(initial?.url ?? '')
+  // a game's link is a photo album or the game's video (albums.title = 比賽影片); a YouTube / Vimeo link picks 比賽影片
+  const [kind, setKind] = useState<'photo' | 'video'>(initial && isVideoLink(initial) ? 'video' : 'photo')
+  const changeUrl = (v: string) => { setUrl(v); if (isVideoUrl(v)) setKind('video') }
+  const video = target !== 'custom' && kind === 'video'
   const [photographer, setPhotographer] = useState(initial?.photographer ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
   const [error, setError] = useState<string | null>(null)
@@ -34,26 +38,26 @@ function AlbumForm({ initial, presetGameId, onSave, onCancel, onDelete }: { init
     if (target === 'custom' && !title.trim()) { setError('請填相簿名稱'); return }
     setBusy(true)
     try {
-      await onSave({ id: initial?.id ?? crypto.randomUUID(), gameId: target === 'custom' ? undefined : target, title: target === 'custom' ? title.trim() : undefined, date: target === 'custom' ? date : undefined, url: url.trim(), photographer: photographer.trim() || undefined, note: note.trim() || undefined, createdBy: initial?.createdBy, updatedAt: new Date().toISOString() })
+      await onSave({ id: initial?.id ?? crypto.randomUUID(), gameId: target === 'custom' ? undefined : target, title: target === 'custom' ? title.trim() : video ? VIDEO_TITLE : undefined, date: target === 'custom' ? date : undefined, url: url.trim(), photographer: photographer.trim() || undefined, note: note.trim() || undefined, createdBy: initial?.createdBy, updatedAt: new Date().toISOString() })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
   return (
-    <Card still title={initial ? '編輯相簿連結' : '新增相簿連結'} subtitle="攝影師把照片放在自己的 Google Drive 或 Google 相簿，設成「知道連結的人可檢視」，把連結貼在這裡">
+    <Card still title={initial ? (video ? '編輯影片連結' : '編輯相簿連結') : (video ? '新增影片連結' : '新增相簿連結')} subtitle={video ? '整場比賽的影片：上傳到 YouTube（不公開）或 Google Drive（知道連結的使用者：檢視者），把連結貼在這裡' : '攝影師把照片放在自己的 Google Drive 或 Google 相簿，設成「知道連結的人可檢視」，把連結貼在這裡'}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Field label="這是哪一場"><Select value={target} onChange={(e) => setTarget(e.target.value)} className="w-full" options={[...games.map((g) => ({ value: g.id, label: `${g.date} vs ${g.opponent}${g.status === 'scheduled' ? '（預定）' : ''}` })), { value: 'custom', label: '不是比賽（春訓、迎新、聚餐…）' }]} /></Field>
         {target === 'custom' ? (<>
           <Field label="相簿名稱"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如 2026 春訓" /></Field>
           <Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="tnum" /></Field>
-        </>) : <div className="hidden sm:block" />}
-        <Field label="相簿連結" className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical">請貼完整的連結（以 https:// 開頭）</span> : undefined}><Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://drive.google.com/drive/folders/…" inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} /></Field>
+        </>) : <Field label="類型"><Select value={kind} onChange={(e) => setKind(e.target.value === 'video' ? 'video' : 'photo')} className="w-full" options={[{ value: 'photo', label: '照片相簿' }, { value: 'video', label: '比賽影片' }]} /></Field>}
+        <Field label={video ? '影片連結' : '相簿連結'} className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical">請貼完整的連結（以 https:// 開頭）</span> : undefined}><Input value={url} onChange={(e) => changeUrl(e.target.value)} placeholder={video ? 'https://youtu.be/…' : 'https://drive.google.com/drive/folders/…'} inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} /></Field>
         <Field label="攝影師（選填）"><Input value={photographer} onChange={(e) => setPhotographer(e.target.value)} placeholder="誰拍的" /></Field>
-        <Field label="備註（選填）"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如 只有上半場、原檔另外索取" /></Field>
+        <Field label={video ? '說明（選填）' : '備註（選填）'}><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={video ? '例如 上半場、本壘後方' : '例如 只有上半場、原檔另外索取'} /></Field>
       </div>
       {error && <p className="mt-3 text-[13px] text-critical">{error}</p>}
       <div className="mt-4 flex items-center gap-2">
         <Button variant="primary" onClick={() => void submit()} disabled={busy}>{busy ? '儲存中…' : '儲存'}</Button>
         <Button variant="ghost" onClick={onCancel} icon={<X />}>取消</Button>
-        {onDelete && <Button variant="ghost" className="ml-auto text-critical" icon={<Trash2 />} onClick={() => { if (window.confirm('移除這個相簿連結？（照片本身不會被刪）')) void onDelete() }}>移除</Button>}
+        {onDelete && <Button variant="ghost" className="ml-auto text-critical" icon={<Trash2 />} onClick={() => { if (window.confirm(video ? '移除這個影片連結？（影片本身不會被刪）' : '移除這個相簿連結？（照片本身不會被刪）')) void onDelete() }}>移除</Button>}
       </div>
     </Card>
   )
@@ -70,8 +74,8 @@ export function PhotosPage() {
   const [editing, setEditing] = useState<AlbumLink | null | 'new'>(null)
   const [preset, setPreset] = useState<string | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
-  // played games that nobody has linked photos for yet, so the gap is visible instead of silent
-  const missing = useMemo(() => playedGames(base).filter((g) => !albums.some((a) => a.gameId === g.id)).reverse(), [base, albums])
+  // played games that nobody has linked photos for yet, so the gap is visible instead of silent (a video is not a photo album)
+  const missing = useMemo(() => playedGames(base).filter((g) => !albums.some((a) => a.gameId === g.id && !isVideoLink(a))).reverse(), [base, albums])
   const sorted = useMemo(() => [...albums].sort((a, b) => albumDate(b, base.games).localeCompare(albumDate(a, base.games)) || b.updatedAt.localeCompare(a.updatedAt)), [albums, base.games])
   const byYear = useMemo(() => { const m = new Map<string, AlbumLink[]>(); for (const a of sorted) { const y = albumDate(a, base.games).slice(0, 4); m.set(y, [...(m.get(y) ?? []), a]) } for (const g of missing) if (!m.has(g.date.slice(0, 4))) m.set(g.date.slice(0, 4), []); return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])) }, [sorted, base.games, missing])
   const scoreOf = (a: AlbumLink) => {
@@ -85,9 +89,9 @@ export function PhotosPage() {
 
   return (
     <>
-      <PageHeader title="相簿" description="每場比賽與活動的照片連結。照片放在攝影師的 Google Drive，點進去就能看、單張或整個資料夾下載。"
+      <PageHeader title="相簿" description="每場比賽與活動的照片與影片連結。照片放在攝影師的 Google Drive，點進去就能看、單張或整個資料夾下載；比賽影片點了會在新分頁打開。"
         actions={canEdit ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => { setPreset(undefined); setEditing('new') }}>新增相簿連結</Button> : undefined} />
-      {!supported && <div role="status" className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2">相簿連結還沒開通：請管理員在 Supabase SQL Editor 執行一次 supabase/migrations/2026-09-12_albums_schedule.sql。</div>}
+      {!supported && <div role="status" className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2">{ALBUMS_SETUP_NOTE}</div>}
       {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
       {editing === 'new' && <AlbumForm initial={null} presetGameId={preset} onSave={save} onCancel={() => { setEditing(null); setPreset(undefined) }} />}
       {sorted.length === 0 && missing.length === 0 && editing !== 'new' && (
@@ -99,23 +103,25 @@ export function PhotosPage() {
           <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {list.map((a) => {
               const sc = scoreOf(a)
+              const isVideo = isVideoLink(a)
               if (editing && editing !== 'new' && editing.id === a.id) return <li key={a.id} className="md:col-span-2 xl:col-span-3"><AlbumForm initial={a} onSave={save} onCancel={() => setEditing(null)} onDelete={() => remove(a.id)} /></li>
               return (
                 <li key={a.id}>
                   <Card className="h-full relative lift" bodyClassName="p-5 flex flex-col gap-3 h-full">
                     {/* The whole card opens the album; the buttons row sits above this layer. */}
-                    <a href={a.url} target="_blank" rel="noreferrer" aria-label={`開啟相簿：${albumTitle(a, base.games)}`} tabIndex={-1} className="absolute inset-0 z-[1] rounded-[inherit]" />
+                    <a href={a.url} target="_blank" rel="noreferrer" aria-label={`${isVideo ? '開啟影片' : '開啟相簿'}：${albumTitle(a, base.games)}`} tabIndex={-1} className="absolute inset-0 z-[1] rounded-[inherit]" />
                     <div className="flex items-start gap-3">
-                      <span className="size-10 rounded-[12px] bg-surface-2 text-ink-2 grid place-items-center shrink-0"><Camera className="size-5" /></span>
+                      <span className="size-10 rounded-[12px] bg-surface-2 text-ink-2 grid place-items-center shrink-0">{isVideo ? <Video className="size-5" /> : <Camera className="size-5" />}</span>
                       <div className="min-w-0 flex-1">
                         <div className="text-[15px] font-semibold text-ink leading-5 truncate">{albumTitle(a, base.games)}</div>
-                        <div className="text-[12px] text-muted mt-0.5 tnum">{fmtDate(albumDate(a, base.games))}{a.photographer ? `・${a.photographer} 攝` : ''}</div>
+                        {/* the 影片 badge sits on the date line, so on a phone it does not cut off the game's title */}
+                        <div className="text-[12px] text-muted mt-0.5 tnum flex items-center gap-1.5 flex-wrap">{isVideo && <Badge variant="accent">影片</Badge>}<span>{fmtDate(albumDate(a, base.games))}{a.photographer ? `・${a.photographer} 攝` : ''}</span></div>
                       </div>
                       {sc && <Badge variant={sc.result === 'W' ? 'good' : sc.result === 'L' ? 'critical' : 'neutral'} className="tnum">{sc.text}</Badge>}
                     </div>
                     {a.note && <p className="text-[13px] text-ink-2 leading-relaxed">{a.note}</p>}
                     <div className="relative z-[2] mt-auto flex items-center gap-2">
-                      <Button variant="primary" size="sm" icon={<ExternalLink />} href={a.url} className={cx('flex-1')} title={a.url}>開啟相簿</Button>
+                      <Button variant="primary" size="sm" icon={<ExternalLink />} href={a.url} className={cx('flex-1')} title={a.url}>{isVideo ? '開啟影片' : '開啟相簿'}</Button>
                       {a.gameId && base.games.some((g) => g.id === a.gameId) && <Button variant="outline" size="sm" to={`/games/${encodeURIComponent(a.gameId)}`} title="看這場比賽的比分、摘要與逐球紀錄">比賽</Button>}
                       <span className="text-[11px] text-muted whitespace-nowrap">{albumProvider(a.url)}</span>
                       {canEdit && <Button variant="ghost" size="sm" aria-label="編輯" icon={<Pencil />} onClick={() => setEditing(a)} />}

@@ -2,9 +2,13 @@
  * Photo albums are links, not files: photographers keep the originals in their own Google Drive (or any
  * shared folder) and a recorder pastes the folder link here. Cloud mode stores links in the `albums` table;
  * local mode keeps them in this browser.
+ *
+ * 比賽影片 are rows of the same table: a game's link whose title is VIDEO_TITLE (game albums never set a title
+ * otherwise), or any link on a video site (isVideoUrl), so a video added as an album still shows as a video.
+ * The site never embeds a player (the Content-Security-Policy has no frame-src): links open in a new tab.
  */
 import { deleteAlbumRow, fetchAlbums, upsertAlbum, type AlbumRow } from './supabase'
-import type { Game } from './types'
+import { ALBUMS_MIGRATION, type Game } from './types'
 
 export interface AlbumLink {
   id: string
@@ -44,6 +48,9 @@ export function albumProvider(url: string): string {
     if (h.includes('dropbox')) return 'Dropbox'
     if (h.includes('onedrive') || h.includes('1drv')) return 'OneDrive'
     if (h.includes('flickr')) return 'Flickr'
+    if (h === 'youtu.be' || h.endsWith('youtube.com')) return 'YouTube'
+    if (h.endsWith('vimeo.com')) return 'Vimeo'
+    if (h === 'fb.watch' || h.endsWith('facebook.com')) return 'Facebook'
     return h.replace(/^www\./, '')
   } catch { return '連結' }
 }
@@ -60,3 +67,24 @@ export function albumDate(a: AlbumLink, games: Game[]): string {
   const g = a.gameId ? games.find((x) => x.id === a.gameId) : undefined
   return g?.date ?? a.date ?? a.updatedAt.slice(0, 10)
 }
+
+/** albums.title of a game's video link (the marker that tells a video from a photo album). */
+export const VIDEO_TITLE = '比賽影片'
+const VIDEO_HOSTS = ['youtube.com', 'm.youtube.com', 'youtu.be', 'vimeo.com', 'fb.watch']
+/** A link on a video site (YouTube, Vimeo, fb.watch). */
+export function isVideoUrl(url: string): boolean {
+  try {
+    const h = new URL(url.trim()).hostname.toLowerCase().replace(/^www\./, '')
+    return VIDEO_HOSTS.some((v) => h === v || h.endsWith(`.${v}`))
+  } catch { return false }
+}
+/** A video link: saved as 比賽影片, or pointing at a video site. */
+export const isVideoLink = (a: Pick<AlbumLink, 'title' | 'url'>) => a.title === VIDEO_TITLE || isVideoUrl(a.url)
+/** One game's photo albums and video links. */
+export function gameMedia(albums: AlbumLink[], gameId: string): { photos: AlbumLink[]; videos: AlbumLink[] } {
+  const mine = albums.filter((a) => a.gameId === gameId)
+  return { photos: mine.filter((a) => !isVideoLink(a)), videos: mine.filter(isVideoLink) }
+}
+
+/** Shown to recorders while the albums table is missing (相簿 page and the game page's 照片與影片). */
+export const ALBUMS_SETUP_NOTE = `相簿連結還沒開通：請管理員在 Supabase SQL Editor 執行一次 ${ALBUMS_MIGRATION}。`

@@ -36,6 +36,10 @@ export const TEAM_DEFAULTS = {
 
 export type TeamConfig = typeof TEAM_DEFAULTS
 
+/** The file (in this repo) that creates the albums table — photo albums and 比賽影片 links. The 相簿 page and a game's
+ *  照片與影片 card name it when the table is missing. Each site's repo has its own (the 校隊's is supabase/schema.sql). */
+export const ALBUMS_MIGRATION = 'supabase/migrations/2026-09-12_albums_schedule.sql'
+
 /** Merge VITE_TEAM_* values over the defaults; blank values are ignored. */
 export function resolveTeam(env: Record<string, string | boolean | undefined>): TeamConfig {
   const str = (key: string, fallback: string) => {
