@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { backupTables, parseWorkbook } from './xlsx'
 import { fillTemplate } from './templateExport'
 import { SEED_DATASET } from './seed'
@@ -40,6 +40,27 @@ describe('匯出備份 in the 總表 layout', () => {
     expect(dataset.games).toHaveLength(1)
     expect(dataset.batting).toHaveLength(one.batting.length)
     expect(dataset.fielding).toHaveLength(one.fielding.length)
+  }, SLOW)
+
+  // the template rebuilt by openpyxl with lxml writes <sheet xmlns:r="…" name="…">: the sheets must still be found
+  const withWorkbookXml = (edit: (xml: string) => string) => {
+    const files = unzipSync(template)
+    files['xl/workbook.xml'] = strToU8(edit(strFromU8(files['xl/workbook.xml'])))
+    return zipSync(files)
+  }
+  it('finds the sheets whatever the order of their attributes', () => {
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    const lxml = withWorkbookXml((x) => x.replace(` xmlns:r="${R}"`, '').replace(/<sheet name=/g, `<sheet xmlns:r="${R}" name=`))
+    expect(strFromU8(unzipSync(lxml)['xl/workbook.xml'])).toContain(`<sheet xmlns:r="${R}" name="打席紀錄"`)
+    const { file, warnings } = fillTemplate(lxml, backupTables(SEED_DATASET))
+    expect(warnings).toEqual([])
+    const { dataset } = parseWorkbook(toBuf(file), 'backup.xlsx')
+    expect(dataset.batting).toHaveLength(SEED_DATASET.batting.length)
+  }, SLOW)
+
+  it('refuses a template without one of the data sheets (the site then hands out the plain workbook)', () => {
+    const broken = withWorkbookXml((x) => x.replace(/<sheet name="打席紀錄"[^>]*\/>/, ''))
+    expect(() => fillTemplate(broken, backupTables(SEED_DATASET))).toThrow(/打席紀錄/)
   }, SLOW)
 
   it('adds new tournaments and opponents to the 設定 lists', () => {

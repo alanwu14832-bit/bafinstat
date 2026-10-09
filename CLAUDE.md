@@ -18,13 +18,17 @@ A database change needs a migration in both repos, and the user must run it in b
 - `supabase/schema.sql` + `supabase/migrations/` — the database; the site keeps working (and warns) before a migration runs.
   `supabase/tests/run.sh` (also in auto-deploy) loads them into a plain Postgres and runs `permissions.sql`: add a check
   there for every new table, policy or function.
-- `tools/build_workbook.py` builds `data/BAFIN_棒球數據總表.xlsx`, the Excel template the site hands out.
+- `tools/build_workbook.py` builds `data/BAFIN_棒球數據總表.xlsx`, the Excel template the site hands out (run it as
+  `OPENPYXL_LXML=False python3 tools/build_workbook.py` to keep the committed file's XML layout). Its 總表 formulas must
+  give the site's numbers: `tools/gamesim/excel.mjs` checks that.
 - 網站版本: `auto-deploy.yml` builds each live version as a read-only copy (VITE_ARCHIVE_ID, base /v/<id>/) into the
   `site-archive` branch (last 30); `web/scripts/archive.mjs` (postbuild) serves them at /v/<id>/; `public/boot.js` hands
   deep links into a copy over to it. Archived copies never sign in (config/archive.ts).
 - `record/sim.test.ts` plays 150 random games through the recording model: keep it green when touching recording or the
   runner timeline. `tools/gamesim/` plays two scripted games through the real 紀錄比賽 screen (Playwright, local mode)
-  and checks the box score against a hand-scored answer key: rerun it after changes to recording or stats.
+  and checks the box score against a hand-scored answer key: rerun it after changes to recording or stats. `edit1.mjs`
+  (修改資料) and `excel.mjs` (匯出／匯入 round trips, 單場模板, and the LibreOffice-recalculated 總表 against the site's own
+  numbers): rerun them after changes to the game editor, import/export, stats or `tools/build_workbook.py`.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

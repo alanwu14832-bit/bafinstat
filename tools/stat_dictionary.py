@@ -70,7 +70,7 @@ STAT_DICTIONARY = [
     dict(key="L", zh="敗投", en="Losses", group="投球", formula="比賽清單『敗投』欄", status="現有", priority="P0", note=""),
     dict(key="SV", zh="救援成功", en="Saves", group="投球", formula="比賽清單『救援』欄", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
     dict(key="HLD", zh="中繼成功", en="Holds", group="投球", formula="比賽清單『中繼』欄（可多人，逗號分隔）", status="新增", priority="P2", note=""),
-    dict(key="IP", zh="投球局數", en="Innings Pitched", group="投球", formula="出局數 ÷ 3（顯示為 x.1 / x.2）；結果代碼 I/II/III 各算 1 個出局；打擊結果為雙殺且打席前出局數 ≤1 者算 2 個", status="現有", priority="P0", note="雙殺時只在打者列填代碼，不要再於跑者列重複填"),
+    dict(key="IP", zh="投球局數", en="Innings Pitched", group="投球", formula="出局數 ÷ 3（顯示為 x.1 / x.2）；每個出局算給出局當下在場上的投手：填了出局(前)時，一個打席的出局數＝下一個打席的出局(前)－這個打席的出局(前)（半局最後一個打席：該半局最大的出局碼－出局(前)）；沒填出局(前)時依結果代碼 I/II/III 各算 1 個，雙殺（打席前出局數 ≤1、同局沒有前一個出局碼）算 2 個", status="現有", priority="P0", note="雙殺可以只在打者列填代碼，也可以跑者列、打者列各填一個（網站即時紀錄的寫法），都只算 2 個出局；換投後才被觸殺的跑者，出局算新投手的"),
     dict(key="BF", zh="面對打者", en="Batters Faced", group="投球", formula="投球紀錄列數", status="現有", priority="P0", note=""),
     dict(key="PC", zh="用球數", en="Pitch Count", group="投球", formula="好球 + 界外 + 壞球", status="現有", priority="P0", note=""),
     dict(key="Strike%", zh="好球率", en="Strike %", group="投球", formula="(好球 + 界外) ÷ 用球數", status="現有", priority="P0", note=""),
