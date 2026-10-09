@@ -20,6 +20,8 @@ import { POSITION_LABEL } from '../lib/fmt'
 import { cx } from '../lib/format'
 import { localDate } from '../lib/dates'
 import { RestHint } from '../components/ui/RestHint'
+import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
+import { gamesAgainst } from '../data/opponent'
 import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
 
 /** Where each position's dropdown sits on the field (percent of the diagram box). */
@@ -109,6 +111,8 @@ export function LineupPage() {
   const sortMode = useRosterSort()
   const names = useMemo(() => candidateNames(base.roster, reg, sortMode), [base.roster, reg, sortMode])
   const listed = !!reg?.players.length
+  // 對手情蒐: when this lineup is for a game against an opponent we have played before
+  const scoutFor = useMemo(() => (game && game.opponent.trim() && gamesAgainst(base, game.opponent).length ? game.opponent : ''), [base, game])
   // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
   const [keys, setKeys] = useState<number[]>(() => Array.from({ length: 9 }, (_, i) => i))
   const [msg, setMsg] = useState<string | null>(null)
@@ -219,6 +223,7 @@ export function LineupPage() {
           <div className="mt-4 pt-3 border-t border-border"><Checkbox label="允許被換下的球員再上場" className="min-h-9 pointer-fine:min-h-7" checked={lineup.reentry} onChange={(v) => update((l) => ({ ...l, reentry: v }))} /></div>
         </Card>
       </div>
+      {scoutFor && <OpponentScoutCard ds={base} opponent={scoutFor} />}
     </>
   )
 }

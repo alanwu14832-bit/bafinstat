@@ -110,6 +110,10 @@ export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out
 /** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
 export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean }
 
+/** The migration that creates the albums table (photo albums and 比賽影片 links); named in the 開通 sentence. Each
+ *  repo's own file, so it lives in config/teamDefaults.ts and this file stays the same in both sites. */
+export { ALBUMS_MIGRATION } from '../config/teamDefaults'
+
 /** A tournament registration list (報名名單) for one year. Not part of Dataset: it lives in its own store slice (like albums). */
 export interface Registration { season: number; tournament: string; players: string[]; updatedAt?: string }
 

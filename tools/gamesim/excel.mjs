@@ -165,6 +165,8 @@ fillLog('單場-投球', rowsOf(wb, '投球紀錄', '投手').filter((r) => r['�
 const sm = tpl.Sheets['單場-摘要'], g = seed.base.games.find((x) => x.id === G)
 const put = (ref, v) => { sm[ref] = typeof v === 'number' ? { t: 'n', v } : { t: 's', v } }
 put('C3', serial('2026-12-30')); put('C5', g.tournament); put('C6', g.opponent); put('C7', g.homeAway); put('F2', g.venue ?? ''); put('I2', g.winningPitcher ?? ''); put('I5', g.dayRoster.bench.join('、'))
+// every decision, as a recorder fills it in: the game page's 投球 table shows 勝敗 (勝／敗／救援／中繼) since batch 6
+put('I3', g.losingPitcher ?? ''); put('I4', g.savePitcher ?? ''); put('I7', (g.holds ?? []).join('、'))
 const single = { SheetNames: ['單場-摘要', '單場-打擊', '單場-投球'], Sheets: { '單場-摘要': sm, '單場-打擊': tpl.Sheets['單場-打擊'], '單場-投球': tpl.Sheets['單場-投球'] } }
 const H = await fresh(seed)
 // as copied, the example game's 守備紀錄 still in 單場-摘要
