@@ -15,6 +15,7 @@ import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
 import { applyOppPitcher, blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
 import { HoldPicker } from './HoldPicker'
+import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
 import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
@@ -439,6 +440,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const pitcherNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher).filter(Boolean))]; return [...used, ...names.filter((n) => !used.includes(n))] }, [pit, names])
   // 中繼: the pitchers after the first (the starter) in the rows being edited, plus any hold already saved
   const holdNames = useMemo(() => { const used = [...new Set(pit.map((p) => p.pitcher.trim()).filter(Boolean))].slice(1); return [...used, ...(game.holds ?? []).filter((h) => !used.includes(h))] }, [pit, game.holds])
+  // 中繼 the score suggests, from the rows being edited (a hint: nothing is ticked for the recorder)
+  const holdHints = useMemo(() => holdCandidates(reliefEntries(pitRows, { homeAway: game.homeAway, ourLine: runsByInning(batRows) }), [game.winningPitcher, game.savePitcher]), [pitRows, batRows, game.homeAway, game.winningPitcher, game.savePitcher])
   const duration = durationMinutes(game.time, game.endTime)
   // one pitcher gets only one of 勝投／中繼／救援: picking him as 勝投 or 救援 takes him off 中繼
   const decide = (k: 'winningPitcher' | 'savePitcher', v: string) => setGame((s) => { const holds = (s.holds ?? []).filter((h) => h !== v); return { ...s, [k]: v || undefined, holds: holds.length ? holds : undefined } })
@@ -496,7 +499,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           {/* not a <label>: a click on its padding would press the first chip */}
           <div className="col-span-2 md:col-span-4 flex flex-col gap-1.5 min-w-0">
             <span className="text-xs font-medium text-ink-2">中繼（可複選）</span>
-            <HoldPicker names={holdNames} value={game.holds ?? []} onChange={(list) => g('holds', list.length ? list : undefined)} disabled={[game.winningPitcher, game.savePitcher]} />
+            <HoldPicker names={holdNames} value={game.holds ?? []} onChange={(list) => g('holds', list.length ? list : undefined)} disabled={[game.winningPitcher, game.savePitcher]} suggested={holdHints} />
+            {holdHints.length > 0 && <span className="text-[12px] text-muted">建議：救援情境上場、拿到至少 1 個出局、退場時仍領先（勝投、救援不算）</span>}
           </div>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
-import { battingLines, errorsByPosition, fieldingLines, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
+import { battingLines, errorsByPosition, fieldingLines, ourRunsOf, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
 
@@ -28,12 +28,14 @@ export function useStats(): Computed {
     const dataset = effectiveDataset(base, demo)
     const params = resolveParams(rawParams, dataset.pitching)
     const fd = applyFilters(dataset, filters)
+    // the score by inning: inherited runners, blown saves… need it
+    const ctx = { ourRuns: ourRunsOf(fd.summaries) }
     return {
       ...fd, dataset,
       batters: battingLines(dataset, fd.batting, params),
       team: teamBatting(dataset, fd.batting, params),
-      pitchers: pitchingLines(fd.pitching, fd.games, params),
-      teamPitch: teamPitching(fd.pitching, params, fd.games),
+      pitchers: pitchingLines(fd.pitching, fd.games, params, ctx),
+      teamPitch: teamPitching(fd.pitching, params, fd.games, ctx),
       fielders: fieldingLines(fd.fielding),
       errorsByPos: errorsByPosition(fd.fielding),
       summary: teamSummary(fd.summaries),

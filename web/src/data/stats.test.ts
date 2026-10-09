@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { applyFilters } from './filters'
 import { SEED_DATASET } from './seed'
-import { battingLines, pitchingLines, pitchTotals, sprayDirection, summarizeGame, teamBatting, teamSummary, WOBA_SCALE, wrcPlus } from './stats'
+import { battedOutKind, battingLines, pitchingLines, pitchTotals, sprayDirection, summarizeGame, teamBatting, teamSummary, WOBA_SCALE, wrcPlus } from './stats'
 import type { BattingPA, PitchingPA } from './types'
 import { DEFAULT_FILTERS } from './types'
 import { generateDemo, mergeDatasets } from './demo'
@@ -157,5 +157,61 @@ describe('突破僵局 runners and 投手犯規', () => {
   it('BK from the plays on our pitcher\'s rows', () => {
     const rows = [pit({ result: '三振', pitches: ['B', 'SS', 'SS', 'SS'], code: 'I', events: [{ at: 1, kind: 'bk', from: 3, to: 'home' }, { at: 1, kind: 'bk', from: 1, to: 2 }] })]
     expect(pitchingLines(rows, [])[0].bk).toBe(1)
+  })
+})
+
+describe('滾地／飛球出局 (GO/AO) and 保送得分', () => {
+  const pit = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'G1', inning: 1, pitcher: '壬', pitches: ['IP'], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
+  it('battedOutKind: balls in play the batter was out on, by 軌跡 or the one the result implies', () => {
+    expect(battedOutKind({ result: '內滾' })).toBe('GO')
+    expect(battedOutKind({ result: '雙殺', traj: 'L' })).toBe('AO')
+    expect(battedOutKind({ result: '外飛' })).toBe('AO')
+    expect(battedOutKind({ result: '內飛', traj: 'P' })).toBe('AO')
+    expect(battedOutKind({ result: '犧飛' })).toBe('AO')
+    expect(battedOutKind({ result: '三振' })).toBeNull()
+    expect(battedOutKind({ result: '犧觸', traj: 'G' })).toBeNull()
+    expect(battedOutKind({ result: '一安', traj: 'G' })).toBeNull()
+    expect(battedOutKind({ result: '野選', traj: 'G' })).toBeNull()
+    const rows = [pit({ result: '內滾' }), pit({ result: '雙殺', traj: 'L' }), pit({ result: '外飛' }), pit({ result: '內飛', traj: 'P' }), pit({ result: '犧飛' }), pit({ result: '三振', pitches: ['SS', 'SS', 'SS'] }), pit({ result: '犧觸', traj: 'G' })]
+    const [l] = pitchingLines(rows, [])
+    expect([l.go, l.ao]).toEqual([1, 4])
+    expect(l.goAo).toBeCloseTo(0.25, 9)
+  })
+  it('保送得分: walks (保送／故四) whose row scored (R / ER); a 觸身 is no walk', () => {
+    const rows = [pit({ result: '保送', pitches: ['B', 'B', 'B', 'B'], code: 'ER' }), pit({ result: '故四', pitches: [], code: 'L' }), pit({ result: '觸身', pitches: ['B'], code: 'R' })]
+    const [l] = pitchingLines(rows, [])
+    expect([l.bbScored, l.bb]).toEqual([1, 2])
+    expect(l.bbScoredPct).toBe(0.5)
+  })
+})
+
+describe('優質打席 (QAB): 兩好球纏鬥 and 6球以上', () => {
+  const pa = (pitches: string[], result: string, extra: Partial<BattingPA> = {}): BattingPA =>
+    ({ gameId: 'G1', inning: 1, batter: '甲', pitches, result, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...extra })
+  const one = (p: BattingPA) => teamBatting({ ...ds, roster: [] }, [p])
+  it('3 or more pitches after reaching two strikes (the last one included) is a quality at-bat, even a strikeout', () => {
+    const t = one(pa(['CS', 'SS', 'F', 'B', 'CS'], '三振'))
+    expect([t.qab, t.twoStrikeBattles, t.twoStrikePA, t.longPA, t.qabPct]).toEqual([1, 1, 1, 0, 1])
+  })
+  it('two pitches after two strikes is not', () => {
+    const t = one(pa(['SS', 'SS', 'F', 'SS'], '三振'))
+    expect([t.qab, t.twoStrikeBattles, t.twoStrikePA]).toEqual([0, 0, 1])
+  })
+  it('6 pitches or more counts as both 6球以上 and (here) a battle', () => {
+    const t = one(pa(['B', 'CS', 'B', 'SS', 'F', 'F', 'IP'], '內滾'))
+    expect([t.qab, t.longPA, t.twoStrikeBattles]).toEqual([1, 1, 1])
+  })
+  it('the sample games are recomputed with it (QAB% 51.6% -> 54.7%)', () => {
+    const g2 = ds.batting.filter((p) => p.gameId === 'G20251222-01')
+    const t2 = teamBatting(ds, g2)
+    expect([t2.pa, t2.qab, t2.twoStrikeBattles, t2.longPA, t2.twoStrikePA]).toEqual([36, 17, 4, 3, 16])
+    const lines = battingLines(ds, g2)
+    expect([lines.find((l) => l.name === '鄭羣燁')!.qab, lines.find((l) => l.name === '鄭羣燁')!.pa]).toEqual([2, 3])
+    expect([lines.find((l) => l.name === '蔡奇霖')!.qab, lines.find((l) => l.name === '蔡奇霖')!.pa]).toEqual([3, 4])
+    const t1 = teamBatting(ds, bat1)
+    expect([t1.pa, t1.qab, t1.twoStrikeBattles, t1.longPA, t1.twoStrikePA]).toEqual([28, 18, 2, 3, 10])
+    const all = teamBatting(ds, ds.batting)
+    expect(all.qab).toBe(35)
+    expect(all.qabPct).toBeCloseTo(35 / 64, 9)
   })
 })
