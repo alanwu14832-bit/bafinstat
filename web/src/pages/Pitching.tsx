@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { BedDouble, Download } from 'lucide-react'
+import { BedDouble, Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
@@ -57,7 +57,8 @@ export function PitchingPage() {
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
   // a player's tile linked here (球員頁「全隊排行」): mark his row
-  const hl = new URLSearchParams(useLocation().search).get('hl') ?? undefined
+  const { search } = useLocation()
+  const hl = new URLSearchParams(search).get('hl') ?? undefined
   const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=pitching`)
   // 門檻: 隊內 (IP ≥ 0.7 × games) or 大專規程 (IP ≥ 1 × games), compared in outs (data/qualify.ts)
   const [rule, setRule] = useQualRule()
@@ -113,6 +114,8 @@ export function PitchingPage() {
   const splitPicker = <Select size="sm" label="對象" aria-label="情境拆分的對象" value={splitWho} onChange={(e) => setSplitWho(e.target.value)}
     options={[{ value: '', label: '全隊' }, ...[...s.pitchers].filter((p) => p.bf > 0).sort((a, b) => b.bf - a.bf).map((p) => ({ value: p.name, label: `${p.name}（面對 ${p.bf} 人次）` }))]} />
   const gapNote = s.teamPitch.sitGaps > 0 ? `；有 ${s.teamPitch.sitGaps} 次換投發生在沒有記壘上跑者的半局（較早匯入的比賽），IR、IRS%、BS 沒有算這幾次` : ''
+  // 列印: one A4 page of the batting and pitching totals in the current filter (the filters travel in the link)
+  const printButton = <Button size="sm" variant="ghost" icon={<Printer />} to={`/print/stats${search}`} title="依目前篩選印出一頁累計成績表">列印</Button>
 
   const footer = useMemo(() => {
     const t = s.teamPitch
@@ -133,7 +136,7 @@ export function PitchingPage() {
         <StatTile label="CSW%" to="?view=process&sort=cswPct#stats" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
         <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
-      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標${college ? '還差幾局' : '「未達門檻」'}，不列入領先者與圖表${gapNote}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標${college ? '還差幾局' : '「未達門檻」'}，不列入領先者與圖表${gapNote}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={480} />

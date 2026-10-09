@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Camera, CheckCircle2, Maximize2, Pencil, Share2, Trash2, Video, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Maximize2, Pencil, Printer, Share2, Trash2, Video, X } from 'lucide-react'
 import { LineScoreBoard, PlateBadge, Stitches } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -313,6 +313,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end -mr-2 sm:mr-0">
             {!page && <Button variant="ghost" size="sm" icon={<Maximize2 />} to={`/games/${encodeURIComponent(id)}`} title="開啟完整比賽頁（可分享、可直接連到某一局）">完整頁</Button>}
             <Button variant="ghost" size="sm" icon={<Share2 />} onClick={() => setSharing((v) => !v)} aria-expanded={sharing} title="複製比分、戰報摘要和網址，貼到 LINE 群組">分享</Button>
+            <Button variant="ghost" size="sm" icon={<Printer />} to={`/print/game/${encodeURIComponent(id)}`} title="印出這場的傳統記分表（A4 橫式），也能存成 PDF">列印</Button>
             {media.photos.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={media.photos[0].url} title="開啟這場的相簿">相簿</Button> : media.photos.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {media.photos.length}</Button> : null}
             {media.videos.length === 1 ? <Button variant="ghost" size="sm" icon={<Video />} href={media.videos[0].url} title="開啟這場的比賽影片（新分頁）">影片</Button> : media.videos.length > 1 ? <Button variant="ghost" size="sm" icon={<Video />} onClick={() => { setTab('summary'); setToMedia(true) }} title="這場有多段影片">影片 {media.videos.length}</Button> : null}
             {editable && !editing && canEdit && (

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Download } from 'lucide-react'
+import { Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
@@ -56,7 +56,8 @@ export function BattingPage() {
   const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
   const { view, setView } = linked
   // a player's tile linked here (球員頁「全隊排行」): mark his row
-  const hl = new URLSearchParams(useLocation().search).get('hl') ?? undefined
+  const { search } = useLocation()
+  const hl = new URLSearchParams(search).get('hl') ?? undefined
   const openPlayer = (d: { name: string }) => navigate(`/players?player=${encodeURIComponent(d.name)}&tab=batting`)
   const [qualifiedOnly, setQualifiedOnly] = useState(false)
   const [rule, setRule] = useQualRule()
@@ -113,6 +114,8 @@ export function BattingPage() {
   const splitRows = useMemo(() => (splitWho ? s.batting.filter((p) => p.batter === splitWho) : s.batting), [s.batting, splitWho])
   const splitPicker = <Select size="sm" label="對象" aria-label="情境拆分的對象" value={splitWho} onChange={(e) => setSplitWho(e.target.value)}
     options={[{ value: '', label: '全隊' }, ...s.batters.filter((b) => b.pa > 0).map((b) => ({ value: b.name, label: `${b.name}（${b.pa} 打席）` }))]} />
+  // 列印: one A4 page of the batting and pitching totals in the current filter (the filters travel in the link)
+  const printButton = <Button size="sm" variant="ghost" icon={<Printer />} to={`/print/stats${search}`} title="依目前篩選印出一頁累計成績表">列印</Button>
 
   const footer = useMemo(() => {
     const t = s.team
@@ -130,7 +133,7 @@ export function BattingPage() {
       <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}${college ? '（大專規程）' : ''}。`} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
-      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />

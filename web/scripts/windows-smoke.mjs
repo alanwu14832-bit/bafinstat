@@ -5,9 +5,12 @@ import { spawn, spawnSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
-const PORT = 4173
+const PORT = Number(process.env.SMOKE_PORT) || 4173
 const BASE = `http://localhost:${PORT}`
-const PAGES = ['/', '/batting', '/pitching', '/fielding', '/players', '/games', '/games?view=schedule', '/live', '/recordbook', '/photos', '/lineup', '/record', '/import', '/dictionary', '/guide']
+const PAGES = ['/', '/batting', '/pitching', '/fielding', '/players', '/games', '/games?view=schedule', '/live', '/recordbook', '/photos', '/lineup', '/record', '/import', '/dictionary', '/guide',
+  // the one-page totals to print, and the player page comparing 4 and 9 players (names filled in from the site below)
+  '/print/stats', '/players?tab=batting&player={0}&cmp={1}&cmp={2}&cmp={3}',
+  '/players?tab=batting&player={0}&cmp={1}&cmp={2}&cmp={3}&cmp={4}&cmp={5}&cmp={6}&cmp={7}&cmp={8}']
 const SIZES = [{ width: 1366, height: 768, scale: 1 }, { width: 1536, height: 864, scale: 1.25 }, { width: 1920, height: 1080, scale: 1 }]
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { shell: true, stdio: 'ignore' })
@@ -20,8 +23,17 @@ for (let i = 0; i < 60; i++) {
 mkdirSync('smoke', { recursive: true })
 const failures = []
 // Playwright hides scrollbars by default; keep them, since Windows' space-taking scrollbars are part of what is checked
-const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined, ignoreDefaultArgs: ['--hide-scrollbars'] })
+const browser = await chromium.launch({ channel: process.platform === 'win32' ? 'msedge' : undefined, executablePath: process.env.CHROMIUM || undefined, ignoreDefaultArgs: ['--hide-scrollbars'] })
 try {
+  // player names with plate appearances on the 打擊 page, for the comparison URLs
+  {
+    const page = await browser.newPage()
+    await page.goto(`${BASE}/players`, { waitUntil: 'networkidle' })
+    await page.click('[aria-controls="roster-panel"]')
+    const names = await page.$$eval('#roster-panel [role=option]', (els) => els.filter((e) => !e.textContent.includes('無打席')).map((e) => e.querySelector('.font-medium')?.textContent ?? '').filter(Boolean))
+    await page.close()
+    for (let i = 0; i < PAGES.length; i++) PAGES[i] = PAGES[i].replace(/\{(\d)\}/g, (_, k) => encodeURIComponent(names[Number(k)] ?? ''))
+  }
   for (const s of SIZES) {
     const ctx = await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.scale })
     const page = await ctx.newPage()

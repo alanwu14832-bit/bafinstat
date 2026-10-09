@@ -21,16 +21,16 @@ function lifted(hex: string): string {
   return `rgb(${mix(n >> 16, 243)}, ${mix((n >> 8) & 255, 239)}, ${mix(n & 255, 231)})`
 }
 
-function canvas() {
-  const c = document.createElement('canvas'); c.width = W; c.height = H
+function canvas(w = W, h = H) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h
   const g = c.getContext('2d')!
-  g.fillStyle = BG; g.fillRect(0, 0, W, H)
+  g.fillStyle = BG; g.fillRect(0, 0, w, h)
   // LED dots and a glow of the team colour from the top, like the 即時比分 board
   g.fillStyle = 'rgba(255,255,255,0.035)'
-  for (let y = 2; y < H; y += 8) for (let x = 2; x < W; x += 8) g.fillRect(x, y, 2, 2)
-  const glow = g.createRadialGradient(W / 2, 0, 0, W / 2, 0, 700)
+  for (let y = 2; y < h; y += 8) for (let x = 2; x < w; x += 8) g.fillRect(x, y, 2, 2)
+  const glow = g.createRadialGradient(w / 2, 0, 0, w / 2, 0, 700)
   glow.addColorStop(0, `${lifted(accent()).replace('rgb', 'rgba').replace(')', ', 0.22)')}`); glow.addColorStop(1, 'rgba(0,0,0,0)')
-  g.fillStyle = glow; g.fillRect(0, 0, W, 700)
+  g.fillStyle = glow; g.fillRect(0, 0, w, 700)
   return { c, g }
 }
 
@@ -99,6 +99,12 @@ export function downloadGameImage(d: GameImage) {
   download(c, `戰報_${d.date}_${d.opponent}.png`)
 }
 
+/** The jersey-number shield of the 成績卡 and the 百分位 card. */
+function plate(g: CanvasRenderingContext2D, acc: string, label: string) {
+  g.fillStyle = acc; g.beginPath(); g.moveTo(72, 90); g.lineTo(252, 90); g.lineTo(252, 200); g.lineTo(162, 270); g.lineTo(72, 200); g.closePath(); g.fill()
+  text(g, label, 162, 200, 96, BG, { align: 'center', font: FIG, weight: 800 })
+}
+
 export interface PlayerImage { name: string; number?: string; meta: string; period: string; big: Array<{ label: string; value: string }>; lines: string[]; footer: string }
 
 /** 成績卡: jersey number, name, the three headline numbers and a few sample lines. */
@@ -106,8 +112,7 @@ export function downloadPlayerImage(d: PlayerImage) {
   const { c, g } = canvas()
   const acc = lifted(accent())
   // home-plate jersey badge
-  g.fillStyle = acc; g.beginPath(); g.moveTo(72, 90); g.lineTo(252, 90); g.lineTo(252, 200); g.lineTo(162, 270); g.lineTo(72, 200); g.closePath(); g.fill()
-  text(g, d.number ?? d.name.slice(0, 1), 162, 200, 96, BG, { align: 'center', font: FIG, weight: 800 })
+  plate(g, acc, d.number ?? d.name.slice(0, 1))
   text(g, d.name, 300, 170, 88, INK, { weight: 800, max: W - 380 })
   text(g, d.meta, 300, 232, 32, MUTED, { weight: 500, max: W - 380 })
   text(g, d.period, 72, 380, 30, MUTED, { weight: 500, max: W - 144 })
@@ -121,4 +126,108 @@ export function downloadPlayerImage(d: PlayerImage) {
   g.fillStyle = LINE; g.fillRect(72, H - 96, W - 144, 2)
   text(g, d.footer, 72, H - 50, 24, MUTED, { weight: 500, max: W - 144 })
   download(c, `成績卡_${d.name}.png`)
+}
+
+// ---------------------------------------------------------------- 隊內百分位 and 多人比較
+
+/** A PR's colour on the dark image: straight lines in sRGB between blue (0), grey (50) and red (100) — the dark-mode
+ *  --pr-cold / --pr-mid / --pr-hot. */
+export function prRgb(pr: number): string {
+  const COLD = [93, 147, 220], MID = [95, 95, 102], HOT = [232, 97, 95]
+  const p = Math.max(0, Math.min(100, pr))
+  const [from, to, t] = p >= 50 ? [MID, HOT, (p - 50) / 50] : [MID, COLD, (50 - p) / 50]
+  const c = from.map((v, i) => Math.round(v + (to[i] - v) * t))
+  return `rgb(${c[0]},${c[1]},${c[2]})`
+}
+const withAlpha = (rgb: string, a: number) => rgb.replace('rgb(', 'rgba(').replace(')', `,${a})`)
+
+/** The comparison image's size: a 300px header, 56px per row and a 130px footer. */
+export const compareImageSize = (_players: number, rows: number) => ({ w: W, h: 300 + rows * 56 + 130 })
+
+function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath()
+}
+
+export interface PercentileImage {
+  name: string; number?: string; meta: string; period: string
+  rows: Array<{ name: string; label: string; group: string; display: string; pr: number | null; small: boolean }>
+  poolNote: string; footer: string
+}
+
+/** 百分位圖: the 成績卡 header, then one bar per stat from 0 to the player's PR, grouped like the page. */
+export function downloadPercentileImage(d: PercentileImage) {
+  const { c, g } = canvas()
+  const acc = lifted(accent())
+  plate(g, acc, d.number ?? d.name.slice(0, 1))
+  text(g, d.name, 300, 170, 88, INK, { weight: 800, max: W - 380 })
+  text(g, d.meta, 300, 232, 32, MUTED, { weight: 500, max: W - 380 })
+  text(g, `隊內百分位・${d.period}`, 72, 300, 28, MUTED, { weight: 500, max: W - 144 })
+  const groups = [...new Set(d.rows.map((r) => r.group))]
+  const top = 330, bottom = H - 130, GROUP = 44
+  // 58px a row when it fits (13 batting bars), a little less for 14 pitching bars in 4 groups
+  const ROW = Math.min(58, (bottom - top - groups.length * GROUP) / Math.max(d.rows.length, 1))
+  const LABEL = 200, BAR = 560, x0 = 72 + LABEL + 16
+  let y = top
+  for (const grp of groups) {
+    text(g, grp, 72, y + 30, 26, acc, { weight: 700 }); y += GROUP
+    for (const r of d.rows.filter((x) => x.group === grp)) {
+      const mid = y + ROW / 2
+      text(g, r.name, 72, mid + 2, 28, INK, { weight: 600, max: LABEL })
+      text(g, r.label, 72, mid + 26, 18, MUTED, { weight: 500, font: FIG, max: LABEL })
+      g.fillStyle = 'rgba(243,239,231,0.10)'; roundRect(g, x0, mid - 7, BAR, 14, 7); g.fill()
+      if (r.pr !== null) {
+        const col = r.small ? 'rgb(95,95,102)' : prRgb(r.pr)
+        const end = x0 + (BAR * r.pr) / 100
+        g.globalAlpha = r.small ? 0.6 : 1
+        g.fillStyle = col; roundRect(g, x0, mid - 7, Math.max(14, end - x0), 14, 7); g.fill()
+        g.beginPath(); g.arc(Math.max(x0 + 20, Math.min(x0 + BAR - 20, end)), mid, 20, 0, Math.PI * 2); g.fill()
+        g.globalAlpha = 1
+        text(g, String(r.pr), Math.max(x0 + 20, Math.min(x0 + BAR - 20, end)), mid + 8, 22, '#fff', { align: 'center', font: FIG, weight: 800 })
+      }
+      text(g, r.display, W - 72, mid + 10, 30, r.small ? MUTED : INK, { align: 'right', font: FIG, weight: 700, max: 120 })
+      y += ROW
+    }
+  }
+  g.fillStyle = LINE; g.fillRect(72, H - 110, W - 144, 2)
+  text(g, d.poolNote, 72, H - 70, 22, MUTED, { weight: 500, max: W - 144 })
+  text(g, d.footer, 72, H - 36, 22, MUTED, { weight: 500, max: W - 144 })
+  download(c, `百分位_${d.name}.png`)
+}
+
+export interface CompareImage {
+  title: string; subtitle: string
+  players: Array<{ name: string; number?: string; note: string }>
+  rows: Array<{ label: string; cells: Array<{ text: string; pr: number | null; best: boolean; more: boolean; small: boolean }> }>
+  footer: string
+}
+
+/** 比較圖: one column per player (up to 9), one row per stat, cells coloured by PR, the best of each row outlined. */
+export function downloadCompareImage(d: CompareImage) {
+  const n = Math.max(1, d.players.length)
+  const { w, h } = compareImageSize(n, d.rows.length)
+  const { c, g } = canvas(w, h)
+  const acc = lifted(accent())
+  const LABEL = 200, col = (w - 144 - LABEL) / n, x0 = 72 + LABEL
+  text(g, d.title, 72, 96, 52, INK, { weight: 800, max: w - 144 })
+  text(g, d.subtitle, 72, 148, 26, MUTED, { weight: 500, max: w - 144 })
+  d.players.forEach((p, i) => {
+    const cx = x0 + col * i + col / 2
+    if (p.number) text(g, `#${p.number}`, cx, 214, 26, acc, { align: 'center', font: FIG, weight: 700, max: col - 8 })
+    text(g, p.name, cx, 252, 30, i === 0 ? acc : INK, { align: 'center', weight: 700, max: col - 8 })
+    text(g, p.note, cx, 282, 20, MUTED, { align: 'center', weight: 500, max: col - 8 })
+  })
+  d.rows.forEach((r, k) => {
+    const y = 300 + k * 56
+    text(g, r.label, 72, y + 37, 26, MUTED, { weight: 600, font: /^[\x20-\x7e]+$/.test(r.label) ? FIG : SANS, max: LABEL - 12 })
+    r.cells.forEach((cell, i) => {
+      const x = x0 + col * i + 4, cw = col - 8
+      if (cell.pr !== null && !cell.small) { g.fillStyle = withAlpha(prRgb(cell.pr), 0.85); roundRect(g, x, y + 6, cw, 44, 10); g.fill() }
+      if (cell.best) { g.strokeStyle = '#fff'; g.lineWidth = 3; roundRect(g, x + 1.5, y + 7.5, cw - 3, 41, 9); g.stroke() }
+      text(g, cell.text, x + cw / 2, y + 38, 28, cell.small ? MUTED : INK, { align: 'center', font: FIG, weight: cell.best || cell.more ? 800 : 600, max: cw - 6 })
+    })
+  })
+  g.fillStyle = LINE; g.fillRect(72, h - 96, w - 144, 2)
+  text(g, d.footer, 72, h - 50, 22, MUTED, { weight: 500, max: w - 144 })
+  const date = new Date(), ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
+  download(c, `比較_${(d.title.trim() || ymd).replace(/[\\/:*?"<>|]/g, '_')}.png`)
 }

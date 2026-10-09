@@ -17,6 +17,7 @@ const PAGES = {
   // batch 3: 投手休息表, 紀錄員小抄
   pitcherRest: () => import('./pages/PitcherRest'), cheatSheet: () => import('./pages/CheatSheet'),
   records: () => import('./pages/Records'),
+  print: () => import('./pages/Print'),
 }
 const page = <M,>(load: () => Promise<M>, name: keyof M) => lazy(() => load().then((m) => ({ default: m[name] as ComponentType })))
 const OverviewPage = page(PAGES.overview, 'OverviewPage')
@@ -38,6 +39,7 @@ const NotFoundPage = page(PAGES.notFound, 'NotFoundPage')
 const PitcherRestPage = page(PAGES.pitcherRest, 'PitcherRestPage')
 const CheatSheetPage = page(PAGES.cheatSheet, 'CheatSheetPage')
 const RecordsPage = page(PAGES.records, 'RecordsPage')
+const PrintPage = page(PAGES.print, 'PrintPage')
 
 /** Fetch every page in the background once the first one has had its turn. */
 function usePrefetchPages() {
@@ -63,8 +65,8 @@ function PageLoading() {
 /** GitHub Pages serves from a sub-path; strip the trailing slash for the router basename. */
 export const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '')
 
-export function AppRoutes() {
-  usePrefetchPages()
+/** The site: every page inside the shell (sidebar, top bar, filters). */
+function ShellRoutes() {
   const { pathname } = useLocation()
   return (
     <AppShell>
@@ -95,6 +97,28 @@ export function AppRoutes() {
       </Suspense>
       </PageErrorBoundary>
     </AppShell>
+  )
+}
+
+/** /print/…: a sheet of paper and its toolbar, without the shell (nothing else may end up on the printout). */
+function PrintRoutes() {
+  const { pathname } = useLocation()
+  return (
+    <PageErrorBoundary resetKey={pathname}>
+      <Suspense fallback={<div className="p-6"><PageLoading /></div>}>
+        <PrintPage />
+      </Suspense>
+    </PageErrorBoundary>
+  )
+}
+
+export function AppRoutes() {
+  usePrefetchPages()
+  return (
+    <Routes>
+      <Route path="/print/*" element={<PrintRoutes />} />
+      <Route path="*" element={<ShellRoutes />} />
+    </Routes>
   )
 }
 

@@ -21,11 +21,27 @@ export const POSITION_LABEL: Record<string, string> = {
 }
 export const posLabel = (pos?: string) => (pos ? `${pos} ${POSITION_LABEL[pos] ?? ''}`.trim() : DASH)
 
-/** Percentile rank (0–100) of v within values; higher is better unless invert. */
+/**
+ * Percentile rank (0–100) of v within values; higher is better unless invert. Midrank: ties share the middle of their
+ * places (so a team where most have 0 HR does not put them all at PR 0), and a v that is not among the values (a player
+ * below the sample minimum) is placed among them as one more. Always 0..100; one value or none → 50.
+ */
 export function percentile(v: number | null, values: Array<number | null>, invert = false): number {
   if (v === null) return 0
   const xs = values.filter((x): x is number => x !== null)
-  if (xs.length <= 1) return 50
-  const below = xs.filter((x) => (invert ? x > v : x < v)).length
-  return Math.round((below / (xs.length - 1)) * 100)
+  let n = xs.length
+  if (n <= 1) return 50
+  const worse = xs.filter((x) => (invert ? x > v : x < v)).length
+  let ties = xs.filter((x) => x === v).length
+  if (ties === 0) { n += 1; ties = 1 }
+  return Math.round((100 * (worse + (ties - 1) / 2)) / (n - 1))
 }
+
+/** How far a PR is from the middle, 0 (PR 50) … 1 (PR 0 or 100). */
+const prDistance = (pr: number) => Math.min(1, Math.abs(pr - 50) / 50)
+/** The colour of a PR: red (--pr-hot) for better than the team's middle, blue (--pr-cold) for worse, grey at PR 50. */
+export function prMix(pr: number): string {
+  return `color-mix(in oklab, var(${pr >= 50 ? '--pr-hot' : '--pr-cold'}) ${Math.round(prDistance(pr) * 100)}%, var(--pr-mid))`
+}
+/** Text on a prMix fill: white once the colour is strong enough, else the normal ink. */
+export const prInk = (pr: number): string => (prDistance(pr) >= 0.4 ? '#fff' : 'var(--ink)')

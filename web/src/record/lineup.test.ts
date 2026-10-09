@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { autoOrder, emptyLineup, LINEUP_KEY, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, toLineupSlots, withoutStarter, type Lineup } from './lineup'
+import { autoOrder, emptyLineup, LINEUP_KEY, lineupCard, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, toLineupSlots, withoutStarter, type Lineup } from './lineup'
 import type { Game } from '../data/types'
 import { gameLabel, scheduledGames } from '../data/schedule'
 
@@ -121,3 +121,22 @@ describe('designated hitter keeps the batting order right', () => {
   })
 })
 
+
+describe('lineup card (print)', () => {
+  const numbered = roster.map((p, i) => ({ ...p, number: i < 9 ? String(i + 1) : undefined }))
+  it('lists the nine with numbers and positions, the pitcher who does not bat under a DH, and the bench', () => {
+    const l = { ...autoOrder({ ...full, dh: '癸' }), bench: ['癸', '子'] }
+    const card = lineupCard(l, numbered)
+    expect(card.rows).toHaveLength(9)
+    expect(card.rows[0]).toMatchObject({ order: 1 })
+    expect(card.rows.find((r) => r.name === '癸')).toMatchObject({ pos: 'DH', number: undefined })
+    expect(card.rows.find((r) => r.name === '甲')).toMatchObject({ pos: 'C', number: '1' })
+    expect(card.pitcher).toEqual({ number: '9', name: '壬' })
+    expect(card.bench).toEqual([{ number: undefined, name: '子' }])
+  })
+  it('has no pitcher line without a DH', () => {
+    const card = lineupCard(autoOrder(full), numbered)
+    expect(card.pitcher).toBeUndefined()
+    expect(card.rows.map((r) => r.name)).toContain('壬')
+  })
+})
