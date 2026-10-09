@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deriveHalf, inferHalf, setEnd, stepAfter, stepProblems } from './timeline'
+import { addPlay, deriveHalf, inferHalf, placedBases, playCounts, rebuildHalf, setEnd, shiftHalf, stepAfter, stepProblems, withoutRunners, withPlaced } from './timeline'
 import type { BattingPA } from '../data/types'
 
 const pa = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 1, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
@@ -165,5 +165,74 @@ describe('taking back a runner play', () => {
     expect(outsIn(back.steps[1])).toBe(0)
     expect(deriveHalf(withSteal, back, 'bat')[1]).toMatchObject({ basesBefore: '1' })
     expect(deriveHalf(withSteal, back, 'bat')[1].events).toBeUndefined()
+  })
+})
+
+describe('突破僵局 runners in the timeline', () => {
+  const placed = (p: Partial<BattingPA>) => pa({ inning: 8, result: '突破僵局', outsBefore: 0, ...p })
+  const rows = [
+    placed({ batter: '戊', basesBefore: '無', run: 1, code: 'R' }),
+    placed({ batter: '己', basesBefore: '2', code: 'L' }),
+    pa({ inning: 8, batter: '庚', result: '二安', basesBefore: '12', outsBefore: 0, rbi: 1, code: 'L' }),
+    pa({ inning: 8, batter: '辛', result: '三振', basesBefore: '23', outsBefore: 0, code: 'I' }),
+    pa({ inning: 8, batter: '壬', result: '外飛', basesBefore: '23', outsBefore: 1, code: 'II' }),
+    pa({ inning: 8, batter: '甲', result: '內滾', basesBefore: '23', outsBefore: 2, code: 'III' }),
+  ]
+  const all = rows.map((_, i) => i)
+  const pick = (r: BattingPA) => JSON.stringify(r, ['basesBefore', 'outsBefore', 'run', 'code', 'events'])
+  it('puts each placed runner on his base, and writing it back changes nothing', () => {
+    const h = inferHalf(rows, all, 'bat')!
+    expect(h.steps[0].batter).toBe(2)
+    expect(h.steps[1].before).toEqual([{ row: 0, base: 2 }])
+    expect(h.steps[1].batter).toBe(1)
+    expect(h.steps[2].before).toEqual([{ row: 0, base: 2 }, { row: 1, base: 1 }])
+    expect(deriveHalf(rows, h, 'bat').map(pick)).toEqual(rows.map(pick))
+  })
+  it('a lone placed runner who is the inning\'s last row: the usual base', () => {
+    const lone = [placed({ basesBefore: '無', code: 'L' })]
+    const h = inferHalf(lone, [0], 'bat')!
+    expect(h.steps[0].batter).toBe(2)
+    expect(deriveHalf(lone, h, 'bat').map(pick)).toEqual(lone.map(pick))
+    expect(rebuildHalf(lone, [0], 'bat').steps[0].batter).toBe(2)
+  })
+  it('placedBases undoes the leadoff\'s own runner plays (a double steal during his plate appearance)', () => {
+    const r = [placed({ basesBefore: '無' }), placed({ basesBefore: '2' }), pa({ inning: 8, result: '三振', basesBefore: '23', outsBefore: 0, code: 'I', events: [{ at: 1, kind: 'sb', from: 2, to: 3 }, { at: 1, kind: 'sb', from: 1, to: 2 }] })]
+    expect(placedBases(r, [0, 1, 2])).toEqual({ 0: 2, 1: 1 })
+    expect(placedBases(r, [0, 1])).toEqual({ 0: 2, 1: 1 })
+    expect(placedBases([placed({}), placed({}), placed({})], [0, 1, 2])).toEqual({ 0: 3, 1: 2, 2: 1 })
+  })
+  it('rebuildHalf puts them on their bases and moves nobody', () => {
+    const h = rebuildHalf(rows, all, 'bat')
+    expect(h.steps[0].batter).toBe(2)
+    expect(h.steps[1]).toMatchObject({ before: [{ row: 0, base: 2 }], dest: { 0: 2 }, batter: 1 })
+    // the double: everyone two bases
+    expect(h.steps[2].dest).toEqual({ 0: 'home', 1: 3 })
+  })
+  it('withPlaced in front of an inning forces them along only when a batter has to take their base; withoutRunners takes them off again', () => {
+    const inning8 = [
+      pa({ inning: 8, batter: 'A', result: '一安', basesBefore: '無', outsBefore: 0, code: 'L' }),
+      pa({ inning: 8, batter: 'B', result: '三振', basesBefore: '1', outsBefore: 0, code: 'I' }),
+      pa({ inning: 8, batter: 'C', result: '外飛', basesBefore: '1', outsBefore: 1, code: 'II' }),
+      pa({ inning: 8, batter: 'D', result: '內滾', basesBefore: '1', outsBefore: 2, code: 'III' }),
+    ]
+    const old = inferHalf(inning8, [0, 1, 2, 3], 'bat')!
+    const withRows = [placed({ batter: 'P1', basesBefore: '無' }), placed({ batter: 'P2', basesBefore: '2' }), ...inning8]
+    const shifted = shiftHalf(old, 0, 2)
+    const h = withPlaced(shifted, 0, [{ row: 0, base: 2 }, { row: 1, base: 1 }])
+    const out = deriveHalf(withRows, h, 'bat')
+    expect(out.map((r) => r.basesBefore)).toEqual(['無', '2', '12', '123', '123', '123'])
+    expect(out.map((r) => r.code)).toEqual(['L', 'L', 'L', 'I', 'II', 'III'])
+    expect(out.reduce((a, r) => a + r.run, 0)).toBe(0)
+    const back = shiftHalf(withoutRunners(h, [0, 1]), 0, -2)
+    expect(deriveHalf(inning8, back, 'bat').map(pick)).toEqual(inning8.map(pick))
+    expect(shiftHalf(h, 0, -2).steps.slice(0, 2).map((s) => s.index)).toEqual([-1, -1])
+  })
+  it('a balk in the editor moves both runners, and counts into no column', () => {
+    const h = inferHalf(rows, all, 'bat')!
+    const { half, added } = addPlay(h, 2, 1, 'bk', [0, 1])
+    expect(added.map((m) => [m.kind, m.from, m.to])).toEqual([['bk', 2, 3], ['bk', 1, 2]])
+    expect(added.every((m) => m.at === 1)).toBe(true)
+    expect(playCounts(half, 'pit').get(2) ?? {}).toEqual({ wp: 0, pb: 0 })
+    expect(playCounts(half, 'bat').size).toBe(0)
   })
 })

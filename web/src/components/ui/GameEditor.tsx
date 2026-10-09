@@ -7,7 +7,7 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, errorsText } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, PA_RESULTS, POSITIONS, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -20,7 +20,20 @@ import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, 
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
-import { applyEarned, earnedAll } from '../../record/earned'
+import { applyEarned, earnedAll, type EarnedCall } from '../../record/earned'
+import { addPlacedRows, extraInnings, removePlacedRows } from '../../record/tiebreak'
+import type { Base } from '../../record/model'
+
+/** 結果 options of the tables: the plate-appearance results, and 突破僵局 for a runner the tie-break rule put on */
+const RESULT_OPTIONS = [...PA_RESULTS, TIEBREAK]
+/** Rows inserted (k > 0) or removed (k < 0) at `at`: the earned calls move with their rows. */
+function shiftCalls(m: Map<number, EarnedCall>, at: number, k: number): Map<number, EarnedCall> {
+  const out = new Map<number, EarnedCall>()
+  for (const [row, c] of m) { if (row < at) out.set(row, c); else if (k > 0 || row >= at - k) out.set(row + k, c) }
+  return out
+}
+/** Runs in an inning's timeline (between pitches, on the plays, the batters). */
+const runsOfHalf = (h: Half | null | undefined) => (h ? h.steps.reduce((a, st) => a + homesIn(st) + st.moves.filter((m) => m.to === 'home').length, 0) : 0)
 
 /* ------------------------------------------------------------------ generic editable table */
 type Kind = 'text' | 'int' | 'select' | 'name'
@@ -118,7 +131,7 @@ const locOption = (v: string) => (Number(v) > 9 ? `${v} ${locLabel(Number(v))}` 
 const batCols: Col<BatDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
   { key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'batter', label: '打者', kind: 'name', w: 96 },
-  { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
+  { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: RESULT_OPTIONS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
   { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '壘死', kind: 'int', w: 44 },
@@ -128,7 +141,7 @@ const batCols: Col<BatDraft>[] = [
 const pitCols: Col<PitDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
   { key: 'oppOrder', label: '對方棒次', kind: 'int', w: 56 }, { key: 'pitcher', label: '投手', kind: 'name', w: 96 }, { key: 'oppBatter', label: '對方打者', kind: 'text', w: 88 },
-  { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: PA_RESULTS, w: 76 },
+  { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: RESULT_OPTIONS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
   { key: 'errorsText', label: '守備失誤（守位）', kind: 'text', w: 96 },
@@ -179,7 +192,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   // 自責／非自責 that followed the rules before an edit of the opponent's plate appearances follow them after it;
   // a call made by hand stays (record/earned.ts)
   const earnedNow = useMemo(() => earnedAll(pitRows), [pitRows])
-  const withEarned = (next: PitchingPA[]) => applyEarned(next, earnedNow, earnedAll(next))
+  const withEarned = (next: PitchingPA[], shift?: { at: number; k: number }) => applyEarned(next, shift ? shiftCalls(earnedNow, shift.at, shift.k) : earnedNow, earnedAll(next))
   const setRows = (side: PaSide, fn: <T>(rows: T[]) => T[]) => (side === 'bat' ? setBat((b) => fn(b)) : setPit((p) => fn(p)))
   const insertPa = (side: PaSide, at: number) => {
     if (side === 'bat') setBat((b) => [...b.slice(0, at), toBatDraft(blankBattingAt(b.map(fromBatDraft), at, game.id)), ...b.slice(at)])
@@ -199,7 +212,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     return r ? `對方${r.oppBatter ? ` ${r.oppBatter}` : r.oppOrder ? ` ${r.oppOrder} 棒` : ''}` : ''
   }
   /** Check an edited inning, then write it onto the rows (or say why not). */
-  const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half): string | null => {
+  /** `was` and `shift`: the inning before the change with its rows moved (rows were added or removed in front of it) */
+  const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half, was?: Half, shift?: { at: number; k: number }): string | null => {
     const name = nameOf(side)
     let outs = 0
     for (let j = 0; j < half.steps.length; j++) {
@@ -214,11 +228,34 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     }
     setTlNotice(null)
     // the counts follow the plays: the difference between the inning's plays before and after this edit
-    const before = (side === 'bat' ? halves.bat : halves.pit).get(half.inning)
+    const before = was ?? (side === 'bat' ? halves.bat : halves.pit).get(half.inning)
     if (side === 'bat') setBat(deriveHalf(applyPlayCounts(rows as BattingPA[], before, half, 'bat'), half, 'bat').map(toBatDraft))
-    else setPit(withEarned(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit')).map(toPitDraft))
+    else setPit(withEarned(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit'), shift).map(toPitDraft))
     return null
   }
+  // 突破僵局 runners added in front of an extra inning, or taken off it: rows in or out, the inning carried through
+  const addPlaced = (side: PaSide, inning: number, bases: Base[]) => {
+    const rows = side === 'bat' ? batRows : pitRows
+    const r = addPlacedRows<BattingPA | PitchingPA>(rows, inning, side, bases, game.id)
+    if ('reason' in r) { window.alert(r.reason); return }
+    const runs = runsOfHalf((side === 'bat' ? halves.bat : halves.pit).get(inning)), now = runsOfHalf(r.half)
+    if (!window.confirm(`在第 ${inning} 局最前面加上突破僵局跑者（${r.text}）。後面打席的壘上跑者會跟著更新；這局原本 ${runs} 分，加上後是 ${now} 分，打點請自己核對。按「儲存修改」才會生效。`)) return
+    const why = commitHalf(side, r.rows, r.half, r.before, { at: r.at, k: r.shift })
+    if (why) window.alert(`沒辦法加上：${why}`)
+  }
+  const removePlaced = (side: PaSide, inning: number) => {
+    const rows = side === 'bat' ? batRows : pitRows
+    const r = removePlacedRows<BattingPA | PitchingPA>(rows, inning, side)
+    if ('reason' in r) { window.alert(r.reason); return }
+    const runs = runsOfHalf((side === 'bat' ? halves.bat : halves.pit).get(inning)), now = runsOfHalf(r.half)
+    if (!window.confirm(`刪除第 ${inning} 局的突破僵局跑者（${r.text}）？後面打席的壘上跑者會跟著更新；這局原本 ${runs} 分，刪除後是 ${now} 分，打點請自己核對。按「儲存修改」才會生效。`)) return
+    const why = commitHalf(side, r.rows, r.half, r.before, { at: r.at, k: r.shift })
+    if (why) { window.alert(`沒辦法刪除：${why}`); return }
+    // stay on the inning's leadoff
+    setSel(r.rows[r.at] ? { side, index: r.at } : null)
+  }
+  // the innings that can be extra innings, read off the game (the planned 局數 is not saved)
+  const extraInningSet = useMemo(() => extraInnings(batRows, pitRows), [batRows, pitRows])
   const timelineFor = (side: PaSide, i: number): TimelineProps | undefined => {
     const rows = side === 'bat' ? batRows : pitRows
     const half = rows[i] ? (side === 'bat' ? halves.bat : halves.pit).get(rows[i].inning) : null
@@ -370,6 +407,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
         timeline={timelineFor(side, i)}
+        onRemovePlaced={() => removePlaced(side, rows[i].inning)}
         onOppPitcher={side === 'bat' ? (next) => setBat((b) => applyOppPitcher(b.map(fromBatDraft), i, next).map(toBatDraft)) : undefined}
         onRebuild={() => {
           const rows = side === 'bat' ? batRows : pitRows
@@ -478,9 +516,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           </div>
         )}
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
-          : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} />)}
+          : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
         {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />
-          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} />)}
+          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
         {tab === 'fld' && <EditableTable rows={fld} cols={fldCols} onChange={setFld} blank={blankFld} listId="game-editor-names" names={names} />}
         {tab === 'roster' && (
           <div className="flex flex-col gap-5">

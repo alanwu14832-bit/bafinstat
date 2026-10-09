@@ -6,14 +6,18 @@
  * The recorder's extras (對方投手 now and then while we bat, 記對方打者姓名 in half the games with pinch hitters, the
  * clock for 比賽時間) draw from a second random stream, so the games themselves are the same as without them. `expect`
  * (returned) holds what each saved row should carry, worked out on the side.
+ *
+ * Every third game (seed % 3 === 0) goes on to the 9th with the tie-break from the 8th (一、二壘, 二壘 or 滿壘 by seed),
+ * and runners now and then move up on a balk.
  */
 import {
-  addError, addExtra, addPitch, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, offense, planProblems, runnerEvent, setOppLineup, setOppNames,
+  addError, addExtra, addPitch, balk, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, offense, planProblems, runnerEvent, setOppLineup, setOppNames,
   setOppPitcher, stampTimes, substitute,
   type Dest, type OppPitcher, type RecordState,
 } from '../record/model'
 import type { BattingPA, Game, OppHand, Player } from '../data/types'
 import type { OnBase } from '../record/timeline'
+import { placeTiebreak, tiebreakDue } from '../record/tiebreak'
 
 export function rng(seed: number) {
   let a = seed >>> 0
@@ -28,7 +32,11 @@ export function playGame(seed: number) {
   const r = rng(seed)
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)]
   const game: Game = { id: `G2026010${seed % 9 + 1}-01`, date: '2026-01-01', tournament: '模擬', opponent: '對手', homeAway: r() < 0.5 ? '主' : '客', innings: 7 }
-  let s: RecordState = newGame(game, NAMES.slice(0, 9).map((name, i) => ({ name, pos: POS[i] })), '壬', { bench: NAMES.slice(9) })
+  // 延長賽: every third game plays the 8th and 9th under the tie-break
+  const extra = seed % 3 === 0
+  const lastInning = extra ? 9 : 7
+  const tiebreak = extra ? { from: 8, bases: ([[1, 2], [2], [1, 2, 3]] as Array<Array<1 | 2 | 3>>)[Math.floor(seed / 3) % 3] } : undefined
+  let s: RecordState = newGame(game, NAMES.slice(0, 9).map((name, i) => ({ name, pos: POS[i] })), '壬', { bench: NAMES.slice(9), ...(tiebreak ? { tiebreak } : {}) })
   let guard = 0
   // ground truth for the timeline: who was on base (row, base) when each plate appearance was sent, and when its
   // batter came up (before the runner plays during his pitches)
@@ -68,15 +76,33 @@ export function playGame(seed: number) {
   const runnerPlay = () => {
     const side = offense(s)
     const run = pick(s.runners)
-    const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'throw', 'pk', 'advance'] as const)
+    const ev = pick(['sb', 'cs', 'wp', 'pb', 'err', 'throw', 'pk', 'advance', 'bk'] as const)
     const before = s.half
-    if (!(ev === 'err' && side === 'opp') && !((ev === 'wp' || ev === 'pb') && side === 'us')) s = runnerEvent(s, run.row, run.side, ev)
+    if (ev === 'bk') s = balk(s)
+    else if (!(ev === 'err' && side === 'opp') && !((ev === 'wp' || ev === 'pb') && side === 'us')) s = runnerEvent(s, run.row, run.side, ev)
     if (ev === 'err' && side === 'opp') s = addError(s, pick(['SS', 'LF', '2B']))
     { const bases = s.runners.map((x) => x.base); if (new Set(bases).size !== bases.length) throw new Error(`two runners on one base after ${ev}: ${bases.join(',')}`) }
     if (s.half !== before) upNow = snap(s)
   }
-  while (s.inning <= 7 && guard++ < 400) {
+  while (s.inning <= lastInning && guard++ < 500) {
     recorder()
+    // 突破僵局: the runners go on before anything else happens in the half
+    if (tiebreakDue(s)) {
+      const key = offense(s) === 'us' ? 'bat' : 'pit'
+      const n0 = key === 'bat' ? s.batting.length : s.pitching.length
+      const t = placeTiebreak(s)
+      const placed = t.runners.slice().sort((a, b) => a.row - b.row)
+      placed.forEach((_, k) => {
+        const on = placed.slice(0, k).map((x) => ({ row: x.row, base: x.base })).sort((a, b) => b.base - a.base)
+        truth[key].set(n0 + k, on)
+        start[key].set(n0 + k, on)
+        if (key === 'bat') want.bat[n0 + k] = fields(oppNow)
+        else { const order = t.pitching[n0 + k].oppOrder!; want.pit[n0 + k] = names ? lineupNow[order - 1] || undefined : undefined }
+      })
+      s = t
+      upNow = snap(s)
+      continue
+    }
     const side = offense(s)
     // before the first pitch: runners move
     if (s.runners.length && r() < 0.15) { runnerPlay(); continue }

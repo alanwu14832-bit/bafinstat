@@ -3,7 +3,7 @@
  * not): 「蘇柏愷 一安・陳威儒 得分・2：0」「陳威儒 暴投 1B→2B」「三出局，換 3 局下」. Pitches alone say nothing.
  */
 import { playText } from '../data/plays'
-import { OPP_HAND_LABEL } from '../data/types'
+import { isPlaced, OPP_HAND_LABEL } from '../data/types'
 import { offense, score, type RecordState } from './model'
 
 const halfName = (s: RecordState) => `${s.inning} 局${s.half === 'top' ? '上' : '下'}`
@@ -11,6 +11,13 @@ const halfName = (s: RecordState) => `${s.inning} 局${s.half === 'top' ? '上' 
 export function describeChange(a: RecordState, b: RecordState): string | null {
   const parts: string[] = []
   const side = offense(a)
+  // 突破僵局: the runners the rule put on (rows of their own, no plate appearance)
+  const newRows = [...b.batting.slice(a.batting.length), ...b.pitching.slice(a.pitching.length)]
+  if (newRows.length && newRows.every(isPlaced)) {
+    const BASE = { 1: '一壘', 2: '二壘', 3: '三壘' } as const
+    const placed = b.runners.filter((r) => r.side === side && !a.runners.some((x) => x.side === r.side && x.row === r.row)).sort((x, z) => z.base - x.base)
+    return `突破僵局：${placed.map((r) => `${BASE[r.base]} ${r.name}`).join('、')}`
+  }
   const bat = b.batting.length > a.batting.length ? b.batting[b.batting.length - 1] : null
   const pit = b.pitching.length > a.pitching.length ? b.pitching[b.pitching.length - 1] : null
   if (bat) parts.push(`${bat.batter} ${bat.result}${bat.rbi ? `（${bat.rbi} 分打點）` : ''}`)

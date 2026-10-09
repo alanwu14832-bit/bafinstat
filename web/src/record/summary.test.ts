@@ -176,3 +176,17 @@ describe('軌跡 the result already tells', () => {
     expect(describeChange(on, setOppLineup(on, ['A1']))).toBe('對方打序已更新')
   })
 })
+
+describe('突破僵局 and 投手犯規', () => {
+  it('names the placed runners by base', async () => {
+    const { placeTiebreak } = await import('./tiebreak')
+    const s = { ...start(), inning: 8, slot: 6 }
+    expect(describeChange(s, placeTiebreak(s))).toBe('突破僵局：二壘 戊、一壘 己')
+  })
+  it('a balk moves everyone, lead runner first', async () => {
+    const { balk } = await import('./model')
+    const t = send(send(start(), '一安'), '一安')
+    const s = { ...t, runners: [{ base: 3 as const, side: 'us' as const, row: 1, name: '乙' }, { base: 1 as const, side: 'us' as const, row: 0, name: '甲' }] }
+    expect(describeChange(s, balk(s))).toBe('乙 投手犯規 3B→得分・甲 投手犯規 1B→2B・得 1 分・1：0')
+  })
+})

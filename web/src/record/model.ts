@@ -15,8 +15,11 @@
  *   - the opponent pitcher (hand, name) set by the recorder is stamped on each of our plate appearances; the opponent
  *     batter's name comes from the one-off name or, when 記對方打者姓名 is on, their batting order (oppLineup)
  *   - the time of the first pitch and of the last plate appearance are kept (stampTimes) for 比賽時間
+ *   - 延長賽突破僵局 (record/tiebreak.ts): the runners the rule puts on base are rows of their own (result 突破僵局, no
+ *     pitches) before the half's first plate appearance; they are not plate appearances. A balk (投手犯規, balk())
+ *     moves every runner up one base and is only logged in the plays (kind 'bk'), no column.
  */
-import { HIT_BASE_COUNT, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, TIEBREAK, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { inferHalf, leftMarks } from './timeline'
 import { earnedCalls } from './earned'
@@ -81,7 +84,14 @@ export interface RecordState {
   oppNames?: boolean
   /** their batting order, 9 names ('' = not typed); a change in the middle of the game is a pinch hitter */
   oppLineup?: string[]
+  // 延長賽突破僵局. Optional: drafts without it use the team's default rule (record/tiebreak.ts tiebreakRuleOf).
+  /** the rule for this game; null = 不採用 */
+  tiebreak?: TiebreakRule | null
+  /** extra half-innings where the recorder pressed 「這局不用」, as `${inning}${half}` ('8top') */
+  tiebreakSkip?: string[]
 }
+/** 突破僵局: from which inning on, and the bases the runners are put on. */
+export interface TiebreakRule { from: number; bases: Base[] }
 export interface OppPitcher { name?: string; hand?: OppHand }
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
@@ -125,7 +135,7 @@ export function withInPlay(pitches: string[], result: string): string[] {
   return [...pitches, 'IP']
 }
 
-export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[] } = {}): RecordState {
+export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null } = {}): RecordState {
   // the bench never repeats a starter (Setup may have promoted a bench player into the lineup)
   const starting = new Set([...lineup.map((l) => l.name), pitcher])
   const bench = [...new Set((opts.bench ?? []).filter((n) => n && !starting.has(n)))]
@@ -133,6 +143,7 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
     game, lineup, slot: 0, pitcher, oppOrder: 1, oppBatter: '', inning: 1, half: 'top', outs: 0, runners: [], batting: [], pitching: [], pitches: [], extras: { ...EXTRAS0 }, finished: false, startedAt: new Date().toISOString(),
     starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry, subs: [],
     ...(opts.oppNames !== undefined ? { oppNames: opts.oppNames } : {}), ...(opts.oppLineup ? { oppLineup: lineupOf(opts.oppLineup) } : {}),
+    ...(opts.tiebreak !== undefined ? { tiebreak: opts.tiebreak } : {}),
   }
 }
 
@@ -226,7 +237,15 @@ export function changePitcher(s: RecordState, name: string): RecordState {
     lineup = s.lineup.map((l, i) => (fielder >= 0 ? (i === fielder ? { ...l, pos: 'P' } : l) : i === old ? { name, pos: 'P' } : l))
   }
   const sub: DayRosterSub = { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}) }
-  return { ...s, pitcher: name, lineup, subs: [...(s.subs ?? []), sub] }
+  // a new pitcher before the first pitch of a tie-break half takes over its placed runners (the pitcher who starts
+  // the half is charged with them)
+  let pitching = s.pitching
+  if (offense(s) === 'opp' && !s.pitches.length) {
+    const half = s.pitching.filter((p) => p.inning === s.inning)
+    // (only while nothing has happened yet: a pickoff or a balk before the first pitch is the old pitcher's)
+    if (half.some(isPlaced) && !half.some(isPA) && !s.plays?.length) pitching = s.pitching.map((p) => (p.inning === s.inning && isPlaced(p) ? { ...p, pitcher: name } : p))
+  }
+  return { ...s, pitcher: name, lineup, pitching, subs: [...(s.subs ?? []), sub] }
 }
 export const setSlot = (s: RecordState, slot: number): RecordState => ({ ...s, slot: ((slot % s.lineup.length) + s.lineup.length) % s.lineup.length })
 export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + 9) % 9) + 1 })
@@ -501,11 +520,12 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
 }
 
 /** A run by someone who got on this way is never earned; one that came in on these plays most likely is not. */
-const UNEARNED_REACH = new Set(['失誤', '妨礙'])
+const UNEARNED_REACH = new Set(['失誤', '妨礙', TIEBREAK])
 const AIDED_KINDS = new Set<string>(['pb', 'err'])
 
-/** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances */
-export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out'
+/** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances.
+ *  bk = 投手犯規 (balk): every runner moves up one (see balk); no column, BK is counted from the plays. */
+export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk'
 
 /** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
  *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
@@ -514,10 +534,10 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   if (!runner) return s
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
   // error just moves him along (counted once), so two runners never share a base
-  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'err' || ev === 'throw' || ev === 'advance') {
+  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'bk' || ev === 'err' || ev === 'throw' || ev === 'advance') {
     const ahead = runner.base < 3 ? s.runners.find((x) => x.side === side && x.base === runner!.base + 1) : undefined
     if (ahead) {
-      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance', ev === 'wp' || ev === 'pb' ? ev : undefined)
+      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance', ev === 'wp' || ev === 'pb' || ev === 'bk' ? ev : undefined)
       if (s.outs >= 3 || offense(s) !== side) return s
       runner = s.runners.find((r) => r.row === row && r.side === side)
       if (!runner) return s
@@ -536,6 +556,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
     case 'cs': dest = 'out'; if (side === 'us') (r as BattingPA).cs += 1; else extras.cs += 1; break
     case 'wp': dest = advance(1); if (side === 'opp') extras.wp += 1; break
     case 'pb': dest = advance(1); if (side === 'opp') extras.pb += 1; break
+    case 'bk': dest = advance(1); break
     case 'err': dest = advance(1); if (side === 'us') (r as BattingPA).advOnError += 1; break
     case 'pk': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; else extras.pk += 1; break
     case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
@@ -564,9 +585,22 @@ export function wildPitch(s: RecordState, kind: 'wp' | 'pb', rows?: number[]): R
   return s
 }
 
+/**
+ * 投手犯規 (balk) with runners on: every runner of the side at bat moves up one base, lead runner first, and the
+ * pitch does not count (the plate appearance goes on). Logged once per runner as a 'bk' play; a run that scores on
+ * it is earned and nobody's RBI. With nobody on there is no balk (that pitch is a ball), so nothing happens.
+ */
+export function balk(s: RecordState): RecordState {
+  const side = offense(s)
+  const moving = s.runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base).map((r) => r.row)
+  for (const row of moving) { if (offense(s) !== side || s.outs >= 3) break; s = runnerEvent(s, row, side, 'bk') }
+  return s
+}
+
 /** Correct the RBI of one of our plate appearances after it was sent (a run scored on it was entered later). */
 export function setRbi(s: RecordState, index: number, rbi: number): RecordState {
-  if (!s.batting[index]) return s
+  // (a 突破僵局 runner did not bat: never an RBI)
+  if (!s.batting[index] || isPlaced(s.batting[index])) return s
   return { ...s, batting: s.batting.map((p, i) => (i === index ? { ...p, rbi: Math.max(0, Math.min(4, rbi)) } : p)) }
 }
 
@@ -579,8 +613,38 @@ export function toggleEarned(s: RecordState, row: number): RecordState {
   return { ...s, pitching: s.pitching.map((x, i) => (i === row ? { ...x, code } : x)), earnedByHand: { ...s.earnedByHand, [row]: code === 'ER' } }
 }
 
+/**
+ * The plate appearance in progress gets no row when the half or the game ends before it is sent (the third out on
+ * the bases, 結束半局, a walk-off balk or wild pitch). What only it would have carried goes on the half's last row of
+ * the side at bat instead, so it is not lost: our pitcher's 被盜壘／阻殺／暴投／捕逸／牽制出局 and errors, and the
+ * 投手犯規 plays (BK is counted from them), written as plays on that row's last play, like where the runners ended.
+ * (The other runner plays are already counted on the runners' own rows; the timeline folds them into that row.)
+ * Only when our pitcher on the mound pitched that row: a reliever who came in during this plate appearance has no
+ * row yet, so his balk, wild pitch or pickoff is dropped rather than charged to the pitcher he replaced.
+ */
+export function settlePending(s: RecordState): RecordState {
+  const side = offense(s)
+  const rows: Array<BattingPA | PitchingPA> = side === 'us' ? s.batting : s.pitching
+  let last = -1
+  rows.forEach((r, i) => { if (r.inning === s.inning) last = i })
+  if (side === 'opp' && last >= 0 && (rows[last] as PitchingPA).pitcher !== s.pitcher) last = -1
+  const bk = (s.plays ?? []).filter((e) => e.kind === 'bk')
+  const x = s.extras
+  const counts = side === 'opp' && (x.sba || x.cs || x.wp || x.pb || x.pk || x.errors?.length)
+  if (last < 0 || (!bk.length && !counts)) return { ...s, plays: [], extras: { ...EXTRAS0 } }
+  const r = rows[last]
+  const events = bk.length ? [...(r.events ?? []), ...bk.map((e) => ({ ...e, at: r.pitches.length, play: true as const }))] : r.events
+  const row = { ...r, ...(events ? { events } : {}) }
+  if (side === 'us') return { ...s, batting: s.batting.map((b, i) => (i === last ? (row as BattingPA) : b)), plays: [], extras: { ...EXTRAS0 } }
+  const p = row as PitchingPA
+  const errors = [...(p.errors ?? []), ...(x.errors ?? [])]
+  const settled: PitchingPA = { ...p, sba: p.sba + x.sba, cs: p.cs + x.cs, wp: p.wp + x.wp, pb: p.pb + x.pb, pk: p.pk + x.pk, ...(errors.length ? { errors } : {}) }
+  return { ...s, pitching: s.pitching.map((q, i) => (i === last ? settled : q)), plays: [], extras: { ...EXTRAS0 } }
+}
+
 /** End the half-inning: runners left on base get L, sides switch, inning advances after the bottom half. */
 export function endHalf(s: RecordState): RecordState {
+  s = settlePending(s)
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   for (const r of s.runners) { const row = r.side === 'us' ? batting[r.row] : pitching[r.row]; if (!row.code) row.code = 'L' }
@@ -606,6 +670,8 @@ export function dayRosterOf(s: RecordState): GameDayRoster {
 
 /** Package the game for saveGame (normalize derives fielding, innings and warnings). */
 export function toGameEdit(s: RecordState, extra: Partial<Game> = {}): GameEdit {
+  // a game that ended in the middle of a plate appearance (a walk-off balk): what it had goes on the last row
+  if (s.finished) s = settlePending(s)
   const played = Math.max(1, ...s.batting.map((p) => p.inning), ...s.pitching.map((p) => p.inning))
   // only drafts started with the roster fields know the bench; older ones keep whatever the game already had
   const roster = s.starters ? { dayRoster: dayRosterOf(s) } : {}

@@ -15,6 +15,7 @@
 | `VITE_TEAM_MARK` | 正方形隊徽（側欄、分頁圖示、主畫面圖示）：`web/public` 裡的檔名，或完整網址 | `teams/ntu/mark.png` |
 | `VITE_TEAM_LOGO` | 使用指南頁的完整 logo：同上 | `teams/ntu/logo.png` |
 | `VITE_TEAM_INNINGS` | 幾局制；ERA 換算與新比賽的預設局數 | `9` |
+| `VITE_TEAM_TIEBREAK` | 延長賽突破僵局放哪幾壘（從規定局數的下一局開始）：`12` 一、二壘（預設）、`2` 只放二壘、`123` 滿壘、`off` 不採用；每場在「紀錄比賽」還能再改 | `12` |
 | `VITE_TEAM_SEED` | 填 `0`：網站從空白開始，**不帶 BaFiN 的比賽資料**（其他隊一定要填 `0`） | `0` |
 | `VITE_TEAM_FILE_PREFIX` | 匯出備份的檔名開頭 | `NTUBB` |
 | `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` | 這一隊自己的資料庫（見第 2 步） | — |

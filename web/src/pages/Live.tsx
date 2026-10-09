@@ -20,7 +20,7 @@ import { hhmm } from '../lib/dates'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
-import { HIT_BASE_COUNT } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced } from '../data/types'
 import { cx } from '../lib/format'
 
 const POLL_MS = 5000
@@ -152,14 +152,15 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
 
   // who is up, with his line so far today
   const slot = s.lineup[s.slot]
-  const mine = slot ? s.batting.filter((p) => p.batter === slot.name) : []
+  // (a tie-break runner's row is no plate appearance)
+  const mine = slot ? s.batting.filter((p) => p.batter === slot.name && isPA(p)) : []
   const ab = mine.filter((p) => !NON_AB.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length, rbi = mine.reduce((a, p) => a + (p.rbi ?? 0), 0)
   // our pitcher's pitch count (finished plate appearances plus the one in progress)
   const pitcherRows = s.pitching.filter((p) => p.pitcher === s.pitcher)
   const pc = pitcherRows.reduce((a, p) => a + p.pitches.filter((x) => x !== 'IP').length, 0) + (side === 'opp' ? s.pitches.length : 0)
   const ks = pitcherRows.filter((p) => p.result === '三振').length
   // the last finished plate appearance (either side)
-  const lastBat = s.batting[s.batting.length - 1], lastPit = s.pitching[s.pitching.length - 1]
+  const lastBat = s.batting.filter(isPA).at(-1), lastPit = s.pitching.filter(isPA).at(-1)
   const last = !lastPit || (lastBat && (lastBat.inning > lastPit.inning || (lastBat.inning === lastPit.inning && (weTop ? side === 'opp' : side === 'us')))) ? (lastBat ? { who: lastBat.batter, result: lastBat.result, rbi: lastBat.rbi, us: true } : null) : { who: lastPit.oppBatter || `對方 ${lastPit.oppOrder ?? ''} 棒`, result: lastPit.result, rbi: 0, us: false }
 
   // a run or a home run flashes across the board for a few seconds
@@ -297,7 +298,7 @@ function RecentPlays({ s, side }: { s: RecordState; side: 'us' | 'opp' }) {
             className="px-4 py-2 flex items-center gap-3">
             <span className="text-muted tnum w-8 shrink-0">{p.inning}局</span>
             <span className="font-medium text-ink truncate flex-1">{'batter' in p ? p.batter : (p.oppBatter || `對方 ${p.oppOrder} 棒`)}</span>
-            <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : 'text-ink-2')}>{p.result || '—'}</span>
+            <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : isPlaced(p) ? 'text-muted' : 'text-ink-2')}>{p.result || '—'}</span>
             {p.code && <Badge variant={p.code === 'R' || p.code === 'ER' ? 'good' : 'neutral'}>{p.code}</Badge>}
           </motion.li>
         ))}

@@ -7,7 +7,8 @@ import { describe, expect, it } from 'vitest'
 import { score, toGameEdit } from './model'
 import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
-import { summarizeGame } from '../data/stats'
+import { battingLines, summarizeGame } from '../data/stats'
+import { isPA, isPlaced } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf } from './timeline'
 import { earnedRepairs } from './earned'
 import { playGame, roster } from '../test/simGame'
@@ -28,6 +29,15 @@ describe('random games through the recording model', () => {
     // every opponent run was called by the rules as it was recorded: reading the saved game again agrees (but for
     // a half that ended on the bases, whose last runner plays may have no row to sit on)
     expect(earnedRepairs(s.pitching)).toEqual([])
+    // 突破僵局 runners are no plate appearances
+    expect([...s.batting, ...s.pitching].filter(isPlaced).every((p) => p.pitches.length === 0)).toBe(true)
+    expect(battingLines(fragment, s.batting).reduce((a, l) => a + l.pa, 0)).toBe(s.batting.filter((p) => p.batter && isPA(p)).length)
+  })
+  it('some games go to extra innings with the tie-break, and some runners move on a balk', () => {
+    const games = seeds.slice(0, 30).map(playGame)
+    expect(games.filter((g) => g.batting.some(isPlaced)).length).toBeGreaterThan(5)
+    expect(games.filter((g) => g.pitching.some(isPlaced)).length).toBeGreaterThan(5)
+    expect(games.some((g) => [...g.batting, ...g.pitching].some((p) => p.events?.some((e) => e.kind === 'bk')))).toBe(true)
   })
 })
 

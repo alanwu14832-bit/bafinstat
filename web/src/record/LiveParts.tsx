@@ -130,8 +130,8 @@ export interface RunnerSheetProps {
   picked: number | null
   onPick: (row: number) => void
   onEvent: (r: Runner, ev: RunnerEvent) => void
-  /** 暴投 / 捕逸 with everyone moving up */
-  onAll: (kind: 'wp' | 'pb') => void
+  /** 暴投 / 捕逸 / 投手犯規 with everyone moving up */
+  onAll: (kind: 'wp' | 'pb' | 'bk') => void
   /** 代跑 for our runner: the names that can come in, and whether that runner has a batting slot to take over */
   pinch?: { names: string[]; disabled: Set<string>; tag: (n: string) => string | undefined; can: (r: Runner) => boolean; onPinch: (r: Runner, name: string) => void }
   /** where the plate appearance stands, e.g. 「1 出局・第 3 球後」 */
@@ -146,10 +146,14 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
     <Sheet open={open} onClose={onClose} ariaLabel="壘上跑者" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-baseline justify-between gap-2"><h2 className="text-[17px] text-ink">壘上跑者</h2><span className="text-[12px] text-muted tnum">{context}</span></div>
-        {ours.length > 1 && (
+        {/* 投手犯規 (balk): every runner moves up one, whoever is on (rare, so only here) */}
+        {ours.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => onAll('wp')} className={bigBtn()}>暴投・全部進壘</button>
-            <button type="button" onClick={() => onAll('pb')} className={bigBtn()}>捕逸・全部進壘</button>
+            <button type="button" onClick={() => onAll('bk')} className={cx(bigBtn(), 'col-span-2')}>投手犯規・全部進壘</button>
+            {ours.length > 1 && <>
+              <button type="button" onClick={() => onAll('wp')} className={bigBtn()}>暴投・全部進壘</button>
+              <button type="button" onClick={() => onAll('pb')} className={bigBtn()}>捕逸・全部進壘</button>
+            </>}
           </div>
         )}
         <RunnerDiamond runners={ours.map((x) => ({ key: String(x.row), base: x.base, name: x.name }))} picked={r ? String(r.row) : null} onPick={(k) => onPick(Number(k))} className="max-w-[260px]" />

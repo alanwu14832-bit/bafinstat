@@ -15,8 +15,11 @@
  * 2B→3B), in order. Its 壘上(前) / 出局(前) are taken when the ball was put in play, i.e. after those plays, so the
  * step keeps them as `moves` between the runners the batter came up with (`before`) and the ones still there for
  * his result (`midOf`). Rows without events fold any such play into the plate appearance before, as before.
+ *
+ * 突破僵局: a runner the tie-break rule put on base is a row (result 突破僵局) before the inning's first plate
+ * appearance, lead runner first; his step puts him on his base (`placedBases`) and moves nobody.
  */
-import { HIT_BASE_COUNT, isDouble, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isDouble, isPlaced, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
@@ -95,9 +98,10 @@ export function leftEnds(left: Array<{ row: number; base: number }>, batter: { r
  * by itself gets one (from where he stood, or for the batter from where his hit put him), so the next look at the
  * game finds him there again.
  */
-export function leftMarks(mid: Array<{ row: number; base: number }>, dest: Record<number, End>, batter: { row: number; result: string; end: End }, plays: PlayEvent[], at: number): PlayEvent[] {
+export function leftMarks(mid: Array<{ row: number; base: number }>, dest: Record<number, End>, batter: { row: number; result: string; end: End; start?: number }, plays: PlayEvent[], at: number): PlayEvent[] {
   const left = mid.filter((o) => typeof dest[o.row] === 'number').sort((a, z) => z.base - a.base)
-  const start = hitBase(batter.result)
+  // (a tie-break runner starts on the base he was put on)
+  const start = batter.start ?? hitBase(batter.result)
   const bat = typeof batter.end === 'number' ? { row: batter.row, base: typeof start === 'number' ? start : 1 } : null
   const kept = plays.slice()
   const out: PlayEvent[] = []
@@ -134,6 +138,24 @@ function startBases(r: Row): Base[] | null {
   return ([...set] as Base[]).sort((a, z) => z - a)
 }
 const startOuts = (r: Row) => r.outsBefore! - moveOuts(r)
+
+/** Where the tie-break rule puts 1, 2 or 3 runners when nothing else tells: 2B; 2B and 1B; 3B, 2B and 1B. */
+const PLACED_LAYOUT: Record<number, Base[]> = { 1: [2], 2: [2, 1], 3: [3, 2, 1] }
+/**
+ * The base each tie-break runner of an inning was put on (by row), lead runner first. It is not stored: it is the
+ * next real batter's 壘上(前) with his own runner plays undone, when that has as many runners as were placed; else
+ * (nobody batted, or the bases do not fit) the usual layout.
+ */
+export function placedBases(rows: Row[], idx: number[]): Record<number, Base> {
+  const placed = idx.filter((i) => rows[i] && isPlaced(rows[i]))
+  if (!placed.length) return {}
+  const next = idx.find((i) => rows[i] && !isPlaced(rows[i]))
+  const fromNext = next === undefined || !rows[next].basesBefore ? null : startBases(rows[next])
+  const bases = fromNext && fromNext.length === placed.length ? fromNext : PLACED_LAYOUT[placed.length] ?? PLACED_LAYOUT[3]
+  const out: Record<number, Base> = {}
+  placed.forEach((row, i) => { out[row] = bases[Math.min(i, bases.length - 1)] })
+  return out
+}
 
 /** Rebuild one inning; null when its rows do not say enough (or do not add up). */
 export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
@@ -201,6 +223,8 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
       // the inning's last plate appearance: whoever scored did, the rest were left on base (see leftEnds)
       const left: Array<{ row: number; base: number }> = []
       let bat: { row: number; base: number } | null = null
+      // (a tie-break runner with no batter after him: the base he was put on)
+      if (isPlaced(r) && typeof batter === 'number') batter = placedBases(rows, idx)[k] ?? batter
       for (const g of going) {
         if (scored(rows[g.row], side)) { if (g.row === k) batter = 'home'; else dest[g.row] = 'home'; continue }
         if (g.row === k) bat = { row: k, base: typeof batter === 'number' ? batter : 1 }
@@ -345,7 +369,7 @@ export function addPlay(half: Half, at: number, pitch: number, kind: string, row
     const r = on.find((o) => o.row === row)
     if (!r) return
     const to: End = OUT_PLAYS.has(k) ? 'out' : k === 'score' || r.base >= 3 ? 'home' : ((r.base + 1) as Base)
-    if (typeof to === 'number') { const ahead = on.find((o) => o.base === to); if (ahead) move(ahead.row, k === 'sb' || k === 'wp' || k === 'pb' ? k : 'advance') }
+    if (typeof to === 'number') { const ahead = on.find((o) => o.base === to); if (ahead) move(ahead.row, k === 'sb' || k === 'wp' || k === 'pb' || k === 'bk' ? k : 'advance') }
     on = on.filter((o) => o.row !== row)
     if (typeof to === 'number') on.push({ row, base: to })
     added.push({ at: pitch, kind: k, row, from: r.base, to })
@@ -366,6 +390,57 @@ export function removePlay(half: Half, at: number, n: number): { half: Half; rem
   const [removed] = steps[i].moves.splice(n, 1)
   carry(steps, i, was)
   return { half: { ...half, steps }, removed }
+}
+
+/**
+ * Row indexes moved for rows inserted (k > 0) or removed (k < 0) at `at`: indexes ≥ at move by k, and the rows that
+ * were removed (at … at − k − 1) become −1, so counts kept on them are dropped.
+ */
+export function shiftHalf(half: Half, at: number, k: number): Half {
+  const f = (row: number) => (row < at ? row : k < 0 && row < at - k ? -1 : row + k)
+  return {
+    ...half,
+    steps: half.steps.map((st) => ({
+      index: f(st.index),
+      before: st.before.map((o) => ({ ...o, row: f(o.row) })),
+      moves: st.moves.map((m) => ({ ...m, row: f(m.row) })),
+      dest: Object.fromEntries(Object.entries(st.dest).map(([row, d]) => [f(Number(row)), d])),
+      batter: st.batter,
+      outs: st.outs.map(f),
+    })),
+  }
+}
+
+/**
+ * Tie-break runners put in front of an inning whose rows start at `at` (already shifted for the inserted rows):
+ * `placed` lead runner first, with their rows and bases. They stand still unless a batter forces them along.
+ */
+export function withPlaced(half: Half, at: number, placed: OnBase[]): Half {
+  const first = half.steps.findIndex((st) => st.index >= at)
+  const i = first < 0 ? half.steps.length : first
+  const added: Step[] = placed.map((p, n) => ({ index: p.row, before: placed.slice(0, n).map((o) => ({ ...o })), moves: [], dest: Object.fromEntries(placed.slice(0, n).map((o) => [o.row, o.base])), batter: p.base, outs: [] }))
+  const steps = [...half.steps.slice(0, i).map((s) => ({ ...s })), ...added, ...half.steps.slice(i).map((s) => ({ ...s, moves: s.moves.slice(), dest: { ...s.dest } }))]
+  const j = i + added.length
+  if (j < steps.length) {
+    const was = midOf(steps[j])
+    steps[j] = { ...steps[j], before: [...placed.map((o) => ({ ...o })), ...steps[j].before].sort((a, z) => z.base - a.base) }
+    carry(steps, j, was)
+  }
+  return { ...half, steps }
+}
+
+/** The inning without these runners (tie-break runners taken off): their steps, and them in every other step, are gone. */
+export function withoutRunners(half: Half, rows: number[]): Half {
+  const gone = new Set(rows)
+  const steps = half.steps.filter((st) => !gone.has(st.index)).map((st) => ({
+    ...st,
+    before: st.before.filter((o) => !gone.has(o.row)),
+    moves: st.moves.filter((m) => !gone.has(m.row)),
+    dest: Object.fromEntries(Object.entries(st.dest).filter(([row]) => !gone.has(Number(row)))),
+    outs: st.outs.filter((r) => !gone.has(r)),
+  }))
+  if (steps.length) carry(steps, 0)
+  return { ...half, steps }
 }
 
 /** Impossible positions in one step: two people on one base, or a runner passing the one ahead. */
@@ -432,9 +507,10 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     r.outsBefore = outs
     // 趁傳進壘 on the play stays while that person still ends where it says
     // (a 壘死 mark is his while the runner who stood on its base is still out)
-    const onPlay = (r.events ?? []).filter((e) => e.play && (e.batter ? s.batter === e.to : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to)))
+    // (a 投手犯規 after the last plate appearance stays: it happened, and BK is counted from it)
+    const onPlay = (r.events ?? []).filter((e) => e.play && (e.kind === 'bk' || (e.batter ? s.batter === e.to : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to))))
     // the inning's last one: where the runners left on base ended has to be written down (no next 壘上(前) says it)
-    if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter }, onPlay, r.pitches.length))
+    if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter, ...(isPlaced(r) && typeof s.batter === 'number' ? { start: s.batter } : {}) }, onPlay, r.pitches.length))
     const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
     if (events.length) r.events = events
     else delete r.events
@@ -502,9 +578,19 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
   const steps: Step[] = []
   let on: OnBase[] = []
   let outs = 0
+  const placedAt = placedBases(rows, idx)
   for (const k of idx) {
     const r = rows[k]
     const before = on.slice().sort((a, z) => z.base - a.base)
+    // a tie-break runner: put on his base, nobody else moves
+    if (isPlaced(r)) {
+      const dest: Record<number, End> = {}
+      for (const o of before) dest[o.row] = o.base
+      const step: Step = { index: k, before, moves: [], dest, batter: placedAt[k] ?? 2, outs: [] }
+      steps.push(step)
+      on = stepAfter(step)
+      continue
+    }
     const dest: Record<number, End> = {}
     const has = (b: number) => before.some((o) => o.base === b)
     const up = (o: OnBase, n: number): End => (o.base + n >= 4 ? 'home' : ((o.base + n) as Base))

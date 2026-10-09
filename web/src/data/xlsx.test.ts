@@ -186,3 +186,19 @@ describe('結束時間, 中繼 and 對方投手 in Excel', () => {
     expect(dataset.games[0]).toMatchObject({ endTime: '15:22', holds: ['子', '丑'] })
   })
 })
+
+describe('突破僵局 rows and 投手犯規 in Excel', () => {
+  it('survive a backup round trip (both sides)', () => {
+    const bat = SEED_DATASET.batting.map((p, i) => (i === 0 ? { ...p, result: '突破僵局', pitches: [], loc: undefined, traj: undefined, quality: undefined, basesBefore: '無', outsBefore: 0, run: 1, rbi: 0, code: 'R' } : i === 1 ? { ...p, events: [{ at: 1, kind: 'bk', from: 3 as const, to: 'home' as const }, { at: 1, kind: 'bk', from: 1 as const, to: 2 as const }] } : p))
+    const pit = SEED_DATASET.pitching.map((p, i) => (i === 0 ? { ...p, result: '突破僵局', pitches: [], loc: undefined, traj: undefined, quality: undefined, basesBefore: '無', outsBefore: 0, code: 'R' } : i === 1 ? { ...p, events: [{ at: 0, kind: 'bk', from: 2 as const, to: 3 as const }] } : p))
+    const ds = { ...SEED_DATASET, batting: bat, pitching: pit }
+    const back = parseWorkbook(XLSX.write(datasetToWorkbook(ds), { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+    const pick = (p: { result: string; basesBefore?: string; outsBefore?: number; code?: string; events?: unknown }) => ({ result: p.result, basesBefore: p.basesBefore, outsBefore: p.outsBefore, code: p.code, events: p.events })
+    expect(pick(back.batting[0])).toEqual(pick(bat[0]))
+    expect(back.batting[0].run).toBe(1)
+    expect(back.batting[0].pitches).toEqual([])
+    expect(back.batting[1].events).toEqual(bat[1].events)
+    expect(pick(back.pitching[0])).toEqual(pick(pit[0]))
+    expect(back.pitching[1].events).toEqual(pit[1].events)
+  })
+})

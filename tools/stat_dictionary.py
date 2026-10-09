@@ -82,6 +82,7 @@ STAT_DICTIONARY = [
     dict(key="pR", zh="失分", en="Runs Allowed", group="投球", formula="結果代碼 R + ER", status="現有", priority="P0", note=""),
     dict(key="ER", zh="責失分", en="Earned Runs", group="投球", formula="結果代碼 ER", status="現有", priority="P0", note="規則 9.16：去掉失誤與捕逸重建半局，三出局前回本壘的才算；網站逐球紀錄自動判定，可手動改"),
     dict(key="WP", zh="暴投", en="Wild Pitches", group="投球", formula="暴投欄加總", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
+    dict(key="BK", zh="投手犯規", en="Balks", group="投球", formula="跑壘事件裡的投手犯規（一次犯規壘上跑者各進一壘，算一次）", status="新增", priority="P2", note="CPBL 官方紀錄項目；只在網站計算，Excel 總表不算（公式數不出次數）"),
     dict(key="PK", zh="牽制出局", en="Pickoffs", group="投球", formula="牽制出局欄加總", status="新增", priority="P2", note=""),
     dict(key="SBA", zh="被盜壘", en="Stolen Bases Allowed", group="投球", formula="被盜壘欄加總", status="新增", priority="P1", note=""),
     dict(key="ERA", zh="防禦率", en="Earned Run Average", group="投球", formula="ER × 每場局數 ÷ IP", status="現有", priority="P0", note="每場局數在『設定』調整（預設 7；MLB/CPBL 為 9）"),

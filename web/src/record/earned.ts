@@ -16,13 +16,19 @@
  * Runs are charged to the pitcher who let the runner on (the row's 投手). A relief pitcher gets no benefit of the
  * outs missed before he came in: his runs are judged by an errorless inning that starts when he took over, with the
  * outs and runners really there then.
+ * 突破僵局 (WBSC / MLB): a runner the tie-break rule put on base counts as having reached on an error, but no error is
+ * charged and no out is added: in the errorless inning he simply stands on his base, moves and is put out the way he
+ * really was (a pickoff of him is a real out), and his own run is never earned. (WBSC also makes unearned the run of a
+ * batter who reached on a fielder's choice that put the placed runner out; that one is left to the recorder's tap.)
  * Not knowable from the rows (the recorder sets these by hand): a muffed foul fly that kept the batter alive, a
  * runner who would have been out without a bad throw.
  */
-import { HIT_BASE_COUNT, type PitchingPA } from '../data/types'
+import { HIT_BASE_COUNT, isPlaced, type PitchingPA } from '../data/types'
 import { batterEndFor, inferAll, midOf, outsIn, type End, type Half, type Step } from './timeline'
 
 export interface EarnedCall { earned: boolean; /** why it is not earned */ why?: string }
+/** Why a tie-break runner's run is unearned. */
+export const TIEBREAK_WHY = '突破僵局放上壘的跑者：規則視同失誤上壘（不算失誤），得分不算自責分'
 
 /** Bases taken this way are not taken in the errorless inning. */
 const AIDED = new Set(['err', 'pb'])
@@ -85,6 +91,14 @@ function errorless(rows: PitchingPA[], half: Half, start: number): Errorless {
   for (; j < half.steps.length && outs < 3; j++) {
     const st: Step = half.steps[j], r = rows[st.index]
     if (!r) break
+    // a tie-break runner: on his base, nobody else moves (no out, no force)
+    if (isPlaced(r)) {
+      if (typeof st.batter === 'number') on.set(st.index, st.batter)
+      else if (st.batter === 'home') g.scored.add(st.index)
+      else addOut()
+      actual += st.outs.length
+      continue
+    }
     for (const m of st.moves) {
       if (outs >= 3) break
       if (m.to === 'out') actual++
@@ -173,6 +187,7 @@ export function earnedCalls(rows: PitchingPA[], half: Half): Map<number, EarnedC
   const cache = new Map<number, Errorless>()
   const out = new Map<number, EarnedCall>()
   for (const [row, at] of scoredAt) {
+    if (rows[row] && isPlaced(rows[row])) { out.set(row, { earned: false, why: TIEBREAK_WHY }); continue }
     const pitcher = rows[row]?.pitcher
     // the errorless inning of the pitcher who let him on starts when that pitcher took over this inning
     const start = Math.max(0, half.steps.findIndex((st) => rows[st.index]?.pitcher === pitcher))

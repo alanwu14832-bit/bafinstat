@@ -2,7 +2,8 @@
  * Stats engine. Definitions mirror the helper columns of the workbook so the
  * website and the spreadsheet always agree. See data/stat_dictionary.json.
  */
-import { DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, isSingle, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
+import { balksIn } from './plays'
+import { DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, isPlaced, isSingle, LOC_CODES, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
@@ -100,6 +101,8 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
 export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   const r = pa.result
   if (!r) return
+  // a tie-break runner is no plate appearance: only what he did on the bases counts (the game still counts for G)
+  if (isPlaced(pa)) { l.r += pa.run; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0; return }
   const pt = pitchTotals(pa.pitches)
   l.pa++
   const isAB = !NON_AB_RESULTS.has(r)
@@ -187,6 +190,8 @@ export interface PitchingLine {
   g: number; gs: number; w: number; l: number; sv: number; hld: number; outs: number; ip: number; ipDisplay: string
   bf: number; ab: number; pc: number; strikes: number; balls: number; k: number; bb: number; ibb: number; hbp: number; h: number; h2: number; h3: number; hr: number; sf: number
   r: number; er: number; wp: number; sba: number; cs: number; pk: number
+  /** 投手犯規 (balks), counted from the runner plays (one balk moves every runner, logged once per runner) */
+  bk: number
   bip: number; gb: number; fb: number; ld: number; iffb: number; hard: number; whiffs: number; swings: number; called: number; firstPitchStrike: number
   era: number | null; whip: number | null; k7: number | null; k9: number | null; bb9: number | null; h9: number | null; kbb: number | null; kPct: number | null; bbPct: number | null
   oppAvg: number | null; oppObp: number | null; babip: number | null; fip: number | null; strikePct: number | null
@@ -197,7 +202,7 @@ export interface PitchingLine {
 function emptyPitching(name: string): PitchingLine {
   return {
     name, g: 0, gs: 0, w: 0, l: 0, sv: 0, hld: 0, outs: 0, ip: 0, ipDisplay: '0.0', bf: 0, ab: 0, pc: 0, strikes: 0, balls: 0, k: 0, bb: 0, ibb: 0, hbp: 0, h: 0, h2: 0, h3: 0, hr: 0, sf: 0,
-    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
+    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bk: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
     era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
     gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
   }
@@ -249,6 +254,16 @@ export function outsCredited(pas: PitchingPA[]): Map<PitchingPA, number> {
 export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: number) {
   const r = pa.result
   if (!r) return
+  // a tie-break runner: not a batter faced; his outs on the bases and his run (never earned) are the pitcher's
+  if (isPlaced(pa)) {
+    if (outs !== undefined) l.outs += outs
+    else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += 1
+    if (pa.code === 'R' || pa.code === 'ER') l.r++
+    if (pa.code === 'ER') l.er++
+    // (a half that ended before anyone batted keeps its pitcher's plays on the last runner: record/model settlePending)
+    l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk; l.bk += balksIn(pa.events)
+    return
+  }
   const pt = pitchTotals(pa.pitches)
   l.bf++
   if (!NON_AB_RESULTS.has(r)) l.ab++
@@ -262,7 +277,7 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: numbe
   else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
-  l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk
+  l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk; l.bk += balksIn(pa.events)
   if (isBIP(pa.traj)) { l.bip++; if (pa.traj === 'G') l.gb++; if (pa.traj === 'F' || pa.traj === 'P') l.fb++; if (pa.traj === 'P') l.iffb++; if (pa.traj === 'L') l.ld++; if (pa.quality === '強') l.hard++ }
 }
 

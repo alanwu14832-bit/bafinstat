@@ -20,7 +20,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { POSITIONS, type Game, type Registration } from '../data/types'
+import { isPA, POSITIONS, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -33,7 +33,7 @@ import { HoldPicker } from '../components/ui/HoldPicker'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, beyondDefault, BIP_RESULTS, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
@@ -46,6 +46,21 @@ import { readDraft, writeDraft } from '../record/draft'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
+import { TiebreakCard, TiebreakSelects } from '../record/TiebreakCard'
+import { basesLabel, parseTiebreakBases, placeTiebreak, setTiebreakRule, skipTiebreak, tiebreakDue } from '../record/tiebreak'
+
+/** 突破僵局 on this device: the bases last picked ('12' / '2' / '123'), or 'off' for 不採用 */
+const TIEBREAK_KEY = 'bafin.tiebreak.v1'
+const TIEBREAK_BASES = ['12', '2', '123']
+function readTiebreakPref(): { on: boolean; bases: string } {
+  const team = TEAM.tiebreak || '12'
+  try {
+    const v = localStorage.getItem(TIEBREAK_KEY)
+    if (v === 'off') return { on: false, bases: team }
+    if (v && TIEBREAK_BASES.includes(v)) return { on: true, bases: v }
+  } catch { /* storage unavailable */ }
+  return { on: !!TEAM.tiebreak, bases: team }
+}
 
 /* ------------------------------------------------------------------ setup */
 function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
@@ -85,6 +100,17 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const [oppLineup, setOppLineupNames] = useState<string[]>(() => Array(9).fill(''))
   const oppNameList = useMemo(() => oppBatterNames(base, game.opponent), [base, game.opponent])
   const lastOpp = useMemo(() => lastOppLineup(base, game.opponent), [base, game.opponent])
+  // 突破僵局: from the inning after 預定局數 (+1 … +3, follows 預定局數), or 不採用; the bases (and 不採用) are remembered
+  const [tbPref] = useState(readTiebreakPref)
+  const [tbOffset, setTbOffset] = useState(tbPref.on ? 1 : 0)
+  const [tbBases, setTbBases] = useState(tbPref.bases)
+  const innings = game.innings ?? TEAM.innings
+  const setTiebreak = (from: number | null, bases: string) => {
+    setTbOffset(from === null ? 0 : from - innings)
+    setTbBases(bases)
+    try { localStorage.setItem(TIEBREAK_KEY, from === null ? 'off' : bases) } catch { /* storage unavailable */ }
+  }
+  const tiebreakRule = tbOffset ? { from: innings + tbOffset, bases: parseTiebreakBases(tbBases) } : null
   const pickSchedule = (id: string) => {
     setFromSchedule(id)
     const s = scheduled.find((g) => g.id === id)
@@ -125,7 +151,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
     const slots = lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos }))
     // Setup may have promoted a bench player: the bench is whoever is left over
     const sp = pitcher.trim()
-    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames ? { oppNames: true, oppLineup } : {}) }))
+    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule }))
   }
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
@@ -136,7 +162,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1 flex flex-col gap-1">
               <div className="text-[16px] font-semibold text-ink tnum">{game.date}{game.time ? ` ${game.time}` : ''}・vs {game.opponent || '（未填對手）'}</div>
-              <div className="text-[13px] text-ink-2">{[game.tournament, game.homeAway === '主' ? '主場（對方先攻）' : '客場（我隊先攻）', game.venue, `${game.innings ?? TEAM.innings} 局`].filter(Boolean).join('・')}</div>
+              <div className="text-[13px] text-ink-2">{[game.tournament, game.homeAway === '主' ? '主場（對方先攻）' : '客場（我隊先攻）', game.venue, `${game.innings ?? TEAM.innings} 局`, tiebreakRule ? `延長第 ${tiebreakRule.from} 局起突破僵局（${basesLabel(tiebreakRule.bases)}）` : ''].filter(Boolean).join('・')}</div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setInfoOpen(true)} className="shrink-0 -mt-1">修改</Button>
           </div>
@@ -149,6 +175,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
           <Field label="對手"><Input list="rec-opponents" value={game.opponent} onChange={(e) => g('opponent', e.target.value)} placeholder="必填" /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} className="w-full" /></Field>
           <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? TEAM.innings} onChange={(e) => g('innings', Number(e.target.value) || TEAM.innings)} className="tnum" /></Field>
+          <TiebreakSelects idPrefix="setup" innings={innings} from={tiebreakRule?.from ?? null} bases={tbBases} onChange={setTiebreak} />
           <Field label="場地"><Input value={game.venue ?? ''} onChange={(e) => g('venue', e.target.value)} /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
@@ -278,7 +305,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const lastOpp = useMemo(() => (state.oppNames ? lastOppLineup(base, state.game.opponent) : null), [base, state.game.opponent, state.oppNames])
   const oppName = oppBatterOf(state)
   const askOppHand = side === 'us' && oppHandOn && !state.oppPitcher && !state.oppHandOff
-  const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && !b.oppHand && !b.oppPitcher).length : 0
+  // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
+  const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && isPA(b) && !b.oppHand && !b.oppPitcher).length : 0
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerOpen(false) }, [side, state.inning])
   // every play ends with one line saying what went in, and a way to take it back
@@ -399,7 +427,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     ? <>第 {state.slot + 1} 棒 <span style={{ color: BOARD.ink }} className="font-medium">{batterSlot?.name ?? '—'}</span> {batterSlot?.pos}</>
     : <>對方第 {state.oppOrder} 棒{oppName ? ` ${oppName}` : ''}・投手 <span style={{ color: BOARD.ink }} className="font-medium">{state.pitcher}</span> <span className={cx('tnum', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : '')}>{currentCount} 球</span></>
   // 暴投／捕逸 from the pitch row: one tap, everyone moves up (復原 if only some did, then use the runner sheet)
-  const allUp = (kind: 'wp' | 'pb') => { act((s) => wildPitch(s, kind)); setRunnerOpen(false) }
+  const allUp = (kind: 'wp' | 'pb' | 'bk') => { act((s) => (kind === 'bk' ? balk(s) : wildPitch(s, kind))); setRunnerOpen(false) }
+  // 延長賽突破僵局: the runners go on first (the pitch pad waits; 換投／換人 still work)
+  const due = tiebreakDue(state)
   const quick = 'h-10 pointer-fine:h-9 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-default'
   const secondary = (
     <div className="flex flex-col gap-2">
@@ -461,6 +491,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               </div>
             )}
 
+            {due && <TiebreakCard state={state} onPlace={() => act(placeTiebreak)} onSkip={() => act(skipTiebreak)} onRule={(rule) => apply((s) => setTiebreakRule(s, rule))} />}
+
             {/* pitches, with the runner plays between them */}
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 min-h-8">
@@ -468,7 +500,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
-              <PitchPad onPitch={(code) => { if (inPlay) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay} />
+              <PitchPad onPitch={(code) => { if (inPlay) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -512,7 +544,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <button type="button" onClick={() => apply(undoPitch)} className="shrink-0 h-9 px-3 rounded-[var(--radius-sm)] text-[12px] text-ink-2 hover:text-ink hover:bg-surface/60 underline underline-offset-2 cursor-pointer">點錯了，刪掉 IP</button>
                   </div>
                 )}
-                <ResultChips onPick={choose} only={inPlay ? BIP_RESULTS : undefined} />
+                {!due && <ResultChips onPick={choose} only={inPlay ? BIP_RESULTS : undefined} />}
               </div>
             ) : (
               <div className="rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">

@@ -10,13 +10,14 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { OPP_HAND_LABEL, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
-import { count } from '../../record/model'
+import { isPlaced, OPP_HAND_LABEL, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
+import { count, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { FIELD_POSITIONS } from '../../data/errors'
-import { batterEndFor, midOf, OUT_PLAYS, type End, type Step } from '../../record/timeline'
-import { playLabel } from '../../data/plays'
+import { batterEndFor, inningsOf, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
+import { balksIn, playLabel } from '../../data/plays'
+import { parseTiebreakBases } from '../../record/tiebreak'
 
 export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
@@ -28,14 +29,35 @@ const whoOf = (side: PaSide, p: AnyPA) => {
   const q = p as PitchingPA
   return `對方 ${q.oppBatter || (q.oppOrder ? `第 ${q.oppOrder} 棒` : '打者')}`
 }
-const extrasOf = (side: PaSide, p: AnyPA) => (isBat(side, p)
+const BASE_ZH: Record<number, string> = { 1: '一壘', 2: '二壘', 3: '三壘' }
+const extrasOf = (side: PaSide, p: AnyPA) => [...(isBat(side, p)
   ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `壘死 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`]
   : [(p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
-).filter(Boolean).join('・')
+), balksIn(p.events) && `投手犯規 ${balksIn(p.events)}`].filter(Boolean).join('・')
 
 /* ------------------------------------------------------------------ list */
-export function PaList({ side, rows, flags, onOpen, onInsert }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; onOpen: (i: number) => void; onInsert: (at: number) => void }) {
+const PLACED_CHOICES = [{ v: '12', l: '一、二壘' }, { v: '2', l: '二壘' }, { v: '123', l: '滿壘' }]
+/** 「＋ 突破僵局跑者」 on an extra inning's header: pick the bases, then 加上. */
+function AddPlaced({ onAdd }: { onAdd: (bases: Base[]) => void }) {
+  const [open, setOpen] = useState(false)
+  const [bases, setBases] = useState('12')
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="ml-auto h-9 pointer-fine:h-7 px-2 text-[11px] font-medium text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">＋ 突破僵局跑者</button>
+  return (
+    <span className="basis-full flex items-center gap-1.5 flex-wrap pt-1" role="group" aria-label="突破僵局跑者放哪幾壘">
+      <span className="text-[11px] text-ink-2">放哪幾壘：</span>
+      {PLACED_CHOICES.map((c) => <button key={c.v} type="button" aria-pressed={bases === c.v} onClick={() => setBases(c.v)} className={cx(chipBtn(bases === c.v), 'h-9 pointer-fine:h-8 px-2.5 text-[12px]')}>{c.l}</button>)}
+      <Button size="sm" variant="primary" onClick={() => { onAdd(parseTiebreakBases(bases)); setOpen(false) }}>加上</Button>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+    </span>
+  )
+}
+
+export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAddPlaced }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; onOpen: (i: number) => void; onInsert: (at: number) => void; /** the innings that can be extra innings (record/tiebreak extraInnings) */ extraInnings?: Set<number>; /** 突破僵局 runners in front of an extra inning */ onAddPlaced?: (inning: number, bases: Base[]) => void }) {
   let last = -1
+  // the base each 突破僵局 runner was put on
+  const placedAt: Record<number, number> = {}
+  if (rows.some(isPlaced)) for (const idx of inningsOf(rows).values()) Object.assign(placedAt, placedBases(rows, idx))
+  const hasPlaced = (inning: number) => rows.some((r) => r.inning === inning && isPlaced(r))
   return (
     <div className="border border-border rounded-[var(--radius-sm)] overflow-hidden">
       {rows.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-muted">沒有打席</div>}
@@ -47,16 +69,20 @@ export function PaList({ side, rows, flags, onOpen, onInsert }: { side: PaSide; 
           const pitcher = !isBat(side, p) ? (p as PitchingPA).pitcher : ''
           return (
             <Fragment key={i}>
-              {header && <li className="px-3 py-1.5 bg-surface-2/60 text-[11px] font-medium text-muted border-t border-border first:border-t-0 tnum">第 {p.inning || '?'} 局・{side === 'bat' ? '我隊進攻' : '對方進攻'}</li>}
+              {header && <li className="px-3 py-1.5 bg-surface-2/60 text-[11px] font-medium text-muted border-t border-border first:border-t-0 tnum flex items-center gap-2 flex-wrap">
+                <span>第 {p.inning || '?'} 局・{side === 'bat' ? '我隊進攻' : '對方進攻'}</span>
+                {onAddPlaced && extraInnings?.has(p.inning) && !hasPlaced(p.inning) && <AddPlaced onAdd={(b) => onAddPlaced(p.inning, b)} />}
+              </li>}
               <li className="border-t border-border first:border-t-0">
                 <button type="button" onClick={() => onOpen(i)} className="w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-surface-2/60 cursor-pointer" aria-label={`修改第 ${i + 1} 個打席：${whoOf(side, p)} ${p.result || '沒有結果'}`}>
                   <span className="w-6 shrink-0 text-[11px] text-muted tnum text-right">{i + 1}</span>
                   <span className="min-w-0 flex-1 flex flex-col gap-1">
                     <span className="flex items-center gap-2 flex-wrap text-[13px]">
-                      <span className="font-medium text-ink">{whoOf(side, p)}</span>
+                      {isPlaced(p) && <span className="text-ink-2">突破僵局・{placedAt[i] ? BASE_ZH[placedAt[i]] : ''}</span>}
+                      <span className="font-medium text-ink">{isPlaced(p) && isBat(side, p) ? (p.runner || p.batter || '（未填）') : whoOf(side, p)}</span>
                       {isBat(side, p) && p.pos && <span className="text-[11px] text-muted">{p.pos}</span>}
                       {pitcher && <span className="text-[11px] text-muted">投手 {pitcher}</span>}
-                      <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>
+                      {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>}
                       {p.code && <span className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{CODE_LABEL[p.code] ?? p.code}</span>}
                       {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
                     </span>
@@ -152,8 +178,8 @@ function CountButton({ label, value, onChange }: { label: string; value: number;
 
 /** Runner plays between pitches, as 紀錄比賽 offers them (a wild pitch while we bat is the other team's). */
 const PLAY_KINDS: Record<PaSide, string[]> = {
-  bat: ['sb', 'wp', 'pb', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
-  pit: ['sb', 'wp', 'pb', 'throw', 'advance', 'cs', 'pk', 'out'],
+  bat: ['sb', 'wp', 'pb', 'bk', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
+  pit: ['sb', 'wp', 'pb', 'bk', 'throw', 'advance', 'cs', 'pk', 'out'],
 }
 export interface TimelineProps {
   step: Step
@@ -214,7 +240,8 @@ function PlayBuilder({ side, pitches, tl }: { side: PaSide; pitches: number; tl:
   if (!step.before.length && !step.moves.length) return null
   const play = (kind: string) => {
     // nobody picked: the only runner, or everyone on a wild pitch / passed ball
-    const rows = picked.length ? picked : on.length === 1 || kind === 'wp' || kind === 'pb' ? on.map((o) => o.row) : []
+    // a balk (投手犯規) always moves every runner
+    const rows = kind === 'bk' ? on.map((o) => o.row) : picked.length ? picked : on.length === 1 || kind === 'wp' || kind === 'pb' ? on.map((o) => o.row) : []
     if (!rows.length) { setHint('先點一位跑者'); return }
     setHint(null)
     tl.onPlay(t, kind, rows)
@@ -235,7 +262,7 @@ function PlayBuilder({ side, pitches, tl }: { side: PaSide; pitches: number; tl:
               const sel = picked.includes(o.row)
               return <button key={o.row} type="button" aria-pressed={sel} onClick={() => setWho(sel ? picked.filter((r) => r !== o.row) : [...picked, o.row])} className={cx(chipBtn(sel), 'h-8 px-2.5 text-[12px]')}><span className="opacity-70 tnum mr-1">{o.base}B</span>{nameOf(o.row)}</button>
             })}
-            {on.length > 1 && <span className="text-[11px] text-muted">可以點多位；暴投、捕逸不點就是全部跑者</span>}
+            {on.length > 1 && <span className="text-[11px] text-muted">可以點多位；暴投、捕逸不點就是全部跑者；投手犯規一定是全部跑者</span>}
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="發生了什麼">
             {PLAY_KINDS[side].map((k) => <button key={k} type="button" onClick={() => play(k)} className={runBtn(OUT_PLAYS.has(k))}>{playLabel(k)}</button>)}
@@ -364,6 +391,8 @@ export interface PaPanelProps {
   onRebuild?: () => void
   /** (our plate appearances) change the opponent pitcher from this one to the end of that pitcher's stint */
   onOppPitcher?: (next: { oppPitcher?: string; oppHand?: OppHand }) => void
+  /** (a 突破僵局 runner) take this inning's placed runners off */
+  onRemovePlaced?: () => void
 }
 
 /** 對方投手 of one of our plate appearances: one line, 修改 opens name + 左投／右投／不知道, applied once. */
@@ -399,7 +428,65 @@ function OppPitcherEdit({ pa, onApply }: { pa: BattingPA; onApply: (next: { oppP
   )
 }
 
-export function PaPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher }: PaPanelProps) {
+/** One plate appearance — or, for a 突破僵局 runner (not a plate appearance), the runner's own small panel. */
+export function PaPanel(props: PaPanelProps) {
+  return isPlaced(props.pa) ? <PlacedPanel {...props} /> : <PlayPanel {...props} />
+}
+
+/** A runner the tie-break rule put on base: who he was, his run (opponent: earned or not), 備註, and taking them off. */
+function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, timeline, onRemovePlaced }: PaPanelProps) {
+  const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
+  const bat = isBat(side, pa) ? pa : null
+  const pit = !bat ? (pa as PitchingPA) : null
+  const base = timeline && typeof timeline.step.batter === 'number' ? BASE_ZH[timeline.step.batter] : ''
+  const run = pa.code === 'R' || pa.code === 'ER'
+  const orderOpts = [{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]
+  return (
+    <div className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/40 p-3 md:p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" variant="ghost" icon={<List />} onClick={onClose}>回到清單</Button>
+        <div className="flex-1 min-w-0 text-center text-[13px] text-ink tnum whitespace-nowrap">{index + 1} / {total}</div>
+        <Button size="sm" variant="outline" icon={<ChevronLeft />} onClick={() => onNav(index - 1)} disabled={index === 0}>上一個</Button>
+        <Button size="sm" variant="outline" onClick={() => onNav(index + 1)} disabled={index >= total - 1}>下一個<ChevronRight className="size-4" /></Button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <h3 className="text-[15px] font-semibold text-ink">突破僵局跑者（不算打席）</h3>
+        <p className="text-[12px] text-muted">延長賽開始時照規則放上{base || '壘'}；他之後的盜壘、得分、出局，在後面打席的壘包圖上改。</p>
+      </div>
+      {bat ? (
+        <div className="flex items-end gap-2 flex-wrap">
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2">棒次<Select value={bat.order ? String(bat.order) : ''} onChange={(e) => set({ order: e.target.value ? Number(e.target.value) : undefined })} options={orderOpts} className="w-[104px]" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">打者<PlayerSelect aria-label="突破僵局跑者" value={bat.batter} onChange={(v) => set({ batter: v })} names={bat.batter && !names.includes(bat.batter) ? [bat.batter, ...names] : names} className="w-full" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">代跑<PlayerSelect aria-label="代跑" value={bat.runner ?? ''} onChange={(v) => { const n = { ...bat, runner: v || undefined }; if (!v) delete n.runner; onChange(n) }} names={names.filter((n) => n !== bat.batter)} placeholder="沒有代跑" className="w-full" /></label>
+        </div>
+      ) : pit && (
+        <div className="flex items-end gap-2 flex-wrap">
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={orderOpts} className="w-[104px]" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[140px]">對方打者<Input value={pit.oppBatter ?? ''} onChange={(e) => set({ oppBatter: e.target.value || undefined })} placeholder="可不填" /></label>
+        </div>
+      )}
+      <div className="flex items-center gap-2 flex-wrap text-[13px] text-ink-2">
+        <span>結果：{pa.code ? CODE_LABEL[pa.code] ?? pa.code : '—'}</span>
+        {pit && run && timeline?.earned && <EarnedChip on={timeline.earned.of(index)} onToggle={() => timeline.earned!.toggle(index)} />}
+      </div>
+      {pit && run && timeline && <EarnedNote tl={timeline} row={index} />}
+      <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pa.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
+      {issues.length > 0 && (
+        <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+        </div>
+      )}
+      {onRemovePlaced && (
+        <div className="flex pt-2 border-t border-border">
+          <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onRemovePlaced}>刪除這局的突破僵局跑者</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
   const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })

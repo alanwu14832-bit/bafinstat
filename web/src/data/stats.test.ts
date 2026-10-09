@@ -126,3 +126,36 @@ describe('內野飛球 (P)', () => {
     expect(l.fbPct).toBeCloseTo(3 / 4, 9); expect(l.iffbPct).toBeCloseTo(1 / 3, 9)
   })
 })
+
+describe('突破僵局 runners and 投手犯規', () => {
+  const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G1', inning: 8, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
+  const pit = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'G1', inning: 8, pitcher: '壬', pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
+  const ds = { ...SEED_DATASET, roster: [] }
+  it('a placed runner is no plate appearance: only his run and steals count', () => {
+    const rows = [bat({ result: '突破僵局', run: 1, sb: 1, code: 'R', basesBefore: '無', outsBefore: 0 }), bat({ inning: 9, result: '一安', pitches: ['IP'], loc: 8, traj: 'L' })]
+    expect(battingLines(ds, rows)[0]).toMatchObject({ pa: 1, ab: 1, h: 1, r: 1, sb: 1, g: 1, avg: 1 })
+    const ran = [{ ...rows[0], runner: '寅' }, rows[1]]
+    const lines = battingLines(ds, ran)
+    expect(lines.find((l) => l.name === '寅')).toMatchObject({ r: 1, sb: 1, pa: 0 })
+    expect(lines.find((l) => l.name === '甲')).toMatchObject({ r: 0, sb: 0, pa: 1 })
+    expect(teamBatting(ds, rows).pa).toBe(1)
+  })
+  it('a placed runner faced nobody: his run is the pitcher\'s (unearned), his out on the bases too', () => {
+    const rows = [
+      pit({ result: '突破僵局', code: 'R', basesBefore: '無', outsBefore: 0 }),
+      pit({ result: '三振', pitches: ['SS', 'SS', 'SS'], code: 'I', basesBefore: '2', outsBefore: 0 }),
+      pit({ result: '內滾', pitches: ['IP'], code: 'II', basesBefore: '2', outsBefore: 1 }),
+      pit({ result: '外飛', pitches: ['IP'], code: 'III', basesBefore: '3', outsBefore: 2 }),
+    ]
+    expect(pitchingLines(rows, [])[0]).toMatchObject({ bf: 3, r: 1, er: 0, outs: 3, pc: 5 })
+    const picked = [
+      pit({ result: '突破僵局', code: 'I', basesBefore: '無', outsBefore: 0 }),
+      pit({ result: '三振', pitches: ['SS', 'SS', 'SS'], code: 'II', basesBefore: '無', outsBefore: 1, events: [{ at: 0, kind: 'pk', from: 2, to: 'out' }] }),
+    ]
+    expect(pitchingLines(picked, [])[0]).toMatchObject({ bf: 1, outs: 2 })
+  })
+  it('BK from the plays on our pitcher\'s rows', () => {
+    const rows = [pit({ result: '三振', pitches: ['B', 'SS', 'SS', 'SS'], code: 'I', events: [{ at: 1, kind: 'bk', from: 3, to: 'home' }, { at: 1, kind: 'bk', from: 1, to: 2 }] })]
+    expect(pitchingLines(rows, [])[0].bk).toBe(1)
+  })
+})
