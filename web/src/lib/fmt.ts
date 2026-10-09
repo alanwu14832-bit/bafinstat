@@ -7,6 +7,28 @@ export const f1 = (v: number | null | undefined): string => (v === null || v ===
 export const pct = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${(v * 100).toFixed(1)}%`)
 /** A difference of two rates, in percentage points with its sign: +12.3% / −4.0% (sSeager). */
 export const signedPct = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(1)}%`)
+/** A signed value with a real minus sign: signed(1.25, 2) → '+1.25', signed(-0.4, 2) → '−0.40' (WPA, RE24). */
+export const signed = (v: number | null | undefined, digits = 2): string => {
+  if (v === null || v === undefined || !Number.isFinite(v)) return DASH
+  const t = Math.abs(v).toFixed(digits)
+  return Number(t) === 0 ? t : `${v > 0 ? '+' : '−'}${t}`
+}
+export const signed2 = (v: unknown): string => signed(v as number | null, 2)
+export const signed1 = (v: unknown): string => signed(v as number | null, 1)
+/** A change of a probability in whole percentage points: +23% / −8% (one game's WPA). */
+export const signedPts = (v: number | null | undefined): string => {
+  if (v === null || v === undefined || !Number.isFinite(v)) return DASH
+  const n = Math.round(v * 100)
+  return n === 0 ? '0%' : `${n > 0 ? '+' : '−'}${Math.abs(n)}%`
+}
+/**
+ * The change between two probabilities shown next to them as whole percents: the difference of the two rounded
+ * numbers, so 「90% → 83%（−7%）」 always adds up (signedPts of the exact change could read −8%).
+ */
+export const signedPtsBetween = (before: number, after: number): string => {
+  const n = Math.round(after * 100) - Math.round(before * 100)
+  return n === 0 ? '0%' : `${n > 0 ? '+' : '−'}${Math.abs(n)}%`
+}
 /** Whole-percent form for composite tiles where a decimal would not fit. */
 export const pct0 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${Math.round(v * 100)}%`)
 export const int = (v: number | null | undefined): string => (v === null || v === undefined ? DASH : String(Math.round(v)))

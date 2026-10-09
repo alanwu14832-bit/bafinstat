@@ -32,6 +32,8 @@ const L: Record<string, Link> = {
   fG: ['fielding', '', 'g'], Inn: ['fielding', '', 'innings'], PO: ['fielding', '', 'po'], A: ['fielding', '', 'a'], E: ['fielding', '', 'e'],
   DP: ['fielding', '', 'dp'], TC: ['fielding', '', 'tc'], FPCT: ['fielding', '', 'fpct'], 'RF/G': ['fielding', '', 'rfg'], PB: ['fielding', '', 'pb'],
   cSB: ['fielding', '', 'sb'], cCS: ['fielding', '', 'cs'], 'CS%': ['fielding', '', 'csPct'],
+  // 獲勝機率模型
+  WPA: ['batting', 'advanced', 'wpa'], RE24: ['batting', 'advanced', 're24'],
 }
 const TEAM: Record<string, string> = { WinPct: '/games?view=results', RunDiff: '/', LOB: '/games?view=results' }
 

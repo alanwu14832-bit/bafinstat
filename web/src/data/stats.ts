@@ -63,6 +63,8 @@ export interface BattingLine {
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
+  /** 獲勝機率增加值 / 局面得分增值: filled in by data/winTimeline.withWinBatting (the model), null here */
+  wpa: number | null; re24: number | null
 }
 
 function emptyBatting(name: string): BattingLine {
@@ -71,6 +73,7 @@ function emptyBatting(name: string): BattingLine {
     rispAB: 0, rispH: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, ballsTaken: 0, pull: 0, center: 0, oppo: 0,
     avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, sSeager: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
     pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
+    wpa: null, re24: null,
   }
 }
 
@@ -197,6 +200,8 @@ export interface PitchingLine {
   oppAvg: number | null; oppObp: number | null; babip: number | null; fip: number | null; strikePct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
   pPerIP: number | null; pPerBF: number | null; lobPct: number | null
+  /** 獲勝機率增加值 / 局面得分增值 (runs saved): filled in by data/winTimeline.withWinPitching (the model), null here */
+  wpa: number | null; re24: number | null
 }
 
 function emptyPitching(name: string): PitchingLine {
@@ -205,6 +210,7 @@ function emptyPitching(name: string): PitchingLine {
     r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bk: 0, bip: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
     era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
     gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
+    wpa: null, re24: null,
   }
 }
 

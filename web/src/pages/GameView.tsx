@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Camera, CheckCircle2, Download, Maximize2, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Download, Info, Maximize2, Pencil, Trash2, X } from 'lucide-react'
 import { LineScoreBoard, PlateBadge, Stitches } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -22,7 +22,12 @@ import { gameRecap } from '../data/recap'
 import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
 import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
-import { f2, f3, pct } from '../lib/fmt'
+import { f2, f3, pct, signedPts } from '../lib/fmt'
+import { WinProbChart } from '../components/charts/WinProbChart'
+import { KeyPlays } from '../components/ui/KeyPlays'
+import { WinModelNote, winRulesText } from '../components/ui/WinModelNote'
+import { useWinData } from '../hooks/useWinData'
+import { keyPlays, keyRowSets, rowWins, withWinBatting, withWinPitching, WPA_DISCLAIMER, type GameEvent } from '../data/winTimeline'
 import { TEAM_NAME } from '../data/seed'
 import { cx } from '../lib/format'
 import { downloadGameImage } from '../lib/shareImage'
@@ -99,11 +104,24 @@ function LineScore({ s }: { s: GameSummary }) {
 const boxBat: Column<BattingLine>[] = [
   { key: 'name', header: '打者', className: 'font-medium' }, { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'h2', header: '2B', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' }, { key: 'rbi', header: 'RBI', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'sb', header: 'SB', align: 'right' },
   { key: 'pitches', header: '用球', align: 'right' }, { key: 'avg', header: 'AVG', align: 'right', format: (v) => f3(v as number | null) },
+  // 獲勝機率增加值 in this game (percentage points)
+  { key: 'wpa', header: 'WPA', align: 'right', format: (v) => signedPts(v as number | null) },
 ]
 const boxPit: Column<PitchingLine>[] = [
   { key: 'name', header: '投手', className: 'font-medium' }, { key: 'outs', header: 'IP', align: 'right', format: (_, r) => r.ipDisplay }, { key: 'bf', header: 'BF', align: 'right' }, { key: 'pc', header: 'PC', align: 'right' }, { key: 'strikes', header: '好球', align: 'right' }, { key: 'k', header: 'K', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'hbp', header: 'HBP', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'er', header: 'ER', align: 'right' },
   { key: 'era', header: 'ERA', align: 'right', format: (v) => f2(v as number | null) }, { key: 'cswPct', header: 'CSW%', align: 'right', format: (v) => pct(v as number | null) },
+  { key: 'wpa', header: 'WPA', align: 'right', format: (v) => signedPts(v as number | null) },
 ]
+
+/** Model note under the chart: what it was built from, and when to read it with care. */
+function winNotes(trainGames: number, trainPas: number, rules: string, approxHalves: number, halves: number): string[] {
+  const out = [trainGames
+    ? `模型依本隊 ${trainGames} 場比賽（雙方共 ${trainPas} 個打席）建立，假設兩隊實力相當；${rules}。`
+    : `模型還沒有本隊有壘上紀錄的比賽可以用，目前全用業餘比賽的預設值，假設兩隊實力相當；${rules}。`]
+  if (approxHalves) out.push(`這場有 ${approxHalves} 個半局沒有完整的壘上紀錄，那幾段依打擊結果推估。`)
+  if (halves < 60) out.push('比賽還不多，模型大多用預設值，數字僅供參考。')
+  return out
+}
 
 
 export type GameTab = 'summary' | 'box' | 'bat' | 'pit' | 'roster'
@@ -144,9 +162,17 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
     const at = (name: string) => { const i = pas.findIndex((p) => p.batter === name || p.runner === name); return (pas[i]?.order ?? 99) * 1000 + i }
     return battingLines(s.dataset, pas).sort((a, b) => at(a.name) - at(b.name))
   }, [id, s.dataset])
-  const boxP = useMemo(() => pitchingLines(s.dataset.pitching.filter((p) => p.gameId === id), [current.game]), [id, current.game, s.dataset])
   const pbpBat = useMemo(() => s.dataset.batting.filter((p) => p.gameId === id), [id, s.dataset])
   const pbpPit = useMemo(() => s.dataset.pitching.filter((p) => p.gameId === id), [id, s.dataset])
+  // 獲勝機率: this game's events, its key plays, and WPA on the box score and the 逐球 rows
+  const win = useWinData()
+  const winEvents = useMemo(() => win.events.get(id) ?? [], [win, id])
+  const keys = useMemo(() => keyPlays(winEvents, 5), [winEvents])
+  const keyRows = useMemo(() => keyRowSets(keys), [keys])
+  const winRows = useMemo(() => ({ bat: rowWins(pbpBat, win.bat), pit: rowWins(pbpPit, win.pit) }), [pbpBat, pbpPit, win])
+  const [modelNote, setModelNote] = useState(false)
+  const boxBatRows = useMemo(() => withWinBatting(boxB, pbpBat, win), [boxB, pbpBat, win])
+  const boxP = useMemo(() => withWinPitching(pitchingLines(pbpPit, [current.game]), pbpPit, win), [pbpPit, current.game, win])
   const issues = useMemo(() => auditGame(pbpBat, pbpPit), [pbpBat, pbpPit])
   // from the unfiltered dataset: the 守位 filter would hide substitutes
   const appearances = useMemo(() => gameAppearances(s.dataset, current.game), [current.game, s.dataset])
@@ -185,6 +211,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
   // open a half-inning in its 逐球 tab (from the recap, or a link with ?inning=)
   const [target, setTarget] = useState<number | undefined>(inning)
   const goInning = (side: 'bat' | 'pit', n: number) => { setTab(side); setTarget(n) }
+  const pickEvent = (e: GameEvent) => goInning(e.side, e.inning)
   useEffect(() => {
     if (!target || (tab !== 'bat' && tab !== 'pit')) return
     const el = document.getElementById(`inning-${target}`)
@@ -310,14 +337,35 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
                 )}
               </Card>
             )}
+            {tab === 'summary' && (
+              <>
+                <Card title="獲勝機率走勢" subtitle={`${TEAM_NAME}每個打席後的獲勝機率。描述這場發生了什麼，不代表預測能力。`}
+                  action={<Button variant="ghost" size="sm" icon={<Info />} aria-expanded={modelNote} onClick={() => setModelNote((v) => !v)}>模型說明</Button>}>
+                  <div className="flex flex-col gap-3">
+                    <WinProbChart events={winEvents} rows={{ bat: pbpBat, pit: pbpPit }} teamName={TEAM_NAME} resultLabel={current.result === 'W' ? '勝' : current.result === 'L' ? '敗' : '和'} onPick={pickEvent} />
+                    {winEvents.length > 0 && (
+                      <div className="flex flex-col gap-0.5 text-[12px] text-muted">
+                        {winNotes(win.coverage.trainGames, win.coverage.trainPas, winRulesText(win.rules), win.approxHalves.get(id) ?? 0, win.model.run.sample.halves).map((t) => <p key={t}>{t}</p>)}
+                      </div>
+                    )}
+                    {modelNote && <div className="border-t border-border pt-4"><WinModelNote win={win} /></div>}
+                  </div>
+                </Card>
+                {keys.length > 0 && (
+                  <Card title="本場關鍵 5 打席" subtitle="依獲勝機率變化排序；點一下看那半局的逐球。描述這場發生了什麼，不代表預測能力。">
+                    <KeyPlays events={keys} rows={{ bat: pbpBat, pit: pbpPit }} onPick={pickEvent} />
+                  </Card>
+                )}
+              </>
+            )}
             {(tab === 'summary' || tab === 'box') && (
               <>
-                <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxB} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={boxBatRows} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
                 <Card title="投球" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
               </>
             )}
-            {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle="每一列是一個打席，依局數分組" action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} /></Card>}
-            {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle="對方每個打席；換投以分隔線標示" action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} flags={flags.pit} /></Card>}
+            {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`} action={<PitchLegend />} flush><BattingPlayByPlay pas={pbpBat} flags={flags.bat} win={winRows.bat} keyRows={keyRows.bat} /></Card>}
+            {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`} action={<PitchLegend />} flush><PitchingPlayByPlay pas={pbpPit} flags={flags.pit} win={winRows.pit} keyRows={keyRows.pit} /></Card>}
             {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
           </>
