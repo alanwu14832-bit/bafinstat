@@ -28,7 +28,10 @@ export const roster: Player[] = NAMES.map((name) => ({ name, status: '現役' })
 export const POS = ['C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'P']
 export const FIELDER: Record<string, number[]> = { 內滾: [1, 3, 4, 5, 6], 內飛: [1, 2, 3, 4, 5, 6], 外飛: [7, 8, 9], 界外飛: [2, 3, 5, 7, 9], 犧飛: [7, 8, 9], 犧觸: [1, 2, 3, 5], 雙殺: [4, 5, 6], 野選: [1, 4, 5, 6], 失誤: [4, 5, 6, 7, 8, 9] }
 
-export function playGame(seed: number) {
+export const playGame = (seed: number) => playGameWith(seed)
+
+/** playGame, calling onPA with the state just before each plate appearance is sent (live-board checks). */
+export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
   const r = rng(seed)
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)]
   const game: Game = { id: `G2026010${seed % 9 + 1}-01`, date: '2026-01-01', tournament: '模擬', opponent: '對手', homeAway: r() < 0.5 ? '主' : '客', innings: 7 }
@@ -140,6 +143,7 @@ export function playGame(seed: number) {
     start[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, upNow)
     if (sideKey === 'bat') want.bat[s.batting.length] = fields(oppNow)
     else want.pit[s.pitching.length] = names ? lineupNow[s.oppOrder - 1] || undefined : undefined
+    onPA?.(s)
     s = commitPA(s, plan)
     upNow = snap(s)
     const bases = s.runners.map((x) => x.base)

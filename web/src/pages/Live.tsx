@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
@@ -10,7 +10,7 @@ import { BOARD, CountLights, LineScoreBoard } from '../components/ui/Scoreboard'
 import { TeamLogo } from '../components/ui/TeamLogo'
 import { OppMark } from '../components/ui/GameCard'
 import { Maximize2, Minimize2 } from 'lucide-react'
-import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
+import { useMediaQuery, usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
 import { EASE } from '../components/motion/Reveal'
 import { readDraft } from '../record/draft'
@@ -22,6 +22,11 @@ import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { HIT_BASE_COUNT, isPA, isPlaced } from '../data/types'
 import { cx } from '../lib/format'
+import { NON_AB_RESULTS } from '../data/stats'
+import { f3 } from '../lib/fmt'
+import { TEAM } from '../config/team'
+import { dueUp, halfPlayed, onDeckOf, upLabel, type UpBatter } from '../record/upNext'
+import { currentHalfCard, halfCardKey, liveContext, seasonLine, type HalfCard } from '../data/liveFacts'
 
 const POLL_MS = 5000
 
@@ -73,7 +78,6 @@ export function LivePage() {
   return <LiveBoard live={live} error={error} />
 }
 
-const NON_AB = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
 // the board is always dark: the team colour is lifted toward the board's ink so a navy or a dark amber still glows
 const BOARD_ACCENT = 'color-mix(in srgb, var(--accent) 62%, #f3efe7)'
 const LED_DOTS = 'radial-gradient(rgba(255,255,255,0.055) 0.9px, transparent 1.3px)'
@@ -95,7 +99,7 @@ function BoardPitches({ pitches }: { pitches: string[] }) {
 }
 
 /** One team's side of the board: mark, name, the big lit score, hits and errors; an arrow marks the team at bat. */
-function TeamPanel({ name, mark, runs, h, e, us, batting, big, align }: { name: string; mark: ReactNode; runs: number; h: number; e: number; us: boolean; batting: boolean; big: boolean; align: 'left' | 'right' }) {
+function TeamPanel({ name, mark, runs, h, e, us, batting, big, align, tight = false }: { name: string; mark: ReactNode; runs: number; h: number; e: number; us: boolean; batting: boolean; big: boolean; align: 'left' | 'right'; tight?: boolean }) {
   return (
     <div className={cx('min-w-0 flex flex-col gap-2', align === 'right' ? 'items-end text-right' : 'items-start text-left')}>
       <div className={cx('flex items-center gap-2 min-w-0 max-w-full', align === 'right' && 'flex-row-reverse')}>
@@ -103,7 +107,7 @@ function TeamPanel({ name, mark, runs, h, e, us, batting, big, align }: { name: 
         <span className={cx('truncate font-semibold', big ? 'text-[20px] md:text-[28px]' : 'text-[14px] md:text-[17px]')} style={{ color: us ? BOARD_ACCENT : BOARD.ink }}>{name}</span>
         {batting && <span aria-label="進攻中" className="shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded-[4px]" style={{ color: BOARD.bg, background: BOARD.strike, boxShadow: `0 0 10px ${BOARD.strike}88` }}>攻</span>}
       </div>
-      <div className={cx('figure font-bold leading-[0.82] tabular-nums', big ? 'text-[120px] md:text-[200px]' : 'text-[76px] md:text-[120px]')}
+      <div className={cx('figure font-bold leading-[0.82] tabular-nums', big ? (tight ? 'text-[112px] md:text-[136px]' : 'text-[120px] md:text-[200px]') : 'text-[76px] md:text-[120px]')}
         style={{ color: BOARD.ink, textShadow: us ? `0 0 28px color-mix(in srgb, ${BOARD_ACCENT} 55%, transparent)` : '0 0 22px rgba(243,239,231,0.18)' }}>
         <RollingNumber text={String(runs)} />
       </div>
@@ -133,6 +137,8 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const s = live.state
   const reduced = usePrefersReducedMotion()
   const [big, setBig] = useState(false)
+  // 大螢幕 on a laptop (1366×768): the middle of the board gives up some height so 準備打擊 and 本半局看點 still fit
+  const tight = useMediaQuery('(max-height: 860px)') && big
   const sc = score(s)
   const side = offense(s)
   const c = count(s.pitches)
@@ -154,7 +160,29 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const slot = s.lineup[s.slot]
   // (a tie-break runner's row is no plate appearance)
   const mine = slot ? s.batting.filter((p) => p.batter === slot.name && isPA(p)) : []
-  const ab = mine.filter((p) => !NON_AB.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length, rbi = mine.reduce((a, p) => a + (p.rbi ?? 0), 0)
+  const ab = mine.filter((p) => !NON_AB_RESULTS.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length, rbi = mine.reduce((a, p) => a + (p.rbi ?? 0), 0)
+  // 本季 (this season's earlier games plus today so far), who is up next, and the half-inning's card. The polled
+  // state is a new object every 5 s, so the memos key on its fields, never on `s` itself.
+  const base = useDataStore((st) => st.base)
+  const params = useDataStore((st) => st.params)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ctx = useMemo(() => liveContext(base, s.game, params), [base, params, s.game.id, s.game.date, s.game.opponent, s.game.innings])
+  const season = useMemo(() => (side === 'us' && slot ? seasonLine(ctx, s.batting, slot.name) : null), [ctx, slot?.name, s.batting.length, side]) // eslint-disable-line react-hooks/exhaustive-deps
+  // (after the game is over the record page has already moved on to the next half until 結束比賽 is tapped:
+  // nobody is up next and that half gets no card)
+  const reg = s.game.innings ?? TEAM.innings
+  const inPlay = halfPlayed(s, sc, reg)
+  const up = inPlay ? onDeckOf(s) : { onDeck: null, inHole: null }
+  const upKey = [up.onDeck, up.inHole].map((b) => (b ? `${b.us ? 'us' : 'opp'}${b.order}:${b.name}` : '')).join('|')
+  const upRows = useMemo(() => ([['準備打擊', up.onDeck], ['再下一棒', up.inHole]] as Array<[string, UpBatter | null]>).flatMap(([label, b]) => {
+    if (!b) return []
+    // (our batters: the 本季 AVG once he has an at bat this season)
+    const line = b.us && b.name ? seasonLine(ctx, s.batting, b.name) : null
+    return [{ label, text: upLabel(b), avg: line && line.ab >= 1 ? f3(line.avg) : '' }]
+  }), [ctx, upKey, s.batting.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const due = dueUp(s, sc, reg)
+  const halfCard = useMemo(() => currentHalfCard(s, ctx), [ctx, halfCardKey(s)]) // eslint-disable-line react-hooks/exhaustive-deps
+  const card = inPlay ? halfCard : null
   // our pitcher's pitch count (finished plate appearances plus the one in progress)
   const pitcherRows = s.pitching.filter((p) => p.pitcher === s.pitcher)
   const pc = pitcherRows.reduce((a, p) => a + p.pitches.filter((x) => x !== 'IP').length, 0) + (side === 'opp' ? s.pitches.length : 0)
@@ -211,18 +239,18 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
         </button>
       </div>
       {/* the scores and the state of play */}
-      <div className={cx('relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-8 px-4 md:px-10', big ? 'py-8 md:py-12 flex-1' : 'py-5 md:py-8')}>
-        <TeamPanel name={top.name} mark={top.us ? <TeamLogo size={big ? 34 : 24} /> : <OppMark name={top.name} size={big ? 34 : 24} />} runs={top.r} h={top.h} e={top.e} us={!!top.us} batting={s.half === 'top'} big={big} align="left" />
-        <div className="flex flex-col items-center gap-2 md:gap-3">
+      <div className={cx('relative grid grid-cols-[1fr_auto_1fr] items-center gap-3 md:gap-8 px-4 md:px-10', big ? (tight ? 'py-3 md:py-4 flex-1' : 'py-8 md:py-12 flex-1') : 'py-5 md:py-8')}>
+        <TeamPanel name={top.name} mark={top.us ? <TeamLogo size={big ? 34 : 24} /> : <OppMark name={top.name} size={big ? 34 : 24} />} runs={top.r} h={top.h} e={top.e} us={!!top.us} batting={s.half === 'top'} big={big} tight={tight} align="left" />
+        <div className={cx('flex flex-col items-center', tight ? 'gap-1.5' : 'gap-2 md:gap-3')}>
           <div className="flex items-center gap-1.5" aria-label={`第 ${s.inning} 局${s.half === 'top' ? '上' : '下'}`}>
             <span className={cx('leading-none', big ? 'text-[26px]' : 'text-[16px] md:text-[20px]')} style={{ color: BOARD.strike }}>{s.half === 'top' ? '▲' : '▼'}</span>
-            <span className={cx('figure font-bold leading-none tabular-nums', big ? 'text-[64px] md:text-[88px]' : 'text-[40px] md:text-[56px]')}>{s.inning}</span>
+            <span className={cx('figure font-bold leading-none tabular-nums', big ? (tight ? 'text-[52px] md:text-[56px]' : 'text-[64px] md:text-[88px]') : 'text-[40px] md:text-[56px]')}>{s.inning}</span>
           </div>
           <span className={cx('tracking-[0.2em]', big ? 'text-[14px]' : 'text-[11px]')} style={{ color: BOARD.muted }}>{s.half === 'top' ? '上半局' : '下半局'}</span>
-          <Diamond runners={s.runners} size={big ? 150 : 96} onBoard />
+          <Diamond runners={s.runners} size={big ? (tight ? 96 : 150) : 96} onBoard />
           <CountLights balls={c.balls} strikes={c.strikes} outs={s.outs} size="lg" onBoard />
         </div>
-        <TeamPanel name={bottom.name} mark={bottom.us ? <TeamLogo size={big ? 34 : 24} /> : <OppMark name={bottom.name} size={big ? 34 : 24} />} runs={bottom.r} h={bottom.h} e={bottom.e} us={!!bottom.us} batting={s.half === 'bottom'} big={big} align="right" />
+        <TeamPanel name={bottom.name} mark={bottom.us ? <TeamLogo size={big ? 34 : 24} /> : <OppMark name={bottom.name} size={big ? 34 : 24} />} runs={bottom.r} h={bottom.h} e={bottom.e} us={!!bottom.us} batting={s.half === 'bottom'} big={big} tight={tight} align="right" />
         <AnimatePresence>
           {flash && (
             <motion.div key={flash.key} role="status" className="absolute inset-0 grid place-items-center pointer-events-none"
@@ -243,9 +271,15 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
             <span className={cx('font-semibold truncate', big ? 'text-[26px]' : 'text-[18px]')}>{side === 'us' ? slot?.name ?? '' : oppBatterOf(s) || `第 ${s.oppOrder} 棒`}</span>
             {side === 'us' && slot?.pos && <span className="text-[12px] shrink-0" style={{ color: BOARD.muted }}>{slot.pos}</span>}
           </div>
-          {side === 'us' && <div className="figure text-[13px] tabular-nums" style={{ color: BOARD.muted }}>{mine.length ? `今日 ${ab} 打數 ${hits} 安${rbi ? `・${rbi} 打點` : ''}` : '今日第一個打席'}</div>}
+          {side === 'us' && (
+            <div className={cx('figure tabular-nums flex flex-wrap gap-x-3 gap-y-0.5', big ? 'text-[16px]' : 'text-[13px]')} style={{ color: BOARD.muted }}>
+              <span>{mine.length ? `今日 ${ab} 打數 ${hits} 安${rbi ? `・${rbi} 打點` : ''}` : '今日第一個打席'}</span>
+              {season && <span>{`本季 ${season.ab ? f3(season.avg) : '—'}・OPS ${f3(season.ops)}（${season.pa} 打席）`}</span>}
+            </div>
+          )}
           {side === 'us' && s.oppPitcher && <div className="text-[12px]" style={{ color: BOARD.muted }}>對 {oppPitcherText(s.oppPitcher)}</div>}
           <div className="text-[12px] mt-0.5"><BoardPitches pitches={s.pitches} /></div>
+          <UpNextRows rows={upRows} big={big} />
         </InfoPanel>
         <InfoPanel label={side === 'opp' ? '我隊投手' : '壘上'} big={big}>
           {side === 'opp' ? (
@@ -266,12 +300,13 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
           ) : <span style={{ color: BOARD.muted }}>比賽剛開始</span>}
         </InfoPanel>
       </div>
+      <HalfStrip card={card} due={due} big={big} reduced={reduced} />
     </div>
   )
 
   if (big) {
     return (
-      <div role="dialog" aria-label="即時比分大螢幕" className="fixed inset-0 z-[80] bg-black p-3 md:p-6 overflow-auto">{board}</div>
+      <div role="dialog" aria-label="即時比分大螢幕" className={cx('fixed inset-0 z-[80] bg-black p-3 overflow-auto', !tight && 'md:p-6')}>{board}</div>
     )
   }
   return (
@@ -305,5 +340,55 @@ function RecentPlays({ s, side }: { s: RecordState; side: 'us' | 'opp' }) {
         </AnimatePresence>
       </ul>
     </Card>
+  )
+}
+
+/** 準備打擊／再下一棒 under the pitches of the plate appearance in progress (our batters with their 本季 AVG). */
+function UpNextRows({ rows, big }: { rows: Array<{ label: string; text: string; avg: string }>; big: boolean }) {
+  if (!rows.length) return null
+  return (
+    <dl className={cx('grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 mt-1.5', big ? 'text-[16px]' : 'text-[12px]')}>
+      {rows.map((r) => (
+        <Fragment key={r.label}>
+          <dt style={{ color: BOARD.muted }}>{r.label}</dt>
+          <dd className="min-w-0 truncate font-medium">{r.text}{r.avg && <span className="figure tabular-nums ml-1.5" style={{ color: BOARD.muted }}>{r.avg}</span>}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  )
+}
+
+/** The strip under the bottom panels: the half-inning's card (picked by fixed rules, data/liveFacts.ts) and who
+ *  leads off after the side is retired. Hidden when it has neither. */
+function HalfStrip({ card, due, big, reduced }: { card: HalfCard | null; due: UpBatter[]; big: boolean; reduced: boolean }) {
+  if (!card && !due.length) return null
+  // theirs by batting order only reads 「對方第 3、4、5 棒」; with any name known each one is spelled out
+  const dueText = due.length && !due[0].us && !due.some((b) => b.name) ? `對方第 ${due.map((b) => b.order).join('、')} 棒` : due.map(upLabel).join('・')
+  const label = cx('font-semibold tracking-[0.12em]', big ? 'text-[13px]' : 'text-[11px]')
+  return (
+    <div className={cx('relative border-t px-4 md:px-6 py-3 grid gap-3', card && due.length > 0 && 'md:grid-cols-[1fr_auto] md:items-center md:gap-6')} style={{ borderColor: BOARD.line }}>
+      {card && (
+        <div className="min-w-0">
+          <div className={label} style={{ color: BOARD.muted }}>本半局看點・照紀錄自動挑選</div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={card.id} className="mt-1.5 flex items-center gap-3 min-w-0"
+              initial={reduced ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={reduced ? undefined : { opacity: 0 }} transition={{ duration: 0.4, ease: EASE }}>
+              {/* (大螢幕 on a phone keeps them stacked: side by side they leave the sentence too narrow) */}
+              <div className={cx('flex items-start shrink-0 flex-col gap-1', big && 'md:flex-row md:items-center md:gap-3')}>
+                <span className={cx('font-semibold px-1.5 py-0.5 rounded-[4px] whitespace-nowrap', big ? 'text-[13px]' : 'text-[11px]')} style={{ color: BOARD.bg, background: BOARD_ACCENT }}>{card.kicker}</span>
+                {card.figure && <span className={cx('figure font-bold leading-none tabular-nums', big ? 'text-[34px]' : 'text-[22px]')} style={{ color: BOARD.ink }}>{card.figure}</span>}
+              </div>
+              <p className={cx('min-w-0 line-clamp-2 leading-snug', big ? 'text-[18px]' : 'text-[13px]')} style={{ color: BOARD.ink }}>{card.text}</p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      )}
+      {due.length > 0 && (
+        <div className="min-w-0 md:text-right">
+          <div className={label} style={{ color: BOARD.muted }}>攻守交換後</div>
+          <div className={cx('font-medium mt-1 break-words', big ? 'text-[18px]' : 'text-[13px]')} style={{ color: BOARD.ink }}>{dueText}</div>
+        </div>
+      )}
+    </div>
   )
 }
