@@ -550,14 +550,3 @@ export function sprayCounts(pas: Array<{ loc?: number; traj?: string; result?: s
 
 export const isHitResult = (r: string) => HIT_RESULTS.has(r)
 
-// wave-2 stand-in: batch 4 owns this (battedOutKind; the merge keeps batch 4's version)
-const BATTER_OUT_BIP_ = new Set(['內滾', '內飛', '外飛', '界外飛', '犧飛', '雙殺'])
-const OUT_TRAJ_: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
-/** Ground out or air out (滾地／飛球出局) of a batter put out on a ball in play; null for everything else
- *  (strikeouts, bunts, hits, 野選, 失誤, walks). 犧飛 is an air out. */
-export function battedOutKind(pa: { result: string; traj?: string }): 'GO' | 'AO' | null {
-  if (!BATTER_OUT_BIP_.has(pa.result)) return null
-  const t = pa.traj || OUT_TRAJ_[pa.result]
-  return t === 'G' ? 'GO' : t === 'F' || t === 'P' || t === 'L' ? 'AO' : null
-}
-// end of wave-2 stand-in

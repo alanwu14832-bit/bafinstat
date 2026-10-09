@@ -26,14 +26,12 @@ export function boxOrderOf(pas: BattingPA[]): (name: string) => number {
 }
 
 /**
- * PitchingLine plus the situational counts of batch 4's pitchingSituations (繼承跑者 ir / irs, 救援失敗 bs, 三上三下
- * inn123, sitGaps). They are read when present; until pitchingLines takes its game context they are absent and
- * those lines simply do not show.
+ * PitchingLine with the situational counts of pitchingSituations (繼承跑者 ir / irs, 救援失敗 bs, 三上三下 inn123,
+ * sitGaps): pitchingLines gets this game's runs by inning so it can tell a save situation.
  */
-export type SituationalLine = PitchingLine & Partial<Record<'ir' | 'irs' | 'bs' | 'inn123' | 'sitGaps', number>>
-/** DEFERRED-TO-MERGE: pass `{ ourRuns: new Map([[summary.game.id, summary.lineUs]]) }` as the 4th argument once batch 4's pitchingLines(pas, games, params, ctx) exists. */
+export type SituationalLine = PitchingLine
 export function gamePitchingLines(pit: PitchingPA[], summary: GameSummary, params: StatParams = DEFAULT_PARAMS): SituationalLine[] {
-  return pitchingLines(pit, [summary.game], params) as SituationalLine[]
+  return pitchingLines(pit, [summary.game], params, { ourRuns: new Map([[summary.game.id, summary.lineUs]]) })
 }
 
 const withCount = (name: string, n: number) => (n > 1 ? `${name} ${n}` : name)
