@@ -1,0 +1,1 @@
+function o(e){return e.filter(t=>t.status==="scheduled").sort((t,a)=>t.date.localeCompare(a.date)||(t.time??"").localeCompare(a.time??""))}const s=e=>`${e.date}${e.time?` ${e.time}`:""} vs ${e.opponent}（${e.tournament}）`;export{s as g,o as s};

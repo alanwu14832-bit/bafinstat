@@ -1,0 +1,18 @@
+{
+  "name": "台大工管財金系棒",
+  "short_name": "NTU BaFiN",
+  "lang": "zh-TW",
+  "start_url": "/v/20261008-1224-6d3be1f/",
+  "scope": "/v/20261008-1224-6d3be1f/",
+  "display": "standalone",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
+  "icons": [
+    {
+      "src": "/v/20261008-1224-6d3be1f/mark.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
