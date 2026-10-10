@@ -3,6 +3,8 @@
  * appears in the UI (abbreviation or Chinese header); `hintFor` normalises composite labels like "團隊 K / BB".
  * Formulas live in stat_dictionary.json; this is the plain-language layer on top of it.
  */
+import { TEAM } from '../config/team'
+
 export interface Hint { title: string; text: string }
 
 const H: Record<string, Hint> = {
@@ -73,7 +75,7 @@ const H: Record<string, Hint> = {
   BK: { title: '投手犯規', text: '投手犯規（balk）讓壘上跑者各進一壘的次數；一次犯規算一次，不管幾位跑者。' },
   PK: { title: '牽制出局', text: '牽制把跑者抓出局的次數。' },
   SBA: { title: '被盜壘', text: '對方在這位投手面前盜壘成功的次數。' },
-  ERA: { title: '防禦率', text: '自責分換算成每場（預設 7 局）的失分，越低越好。' },
+  ERA: { title: '防禦率', text: `自責分換算成每場（${TEAM.innings} 局）的失分，越低越好。` },
   WHIP: { title: '每局被上壘率', text: '（被安打 + 四壞）÷ 局數，看投手每局讓多少人上壘。' },
   'K/7': { title: '每七局三振', text: '三振數換算成 7 局的比率；7 局制的比賽就是平均每場三振數。' },
   'K/9': { title: '每九局三振', text: '三振數換算成 9 局的比率。' },
