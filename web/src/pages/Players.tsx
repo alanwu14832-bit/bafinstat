@@ -285,7 +285,7 @@ export function PlayersPage() {
     ? `隊內百分位：和這段期間${batPool.relaxed ? '所有有打席' : ` PA ≥ ${PCT_POOL_MIN.bat} `}的 ${batPool.pool.length} 位打者比`
     : `隊內百分位：和這段期間${pitPool.relaxed ? '所有有投球' : `面對 ${PCT_POOL_MIN.pit} 位以上打者`}的 ${pitPool.pool.length} 位投手比`)
   // the names the comparison picker offers: those with numbers on this tab, in the site's order
-  const comparable = (kind: PlayerTab) => names.filter((n) => (kind === 'batting' ? (byName.get(n)?.pa ?? 0) >= 1 : (pitchByName.get(n)?.bf ?? 0) + (pitchByName.get(n)?.outs ?? 0) > 0))
+  const comparable = (kind: PlayerTab) => names.filter((n) => (kind !== 'pitching' ? (byName.get(n)?.pa ?? 0) >= 1 : (pitchByName.get(n)?.bf ?? 0) + (pitchByName.get(n)?.outs ?? 0) > 0))
 
   const trend = useMemo(() => {
     const rows = [...gameLog].reverse()
@@ -438,7 +438,7 @@ export function PlayersPage() {
 
   return (
     <>
-      <PageHeader scoped title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；百分位是隊內排名（PA ≥ ${PCT_POOL_MIN.bat} 的打者、面對 ${PCT_POOL_MIN.pit} 位以上打者的投手）。`} />
+      <PageHeader scoped title="球員" description={`${roster.length} 位球員。分打擊、投球、生涯三頁：打擊、投球依上方篩選計算，生涯是所有比賽、不受篩選影響；百分位是隊內排名（PA ≥ ${PCT_POOL_MIN.bat} 的打者、面對 ${PCT_POOL_MIN.pit} 位以上打者的投手）。`} />
       <DemoBanner />
 
       {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
@@ -491,7 +491,7 @@ export function PlayersPage() {
               <StoryRow stories={stories} link={false} className="relative" />
             </>
           )}
-          {player && <ComparePicker names={comparable(tab)} selected={compareList} main={selected} onChange={setCompareList} max={MAX_COMPARE} roster={roster} />}
+          {player && tab !== 'career' && <ComparePicker names={comparable(tab)} selected={compareList} main={selected} onChange={setCompareList} max={MAX_COMPARE} roster={roster} />}
         </div>
         <AnimatePresence initial={false}>
           {open && (

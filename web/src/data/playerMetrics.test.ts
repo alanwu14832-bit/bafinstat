@@ -80,9 +80,13 @@ describe('compareRows', () => {
   it('marks every tied best', () => {
     expect(r('AVG').cells.map((x) => x.best)).toEqual([true, true, false])
   })
-  it('marks everyone best when all eligible values are equal', () => {
+  it('marks nobody best when all eligible values are equal (everyone at 0 HR is no achievement)', () => {
     const rows2 = compareRows([a, b], BAT_METRICS, prOf)
-    expect(rows2.find((x) => x.label === 'AVG')!.cells.map((x) => x.best)).toEqual([true, true])
+    expect(rows2.find((x) => x.label === 'AVG')!.cells.map((x) => x.best)).toEqual([false, false])
+    expect(rows2.find((x) => x.label === 'HR')!.cells.map((x) => x.best)).toEqual([false, false])
+    expect(rows2.find((x) => x.label === '壘死')!.cells.map((x) => x.best)).toEqual([false, false])
+    const same = compareRows([bl('E', { pa: 20, g: 5 }), bl('F', { pa: 20, g: 5 })], BAT_METRICS, prOf)
+    expect(same.find((x) => x.label === 'PA')!.cells.map((x) => x.more)).toEqual([false, false])
   })
   it('marks only 較多 on volume rows, without a PR', () => {
     expect(r('PA').cells.map((x) => x.more)).toEqual([false, true, false])

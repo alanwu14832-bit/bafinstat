@@ -12,7 +12,15 @@ import { isDouble, isPA, DEFAULT_PARAMS, type BattingPA, type Dataset, type Pitc
 export interface NoteLine { label: string; text: string }
 export interface NoteSection { title: '打擊' | '跑壘' | '守備' | '投球' | '比賽'; lines: NoteLine[] }
 
-export const NOTES_FOOTNOTE = '繼承跑者：中繼投手上場時已在壘上的跑者／其中回來得分的人數。滾地、飛球出局不含三振與犧牲觸擊。'
+const FOOTNOTES: Array<[label: string, text: string]> = [
+  ['繼承跑者－回來得分', '繼承跑者：中繼投手上場時已在壘上的跑者／其中回來得分的人數。'],
+  ['滾地－飛球出局', '滾地、飛球出局不含三振與犧牲觸擊。'],
+]
+/** The small print under 比賽附註: only the sentences that explain a line the card shows ('' when none does). */
+export function notesFootnote(sections: NoteSection[]): string {
+  const labels = new Set(sections.flatMap((s) => s.lines.map((l) => l.label)))
+  return FOOTNOTES.filter(([label]) => labels.has(label)).map(([, text]) => text).join('')
+}
 
 /** Pitchers in the order they first pitched. */
 export function pitcherOrder(pas: Array<Pick<PitchingPA, 'pitcher'>>): string[] {

@@ -82,6 +82,9 @@ describe('buildScoresheet: rows alone', () => {
     const slot1 = sh.lines[0]
     expect(slot1.players.map((p) => p.name)).toEqual(['甲', '乙'])
     expect(slot1.players[1].pos).toBe('代跑')
+    // a pinch hitter's PH reads 代打, like the 代跑 above
+    const ph = buildScoresheet([row({ result: '三振', code: 'I' }), row({ batter: '丁', pos: 'PH', result: '一安' }), row({ batter: '戊', pos: 'PR', result: '保送' })], 'bat', { innings: 7 })
+    expect(ph.lines[0].players.slice(1).map((p) => p.pos)).toEqual(['代打', '代跑'])
     expect(slot1.cells[1].map((c) => c.kind)).toEqual(['pa', 'pr', 'pa'])
     expect(slot1.cells[1][1]).toMatchObject({ player: '乙', text: '代跑' })
     expect(slot1.cells[1][0].notes).toContain('代跑 乙')
@@ -154,6 +157,9 @@ describe('buildScoresheet: the opponent', () => {
     expect(cellsOf(sh, '棒次未記')[0].pitcherChange).toBeUndefined()
     expect(sh.perInning[1]).toEqual({ r: 2, h: 1, e: 1, lob: 0 })
     expect(buildScoresheet([prow({})], 'pit', { innings: 7 }).perInning[1].e).toBeNull()
+    // a batter who reached on our error, recorded the usual way (result 失誤, no 守備失誤 list), and a 妨礙
+    const reached = buildScoresheet([prow({ result: '失誤', loc: 6 }), prow({ oppOrder: 2, result: '妨礙' }), prow({ inning: 2, oppOrder: 3, result: '三振', code: 'I' })], 'pit', { innings: 7 })
+    expect([reached.perInning[1].e, reached.perInning[2].e, reached.totals.e]).toEqual([2, 0, 2])
   })
 })
 

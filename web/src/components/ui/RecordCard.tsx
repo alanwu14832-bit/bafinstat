@@ -43,8 +43,8 @@ export function RecordCard({ list, roster }: { list: RecordList; roster: Player[
                     {e.demo && <Badge variant="outline" className="shrink-0">示範</Badge>}
                   </span>
                   {second
-                    ? <Link to={second} className="relative z-10 flex items-center min-h-9 w-fit max-w-full text-[12px] text-muted hover:text-ink underline-offset-2 hover:underline"><span className="truncate">{e.context}</span></Link>
-                    : <span className="block text-[12px] text-muted truncate">{e.context}</span>}
+                    ? <Link to={second} className="relative z-10 flex items-center min-h-9 w-fit max-w-full text-[12px] text-muted hover:text-ink underline-offset-2 hover:underline"><span className="line-clamp-2 break-words">{e.context}</span></Link>
+                    : <span className="block text-[12px] text-muted line-clamp-2 break-words">{e.context}</span>}
                 </span>
                 <span className={cx('figure tnum font-semibold text-ink shrink-0 text-right', e.display.length > 5 ? 'text-[17px]' : 'text-[20px]')}>{e.display}</span>
               </li>

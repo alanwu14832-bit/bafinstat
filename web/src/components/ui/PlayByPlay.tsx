@@ -185,8 +185,8 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}{marks.has(i) && <div className="mt-1"><Badge variant="outline">{marks.get(i)}</Badge></div>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')} title={isPlaced(p) ? '延長賽照規則放上壘的跑者，不算打席' : '這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數'}>{isPlaced(p) ? '不算打席' : `用球 ${pt.pitches}（好球類 ${pt.strikes}、壞球 ${pt.balls}）`}</td>
-                  <td className={cx(td, 'whitespace-nowrap', isPlaced(p) ? 'text-muted' : resultCls(p.result))}>{isPlaced(p) ? placedResult(placed[i]) : <ResultText p={p} wording={wording} />}</td>
+                  <td className={cx(td, 'text-muted')} title={isPlaced(p) ? '延長賽照規則放上壘的跑者，不算打席' : '這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數'}>{isPlaced(p) ? '不算打席' : <><span className="whitespace-nowrap">用球 {pt.pitches}</span><span className="whitespace-nowrap">（好球類 {pt.strikes}、壞球 {pt.balls}）</span></>}</td>
+                  <td className={cx(td, 'min-w-[7.5rem]', isPlaced(p) ? 'text-muted' : resultCls(p.result))}>{isPlaced(p) ? placedResult(placed[i]) : <ResultText p={p} wording={wording} />}</td>
                   {win && <WpaCell w={win.get(i)} />}
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>
@@ -242,8 +242,8 @@ export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win 
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')} title={isPlaced(p) ? '延長賽照規則放上壘的跑者，不算打席' : '這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數'}>{isPlaced(p) ? '不算打席' : `用球 ${pt.pitches}（好球類 ${pt.strikes}、壞球 ${pt.balls}）`}</td>
-                  <td className={cx(td, 'whitespace-nowrap', isPlaced(p) ? 'text-muted' : resultCls(p.result))}>{isPlaced(p) ? placedResult(placed[i]) : <ResultText p={p} wording={wording} />}</td>
+                  <td className={cx(td, 'text-muted')} title={isPlaced(p) ? '延長賽照規則放上壘的跑者，不算打席' : '這個打席總共投了幾球；好球類包含界外與擊進場內，不是當下的球數'}>{isPlaced(p) ? '不算打席' : <><span className="whitespace-nowrap">用球 {pt.pitches}</span><span className="whitespace-nowrap">（好球類 {pt.strikes}、壞球 {pt.balls}）</span></>}</td>
+                  <td className={cx(td, 'min-w-[7.5rem]', isPlaced(p) ? 'text-muted' : resultCls(p.result))}>{isPlaced(p) ? placedResult(placed[i]) : <ResultText p={p} wording={wording} />}</td>
                   {win && <WpaCell w={win.get(i)} />}
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{extras || '—'}</td>

@@ -125,7 +125,7 @@ export function Scoresheet({ game, summary, side, sheet, pitchers, homeX }: Scor
                 </td>
                 {innings.map((i) => {
                   const cells = line.cells[i] ?? []
-                  return <td key={i} className={cells.some((c) => c.pitcherChange) ? 'cell change' : 'cell'}>{cells.map((c, j) => <PaCell key={j} cell={c} />)}</td>
+                  return <td key={i} className={cells.some((c) => c.pitcherChange) ? 'cell change' : 'cell'}>{cells.length > 0 && <div className="pa-stack">{cells.map((c, j) => <PaCell key={j} cell={c} />)}</div>}</td>
                 })}
                 <td className="num">{t.ab}</td><td className="num">{t.r}</td><td className="num">{t.h}</td>{side === 'us' && <td className="num">{t.rbi}</td>}<td className="num">{t.bb}</td><td className="num">{t.so}</td>
               </tr>

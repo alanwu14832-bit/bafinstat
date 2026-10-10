@@ -1,9 +1,10 @@
 import { Card } from '../ui/Card'
-import { NOTES_FOOTNOTE, type NoteSection } from '../../data/gameNotes'
+import { notesFootnote, type NoteSection } from '../../data/gameNotes'
 
 /** 比賽附註: the box score's small print (data/gameNotes), one 「標籤：內容」 line each. */
 export function GameNotesCard({ sections }: { sections: NoteSection[] }) {
   if (!sections.length) return null
+  const foot = notesFootnote(sections)
   return (
     <Card title="比賽附註" subtitle="依這場的紀錄整理">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -18,7 +19,7 @@ export function GameNotesCard({ sections }: { sections: NoteSection[] }) {
           </section>
         ))}
       </div>
-      <p className="mt-4 text-[11px] text-muted leading-4">{NOTES_FOOTNOTE}</p>
+      {foot && <p className="mt-4 text-[11px] text-muted leading-4">{foot}</p>}
     </Card>
   )
 }

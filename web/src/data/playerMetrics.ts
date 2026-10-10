@@ -130,7 +130,7 @@ export interface CompareCell { text: string; pr: number | null; best: boolean; m
 export interface CompareRow { label: string; volume: boolean; cells: CompareCell[] }
 
 /** The comparison grid: one row per metric, one cell per player. pr / small come from prOf (the 百分位 pool) when that
- *  metric has a percentile; best = the best value among ≥ 2 non-small values (ties all best); volume rows (G, PA, IP)
+ *  metric has a percentile; best = the best value among ≥ 2 non-small values (ties all best; none when they are all equal); volume rows (G, PA, IP)
  *  only mark the most as `more`, never coloured. */
 export function compareRows<T>(lines: Array<T | undefined>, metrics: Metric<T>[], prOf?: (label: string, line: T) => { pr: number | null; small: boolean } | null): CompareRow[] {
   return metrics.map((m) => {
@@ -138,7 +138,9 @@ export function compareRows<T>(lines: Array<T | undefined>, metrics: Metric<T>[]
     const info = lines.map((l) => (l && !m.volume ? prOf?.(m.label, l) ?? null : null))
     const small = info.map((x) => !!x?.small)
     const eligible = vals.map((v, i) => (v !== null && !small[i] ? v : null)).filter((v): v is number => v !== null)
-    const top = eligible.length >= 2 ? (m.lowerBetter && !m.volume ? Math.min(...eligible) : Math.max(...eligible)) : null
+    // no 最佳／較多 when every eligible value is the same (four players with 0 HR: nobody is best)
+    const differ = eligible.some((v) => v !== eligible[0])
+    const top = eligible.length >= 2 && differ ? (m.lowerBetter && !m.volume ? Math.min(...eligible) : Math.max(...eligible)) : null
     return {
       label: m.label, volume: !!m.volume,
       cells: vals.map((v, i) => {

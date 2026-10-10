@@ -63,6 +63,20 @@ describe('繼承跑者 (IR / IRS)', () => {
     // never 1-2-3 (it started with runners on); the leadoff is the first real batter
     expect([x.fullInn, x.inn123, x.leadoffBf, x.leadoffOuts]).toEqual([1, 0, 1, 1])
   })
+  it('the placed 突破僵局 runners count for the save situation of the pitcher who starts the half (not as inherited)', () => {
+    let s = k3(hr(start('客'), 4))                       // top 1: 4–0
+    s = k3(s)                                             // bottom 1
+    s = { ...s, inning: 8, half: 'bottom', outs: 0, runners: [], oppOrder: 3 }
+    s = placeTiebreak(s)
+    s = changePitcher(s, '癸')
+    s = hr(s, 2)                                          // 3 + 1 runs: 4–4
+    const e = reliefEntries(s.pitching, scoreOf(s))
+    // a 4-run lead with two on: the tying run is on deck (MLB 9.19(c)(2))
+    expect(e).toMatchObject([{ pitcher: '癸', inning: 8, runners: 2, ir: 0, lead: 4, saveSituation: true, blown: true, sure: true }])
+    expect(line(s, '癸').bs).toBe(1)
+    // the same rows without 壘上(前)／出局(前): the change on the half's first row is still clear
+    expect(reliefEntries(strip(s.pitching), scoreOf(s))).toMatchObject([{ pitcher: '癸', runners: 2, saveSituation: true, blown: true, sure: true }])
+  })
   it('older rows without 壘上(前)／出局(前): a mid-inning change is not judged and shows as a gap', () => {
     const s = inherited()
     const rows = strip(s.pitching)

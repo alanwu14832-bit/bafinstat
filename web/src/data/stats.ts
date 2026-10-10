@@ -385,8 +385,17 @@ export interface GameContext { ourRuns: Map<string, number[]> }
 export const ourRunsOf = (s: GameSummary[]) => new Map(s.map((x) => [x.game.id, x.lineUs]))
 
 /** Adds the per-game situations (pitchingSituations.ts) of `pas` to the lines, by pitcher name. */
+const situationsCache = new WeakMap<GameContext, { pas: PitchingPA[]; games: Game[]; sits: ReturnType<typeof pitcherSituations> }>()
+/** pitcherSituations replays every half inning: pitchingLines and teamPitching on the same rows, games and ctx share one run */
+function situationsOf(pas: PitchingPA[], games: Game[], ctx: GameContext) {
+  const hit = situationsCache.get(ctx)
+  if (hit && hit.pas === pas && hit.games === games) return hit.sits
+  const sits = pitcherSituations(pas, games, ctx.ourRuns)
+  situationsCache.set(ctx, { pas, games, sits })
+  return sits
+}
 function addSituations(lines: (name: string) => PitchingLine | undefined, pas: PitchingPA[], games: Game[], ctx: GameContext) {
-  for (const [name, x] of pitcherSituations(pas, games, ctx.ourRuns)) {
+  for (const [name, x] of situationsOf(pas, games, ctx)) {
     const l = lines(name)
     if (!l) continue
     l.leadoffBf += x.leadoffBf; l.leadoffOuts += x.leadoffOuts; l.fullInn += x.fullInn; l.pitchInn += x.pitchInn; l.inn13 += x.inn13; l.inn123 += x.inn123

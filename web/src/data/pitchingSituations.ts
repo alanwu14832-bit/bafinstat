@@ -66,11 +66,13 @@ export function reliefEntries(rows: PitchingPA[], score?: Score): ReliefEntry[] 
   const now = () => e
   let us = 0, them = 0
   /** `exitKnown` false: the change falls inside a half without runners recorded, so the score when he left is unknown */
-  const take = (p: string, row: number, inning: number, outs: number, on: number[], sure: boolean, exitKnown = true) => {
+  /** `on` = the inherited runners' rows; `onBase` = everyone on base when he came in (more than `on` when he starts a
+   *  突破僵局 half: the placed runners are on base for the save situation, MLB 9.19(c)(2), but are not inherited) */
+  const take = (p: string, row: number, inning: number, outs: number, on: number[], sure: boolean, exitKnown = true, onBase = on.length) => {
     if (e) e.leadAtExit = exitKnown && e.sure && score ? us - them : null
     const lead = sure && score ? us - them : null
     const next: ReliefEntry = {
-      pitcher: p, row, inning, outs, runners: on.length, lead, saveSituation: lead !== null && lead > 0 && (lead <= 3 || lead <= on.length + 2),
+      pitcher: p, row, inning, outs, runners: onBase, lead, saveSituation: lead !== null && lead > 0 && (lead <= 3 || lead <= onBase + 2),
       ir: on.length, irs: 0, blown: false, outsMade: 0, leadAtExit: null, finished: false, sure,
     }
     entries.push(next); inherited.set(next, new Set(on))
@@ -82,11 +84,13 @@ export function reliefEntries(rows: PitchingPA[], score?: Score): ReliefEntry[] 
     if (weTop) us += ourLine[inning - 1] ?? 0
     const idx = innings.get(inning)
     const half = halves.get(inning)
+    /** 突破僵局 runners placed at the start of this half (on base for whoever starts it) */
+    const placed = idx ? idx.filter((i) => isPlaced(rows[i])).length : 0
     if (idx && half) {
       let outs = 0
       half.steps.forEach((st, j) => {
         const p = rows[st.index].pitcher
-        if (p && p !== cur) take(p, st.index, inning, outs, j === 0 ? [] : st.before.map((o) => o.row), true)
+        if (p && p !== cur) take(p, st.index, inning, outs, j === 0 ? [] : st.before.map((o) => o.row), true, true, j === 0 ? placed : st.before.length)
         for (const row of runsIn(st)) { them++; if (e && inherited.get(e)!.has(row)) e.irs++ }
         const n = outsIn(st)
         outs += n
@@ -99,7 +103,7 @@ export function reliefEntries(rows: PitchingPA[], score?: Score): ReliefEntry[] 
       // settled (a blown save in an earlier inning, his inherited runners); what happened in this half before he left
       // (and so his lead at exit, which hold suggestions need) is unknown and left out.
       const first = rows[idx[0]]
-      if (first.pitcher && first.pitcher !== cur) take(first.pitcher, idx[0], inning, 0, [], true)
+      if (first.pitcher && first.pitcher !== cur) take(first.pitcher, idx[0], inning, 0, [], true, true, placed)
       for (const i of idx) {
         const r = rows[i]
         if (r.pitcher && r.pitcher !== cur) {

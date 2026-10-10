@@ -7,6 +7,7 @@
  */
 import { inferAll, inningsOf, placedBases, scored as scoredRow, batterEndFor, type End, type Side } from '../record/timeline'
 import { REACH_RESULTS } from '../record/model'
+import { errorsOf } from './errors'
 import { countBefore, gridCell, type GridTone } from './gameText'
 import { oppKey } from './opponent'
 import { isHitResult, pitchTotals } from './stats'
@@ -57,6 +58,7 @@ export interface Scoresheet {
 }
 
 const OUT_NO: Record<string, 1 | 2 | 3> = { I: 1, II: 2, III: 3 }
+const SUB_POS: Record<string, string> = { PH: '代打', PR: '代跑' }
 const NON_AB = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
 const PLAY_ABBR: Record<string, string> = { sb: 'SB', cs: 'CS', wp: 'WP', pb: 'PB', pk: 'PK', err: 'E', bk: 'BK' }
 
@@ -152,14 +154,18 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
 
   const innings = Math.max(opts.innings || 0, ...rows.map((r) => r.inning), 1)
   const perInning: Record<number, InningTotals> = {}
-  const anyErrors = side === 'pit' && rows.some((r) => Array.isArray((r as PitchingPA).errors))
+  // our errors on their batters: the 守備失誤 list, or a 失誤／妨礙 result (data/errors.ts). Blank only when neither appears
+  // anywhere (an older import may have left errors out)
+  const pitErrors = (r: Row) => { const x = errorsOf(r as PitchingPA); return x.positions.length + x.unknown }
+  const anyErrors = side === 'pit' && rows.some((r) => Array.isArray((r as PitchingPA).errors) || pitErrors(r) > 0)
   for (let i = 1; i <= innings; i++) perInning[i] = { r: 0, h: 0, e: side === 'pit' && !anyErrors ? null : 0, lob: 0 }
   const totals = { r: 0, h: 0, e: side === 'pit' && !anyErrors ? null as number | null : 0, lob: 0, pa: 0, ab: 0, rbi: 0 }
 
   const slotOf = (r: Row): number | null => (side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder) ?? null
   const lines = new Map<number | null, SheetLine>()
   const lineFor = (slot: number | null) => { let l = lines.get(slot); if (!l) { l = { order: slot, players: [], cells: {} }; lines.set(slot, l) } return l }
-  const addPlayer = (l: SheetLine, p: SheetPlayer) => { if (!l.players.some((x) => x.name === p.name)) l.players.push(p) }
+  // a substitute reads the same way everywhere: 代打 / 代跑 (the rows store PH / PR)
+  const addPlayer = (l: SheetLine, p: SheetPlayer) => { if (!l.players.some((x) => x.name === p.name)) l.players.push(p.pos && SUB_POS[p.pos] ? { ...p, pos: SUB_POS[p.pos] } : p) }
   const prDone = new Set<string>()
 
   rows.forEach((r, k) => {
@@ -167,7 +173,7 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
     const run = side === 'bat' ? (r as BattingPA).run : r.code === 'R' || r.code === 'ER' ? 1 : 0
     t.r += run; totals.r += run
     if (isHitResult(r.result)) { t.h++; totals.h++ }
-    const e = side === 'bat' ? (r.result === '失誤' || r.result === '妨礙' ? 1 : 0) : ((r as PitchingPA).errors?.length ?? 0)
+    const e = side === 'bat' ? (r.result === '失誤' || r.result === '妨礙' ? 1 : 0) : pitErrors(r)
     if (t.e !== null) t.e += e
     if (totals.e !== null) totals.e += e
     if (r.code === 'L') { t.lob++; totals.lob++ }
