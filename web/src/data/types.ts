@@ -38,6 +38,11 @@ export const isDouble = (r: string) => r === '二安' || r === '場地二安'
 /** 內安 (infield single: the ball never left the infield) is a single in every stat; only forced runners move up. */
 export const isSingle = (r: string) => r === '一安' || r === '內安'
 
+/** 軌跡 a result implies when none was recorded (G 滾地 · P 內野飛球 · F 飛球). */
+export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
+/** Balls in play on which the batter is out (GO/AO count these; 三振, 犧觸, hits, 野選, 失誤 are neither). */
+export const BATTER_OUT_BIP = new Set(['內滾', '內飛', '外飛', '界外飛', '犧飛', '雙殺'])
+
 /** I/II/III = this PA produced the Nth out · L 殘壘 · R 得分（非自責） · ER 自責分 */
 export type OutcomeCode = 'I' | 'II' | 'III' | 'L' | 'R' | 'ER'
 
@@ -104,6 +109,10 @@ export type GameStatus = 'scheduled' | 'cancelled'
 export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out: string; pos: string; inning: number; half: 'top' | 'bottom'; slot?: number }
 /** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
 export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean }
+
+/** The migration that creates the albums table (photo albums and 比賽影片 links); named in the 開通 sentence. Each
+ *  repo's own file, so it lives in config/teamDefaults.ts and this file stays the same in both sites. */
+export { ALBUMS_MIGRATION } from '../config/teamDefaults'
 
 /** A tournament registration list (報名名單) for one year. Not part of Dataset: it lives in its own store slice (like albums). */
 export interface Registration { season: number; tournament: string; players: string[]; updatedAt?: string }
@@ -216,6 +225,11 @@ export interface Dataset {
   pitching: PitchingPA[]
   fielding: FieldingLine[]
 }
+
+/** 練習紀錄 (紀錄比賽 ?practice=1): its game id starts with this. Such a game lives only on the device that practised:
+ *  never saved, synced or counted (the page, store/data.ts saveGame and data/supabase.ts saveCloudDraft all refuse it). */
+export const PRACTICE_PREFIX = 'PRACTICE-'
+export const isPracticeId = (id: string) => id.startsWith(PRACTICE_PREFIX)
 
 export const EMPTY_DATASET: Dataset = { roster: [], games: [], batting: [], pitching: [], fielding: [] }
 

@@ -217,3 +217,24 @@ html[data-font="serif"] .font-bold { font-weight: 700; }
 /* 紀錄比賽「大字」(Record.tsx): the live screen and its sheets one size up. zoom (unlike transform) lays the content
    out again at the larger size, so it still fits the screen width and only grows downwards. */
 html.record-large .record-zoom { zoom: 1.2; }
+
+/* Printing (紀錄員小抄 and the print layouts): A4, always light — a dark-mode screen still prints black on white.
+   The app shell (sidebar, top bar, banners) carries print:hidden; paper-only styles live with the pages that print. */
+@media print {
+  @page { size: A4; margin: 10mm; }
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f2f2f4;
+    --ink: #1d1d1f;
+    --ink-2: #515154;
+    --muted: #6b6b70;
+    --border: rgba(0, 0, 0, 0.12);
+    --surface-3: #e8e8ed;
+    --border-strong: rgba(0, 0, 0, 0.2);
+    --grid: #ececef;
+    --axis: #d2d2d7;
+    color-scheme: light;
+  }
+  body { background: #fff; color: #1d1d1f; }
+}

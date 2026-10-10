@@ -20,8 +20,10 @@ describe('radar helpers', () => {
     expect(median([4, 1, null, 3, 2])).toBe(2.5)
     expect(median([null, undefined])).toBeNull()
   })
-  it('steps back one calendar year', () => {
-    expect(previousSeason('2026-02-15')).toEqual({ year: 2025, from: '2025-01-01', to: '2025-12-31' })
+  it('steps back one season (calendar year by default, 學年 with start 8)', () => {
+    expect(previousSeason('2026-02-15')).toEqual({ season: 2025, label: '2025 年', from: '2025-01-01', to: '2025-12-31' })
+    expect(previousSeason('2026-02-15', 8)).toEqual({ season: 2024, label: '113 學年', from: '2024-08-01', to: '2025-07-31' })
     expect(previousSeason(undefined)).toBeNull()
+    expect(previousSeason(undefined, 8)).toBeNull()
   })
 })

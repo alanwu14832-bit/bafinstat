@@ -19,7 +19,7 @@
  *     pitches) before the half's first plate appearance; they are not plate appearances. A balk (投手犯規, balk())
  *     moves every runner up one base and is only logged in the plays (kind 'bk'), no column.
  */
-import { HIT_BASE_COUNT, isPA, isPlaced, TIEBREAK, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { inferHalf, leftMarks } from './timeline'
 import { earnedCalls } from './earned'
@@ -89,6 +89,8 @@ export interface RecordState {
   tiebreak?: TiebreakRule | null
   /** extra half-innings where the recorder pressed 「這局不用」, as `${inning}${half}` ('8top') */
   tiebreakSkip?: string[]
+  /** 練習紀錄: a practice game, kept only on this device (record/draft.ts PRACTICE_KEY); never saved or synced */
+  practice?: boolean
 }
 /** 突破僵局: from which inning on, and the bases the runners are put on. */
 export interface TiebreakRule { from: number; bases: Base[] }
@@ -100,7 +102,7 @@ export const BIP_RESULTS = new Set(['一安', '內安', '二安', '場地二安'
 export const REACH_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
 const HIT_BASES: Record<string, Dest> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
 /** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
-export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
+export { TRAJ_OF } from '../data/types'
 const ROMAN = ['I', 'II', 'III'] as const
 const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 

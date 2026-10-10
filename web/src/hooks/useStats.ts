@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
-import { battingLines, errorsByPosition, fieldingLines, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
+import { battingLines, errorsByPosition, fieldingLines, ourRunsOf, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
 
@@ -18,6 +18,10 @@ export interface Computed extends FilteredData {
   params: StatParams
 }
 
+type Inputs = [base: unknown, demo: unknown, filters: unknown, params: unknown]
+/** The last pass, shared by every component that calls useStats (a page and its 情境拆分 card…): one pass per change. */
+let last: { inputs: Inputs; out: Computed } | null = null
+
 /** Everything the pages need, recomputed only when data/filters change. */
 export function useStats(): Computed {
   const base = useDataStore((s) => s.base)
@@ -25,22 +29,33 @@ export function useStats(): Computed {
   const filters = useDataStore((s) => s.filters)
   const rawParams = useDataStore((s) => s.params)
   return useMemo(() => {
-    const dataset = effectiveDataset(base, demo)
-    const params = resolveParams(rawParams, dataset.pitching)
-    const fd = applyFilters(dataset, filters)
-    return {
-      ...fd, dataset,
-      batters: battingLines(dataset, fd.batting, params),
-      team: teamBatting(dataset, fd.batting, params),
-      pitchers: pitchingLines(fd.pitching, fd.games, params),
-      teamPitch: teamPitching(fd.pitching, params, fd.games),
-      fielders: fieldingLines(fd.fielding),
-      errorsByPos: errorsByPosition(fd.fielding),
-      summary: teamSummary(fd.summaries),
-      hasDemo: dataset.games.some((g) => g.isDemo),
-      params,
-    }
+    const inputs: Inputs = [base, demo, filters, rawParams]
+    if (last && last.inputs.every((x, i) => x === inputs[i])) return last.out
+    const out = compute(base, demo, filters, rawParams)
+    last = { inputs, out }
+    return out
   }, [base, demo, filters, rawParams])
+}
+
+type State = ReturnType<typeof useDataStore.getState>
+function compute(base: State['base'], demo: State['demo'], filters: State['filters'], rawParams: State['params']): Computed {
+  const dataset = effectiveDataset(base, demo)
+  const params = resolveParams(rawParams, dataset.pitching)
+  const fd = applyFilters(dataset, filters)
+  // the score by inning: inherited runners, blown saves… need it
+  const ctx = { ourRuns: ourRunsOf(fd.summaries) }
+  return {
+    ...fd, dataset,
+    batters: battingLines(dataset, fd.batting, params),
+    team: teamBatting(dataset, fd.batting, params),
+    pitchers: pitchingLines(fd.pitching, fd.games, params, ctx),
+    teamPitch: teamPitching(fd.pitching, params, fd.games, ctx),
+    fielders: fieldingLines(fd.fielding),
+    errorsByPos: errorsByPosition(fd.fielding),
+    summary: teamSummary(fd.summaries),
+    hasDemo: dataset.games.some((g) => g.isDemo),
+    params,
+  }
 }
 
 /** Option lists for the global filter bar (from the unfiltered dataset). Tournaments also come from the 報名名單, so a

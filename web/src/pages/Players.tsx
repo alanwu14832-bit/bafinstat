@@ -3,12 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { median, previousSeason, sameGroup } from '../data/radar'
+import { SEASON_START, seasonHeader } from '../data/seasons'
+import { useHistory } from '../hooks/useHistory'
+import { PlayerCareer } from '../components/ui/PlayerCareer'
 import { filterGames } from '../data/filters'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { activeFilterCount } from '../components/layout/FilterBar'
-import { scopeText } from '../components/layout/FilterChips'
-import { downloadPlayerImage } from '../lib/shareImage'
+import { scopeText, useNavigateWithFilters } from '../components/layout/FilterChips'
+import { downloadCompareImage, downloadPercentileImage, downloadPlayerImage } from '../lib/shareImage'
 import { TEAM_NAME } from '../data/seed'
 import { StoryRow } from '../components/ui/SeasonHero'
 import { HeroGlow } from '../components/ui/HeroGlow'
@@ -29,17 +32,23 @@ import { Tabs } from '../components/ui/Tabs'
 import { seasonOf } from '../data/registrations'
 import { useDataStore } from '../store/data'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
+import { SplitsCard } from '../components/ui/SplitsCard'
+import { minOutsPitched, minPlateAppearances, outsGapText, paGapText } from '../data/qualify'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { RadarCard } from '../components/charts/RadarCard'
+import { PercentileCard } from '../components/charts/PercentileBars'
+import { ComparePicker } from '../components/ui/ComparePicker'
+import { CompareGrid, type ComparePlayer } from '../components/ui/CompareGrid'
+import { BAT_METRICS, BAT_PCT, BAT_SAMPLE_LIKE, comparePr, compareRows, PCT_POOL_MIN, percentileRows, PIT_METRICS, PIT_PCT, PIT_SAMPLE_LIKE, teamPool, type Metric } from '../data/playerMetrics'
 import { SprayChart } from '../components/charts/SprayChart'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { isPA, type BattingPA } from '../data/types'
-import { battingLines, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
-import { f2, f3, pct, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
+import { battingLines, ipDisplay, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
+import { f2, f3, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
 import { cx } from '../lib/format'
 
 /** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
@@ -48,21 +57,17 @@ const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runne
 interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
 /** One game on the mound: that game's line, with the season ERA after it. */
 interface PitchLogRow { id: string; date: string; opponent: string; dec: string; outs: number; ip: string; bf: number; h: number; r: number; er: number; bb: number; k: number; pc: number; era: string; isDemo: boolean }
-type PlayerTab = 'batting' | 'pitching'
+type PlayerTab = 'batting' | 'pitching' | 'career'
 
 const hand = (b?: string) => (b ? (b === 'L' ? '左打' : b === 'S' ? '左右開弓' : '右打') : '')
 
-/** volume: a count of chances (G, PA, IP) — more of it is 較多, not 較佳 */
-type Metric<T> = { label: string; get: (l: T) => number | null | undefined; fmt: (v: number) => string; lowerBetter?: boolean; volume?: boolean; min?: (l: T) => boolean }
-const BAT_METRICS: Metric<BattingLine>[] = [
-  { label: 'G', get: (l) => l.g, fmt: String, volume: true }, { label: 'PA', get: (l) => l.pa, fmt: String, volume: true }, { label: 'H', get: (l) => l.h, fmt: String }, { label: 'HR', get: (l) => l.hr, fmt: String }, { label: 'RBI', get: (l) => l.rbi, fmt: String }, { label: 'SB', get: (l) => l.sb, fmt: String },
-  { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wRC+', get: (l) => l.wrcPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
-  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'sSeager', get: (l) => l.sSeager, fmt: signedPct }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct, lowerBetter: true }, { label: '壘死', get: (l) => l.baserunningOuts, fmt: String, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
-]
-const PIT_METRICS: Metric<PitchingLine>[] = [
-  { label: 'IP', get: (l) => l.ip, fmt: (v) => v.toFixed(1), volume: true }, { label: 'ERA', get: (l) => l.era, fmt: f2, lowerBetter: true }, { label: 'FIP', get: (l) => l.fip, fmt: f2, lowerBetter: true }, { label: 'WHIP', get: (l) => l.whip, fmt: f2, lowerBetter: true },
-  { label: 'K/7', get: (l) => l.k7, fmt: f2 }, { label: 'K/9', get: (l) => l.k9, fmt: f2 }, { label: 'BB/9', get: (l) => l.bb9, fmt: f2, lowerBetter: true }, { label: 'K%', get: (l) => l.kPct, fmt: pct }, { label: 'CSW%', get: (l) => l.cswPct, fmt: pct }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct }, { label: '被打擊率', get: (l) => l.oppAvg, fmt: f3, lowerBetter: true },
-]
+/** 隊內百分位 as bars (default) or the radar: each reader's own choice, remembered on this device */
+type PctView = 'bars' | 'radar'
+const PCT_VIEW_KEY = 'bafin.players.pctView'
+const readPctView = (): PctView => { try { return localStorage.getItem(PCT_VIEW_KEY) === 'radar' ? 'radar' : 'bars' } catch { return 'bars' } }
+const writePctView = (v: PctView) => { try { localStorage.setItem(PCT_VIEW_KEY, v) } catch { /* private mode: just this visit */ } }
+/** the most teammates compared with the main player (9 in all) */
+const MAX_COMPARE = 8
 
 /** One side of a comparison row: the better number stands out (accent pill, bold, ▲ towards the label), the other fades. */
 function CompareValue({ text, state, side }: { text: string; state: 'win' | 'lose' | 'tie' | 'more'; side: 'a' | 'b' }) {
@@ -132,12 +137,31 @@ export function PlayersPage() {
   const [selected, setSelected] = useState<string>(requested && names.includes(requested) ? requested : busiest ?? names[0] ?? '')
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const [compare, setCompare] = useState<string>('')
+  // 比較: teammates in the link (?cmp=A&cmp=B), known names only, never the main player, at most 8. One of them = the
+  // two-column table and the radar overlay as before; two or more = the comparison grid.
+  const cmpParams = params.getAll('cmp')
+  const compareList = useMemo(() => [...new Set(cmpParams)].filter((n) => names.includes(n) && n !== selected).slice(0, MAX_COMPARE),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cmpParams.join('\u0000'), names, selected])
+  const compare = compareList.length === 1 ? compareList[0] : ''
+  const multi = compareList.length >= 2
+  const setCompareList = (list: string[]) => setParams((prev) => {
+    const n = new URLSearchParams(prev)
+    n.delete('cmp'); for (const c of list.slice(0, MAX_COMPARE)) n.append('cmp', c)
+    if (selected) n.set('player', selected)
+    return n
+  }, { replace: true })
+  const setCompare = (name: string) => setCompareList(name ? [name] : [])
+  const [pctView, setPctViewState] = useState<PctView>(readPctView)
+  const setPctView = (v: PctView) => { setPctViewState(v); writePctView(v) }
   const [editingRoster, setEditingRoster] = useState(false)
   const [showRegs, setShowRegs] = useState(false)
   const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
   const filters = useDataStore((st) => st.filters)
+  const goWithFilters = useNavigateWithFilters()
+  // every game, for the 生涯 tab, the 里程碑 story and the all-time streak rank
+  const history = useHistory()
   const resetFilters = useDataStore((st) => st.resetFilters)
   const statParams = s.params
   const cloud = useDataStore((st) => st.cloud)
@@ -186,8 +210,8 @@ export function PlayersPage() {
   const group = useMemo(() => sameGroup(s.dataset.roster, selected), [s.dataset.roster, selected])
   const groupPool = useMemo(() => (group ? pool.filter((b) => group.names.has(b.name)) : []), [group, pool])
   const prev = useMemo(() => previousSeason(s.games[s.games.length - 1]?.date), [s.games])
-  // When the filter already covers that year (e.g. 全部), "last season" would overlap what is on screen.
-  const spansPrev = !!prev && s.games.some((g) => g.date.startsWith(String(prev.year)))
+  // When the filter already covers that season (e.g. 全部), "last season" would overlap what is on screen.
+  const spansPrev = !!prev && s.games.some((g) => g.date >= prev.from && g.date <= prev.to)
   const lastBat = useMemo(() => {
     if (!prev || spansPrev) return undefined
     // same filters as the page, with the date range moved to the season before
@@ -205,7 +229,7 @@ export function PlayersPage() {
       line: group && groupPool.length >= 3 ? Object.fromEntries(AXES.map((a) => [a.key, median(groupPool.map((b) => b[a.key] as number | null))])) : undefined,
       why: group ? `${group.group}不到 3 人達 3 打席` : '名單沒填主守位', note: (v) => `${v}（${groupPool.length} 人中位）`,
     },
-    { value: 'last', label: prev ? `上一季（${prev.year} 年）` : '上一季', short: prev ? `${prev.year} 年` : '上一季', line: lastBat, why: spansPrev ? '篩選跨年，先在上方選單一年份' : '沒有上一季的資料', note: (v) => `${v}（${prev?.year} 年）` },
+    { value: 'last', label: prev ? `上一季（${prev.label}）` : '上一季', short: prev ? prev.label : '上一季', line: lastBat, why: spansPrev ? (SEASON_START === 1 ? '篩選跨年，先在上方選單一年份' : `篩選跨${seasonHeader()}，先在上方選單一個${seasonHeader()}`) : '沒有上一季的資料', note: (v) => `${v}（${prev?.label}）` },
     { value: 'team', label: '全隊平均', short: '全隊平均', line: s.team, why: '', note: (v) => `全隊 ${v}` },
   ]
   const [basisPick, setBasisPick] = useState<Basis | ''>('')
@@ -229,6 +253,39 @@ export function PlayersPage() {
       }
     })
   })()
+
+  // 隊內百分位 (bars): against the teammates with PA ≥ 10 / BF ≥ 10 in the filtered games (everyone who played when
+  // fewer than 5 qualify)
+  const batPool = useMemo(() => teamPool(s.batters, (l) => l.pa, PCT_POOL_MIN.bat), [s.batters])
+  const pitPool = useMemo(() => teamPool(s.pitchers, (l) => l.bf, PCT_POOL_MIN.pit), [s.pitchers])
+  const batPct = useMemo(() => (bat ? percentileRows(bat, batPool.pool, BAT_PCT) : []), [bat, batPool])
+  const pitPct = useMemo(() => (pit ? percentileRows(pit, pitPool.pool, PIT_PCT) : []), [pit, pitPool])
+  // one head count everywhere (the percentile card, its image and the comparison): the whole pool, the player included,
+  // the same N as 「隊內第 3／N」
+  const batPoolNote = batPool.relaxed
+    ? `這段期間不到 5 位隊友達 ${PCT_POOL_MIN.bat} 打席，改和所有有打席的 ${batPool.pool.length} 位打者比；圓圈裡是 PR（100＝隊內最佳）`
+    : `和這段期間 PA ≥ ${PCT_POOL_MIN.bat} 的 ${batPool.pool.length} 位打者比；圓圈裡是 PR（100＝隊內最佳），不是和其他球隊比`
+  const pitPoolNote = pitPool.relaxed
+    ? `這段期間不到 5 位投手面對 ${PCT_POOL_MIN.pit} 位打者，改和所有有投球的 ${pitPool.pool.length} 位投手比；圓圈裡是 PR（100＝隊內最佳）`
+    : `和這段期間面對 ${PCT_POOL_MIN.pit} 位以上打者的 ${pitPool.pool.length} 位投手比；圓圈裡是 PR（100＝隊內最佳），不是和其他球隊比`
+  const PCT_FOOTNOTE = '灰色＝這一項樣本太少（例如揮棒不到 15 次）。描述這段期間的表現，不代表穩定能力。'
+
+  // 多人比較 (and the two-player table's image): the main player first, then the chosen teammates
+  const comparePlayers = (kind: PlayerTab): ComparePlayer[] => [selected, ...compareList].map((n) => {
+    const p = roster.find((x) => x.name === n)
+    const b = byName.get(n), pl = pitchByName.get(n)
+    return kind === 'batting'
+      ? { name: n, number: p?.number, note: b ? `${b.pa} 打席` : '', none: b ? undefined : '無打擊紀錄', small: !!b && b.pa < PCT_POOL_MIN.bat }
+      : { name: n, number: p?.number, note: pl ? `${pl.ipDisplay} 局` : '', none: pl ? undefined : '無投球紀錄', small: !!pl && pl.bf < PCT_POOL_MIN.pit }
+  })
+  const compareTableRows = (kind: PlayerTab) => (kind === 'batting'
+    ? compareRows([selected, ...compareList].map((n) => byName.get(n)), BAT_METRICS, comparePr(batPool.pool, BAT_PCT, BAT_SAMPLE_LIKE))
+    : compareRows([selected, ...compareList].map((n) => pitchByName.get(n)), PIT_METRICS, comparePr(pitPool.pool, PIT_PCT, PIT_SAMPLE_LIKE)))
+  const comparePoolNote = (kind: PlayerTab) => (kind === 'batting'
+    ? `隊內百分位：和這段期間${batPool.relaxed ? '所有有打席' : ` PA ≥ ${PCT_POOL_MIN.bat} `}的 ${batPool.pool.length} 位打者比`
+    : `隊內百分位：和這段期間${pitPool.relaxed ? '所有有投球' : `面對 ${PCT_POOL_MIN.pit} 位以上打者`}的 ${pitPool.pool.length} 位投手比`)
+  // the names the comparison picker offers: those with numbers on this tab, in the site's order
+  const comparable = (kind: PlayerTab) => names.filter((n) => (kind !== 'pitching' ? (byName.get(n)?.pa ?? 0) >= 1 : (pitchByName.get(n)?.bf ?? 0) + (pitchByName.get(n)?.outs ?? 0) > 0))
 
   const trend = useMemo(() => {
     const rows = [...gameLog].reverse()
@@ -269,24 +326,55 @@ export function PlayersPage() {
   }, [pitchLog, s.pitching, selected, statParams])
   // where the batters he faced hit the ball
   const pitchSpray = useMemo(() => sprayCounts(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
+  // 情境拆分: only his own plate appearances (not the ones he pinch-ran on) / the batters he faced
+  const splitBat = useMemo(() => s.batting.filter((p) => p.batter === selected), [s.batting, selected])
+  const splitPit = useMemo(() => s.pitching.filter((p) => p.pitcher === selected), [s.pitching, selected])
+  // 大專規程 minimums for the games in the filter, and how far he is from them
+  const games = s.summary.games
+  const needPA = minPlateAppearances('college', games)
+  const needOuts = minOutsPitched('college', games)
+  const qualPA = `大專規程：規定打席 ${needPA}（2.1 × ${games} 場，依目前篩選），${bat && bat.pa >= needPA ? '已達規定打席' : `還差 ${paGapText(bat?.pa ?? 0, needPA)}`}`
+  const qualIP = `大專規程：規定投球局 ${ipDisplay(needOuts).replace(/\.0$/, '')}（1 × ${games} 場），${pit && pit.outs >= needOuts ? '已達規定投球局' : `還差 ${outsGapText(pit?.outs ?? 0, needOuts)}`}`
   // 打擊／投球 tabs: from the link (?tab=pitching from the 投球 page), else what he has numbers for
   const tabParam = params.get('tab')
-  const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' ? tabParam : !bat && pit ? 'pitching' : 'batting'
+  const tab: PlayerTab = tabParam === 'pitching' || tabParam === 'batting' || tabParam === 'career' ? tabParam : !bat && pit ? 'pitching' : 'batting'
   const setTab = (t: PlayerTab) => setParams((prev) => { const n = new URLSearchParams(prev); n.set('tab', t); if (selected) n.set('player', selected); return n }, { replace: true })
-  const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams])
+  const stories = useMemo(() => (selected ? playerStories(selected, { dataset: s.dataset, summaries: s.summaries, batting: s.batting, pitching: s.pitching, params: statParams, history }) : []), [selected, s.dataset, s.summaries, s.batting, s.pitching, statParams, history])
 
   // 成績卡: a share image of the numbers on screen, with the period and sample written on it
   const sharePlayer = () => {
     if (!player) return
+    const filteredBat = byName.get(selected), filteredPit = pitchByName.get(selected)
     const lines: string[] = []
+    const career = tab === 'career'
+    const bat = career ? careerBat : filteredBat
+    const pit = career ? careerPit : filteredPit
     if (bat) lines.push(`打擊：${bat.g} 場 ${bat.pa} 打席、${bat.ab} 打數 ${bat.h} 安，${bat.hr} 全壘打、${bat.rbi} 打點、${bat.sb} 盜壘`, `OBP ${f3(bat.obp)}・SLG ${f3(bat.slg)}・OPS ${f3(bat.ops)}${bat.wrcPlus === null ? '' : `・wRC+ ${Math.round(bat.wrcPlus)}`}`)
     if (pit) lines.push(`投球：${pit.g} 場 ${pit.ipDisplay} 局，${pit.k} 三振、${pit.bb} 保送，ERA ${f2(pit.era)}・WHIP ${f2(pit.whip)}`)
     downloadPlayerImage({
-      name: player.name, number: player.number, meta: [posLabel(player.primaryPos), player.bats && hand(player.bats)].filter(Boolean).join('・'),
-      period: scopeText(filters, s.games), big: headline, lines,
-      footer: `${TEAM_NAME} 數據平台・wRC+ 以同期間全隊為 100・樣本少時僅供參考`,
+      name: player.name, number: player.number, meta: playerMeta(),
+      // (the 生涯 tab's headline covers every game, not the filter)
+      period: tab === 'career' ? `所有比賽（生涯 ${history.games.length} 場）` : scopeText(filters, s.games), big: headline, lines,
+      footer: career ? `${TEAM_NAME} 數據平台・生涯 = 所有比賽，不受篩選影響` : `${TEAM_NAME} 數據平台・wRC+ 以同期間全隊為 100・樣本少時僅供參考`,
     })
   }
+  const playerMeta = () => (player ? [posLabel(player.primaryPos), player.bats && hand(player.bats)].filter(Boolean).join('・') : '')
+  // 百分位圖: the bars of the tab being read
+  const sharePercentile = (kind: PlayerTab) => {
+    if (!player) return
+    downloadPercentileImage({
+      name: player.name, number: player.number, meta: playerMeta(), period: scopeText(filters, s.games),
+      rows: kind === 'batting' ? batPct : pitPct, poolNote: kind === 'batting' ? batPoolNote : pitPoolNote,
+      footer: `${TEAM_NAME} 數據平台・隊內百分位（PR）・樣本少的項目為灰色`,
+    })
+  }
+  // 比較圖 of the two-player table (the grid has its own button)
+  const shareCompare = (kind: PlayerTab) => downloadCompareImage({
+    title: `${selected} vs ${compareList[0] ?? ''}・${kind === 'batting' ? '打擊' : '投球'}`,
+    subtitle: `${scopeText(filters, s.games)}・${comparePoolNote(kind)}`,
+    players: comparePlayers(kind).map((p) => ({ name: p.name, number: p.number, note: p.none ?? p.note })),
+    rows: compareTableRows(kind), footer: `${TEAM_NAME} 數據平台・底色是隊內百分位（紅好藍差），白框＝這一列最佳`,
+  })
   // a player without numbers in the filtered games: widen the period, or pick someone else
   const noDataActions = (
     <span className="inline-flex gap-2 flex-wrap justify-center">
@@ -297,7 +385,13 @@ export function PlayersPage() {
   // a tile opens the team ranking of that stat with this player marked (?hl=), which its label says
   const rank = (path: string) => `${path}&hl=${encodeURIComponent(selected)}`
   // the three numbers on the 球員卡, for the tab being read
-  const headline = tab === 'pitching'
+  const careerBat = history.batCareer.get(selected)
+  const careerPit = history.pitCareer.get(selected)
+  const careerSeasons = new Set([...(history.batSeasons.get(selected) ?? []), ...(history.pitSeasons.get(selected) ?? [])].map((x) => x.season)).size
+  const headline = tab === 'career'
+    ? (careerBat && careerBat.pa > 0 ? [{ label: '生涯 AVG', value: f3(careerBat.avg) }, { label: '生涯 OPS', value: f3(careerBat.ops) }, { label: '生涯安打', value: String(careerBat.h) }]
+      : careerPit ? [{ label: '生涯 ERA', value: f2(careerPit.era) }, { label: '生涯局數', value: careerPit.ipDisplay }, { label: '生涯三振', value: String(careerPit.k) }] : [])
+    : tab === 'pitching'
     ? (pit ? [{ label: 'ERA', value: f2(pit.era) }, { label: 'WHIP', value: f2(pit.whip) }, { label: '三振', value: String(pit.k) }] : [])
     : (bat ? [{ label: 'AVG', value: f3(bat.avg) }, { label: 'OPS', value: f3(bat.ops) }, { label: 'wRC+', value: bat.wrcPlus === null ? '—' : String(Math.round(bat.wrcPlus)) }] : [])
 
@@ -315,7 +409,17 @@ export function PlayersPage() {
   ]
 
   // switching players keeps the tab the reader is on
-  const choose = (name: string) => { setSelected(name); setParams(tabParam ? { player: name, tab: tabParam } : { player: name }, { replace: true }); setOpen(false); setQ('') }
+  // switching players keeps the comparison list (the new main player leaves it); `keep` puts the old one in his place
+  const choose = (name: string, keep?: string) => {
+    setSelected(name)
+    setParams((prev) => {
+      const n = new URLSearchParams(tabParam ? { player: name, tab: tabParam } : { player: name })
+      const list = prev.getAll('cmp').map((c) => (c === name && keep ? keep : c)).filter((c) => c !== name)
+      for (const c of [...new Set(list)].slice(0, MAX_COMPARE)) n.append('cmp', c)
+      return n
+    }, { replace: true })
+    setOpen(false); setQ('')
+  }
   const step = (d: number) => { const n = names[(index + d + names.length) % names.length]; if (n) choose(n) }
   // 報名名單 of the tournament picked in the 杯賽 filter, for the years the filtered games are in (every year when no game
   // matches yet). null = no filter or no list, and then the panel shows nothing extra.
@@ -330,9 +434,11 @@ export function PlayersPage() {
   const onlyRegistered = rosterView === 'reg' && !!registered
   const filtered = useMemo(() => roster.filter((p) => (!q || p.name.includes(q) || (p.number ?? '').includes(q)) && (!onlyRegistered || registered!.names.has(p.name))), [roster, q, onlyRegistered, registered])
 
+  const pctToggle = <Tabs size="sm" aria-label="百分位的畫法" value={pctView} onChange={setPctView} items={[{ value: 'bars', label: '長條' }, { value: 'radar', label: '雷達' }]} />
+
   return (
     <>
-      <PageHeader scoped title="球員" description={`${roster.length} 位球員。個人數據依上方篩選計算，分打擊、投球兩頁；雷達圖為隊內百分位（PA ≥ 1 的打者）。`} />
+      <PageHeader scoped title="球員" description={`${roster.length} 位球員。分打擊、投球、生涯三頁：打擊、投球依上方篩選計算，生涯是所有比賽、不受篩選影響；百分位是隊內排名（PA ≥ ${PCT_POOL_MIN.bat} 的打者、面對 ${PCT_POOL_MIN.pit} 位以上打者的投手）。`} />
       <DemoBanner />
 
       {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
@@ -385,8 +491,7 @@ export function PlayersPage() {
               <StoryRow stories={stories} link={false} className="relative" />
             </>
           )}
-          <Select label="比較" value={compare} onChange={(e) => setCompare(e.target.value)} className="w-full sm:w-auto sm:max-w-[240px]"
-            options={[{ value: '', label: '無' }, ...roster.filter((p) => p.name !== selected).map((p) => ({ value: p.name, label: p.name }))]} />
+          {player && tab !== 'career' && <ComparePicker names={comparable(tab)} selected={compareList} main={selected} onChange={setCompareList} max={MAX_COMPARE} roster={roster} />}
         </div>
         <AnimatePresence initial={false}>
           {open && (
@@ -453,11 +558,18 @@ export function PlayersPage() {
         <>
           {/* 打擊 and 投球 each get their own page of numbers */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }]} />
+            <Tabs aria-label="數據類別" value={tab} onChange={setTab} items={[{ value: 'batting', label: bat ? `打擊・${bat.pa} 打席` : '打擊' }, { value: 'pitching', label: pit ? `投球・${pit.ipDisplay} 局` : '投球' }, { value: 'career', label: careerSeasons ? `生涯・${careerSeasons} ${seasonHeader()}` : '生涯' }]} />
           </div>
-          {tab === 'batting' ? (
+          {tab === 'career' ? (
+            <PlayerCareer h={history} name={selected} onPickSeason={(r) => {
+              // the tab and the filter in one step (a separate setTab would be undone by the filter sync)
+              const keep = new URLSearchParams(params); keep.set('tab', 'batting'); keep.set('player', selected)
+              goWithFilters(null, r, { keep, replace: true })
+            }} />
+          ) : tab === 'batting' ? (
             !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <p className="text-[12px] text-muted -mb-1">{qualPA}</p>
             <StatGroup columns="grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
               <StatTile label="打擊率 AVG" to={rank('/batting?sort=avg')} toLabel="全隊排行" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
               <StatTile label="上壘率 OBP" to={rank('/batting?sort=obp')} toLabel="全隊排行" value={bat.obp ?? 0} format="decimal3" note={`${bat.bb} BB・${bat.hbp} HBP`} />
@@ -471,22 +583,29 @@ export function PlayersPage() {
               <StatTile label="sSeager" to={rank('/batting?view=process&sort=sSeager')} toLabel="全隊排行" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note="好球敢打、壞球忍得住" />
             </StatGroup>
           {compare && cmpPlayer && (
-            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 1）" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 1）" flush
+              action={<><Button variant="ghost" size="sm" icon={<Download />} onClick={() => shareCompare('batting')} title="把這張比較表存成 PNG 圖片">存成圖片</Button><Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button></>}>
               <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} only="batting" />
             </Card>
           )}
+          {multi && <CompareGrid kind="batting" players={comparePlayers('batting')} rows={compareTableRows('batting')} onPick={(n) => choose(n, selected)}
+            scope={scopeText(filters, s.games)} poolNote={comparePoolNote('batting')} footer={`${TEAM_NAME} 數據平台・底色是隊內百分位（紅好藍差），白框＝這一列最佳`} />}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            {bat && bat.pa < 1 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : <RadarCard title="隊內百分位" data={radar} reference={50}
-              subtitle={`${compare ? `與 ${compare} 比較；` : ''}越外圈越好，虛線 = 隊內中位（PR 50）；參照 ${pool.length} 位打者、${s.summary.games} 場，描述這段期間的表現，不代表穩定能力`}
-              action={!compare && (
+            {bat && bat.pa < 1 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : pctView === 'bars' ? (
+              <PercentileCard title="隊內百分位" rows={batPct} poolNote={batPoolNote} footnote={PCT_FOOTNOTE} toggle={pctToggle}
+                action={<Button variant="ghost" size="sm" icon={<Download />} onClick={() => sharePercentile('batting')} title="把隊內百分位存成 PNG 圖片">存成圖片</Button>} />
+            ) : <RadarCard title="隊內百分位" data={radar} reference={50}
+              subtitle={`${compare ? `與 ${compare} 比較；` : multi ? '多人比較看下方表格；' : ''}越外圈越好，虛線 = 隊內中位（PR 50）；參照 ${pool.length} 位打者、${s.summary.games} 場，描述這段期間的表現，不代表穩定能力`}
+              action={<>{pctToggle}{!compare && (
                 <Select size="sm" label="比較" aria-label="雷達圖比較對象" value={basis?.value ?? ''} onChange={(e) => setBasisPick(e.target.value as Basis)}
                   options={bases.map((b) => ({ value: b.value, label: b.line ? b.label : `${b.label}・${b.why}`, disabled: !b.line }))} />
-              )}
+              )}</>}
               series={compare ? [{ key: 'player', label: player.name }, { key: 'other', label: compare }] : basis ? [{ key: 'player', label: player.name }, { key: 'other', label: basis.short }] : [{ key: 'player', label: player.name }]}
               formatValue={(v) => `PR ${Math.round(v)}`} detail={(d, k) => String(d[k === 'player' ? 'playerDetail' : 'otherDetail'] ?? '')} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          <SplitsCard side="bat" rows={splitBat} who={player.name} />
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
             <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
@@ -495,6 +614,7 @@ export function PlayersPage() {
           ) : (
             !pit ? <Card><EmptyState compact title="目前篩選條件下沒有投球紀錄" description={bat ? '這位球員有打擊紀錄：點上面的「打擊」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <p className="text-[12px] text-muted -mb-1">{qualIP}</p>
             <StatGroup>
               <StatTile label="防禦率 ERA" to={rank('/pitching?view=basic&sort=era&dir=asc')} toLabel="全隊排行" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP・${pit.w} 勝 ${pit.l} 敗${pit.sv ? `・${pit.sv} 救援` : ''}`} />
               <StatTile label="FIP" to={rank('/pitching?view=advanced&sort=fip&dir=asc')} toLabel="全隊排行" value={pit.fip ?? 0} format="era" note="只看三振、保送、全壘打" />
@@ -504,17 +624,27 @@ export function PlayersPage() {
               <StatTile label="被打擊率" to={rank('/pitching?view=advanced&sort=oppAvg&dir=asc')} toLabel="全隊排行" value={pit.oppAvg ?? 0} format="decimal3" display={f3(pit.oppAvg)} note={`${pit.h} H / ${pit.ab} AB・${pit.hr} HR`} />
               <StatTile label="好球率 / 首球好球" to={rank('/pitching?view=process&sort=strikePct')} toLabel="全隊排行" value={(pit.strikePct ?? 0) * 100} format="pct" display={`${pct0(pit.strikePct)}/${pct0(pit.fStrikePct)}`} note={`${pit.pc} 球・每局 ${pit.pPerIP === null ? '—' : pit.pPerIP.toFixed(1)} 球`} />
               <StatTile label="Whiff% / CSW%" to={rank('/pitching?view=process&sort=cswPct')} toLabel="全隊排行" value={(pit.cswPct ?? 0) * 100} format="pct" display={`${pct0(pit.whiffPct)}/${pct0(pit.cswPct)}`} note="揮空率 / 好球＋揮空占比" />
+              <StatTile label="繼承失分" to={rank('/pitching?view=advanced&sort=irsPct&dir=asc')} toLabel="全隊排行" value={pit.irs} display={pit.ir ? `${pit.irs}/${pit.ir}` : '—'} note={`IRS% ${pct0(pit.irsPct)}・救援 ${pit.g - pit.gs} 場`} />
+              <StatTile label="救援失敗" to={rank('/pitching?view=advanced&sort=bs')} toLabel="全隊排行" value={pit.bs} display={String(pit.bs)} note={`救援 ${pit.sv}・中繼 ${pit.hld}`} />
+              <StatTile label="三上三下" to={rank('/pitching?view=process&sort=inn123')} toLabel="全隊排行" value={pit.inn123} display={String(pit.inn123)} note={`13 球內 ${pit.inn13}/${pit.pitchInn} 局`} />
+              <StatTile label="首打出局" to={rank('/pitching?view=process&sort=leadoffOutPct')} toLabel="全隊排行" value={(pit.leadoffOutPct ?? 0) * 100} display={pct0(pit.leadoffOutPct)} note={`${pit.leadoffOuts}/${pit.leadoffBf}・滾飛比 ${f2(pit.goAo)}`} />
             </StatGroup>
           {compare && cmpPlayer && (
-            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button>} flush>
+            <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" flush
+              action={<><Button variant="ghost" size="sm" icon={<Download />} onClick={() => shareCompare('pitching')} title="把這張比較表存成 PNG 圖片">存成圖片</Button><Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button></>}>
               <CompareTable a={bat} b={cmpBat} pa={pit} pb={cmpPit} names={[player.name, cmpPlayer.name]} only="pitching" />
             </Card>
           )}
+          {multi && <CompareGrid kind="pitching" players={comparePlayers('pitching')} rows={compareTableRows('pitching')} onPick={(n) => choose(n, selected)}
+            scope={scopeText(filters, s.games)} poolNote={comparePoolNote('pitching')} footer={`${TEAM_NAME} 數據平台・底色是隊內百分位（紅好藍差），白框＝這一列最佳`} />}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-            {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
-              : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
+            <PercentileCard title="隊內百分位" rows={pitPct} poolNote={pitPoolNote} footnote={PCT_FOOTNOTE}
+              action={<Button variant="ghost" size="sm" icon={<Download />} onClick={() => sharePercentile('pitching')} title="把隊內百分位存成 PNG 圖片">存成圖片</Button>} />
             <SprayChart title="被擊球落點" subtitle="面對的打者：安打 / 場內球" counts={pitchSpray.all} secondary={pitchSpray.hits} />
           </div>
+          {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
+            : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
+          <SplitsCard side="pit" rows={splitPit} who={player.name} title="情境拆分（面對的打者）" />
           <Card title="逐場投球" subtitle="點一列看那一場" flush>
             <DataTable columns={pitchCols} rows={pitchLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>

@@ -32,6 +32,13 @@ const L: Record<string, Link> = {
   fG: ['fielding', '', 'g'], Inn: ['fielding', '', 'innings'], PO: ['fielding', '', 'po'], A: ['fielding', '', 'a'], E: ['fielding', '', 'e'],
   DP: ['fielding', '', 'dp'], TC: ['fielding', '', 'tc'], FPCT: ['fielding', '', 'fpct'], 'RF/G': ['fielding', '', 'rfg'], PB: ['fielding', '', 'pb'],
   cSB: ['fielding', '', 'sb'], cCS: ['fielding', '', 'cs'], 'CS%': ['fielding', '', 'csPct'],
+  // 投手補充數據, 規定打席／投球局, 優質打席 kinds
+  'GO/AO': ['pitching', 'process', 'goAo'], IR: ['pitching', 'advanced', 'ir'], 'IRS%': ['pitching', 'advanced', 'irsPct', 'asc'], BS: ['pitching', 'advanced', 'bs'],
+  'BBS%': ['pitching', 'advanced', 'bbScoredPct', 'asc'], 'LOO%': ['pitching', 'process', 'leadoffOutPct'], '123INN': ['pitching', 'process', 'inn123'],
+  '13P%': ['pitching', 'process', 'inn13Pct'], QualPA: ['batting', '', 'pa'], QualIP: ['pitching', '', 'outs'],
+  '6球以上': ['batting', 'process', 'longPA'], 兩好球纏鬥: ['batting', 'process', 'twoStrikeBattles'],
+  // 獲勝機率模型
+  WPA: ['batting', 'advanced', 'wpa'], RE24: ['batting', 'advanced', 're24'],
 }
 const TEAM: Record<string, string> = { WinPct: '/games?view=results', RunDiff: '/', LOB: '/games?view=results' }
 

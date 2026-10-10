@@ -22,6 +22,28 @@ describe('team config', () => {
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '0' }).tiebreak).toBe('')
     expect(resolveTeam({ VITE_TEAM_TIEBREAK: '9' }).tiebreak).toBe('12')
   })
+  it('carries the pitch-rest rules (投手休息表) as they are', () => {
+    expect(resolveTeam({}).pitchRest).toEqual(TEAM_DEFAULTS.pitchRest)
+    expect(resolveTeam({}).pitchRest.dailyMax).toBe(120)
+  })
+  it('reads the season start month (VITE_TEAM_SEASON_START), calendar year by default', () => {
+    expect(resolveTeam({}).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '8' }).seasonStart).toBe(8)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '1' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '13' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: 'x' }).seasonStart).toBe(1)
+    expect(resolveTeam({ VITE_TEAM_SEASON_START: '8.5' }).seasonStart).toBe(1)
+  })
+  it('reads the link-preview settings (site address, picture, description)', () => {
+    expect(resolveTeam({}).siteUrl).toBe('https://bafinstat.vercel.app')
+    expect(resolveTeam({ VITE_TEAM_SITE_URL: 'https://x.org/' }).siteUrl).toBe('https://x.org')
+    expect(resolveTeam({ VITE_TEAM_SITE_URL: 'javascript:alert(1)' }).siteUrl).toBe(TEAM_DEFAULTS.siteUrl)
+    expect(resolveTeam({ VITE_TEAM_SITE_URL: 'x.org' }).siteUrl).toBe(TEAM_DEFAULTS.siteUrl)
+    expect(resolveTeam({}).ogImage).toBe('og.png')
+    expect(resolveTeam({ VITE_TEAM_OG_IMAGE: 'banner.jpg' }).ogImage).toBe('banner.jpg')
+    expect(resolveTeam({}).description).toBe('')
+    expect(resolveTeam({ VITE_TEAM_DESCRIPTION: '我們的球隊' }).description).toBe('我們的球隊')
+  })
   it('resolves assets against the base path, leaving URLs alone', () => {
     expect(assetUrl('mark.png', '/bafinstat/')).toBe('/bafinstat/mark.png')
     expect(assetUrl('/team/mark.png', '/')).toBe('/team/mark.png')

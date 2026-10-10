@@ -16,8 +16,12 @@
 | `VITE_TEAM_LOGO` | 使用指南頁的完整 logo：同上 | `teams/ntu/logo.png` |
 | `VITE_TEAM_INNINGS` | 幾局制；ERA 換算與新比賽的預設局數 | `9` |
 | `VITE_TEAM_TIEBREAK` | 延長賽突破僵局放哪幾壘（從規定局數的下一局開始）：`12` 一、二壘（預設）、`2` 只放二壘、`123` 滿壘、`off` 不採用；每場在「紀錄比賽」還能再改 | `12` |
+| `VITE_TEAM_SEASON_START` | 「季」從幾月開始（紀錄簿、生涯逐季、逐季戰績、篩選列的年份按鈕都照它分季）：`1` 西元年（預設）；想改成學年制（8 月到隔年 7 月）填 `8` | `8` |
 | `VITE_TEAM_SEED` | 填 `0`：網站從空白開始，**不帶 BaFiN 的比賽資料**（其他隊一定要填 `0`） | `0` |
 | `VITE_TEAM_FILE_PREFIX` | 匯出備份的檔名開頭 | `NTUBB` |
+| `VITE_TEAM_SITE_URL` | 網站的完整網址（`https://` 開頭、結尾不要 `/`），讓 LINE／FB 的連結預覽抓得到圖；**其他隊一定要填**，不然預覽圖會指到 BaFiN 的網站 | `https://stats.example.org` |
+| `VITE_TEAM_OG_IMAGE` | 連結預覽圖（1200×630）：`web/public` 裡的檔名或完整網址；預設 `og.png`（BaFiN 的圖），用 `tools/og/make-og.mjs` 產生自己的一張放進 `web/public/teams/<隊代號>/` 再填這裡 | `teams/ntu/og.png` |
+| `VITE_TEAM_DESCRIPTION` | 連結預覽下面的一句介紹；不填就自動寫「{組織}（{隊名}）的比賽紀錄、即時比分與球員數據…」 | `台大棒球隊的比賽紀錄與數據` |
 | `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` | 這一隊自己的資料庫（見第 2 步） | — |
 
 `VITE_TEAM_SEED=0` 時，BaFiN 的比賽紀錄在建置時就被整個拿掉，不會出現在對方網站的程式碼裡。

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Reorder, useDragControls } from 'framer-motion'
-import { ArrowDown, ArrowUp, Copy, Eraser, GripVertical, PenLine, Wand2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Eraser, GripVertical, PenLine, Printer, Wand2 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -18,6 +18,10 @@ import { registrationByKey, registrationFor, registrationKey, unscheduledRegistr
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { POSITION_LABEL } from '../lib/fmt'
 import { cx } from '../lib/format'
+import { localDate } from '../lib/dates'
+import { RestHint } from '../components/ui/RestHint'
+import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
+import { gamesAgainst } from '../data/opponent'
 import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
 
 /** Where each position's dropdown sits on the field (percent of the diagram box). */
@@ -107,6 +111,8 @@ export function LineupPage() {
   const sortMode = useRosterSort()
   const names = useMemo(() => candidateNames(base.roster, reg, sortMode), [base.roster, reg, sortMode])
   const listed = !!reg?.players.length
+  // 對手情蒐: when this lineup is for a game against an opponent we have played before
+  const scoutFor = useMemo(() => (game && game.opponent.trim() && gamesAgainst(base, game.opponent).length ? game.opponent : ''), [base, game])
   // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
   const [keys, setKeys] = useState<number[]>(() => Array.from({ length: 9 }, (_, i) => i))
   const [msg, setMsg] = useState<string | null>(null)
@@ -146,6 +152,8 @@ export function LineupPage() {
   const copy = async () => {
     try { await navigator.clipboard.writeText(lineupText(lineup, game?.opponent)); setMsg('已複製陣容文字，可以貼到群組') } catch { setMsg('這個瀏覽器不允許複製，請手動選取') }
   }
+  // 陣容卡: the print page reads the lineup saved on this device, so save it first
+  const toPrint = () => { writeLineup({ ...lineup, updatedAt: lineup.updatedAt || new Date().toISOString() }); navigate('/print/lineup') }
   const toRecord = () => { writeLineup({ ...lineup, updatedAt: new Date().toISOString() }); navigate(lineup.gameId ? `/record?game=${encodeURIComponent(lineup.gameId)}` : '/record') }
   const REG = 'reg:'
   const pickValue = lineup.gameId || (lineup.regKey ? REG + lineup.regKey : '')
@@ -177,7 +185,7 @@ export function LineupPage() {
   return (
     <>
       <PageHeader title="先發陣容" description="先選這份陣容是哪一場，再排守位、打序，最後勾今天有到的板凳；陣容會存在這台裝置，開始紀錄比賽時自動帶入。手機是清單、電腦是球場圖。"
-        actions={<div className="flex items-center gap-2 flex-wrap"><RosterSortToggle /><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
+        actions={<div className="flex items-center gap-2 flex-wrap"><RosterSortToggle /><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="ghost" size="sm" icon={<Printer />} onClick={toPrint} title="印出先發名單（A4 直式，可印 2 份裁開）">列印陣容卡</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       <Card bodyClassName="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-4">
@@ -189,6 +197,8 @@ export function LineupPage() {
         <Card className="xl:col-span-7" title="守備陣容" subtitle="每個守位選一個人；同一人只會站一個位置" bodyClassName="p-3 sm:p-5">
           <div className="sm:hidden"><PositionList lineup={lineup} names={names} onPick={pick} /></div>
           <div className="hidden sm:block"><FieldDiagram lineup={lineup} names={names} onPick={pick} /></div>
+          {/* 投手休息表: is the pitcher picked rested enough for this game's date (Pitch Smart 建議, a reminder only) */}
+          {lineup.field.P && <RestHint name={lineup.field.P} asOf={game?.date ?? localDate()} excludeGameId={game && !game.status ? game.id : undefined} className="mt-3" />}
           <div className="mt-4 pt-4 border-t border-border flex items-center gap-3 flex-wrap">
             <span className="text-[12px] font-medium text-ink-2">指定打擊 DH</span>
             <PlayerSelect size="sm" aria-label="DH 指定打擊" value={lineup.dh} onChange={setDh} names={names} placeholder="不用 DH" className="w-[160px]" />
@@ -215,6 +225,7 @@ export function LineupPage() {
           <div className="mt-4 pt-3 border-t border-border"><Checkbox label="允許被換下的球員再上場" className="min-h-9 pointer-fine:min-h-7" checked={lineup.reentry} onChange={(v) => update((l) => ({ ...l, reentry: v }))} /></div>
         </Card>
       </div>
+      {scoutFor && <OpponentScoutCard ds={base} opponent={scoutFor} />}
     </>
   )
 }

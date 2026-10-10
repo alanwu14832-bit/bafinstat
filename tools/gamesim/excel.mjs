@@ -46,9 +46,14 @@ async function box(p, id = G) {
   const dlg = p.getByRole('dialog').last()
   const rows = async (header) => {
     const t = dlg.locator('table', { has: p.locator('th', { hasText: new RegExp(`^${header}$`) }) }).first()
-    const heads = (await t.locator('thead th').allTextContents()).map((x) => x.trim())
+    const all = (await t.locator('thead th').allTextContents()).map((x) => x.trim())
+    // WPA comes from the win-probability model, rebuilt from every game on the site: a second copy of a game moves
+    // it a little, so it is left out of these "the same Box Score" comparisons (data/winTimeline.ts)
+    const skip = all.indexOf('WPA')
+    const keep = (cells) => cells.filter((_, i) => i !== skip)
+    const heads = keep(all)
     const out = []
-    for (const tr of await t.locator('tbody tr').all()) out.push((await tr.locator('td').allTextContents()).map((x) => x.trim()))
+    for (const tr of await t.locator('tbody tr').all()) out.push(keep((await tr.locator('td').allTextContents()).map((x) => x.trim())))
     return { heads, rows: out }
   }
   const text = await dlg.innerText()
@@ -165,6 +170,8 @@ fillLog('單場-投球', rowsOf(wb, '投球紀錄', '投手').filter((r) => r['�
 const sm = tpl.Sheets['單場-摘要'], g = seed.base.games.find((x) => x.id === G)
 const put = (ref, v) => { sm[ref] = typeof v === 'number' ? { t: 'n', v } : { t: 's', v } }
 put('C3', serial('2026-12-30')); put('C5', g.tournament); put('C6', g.opponent); put('C7', g.homeAway); put('F2', g.venue ?? ''); put('I2', g.winningPitcher ?? ''); put('I5', g.dayRoster.bench.join('、'))
+// every decision, as a recorder fills it in: the game page's 投球 table shows 勝敗 (勝／敗／救援／中繼) since batch 6
+put('I3', g.losingPitcher ?? ''); put('I4', g.savePitcher ?? ''); put('I7', (g.holds ?? []).join('、'))
 const single = { SheetNames: ['單場-摘要', '單場-打擊', '單場-投球'], Sheets: { '單場-摘要': sm, '單場-打擊': tpl.Sheets['單場-打擊'], '單場-投球': tpl.Sheets['單場-投球'] } }
 const H = await fresh(seed)
 // as copied, the example game's 守備紀錄 still in 單場-摘要
@@ -186,7 +193,7 @@ function totalsVsSite(label, ds, loFile) {
   const lwb = X.readFile(loFile)
   const grid = X.utils.sheet_to_json(lwb.Sheets['總表'], { header: 1, defval: '' })
   const MAP = {
-    bat: { G: 'g', PA: 'pa', AB: 'ab', R: 'r', H: 'h', '1B': 'h1', '2B': 'h2', '3B': 'h3', HR: 'hr', TB: 'tb', RBI: 'rbi', BB: 'bb', IBB: 'ibb', HBP: 'hbp', SO: 'so', SH: 'sh', SF: 'sf', GIDP: 'gidp', ROE: 'roe', SB: 'sb', CS: 'cs', 壘死: 'baserunningOuts', 'SB%': 'sbPct', AVG: 'avg', OBP: 'obp', SLG: 'slg', OPS: 'ops', 'OPS+': 'opsPlus', ISO: 'iso', BABIP: 'babip', wOBA: 'woba', 'wRC+': 'wrcPlus', 'K%': 'kPct', 'BB%': 'bbPct', 'RISP AVG': 'rispAvg', 'QAB%': 'qabPct', 'P/PA': 'pPerPA', sSeager: 'sSeager' },
+    bat: { G: 'g', PA: 'pa', AB: 'ab', R: 'r', H: 'h', '1B': 'h1', '2B': 'h2', '3B': 'h3', HR: 'hr', TB: 'tb', RBI: 'rbi', BB: 'bb', IBB: 'ibb', HBP: 'hbp', SO: 'so', SH: 'sh', SF: 'sf', GIDP: 'gidp', ROE: 'roe', SB: 'sb', CS: 'cs', 壘死: 'baserunningOuts', 'SB%': 'sbPct', AVG: 'avg', OBP: 'obp', SLG: 'slg', OPS: 'ops', 'OPS+': 'opsPlus', ISO: 'iso', BABIP: 'babip', wOBA: 'woba', 'wRC+': 'wrcPlus', 'K%': 'kPct', 'BB%': 'bbPct', 'RISP AVG': 'rispAvg', 'QAB%': 'qabPct', '兩好球纏鬥': 'twoStrikeBattles', '6球以上': 'longPA', 'P/PA': 'pPerPA', sSeager: 'sSeager' },
     pit: { G: 'g', GS: 'gs', W: 'w', L: 'l', SV: 'sv', HLD: 'hld', 出局數: 'outs', IP: 'ipNumber', BF: 'bf', PC: 'pc', 好球: 'strikes', 壞球: 'balls', 'Strike%': 'strikePct', K: 'k', BB: 'bb', IBB: 'ibb', HBP: 'hbp', H: 'h', '2B': 'h2', '3B': 'h3', HR: 'hr', R: 'r', ER: 'er', WP: 'wp', SBA: 'sba', CS: 'cs', PK: 'pk', ERA: 'era', WHIP: 'whip', 'K/7': 'k7', 'K/9': 'k9', 'BB/9': 'bb9', 'K/BB': 'kbb', 'K%': 'kPct', 'BB%': 'bbPct', OppAVG: 'oppAvg', OppOBP: 'oppObp', BABIP: 'babip', FIP: 'fip', 'GB%': 'gbPct' },
     fld: { G: 'g', Inn: 'innings', PO: 'po', A: 'a', E: 'e', DP: 'dp', TC: 'tc', FPCT: 'fpct', 'RF/G': 'rfg', PB: 'pb', SB: 'sb', CS: 'cs', 'CS%': 'csPct' },
   }
@@ -209,7 +216,7 @@ function totalsVsSite(label, ds, loFile) {
     }
   }
   const ov = Object.fromEntries(grid[12].map((h, i) => [String(h).trim(), grid[13][i]]))
-  for (const [h, v] of [['場次', site.team.games], ['勝', site.team.w], ['敗', site.team.l], ['得分', site.team.rs], ['失分', site.team.ra], ['團隊AVG', site.tb.avg], ['團隊OBP', site.tb.obp], ['團隊SLG', site.tb.slg], ['團隊ERA', site.tp.era], ['團隊WHIP', site.tp.whip], ['盜壘', site.tb.sb]]) same(`球隊總覽 ${h}`, ov[h], v)
+  for (const [h, v] of [['場次', site.team.games], ['勝', site.team.w], ['敗', site.team.l], ['得分', site.team.rs], ['失分', site.team.ra], ['團隊AVG', site.tb.avg], ['團隊OBP', site.tb.obp], ['團隊SLG', site.tb.slg], ['團隊ERA', site.tp.era], ['團隊WHIP', site.tp.whip], ['盜壘', site.tb.sb], ['勝率', site.team.winPct]]) same(`球隊總覽 ${h}`, ov[h], v)
   for (let i = 0; i < 9; i++) { same(`逐局 我隊第${i + 1}局`, grid[17][2 + i], site.team.runsByInningUs[i] ?? 0); same(`逐局 對手第${i + 1}局`, grid[18][2 + i], site.team.runsByInningOpp[i] ?? 0) }
   const gl = X.utils.sheet_to_json(lwb.Sheets['比賽清單'], { header: 1, defval: '' }); const gh = gl.find((r) => r.includes('比賽ID')).map(String)
   for (const s of site.sums) {

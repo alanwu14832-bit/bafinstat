@@ -1,4 +1,5 @@
 import type { Player } from './types'
+import { SEASON_START, seasonLabel, seasonOfDate, seasonRange } from './seasons'
 
 /** Position groups for the radar's 同守位 comparison; DH / UT / unknown have no group. */
 export type PosGroup = '投手' | '捕手' | '內野' | '外野'
@@ -20,11 +21,12 @@ export function median(values: Array<number | null | undefined>): number | null 
 }
 
 /**
- * The season before the one the filtered games end in. Seasons follow the calendar year, like the filter
- * bar's 「2026年」 preset, so a filter ending in 2026 compares with 2025.
+ * The season before the one the filtered games end in (data/seasons.ts: the calendar year by default, so a filter
+ * ending in 2026 compares with 2025; with 學年 a filter ending in 2026-02 compares with 113 學年).
  */
-export function previousSeason(lastGameDate: string | undefined): { year: number; from: string; to: string } | null {
-  const y = Number(lastGameDate?.slice(0, 4))
-  if (!Number.isInteger(y) || y < 1900) return null
-  return { year: y - 1, from: `${y - 1}-01-01`, to: `${y - 1}-12-31` }
+export function previousSeason(lastGameDate: string | undefined, start = SEASON_START): { season: number; label: string; from: string; to: string } | null {
+  const cur = seasonOfDate(lastGameDate, start)
+  if (cur < 1900) return null
+  const season = cur - 1
+  return { season, label: seasonLabel(season, start), ...seasonRange(season, start) }
 }

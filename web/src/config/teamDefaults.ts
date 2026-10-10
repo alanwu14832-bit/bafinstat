@@ -22,6 +22,10 @@ export const TEAM_DEFAULTS = {
   /** VITE_TEAM_TIEBREAK: 延長賽突破僵局 — the bases the rule puts runners on from the inning after regulation (WBSC:
    *  '12' 一、二壘; '2' 二壘 only; '123' 滿壘; '' = the team does not use it). Each game can still change it on 紀錄比賽. */
   tiebreak: '12' as string,
+  /** VITE_TEAM_SEASON_START: the month a 「季」 starts (1–12). 1 = calendar year (「2026 年」, the default); 8 = 學年度,
+   *  August to July (「115 學年」). 紀錄簿, 生涯逐季, 逐季戰績, the filter bar's season button and 上一季 follow it;
+   *  報名名單 always use calendar years. */
+  seasonStart: 1,
   /** VITE_TEAM_SEED: '0' starts empty instead of with BaFiN's recorded games (every other team). */
   seed: true,
   /** VITE_TEAM_FILE_PREFIX: start of downloaded backup file names. */
@@ -32,9 +36,37 @@ export const TEAM_DEFAULTS = {
   accentDark: '#e2a03a',
   accentInk: '#1a1207',
   accentInkDark: '#1a1207',
+  /** 投手休息表 (no VITE_ variable: edit here, per team). MLB Pitch Smart 19–22 歲建議 — a recommendation, not a league
+   *  rule, and the site never blocks a pitching change with it. tiers = [most pitches that day, rest days]; past the last
+   *  tier rest `over` days (the 2017 MLB/USA Baseball update; the live table leaves out 106–120). dailyMax = most pitches
+   *  in a day; maxConsecutiveDays = no 3rd day in a row; oneGamePerDay = one game a day; warnWithin = warn this many
+   *  pitches before a tier / the daily max on 紀錄比賽; windowDays = how far back the rest table looks. */
+  pitchRest: {
+    source: 'MLB Pitch Smart 19–22 歲建議',
+    tiers: [[30, 0], [45, 1], [60, 2], [80, 3], [105, 4]] as Array<[number, number]>,
+    over: 5,
+    dailyMax: 120,
+    maxConsecutiveDays: 2,
+    oneGamePerDay: true,
+    warnWithin: 5,
+    windowDays: 30,
+  },
+  /** VITE_TEAM_SITE_URL: the site's full address (http(s), no trailing /; include the path when the site lives under
+   *  one, e.g. https://x.github.io/bafinstat), so link previews (LINE, Facebook…) get an absolute picture URL. A build
+   *  whose base path differs from it keeps a relative picture. Set it after moving to your own domain. */
+  siteUrl: 'https://bafinstat.vercel.app',
+  /** VITE_TEAM_OG_IMAGE: the 1200×630 link-preview picture: a file in web/public or a full URL. Without the file the
+   *  build uses the logo and a small preview card. */
+  ogImage: 'og.png',
+  /** VITE_TEAM_DESCRIPTION: the text under link previews; '' = 「{org}（{name}）的比賽紀錄、即時比分與球員數據…」. */
+  description: '',
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
+
+/** The file (in this repo) that creates the albums table — photo albums and 比賽影片 links. The 相簿 page and a game's
+ *  照片與影片 card name it when the table is missing. Each site's repo has its own (the 校隊's is supabase/schema.sql). */
+export const ALBUMS_MIGRATION = 'supabase/migrations/2026-09-12_albums_schedule.sql'
 
 /** Merge VITE_TEAM_* values over the defaults; blank values are ignored. */
 export function resolveTeam(env: Record<string, string | boolean | undefined>): TeamConfig {
@@ -48,6 +80,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
   const seed = str('VITE_TEAM_SEED', '')
   const tb = str('VITE_TEAM_TIEBREAK', '').toLowerCase()
   const tiebreak = ['2', '12', '123'].includes(tb) ? tb : ['0', 'off', 'false', 'no'].includes(tb) ? '' : TEAM_DEFAULTS.tiebreak
+  const seasonStart = Number(str('VITE_TEAM_SEASON_START', ''))
   return {
     name: str('VITE_TEAM_NAME', TEAM_DEFAULTS.name),
     org: str('VITE_TEAM_ORG', TEAM_DEFAULTS.org),
@@ -57,13 +90,23 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     logo: str('VITE_TEAM_LOGO', TEAM_DEFAULTS.logo),
     innings: Number.isInteger(innings) && innings >= 1 && innings <= 12 ? innings : TEAM_DEFAULTS.innings,
     tiebreak,
+    seasonStart: Number.isInteger(seasonStart) && seasonStart >= 1 && seasonStart <= 12 ? seasonStart : TEAM_DEFAULTS.seasonStart,
     seed: seed ? !['0', 'false', 'no', 'off'].includes(seed.toLowerCase()) : TEAM_DEFAULTS.seed,
     filePrefix: str('VITE_TEAM_FILE_PREFIX', TEAM_DEFAULTS.filePrefix),
     accent: color('VITE_TEAM_ACCENT', TEAM_DEFAULTS.accent),
     accentDark: color('VITE_TEAM_ACCENT_DARK', TEAM_DEFAULTS.accentDark),
     accentInk: color('VITE_TEAM_ACCENT_INK', TEAM_DEFAULTS.accentInk),
     accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
+    pitchRest: TEAM_DEFAULTS.pitchRest,
+    siteUrl: siteUrl(str('VITE_TEAM_SITE_URL', '')) ?? TEAM_DEFAULTS.siteUrl,
+    ogImage: str('VITE_TEAM_OG_IMAGE', TEAM_DEFAULTS.ogImage),
+    description: str('VITE_TEAM_DESCRIPTION', TEAM_DEFAULTS.description),
   }
+}
+
+/** An http(s) address without its trailing slash, or null for anything else (javascript:, a bare host…). */
+function siteUrl(v: string): string | null {
+  return /^https?:\/\/[^\s"'<>]+$/i.test(v) ? v.replace(/\/+$/, '') : null
 }
 
 /** The team colour as CSS variables: :root for light mode, dark mode the same way tokens.css switches. `html:root` outranks

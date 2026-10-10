@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, CloudDownload, Flag, Maximize2, Minimize2, RefreshCw, Save, Type, X } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowRightLeft, BedDouble, CloudDownload, Flag, Maximize2, Minimize2, PenLine, RefreshCw, Save, Type, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -20,7 +20,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, POSITIONS, type Game, type Registration } from '../data/types'
+import { isPA, POSITIONS, PRACTICE_PREFIX, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -28,8 +28,9 @@ import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
 import { RECORD_FIELDS_MIGRATION } from '../data/recordFields'
 import { lastOppLineup, oppBatterNames, oppPitcherOptions } from '../data/opponents'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../data/gameTime'
-import { hhmm, localDate } from '../lib/dates'
+import { addDays, hhmm, localDate } from '../lib/dates'
 import { HoldPicker } from '../components/ui/HoldPicker'
+import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSituations'
 import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
@@ -40,9 +41,13 @@ import {
 import { LastOppLineupButton, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
 import { describeChange } from '../record/summary'
 import { earnedAll } from '../record/earned'
-import { LiveBar, RunnerSheet, SubSheet } from '../record/LiveParts'
+import { LiveBar, PracticeTag, RunnerSheet, SubSheet } from '../record/LiveParts'
 
-import { readDraft, writeDraft } from '../record/draft'
+import { DRAFT_KEY, PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
+import { earlierPAs } from '../record/history'
+import { liveRestHint, md, mdWeek, pitchesToday, restStatus } from '../data/pitchRest'
+import { RestHint, useOutings } from '../components/ui/RestHint'
+import { ARCHIVE } from '../config/archive'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
@@ -63,13 +68,14 @@ function readTiebreakPref(): { on: boolean; bases: string } {
 }
 
 /* ------------------------------------------------------------------ setup */
-function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
+function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => void; /** 練習紀錄: no schedule, a PRACTICE- id, never saved */ practice?: boolean }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
   const opts = useFilterOptions()
   const today = localDate()
   const last = useMemo(() => playedGames(base).slice(-1)[0], [base])
-  const scheduled = useMemo(() => scheduledGames(base.games), [base.games])
+  // (a practice never takes a schedule entry: its id must stay PRACTICE-…)
+  const scheduled = useMemo(() => (practice ? [] : scheduledGames(base.games)), [base.games, practice])
   // the lineup drawn up on the 先發陣容 page, read first: the game it was drawn up for is the default game
   const stored = useMemo(() => readLineup(), [])
   // ?game= (賽程's 去紀錄, 先發陣容's 帶到紀錄比賽) picks that entry; then the lineup's own game; otherwise the next one coming up
@@ -84,7 +90,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const [lineupOpen, setLineupOpen] = useState(() => !saved)
   // a lineup drawn up for a 報名名單 whose game is not on the schedule yet: start with that tournament, so the same list applies
   const lineupReg = !initial && applied ? registrationByKey(registrations, stored?.regKey) : undefined
-  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
+  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : practice ? { id: '', date: today, tournament: '練習', opponent: '練習對手', homeAway: '主', innings: TEAM.innings, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
     if (saved) return toLineupSlots(saved)
     const slots: LineupSlot[] = Array.from({ length: 9 }, () => ({ name: '', pos: '' }))
@@ -142,16 +148,24 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
   const benchTag = (n: string) => (bench.includes(n) && !starting.has(n) ? '（板凳）' : undefined)
   const [error, setError] = useState<string | null>(null)
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
+  // 投手休息表: is the starter rested enough on this game's date (a scheduled game ahead is right too); a reminder only
+  const starterRest = (
+    <div className="flex flex-col gap-1 sm:self-center">
+      {pitcher.trim() && <RestHint name={pitcher.trim()} asOf={game.date || today} excludeGameId={game.id || undefined} />}
+      <Link to="/pitching/rest" className="self-start inline-flex items-center min-h-9 pointer-fine:min-h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2">看投手休息表</Link>
+    </div>
+  )
   const start = () => {
     if (!game.opponent.trim()) { setError('請填對手'); setInfoOpen(true); return }
     if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); setLineupOpen(true); return }
     if (!pitcher.trim()) { setError('請填先發投手'); setLineupOpen(true); return }
     // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
-    const id = fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
+    const id = practice ? `${PRACTICE_PREFIX}${game.date.replace(/-/g, '')}` : fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
     const slots = lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos }))
     // Setup may have promoted a bench player: the bench is whoever is left over
     const sp = pitcher.trim()
-    onStart(newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule }))
+    const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule })
+    onStart(practice ? { ...s, practice: true } : s)
   }
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
@@ -210,6 +224,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
               <span className="text-[13px] text-ink-2 min-w-0 flex-1">先發投手 <span className="font-medium text-ink">{pitcher || '—'}</span></span>
               <Button variant="ghost" size="sm" onClick={() => setLineupOpen(true)} className="shrink-0">修改打序</Button>
             </div>
+            {starterRest}
           </div>
         ) : <>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
@@ -223,6 +238,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
         </div>
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} tag={benchTag} placeholder="必填" className="w-full" /></Field>
+          {starterRest}
         </div>
         </>}
         <div className="mt-4 pt-4 border-t border-border">
@@ -237,7 +253,7 @@ function Setup({ onStart }: { onStart: (s: RecordState) => void }) {
         </div>
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
           {error && <span className="text-[13px] text-critical">{error}</span>}
-          <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">開始紀錄</Button>
+          <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">{practice ? '開始練習' : '開始紀錄'}</Button>
         </div>
       </Card>
     </div>
@@ -275,7 +291,7 @@ export function staleAgainstCloud(s: RecordState, store: { base: { batting: { ga
 /** tone: ok = in the cloud (or saved on this device), pending = a change not synced yet, failed = not saved */
 interface SaveState { tone: 'ok' | 'pending' | 'failed'; status: string; button: string | null; saving: boolean; onSave: () => void }
 
-function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus, large, onToggleLarge, oppHandOn }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void; large: boolean; onToggleLarge: () => void; /** the cloud has the 對方投手 columns (or there is no cloud) */ oppHandOn: boolean }) {
+function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus, large, onToggleLarge, oppHandOn, practice = false }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void; large: boolean; onToggleLarge: () => void; /** the cloud has the 對方投手 columns (or there is no cloud) */ oppHandOn: boolean; /** 練習紀錄 */ practice?: boolean }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
   const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
@@ -325,6 +341,30 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const pitchCount = useMemo(() => { const m = new Map<string, number>(); for (const p of state.pitching) m.set(p.pitcher, (m.get(p.pitcher) ?? 0) + p.pitches.length); return m }, [state.pitching])
   const currentCount = (pitchCount.get(state.pitcher) ?? 0) + (side === 'opp' ? state.pitches.length : 0)
   const countTone = currentCount >= params.pitchMax ? 'critical' : currentCount >= params.pitchWarn ? 'warning' : 'ok'
+  // 投手休息表 (Pitch Smart 建議): pitches today = this game + his other games today (a doubleheader). This game's own
+  // rows are left out of the saved games (in cloud mode they are synced there already), so nothing counts twice.
+  const allOutings = useOutings()
+  const otherToday = pitchesToday(state.pitcher, state.game.date, allOutings, state.game.id)
+  const restHint = liveRestHint(currentCount + otherToday)
+  // a pitcher out there before his rest is over (投手休息表 lists him as 休息中): say so first, in amber at least
+  const restNow = useMemo(() => restStatus(state.pitcher, allOutings, state.game.date, TEAM.pitchRest, { excludeGameId: state.game.id }), [state.pitcher, allOutings, state.game.date, state.game.id])
+  const restTone = restHint.tone === 'ok' && !restNow.available ? 'warning' : restHint.tone
+  // 換投 chips: who is still resting, who pitched lately, who pitched in another game today (reminders, never a lock)
+  const restNotes = useMemo(() => {
+    const m = new Map<string, { text: string; tone: 'muted' | 'warning' }>()
+    const date = state.game.date
+    for (const n of pitcherCands.names) {
+      const other = pitchesToday(n, date, allOutings, state.game.id)
+      if (other) { m.set(n, { text: `今天另一場 ${other} 球`, tone: 'warning' }); continue }
+      const st = restStatus(n, allOutings, date, TEAM.pitchRest, { excludeGameId: state.game.id })
+      const last = st.days[st.days.length - 1]
+      if (!st.available) m.set(n, { text: `休息中・${md(st.earliest)} 起`, tone: 'warning' })
+      else if (last && last.date >= addDays(date, -3)) m.set(n, { text: `${md(last.date)} 投 ${last.pitches} 球`, tone: 'muted' })
+    }
+    return m
+  }, [pitcherCands.names, allOutings, state.game.date, state.game.id])
+  // 這位打者今天前幾個打席 (plain text under who is up)
+  const earlier = useMemo(() => earlierPAs(state), [state])
   const batterSlot = state.lineup[state.slot]
   const choose = (result: string) => { setPlan(defaultPlan(state, result)); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
@@ -444,8 +484,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
         <Button variant="ghost" size="sm" icon={<Type />} onClick={onToggleLarge} aria-pressed={large} title="按鈕和字放大一級，大太陽下比較好看（這台裝置會記住）">{large ? '一般字' : '大字'}</Button>
         <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
-        <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>
-        <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">結束比賽</Button>
+        {!practice && <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>}
+        <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">{practice ? '結束練習' : '結束比賽'}</Button>
       </div>
     </div>
   )
@@ -453,7 +493,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   return (
     <div className="flex flex-col gap-4 md:gap-5">
       {/* the scoreboard keeps its size under 大字 (it is big already; the team name needs the width) */}
-      <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undo} canUndo={canUndo} focus={focus} />
+      {practice && (
+        <div role="note" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="min-w-0 flex-1 basis-60">練習模式：這場只存在這台裝置，不會同步到雲端、不會出現在即時比分、也不算進任何數據。</span>
+          <Link to="/guide/cheatsheet" className="inline-flex items-center min-h-9 pointer-fine:min-h-7 text-ink-2 hover:text-ink underline underline-offset-2">看小抄</Link>
+          <Link to="/record" className="inline-flex items-center min-h-9 pointer-fine:min-h-7 text-ink-2 hover:text-ink underline underline-offset-2">回到正式紀錄</Link>
+        </div>
+      )}
+      <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undo} canUndo={canUndo} focus={focus} practice={practice} />
       <div className="record-zoom grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
         <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 min-w-0">
           <Card still bodyClassName="p-4 md:p-5 flex flex-col gap-4">
@@ -469,7 +516,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               ) : (
                 <div className="flex items-center gap-3 min-w-0">
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
-                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">我隊投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? '・已達上限' : countTone === 'warning' ? '・注意' : ''}</span></div><div className="font-display text-[22px] font-bold text-ink leading-7 truncate">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
+                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">我隊投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
+                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="font-display text-[22px] font-bold text-ink leading-7 truncate">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
                     {state.oppNames && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
               )}
@@ -479,6 +527,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppPitcherOpen(true); setToast(null) }} title="對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
               </div>
             </div>
+
+            {earlier.length > 0 && (
+              <p className="text-[12px] text-muted leading-relaxed -mt-2">
+                {side === 'us' ? '今天' : `對方第 ${state.oppOrder} 棒今天`}{earlier.map((e) => `　第${e.n}打席 ${e.text}${e.vs ? `（投手 ${e.vs}）` : ''}`).join('')}
+              </p>
+            )}
 
             {posIssues.length > 0 && (
               <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 flex flex-col gap-1">
@@ -648,7 +702,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onAll={allUp}
         pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) } } : undefined} />
       <SubSheet open={tool !== 'none'} onClose={() => setTool('none')} mode={tool === 'pitcher' ? 'pitcher' : 'lineup'} onMode={(m) => openTool(m)} state={state} side={side}
-        batters={batterCands} pitchers={pitcherCands} pitchCount={pitchCount} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')}
+        batters={batterCands} pitchers={pitcherCands} pitchCount={pitchCount} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')} restNote={(n) => restNotes.get(n)}
         sub={sub} setSub={setSub} onPickPos={pickSubPos} canSub={canSub} onConfirmSub={confirmSub} fieldPos={fieldPos}
         newPitcher={newPitcher} setNewPitcher={setNewPitcher} pitcherHint={pitcherHint} onConfirmPitcher={() => { if (newPitcher) { act((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }}
         extras={toolExtras} />
@@ -687,14 +741,30 @@ const LARGE_KEY = 'bafin.record.large'
 const OPP_NAMES_KEY = 'bafin.record.oppNames'
 /** 結束比賽: decisions, 中繼, and the times captured when the dialog opened (the recorder may change them). */
 interface FinishForm { w: string; l: string; sv: string; holds: string[]; start: string; end: string; live: boolean }
+
+/**
+ * 紀錄比賽. /record?practice=1 is 練習紀錄: the same screen with its own progress on this device (PRACTICE_KEY), never
+ * synced, saved or shown on 即時比分, and open without signing in. Not in an archived copy of the site. The key remounts
+ * the screen, so the two progresses and their undo histories never mix.
+ */
 export function RecordPage() {
+  const [params] = useSearchParams()
+  const practice = !ARCHIVE && params.get('practice') === '1'
+  return <RecordScreen key={practice ? 'practice' : 'game'} practice={practice} />
+}
+
+function RecordScreen({ practice }: { practice: boolean }) {
   const navigate = useNavigate()
   const cloud = useDataStore((s) => s.cloud)
   const saveGame = useDataStore((s) => s.saveGame)
   const dayRosterSupported = useDataStore((s) => s.dayRosterSupported)
   const recordFields = useDataStore((s) => s.recordFields)
-  const oppHandOn = !cloud.configured || recordFields.oppPitcher
-  const [state, setState] = useState<RecordState | null>(() => readDraft())
+  // (a practice touches no cloud: it asks for the 對方投手 whatever the database has)
+  const oppHandOn = practice || !cloud.configured || recordFields.oppPitcher
+  const draftKey = practice ? PRACTICE_KEY : DRAFT_KEY
+  const [state, setState] = useState<RecordState | null>(() => readDraft(draftKey))
+  // practising while a real game is in progress on this device: say it is left alone
+  const [realDraft] = useState(() => (practice ? readDraft(DRAFT_KEY) : null))
   const [history, setHistory] = useState<RecordState[]>([])
   const [finish, setFinish] = useState<FinishForm | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
@@ -725,10 +795,10 @@ export function RecordPage() {
   // if the browser refuses (storage full), the cloud copy of the stats is only a cache: drop it and try again
   const [localOk, setLocalOk] = useState(true)
   useEffect(() => {
-    let ok = writeDraft(state)
-    if (!ok && cloud.configured) { dropCloudCache(); ok = writeDraft(state) }
+    let ok = writeDraft(state, draftKey)
+    if (!ok && cloud.configured && !practice) { dropCloudCache(); ok = writeDraft(state, draftKey) }
     setLocalOk(ok)
-  }, [state, cloud.configured])
+  }, [state, cloud.configured, draftKey, practice])
   // 2) in cloud mode every change is pushed a moment later: the progress (record_drafts: other devices and the 即時比分
   // page see the count and the runners) each time, the game's rows (the stats everyone loads) only when they changed
   const latest = useRef(state)
@@ -744,6 +814,7 @@ export function RecordPage() {
   const [stale, setStale] = useState<StaleDraft | null>(null)
   /** true once the latest state is in the cloud */
   const sync = (force = false): Promise<boolean> => {
+    if (practice || latest.current?.practice) return Promise.resolve(true)   // a practice never leaves this device
     if (force) rowsSaved.current = ''
     if (syncing.current) { again.current = true; return syncing.current }
     const run = (async () => {
@@ -775,7 +846,7 @@ export function RecordPage() {
     syncing.current = run
     return run
   }
-  const cloudSync = !!state && cloud.configured && !!cloud.user && cloud.isEditor
+  const cloudSync = !practice && !!state && cloud.configured && !!cloud.user && cloud.isEditor
   useEffect(() => {
     if (!cloudSync) return
     const t = window.setTimeout(() => void sync(), 1000)
@@ -790,30 +861,40 @@ export function RecordPage() {
   const [cloudDrafts, setCloudDrafts] = useState<CloudDraft<RecordState>[] | null>(null)
   const [draftsSupported, setDraftsSupported] = useState(true)
   const refreshDrafts = async () => {
-    if (!cloud.configured || !cloud.user) return
+    if (practice || !cloud.configured || !cloud.user) return
     try { const d = await listCloudDrafts<RecordState>(); if (d === null) setDraftsSupported(false); else setCloudDrafts(d) } catch { /* offline: ignore */ }
   }
   useEffect(() => { void refreshDrafts() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [cloud.user])
-  const newerCloud = state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
+  const newerCloud = !practice && state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
   const resume = (d: CloudDraft<RecordState>) => { trustedFor.current = null; setStale(null); setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
   const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher)])].filter(Boolean) : []), [state])
   const relievers = useMemo(() => (state ? reliefPitchers(state) : []), [state])
+  // 中繼 the score suggests (MLB's hold: came in with a save situation, got an out, left still ahead); never picked for him
+  const reliefs = useMemo(() => (state ? reliefEntries(state.pitching, { homeAway: state.game.homeAway, ourLine: runsByInning(state.batting) }) : []), [state])
   const openFinish = () => { if (state) setFinish({ w: '', l: '', sv: '', holds: [], ...finishTimes(state) }) }
   // one pitcher gets only one of 勝投／中繼／救援: picking him as 勝投 or 救援 takes him off 中繼
   const pickDecision = (k: 'w' | 'l' | 'sv', v: string) => setFinish((f) => (f ? { ...f, [k]: v, holds: k === 'l' ? f.holds : f.holds.filter((h) => h !== v) } : f))
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
 
-  if (!canEdit) {
+  if (!canEdit && !practice) {
     return (
       <>
         <PageHeader title="紀錄比賽" description="紀錄員登入後就能在這裡逐球紀錄，不必再用 Excel 匯入。" />
-        <div className="max-w-md"><CloudPanel /></div>
+        <div className="max-w-md flex flex-col gap-4">
+          <CloudPanel />
+          {!ARCHIVE && (
+            <Card still bodyClassName="p-4 flex flex-col gap-3">
+              <p className="text-[13px] text-ink-2 leading-relaxed">還沒有紀錄員帳號？可以先用練習模式熟悉按鈕（不用登入、不會存檔）</p>
+              <Button variant="outline" size="sm" icon={<PenLine />} to="/record?practice=1" className="self-start">開始練習</Button>
+            </Card>
+          )}
+        </div>
       </>
     )
   }
   const saveDraft = async (): Promise<boolean> => {
-    if (!state) return false
+    if (!state || practice) return false
     setMsg(null)
     if (cloud.configured) {
       // the autosave, now and in full (another device then gets the latest substitutions too)
@@ -828,7 +909,7 @@ export function RecordPage() {
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)); return false }
   }
   const abandon = () => {
-    if (!state || !window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) return
+    if (!state || practice || !window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) return
     const id = state.game.id
     writeDraft(null); setState(null); setHistory([])
     // after a save still on its way, so it cannot put the progress back
@@ -836,7 +917,8 @@ export function RecordPage() {
   }
   // with the cloud every play is saved by itself: a status line, and a button only to retry a failed save
   const pending = !!state && state.updatedAt !== synced
-  const save: SaveState = cloud.configured
+  const save: SaveState = practice ? { tone: 'ok', status: '練習中：不會存檔', button: null, saving: false, onSave: () => undefined }
+    : cloud.configured
     ? saveFailed ? { tone: 'failed', status: localOk ? '同步失敗：最新進度只在這台裝置' : '同步失敗，這台裝置也存不下：先別關掉這頁', button: '重試儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
       : { tone: pending ? 'pending' : 'ok', status: pending ? '尚未同步…' : autoSaved ? `已同步到雲端 ${autoSaved}` : '每次點選都會自動同步到雲端', button: null, saving: cloud.pushing, onSave: () => void saveDraft() }
     : localOk ? { tone: 'ok', status: '進度存在這台裝置；關掉再打開這頁可以接續', button: '儲存', saving: cloud.pushing, onSave: () => void saveDraft() }
@@ -844,6 +926,15 @@ export function RecordPage() {
   const complete = async () => {
     if (!state || !finish) return
     setMsg(null)
+    if (practice || state.practice) {
+      // nothing is saved: back to the practice setup with what was recorded
+      const sc = score(state)
+      const pas = state.batting.filter(isPA).length + state.pitching.filter(isPA).length
+      writeDraft(null, draftKey); setState(null); setHistory([]); setFinish(null)
+      setMsg(`練習結束，沒有存檔：${TEAM_NAME} ${sc.us}：${sc.opp} ${state.game.opponent}，共記了 ${pas} 個打席。`)
+      document.scrollingElement?.scrollTo?.({ top: 0 })
+      return
+    }
     try {
       // the actual first-pitch time replaces the schedule's planned one
       const w = await saveGame(toGameEdit({ ...state, finished: true }, { winningPitcher: finish.w || undefined, losingPitcher: finish.l || undefined, savePitcher: finish.sv || undefined, holds: finish.holds.length ? finish.holds : undefined, time: finish.start || undefined, endTime: finish.end || undefined }))
@@ -858,8 +949,12 @@ export function RecordPage() {
   return (
     <>
       {/* during a game the scoreboard bar is the top of the page (the top bar already says 紀錄比賽) */}
-      {state ? <h1 className="sr-only">紀錄比賽：{state.game.date} vs {state.game.opponent}</h1>
-        : <PageHeader title="紀錄比賽" description="填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。" />}
+      {state ? <h1 className="sr-only">{practice ? '練習紀錄' : '紀錄比賽'}：{state.game.date} vs {state.game.opponent}</h1>
+        : practice ? <PageHeader title="練習紀錄" description="和正式紀錄一樣的畫面，但不會存檔：記錯也沒關係。"
+            actions={<><Button variant="ghost" size="sm" to="/guide/cheatsheet">紀錄員小抄</Button><Button variant="ghost" size="sm" to="/record">回到正式紀錄</Button></>} />
+        : <PageHeader title="紀錄比賽" description="填好比賽資訊與先發，就能逐球紀錄；每個打席會自動寫成和總表一樣的格式。"
+            actions={!ARCHIVE && <><Button variant="ghost" size="sm" icon={<PenLine />} to="/record?practice=1" title="和正式紀錄一樣的畫面，但不會存檔">練習紀錄</Button><Button variant="ghost" size="sm" icon={<BedDouble />} to="/pitching/rest">投手休息表</Button></>} />}
+      {practice && !state && realDraft && <div className="text-[13px] text-ink-2">這台裝置還有一場正式比賽的進度（{md(realDraft.game.date)} vs {realDraft.game.opponent}），練習不會動到它。</div>}
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       {!state && cloudDrafts && cloudDrafts.length > 0 && (
         <Card title="雲端有進行中的比賽" subtitle="在另一台裝置開始的紀錄，可以在這裡接續" flush>
@@ -884,8 +979,8 @@ export function RecordPage() {
           <Button size="sm" onClick={() => resume(newerCloud)}>載入較新進度</Button>
         </div>
       )}
-      {cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
-      {cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
+      {!practice && cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
+      {!practice && cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
       {cloud.configured && !oppHandOn && state && <div className="text-[12px] text-muted">對方投手（左投／右投）要等管理員在 Supabase 執行 {RECORD_FIELDS_MIGRATION} 才會記（比分與打席照常儲存）</div>}
       {state && stale && stale.gameId === state.game.id ? (
         <Card title="這份紀錄進度比雲端舊" subtitle={`${state.game.date} vs ${state.game.opponent}`}>
@@ -901,22 +996,22 @@ export function RecordPage() {
             </div>
           </div>
         </Card>
-      ) : !state ? <Setup onStart={(s) => { setState(s); setHistory([]); document.scrollingElement?.scrollTo?.({ top: 0 }) }} /> : (
+      ) : !state ? <Setup practice={practice} onStart={(s) => { setState(s); setHistory([]); setMsg(null); document.scrollingElement?.scrollTo?.({ top: 0 }) }} /> : (
         <>
           {focus ? createPortal(
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
-                <div className="flex items-center gap-3 text-[12px] text-muted"><span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className={cx('truncate', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
-                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} />
+                <div className="flex items-center gap-3 text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className={cx('truncate', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
+                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} practice={practice} />
               </div>
             </div>, document.body)
-            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus={false} onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} />}
+            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus={false} onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} practice={practice} />}
         </>
       )}
-      <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel="結束比賽" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom">
+      <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel={practice ? '結束練習' : '結束比賽'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom">
         {finish && state && (
           <div className="p-5 flex flex-col gap-4">
-            <div><div className="text-[16px] font-semibold text-ink">結束比賽</div><div className="text-[13px] text-ink-2 mt-1 tnum">{TEAM_NAME} {score(state).us} : {score(state).opp} {state.game.opponent}・{state.inning} 局{state.runners.length ? '・壘上跑者會記為殘壘' : ''}</div></div>
+            <div><div className="text-[16px] font-semibold text-ink">{practice ? '結束練習' : '結束比賽'}</div><div className="text-[13px] text-ink-2 mt-1 tnum">{TEAM_NAME} {score(state).us} : {score(state).opp} {state.game.opponent}・{state.inning} 局{state.runners.length ? '・壘上跑者會記為殘壘' : ''}</div></div>
             <div className="flex flex-col gap-1.5">
               <span className="text-xs font-medium text-ink-2">比賽時間</span>
               {/* (two columns on phones: a time input with 下午 needs the width; the total goes under them) */}
@@ -938,12 +1033,12 @@ export function RecordPage() {
             {relievers.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs font-medium text-ink-2">中繼（可複選，選填）</span>
-                <HoldPicker names={relievers} value={finish.holds} onChange={(holds) => setFinish({ ...finish, holds })} disabled={[finish.w, finish.sv]} />
-                <span className="text-[12px] text-muted">勝投、中繼、救援只能擇一</span>
+                <HoldPicker names={relievers} value={finish.holds} onChange={(holds) => setFinish({ ...finish, holds })} disabled={[finish.w, finish.sv]} suggested={holdCandidates(reliefs, [finish.w, finish.sv])} />
+                <span className="text-[12px] text-muted">建議：救援情境上場、拿到至少 1 個出局、退場時仍領先（勝投、救援不算）。勝投、中繼、救援只能擇一</span>
               </div>
             )}
-            <p className="text-[12px] text-muted">儲存後會跳到這場比賽的頁面；之後仍可用「修改資料」調整。</p>
-            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFinish(null)}>再想想</Button><Button variant="primary" onClick={() => void complete()} disabled={cloud.pushing}>儲存並結束</Button></div>
+            <p className="text-[12px] text-muted">{practice ? '練習不會存檔：結束後回到練習設定頁。' : '儲存後會跳到這場比賽的頁面；之後仍可用「修改資料」調整。'}</p>
+            <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setFinish(null)}>再想想</Button><Button variant="primary" onClick={() => void complete()} disabled={!practice && cloud.pushing}>{practice ? '結束（不存檔）' : '儲存並結束'}</Button></div>
           </div>
         )}
       </Sheet>

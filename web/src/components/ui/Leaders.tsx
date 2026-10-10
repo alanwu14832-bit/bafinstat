@@ -16,23 +16,46 @@ export interface Leader {
   to: string
 }
 
+/** A tie-break: compared only among the rows tied on the main value (null = worst). */
+export interface TieBreak<T> { get: (r: T) => number | null | undefined; low?: boolean; label: string }
+export interface LeaderResult { value: number; names: string[]; /** how many were tied before the tie-breaks */ tied?: number; /** the tie-break that decided it */ by?: string }
+
+/** Equal up to float noise (an ERA of 3 ER / 10 IP and 1 ER / 3⅓ IP is one number). */
+const same = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b))
+
 /**
  * The leader in one column: highest (or lowest) value among the rows that qualify; ties share it. Null when nobody
- * qualifies or the best is nothing to lead in (0 home runs, 0 steals).
+ * qualifies or the best is nothing to lead in (0 home runs, 0 steals). With `ties`, rows sharing the best value are
+ * narrowed by each tie-break in order; the result then says how many were tied and which tie-break decided it.
  */
-export function leaderOf<T extends { name: string }>(rows: T[], get: (r: T) => number | null | undefined, opts: { low?: boolean; qualifies?: (r: T) => boolean; allowZero?: boolean } = {}): { value: number; names: string[] } | null {
+export function leaderOf<T extends { name: string }>(rows: T[], get: (r: T) => number | null | undefined, opts: { low?: boolean; qualifies?: (r: T) => boolean; allowZero?: boolean; ties?: TieBreak<T>[] } = {}): LeaderResult | null {
   let best: number | null = null
-  let names: string[] = []
+  let top: T[] = []
   for (const r of rows) {
     if (opts.qualifies && !opts.qualifies(r)) continue
     const v = get(r)
     if (v === null || v === undefined || !Number.isFinite(v)) continue
-    if (best === null || (opts.low ? v < best : v > best)) { best = v; names = [r.name] }
-    else if (v === best) names.push(r.name)
+    if (best !== null && same(v, best)) top.push(r)
+    else if (best === null || (opts.low ? v < best : v > best)) { best = v; top = [r] }
   }
   if (best === null || (!opts.allowZero && !opts.low && best <= 0)) return null
-  return { value: best, names }
+  if (!opts.ties?.length || top.length < 2) return { value: best, names: top.map((r) => r.name) }
+  const tied = top.length
+  let by: string | undefined
+  for (const t of opts.ties) {
+    const vals = top.map((r) => t.get(r)).map((v) => (v === null || v === undefined || !Number.isFinite(v) ? null : v))
+    const ok = vals.filter((v): v is number => v !== null)
+    if (!ok.length) continue
+    const b = t.low ? Math.min(...ok) : Math.max(...ok)
+    const next = top.filter((_, i) => vals[i] !== null && same(vals[i]!, b))
+    if (next.length < top.length) { top = next; by = t.label }
+    if (top.length === 1) break
+  }
+  return { value: best, names: top.map((r) => r.name), tied, ...(by ? { by } : {}) }
 }
+
+/** 「同率 2 人，比長打率」 for a leader decided by a tie-break (empty otherwise). */
+export const tieNote = (l: LeaderResult | null) => (l?.by && l.tied ? `同率 ${l.tied} 人，比${l.by}` : '')
 
 /**
  * 領先者: who leads the page's key numbers, at the top of 打擊 / 投球 / 守備 so the page has a main character before

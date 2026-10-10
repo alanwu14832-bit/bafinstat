@@ -16,6 +16,9 @@ const arrayBuf = (b: Buffer) => b.buffer.slice(b.byteOffset, b.byteOffset + b.by
 const template = XLSX.read(new Uint8Array(templateBuf()), { type: 'array' })
 const headerRow = (ws: XLSX.WorkSheet, key: string) =>
   (XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }).slice(0, 12).find((r) => r.some((c) => String(c).trim() === key)) ?? []).map((c) => String(c).trim())
+// formula cells have no cached value until a spreadsheet recalculates them: read as stubs (slow, so once)
+let stubbed: XLSX.WorkBook | null = null
+const withStubs = () => (stubbed ??= XLSX.read(new Uint8Array(templateBuf()), { type: 'array', sheetStubs: true }))
 const KEY: Record<string, string> = { 比賽清單: '比賽ID', 球員名單: '姓名', 報名名單: '球員', 打席紀錄: '打者', 投球紀錄: '投手', 守備紀錄: '球員' }
 const regs: Registration[] = [{ season: 2026, tournament: '大專盃', players: ['蘇柏愷', '許振謙'] }, { season: 2025, tournament: '友誼賽', players: ['王廷宇'] }]
 
@@ -29,6 +32,18 @@ describe('公版 Excel keeps up with the website', () => {
       for (const col of want) expect(have, `公版「${name}」缺少欄位「${col}」`).toContain(col)
     }
   })
+  it('打席紀錄 has the 優質打席 kinds 兩好球纏鬥 and 6球以上, and 優質打席 counts 兩好球纏鬥 (QAB, 2026-10)', () => {
+    const ws = withStubs().Sheets['打席紀錄']
+    const head = headerRow(ws, '打者')
+    expect(head).toContain('兩好球纏鬥')
+    expect(head).toContain('6球以上')
+    const rowOfHead = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }).findIndex((r) => r.some((c) => String(c).trim() === '打者'))
+    const col = (name: string) => XLSX.utils.encode_col(head.indexOf(name))
+    const qab = ws[`${col('優質打席')}${rowOfHead + 2}`]
+    expect(qab?.f, '優質打席 is a formula').toBeTruthy()
+    expect(qab.f).toContain(`${col('兩好球纏鬥')}${rowOfHead + 2}`)
+    expect(qab.f).toContain(`${col('6球以上')}${rowOfHead + 2}`)
+  }, 30000)
   it('has the 當日登錄名單 cells in the single-game template', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')
@@ -38,7 +53,7 @@ describe('公版 Excel keeps up with the website', () => {
   })
   it('does not count a 突破僵局 runner as a plate appearance (打席 helper), and offers it in the 打擊結果 list', () => {
     // formula cells without a cached value are stubs
-    const withFormulas = XLSX.read(new Uint8Array(templateBuf()), { type: 'array', sheetStubs: true })
+    const withFormulas = withStubs()
     for (const [sheet, key] of [['打席紀錄', '打者'], ['投球紀錄', '投手']] as const) {
       const ws = withFormulas.Sheets[sheet]
       const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
@@ -50,7 +65,7 @@ describe('公版 Excel keeps up with the website', () => {
     const lists = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['設定'], { header: 1, defval: '' })
     const col = lists.flatMap((row) => row.map((v, i) => [String(v).trim(), i] as const)).find(([v]) => v === '打擊結果')![1]
     expect(lists.map((row) => String(row[col] ?? '').trim())).toContain('突破僵局')
-  })
+  }, 30000)
   it('an empty 報名名單 sheet imports as no lists', () => {
     expect(parseWorkbook(arrayBuf(templateBuf())).registrations).toEqual([])
   })

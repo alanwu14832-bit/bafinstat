@@ -7,6 +7,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import type { Editor } from './editors'
 import type { BattingPA, Dataset, FieldingLine, Game, GameDayRoster, HomeAway, OppHand, PitchingPA, Player, PlayEvent } from './types'
+import { isPracticeId } from './types'
 import { normalizeDataset } from './normalize'
 import { parseDayRoster } from './gameRoster'
 
@@ -354,6 +355,7 @@ export interface CloudDraft<T = unknown> { game_id: string; state: T; updated_by
 const draftsMissing = (e: { message: string; code?: string } | null) => !!e && (e.code === '42P01' || /record_drafts/.test(e.message))
 /** Upsert the in-progress state. Silently a no-op when the table has not been created yet. */
 export async function saveCloudDraft(gameId: string, state: unknown, _email?: string | null): Promise<boolean> {
+  if (isPracticeId(gameId)) return true   // 練習紀錄 never leaves the device
   // updated_by is stamped by the database with the recorder's name (the live page reads this table publicly)
   const { error } = await supabase().from('record_drafts').upsert({ game_id: gameId, state, updated_at: new Date().toISOString() }, { onConflict: 'game_id' })
   if (draftsMissing(error)) return false

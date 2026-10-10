@@ -34,6 +34,9 @@ STAT_DICTIONARY = [
     dict(key="CS", zh="盜壘失敗", en="Caught Stealing", group="打擊", formula="盜壘失敗欄加總", status="新增", priority="P1", note="舊表只記『壘死』，無法算盜壘成功率"),
     dict(key="壘死", zh="壘死", en="Outs on Bases (baserunning mistakes)", group="打擊", formula="壘死欄加總：自己跑壘失誤出局", status="新增", priority="P2", note="衝過頭、飛球被雙殺回不去、離壘被觸殺等；被守備封殺／刺殺不算（記在壘上出局）"),
     dict(key="SB%", zh="盜壘成功率", en="Stolen Base %", group="打擊", formula="SB ÷ (SB + CS)", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
+    # 紀錄簿・生涯 (batch 5): streaks over every game, computed on the website only
+    dict(key="HitStreak", zh="連續安打", en="Hitting Streak", group="打擊", formula="連續幾場出賽都有安打（依比賽日期）", status="新增", priority="P2", note="MLB 9.23(b)：沒有打數也沒有犧飛的那場（只有保送、觸身、犧觸、妨礙或代跑）不算也不中斷；只有犧飛的那場會中斷。網站計算，總表不算"),
+    dict(key="OBStreak", zh="連續上壘", en="On-Base Streak", group="打擊", formula="連續幾場出賽都有上壘（H + BB + HBP > 0）", status="新增", priority="P2", note="只代跑、沒有打席的那場不算也不中斷。網站計算，總表不算"),
     # ---------------- 打擊 rate ----------------
     dict(key="AVG", zh="打擊率", en="Batting Average", group="打擊", formula="H ÷ AB", status="新增", priority="P0", note="舊表未計算"),
     dict(key="OBP", zh="上壘率", en="On-Base Percentage", group="打擊", formula="(H + BB + HBP) ÷ (AB + BB + HBP + SF)", status="新增", priority="P0", note=""),
@@ -44,11 +47,14 @@ STAT_DICTIONARY = [
     dict(key="BABIP", zh="場內球安打率", en="Batting Avg on Balls In Play", group="打擊", formula="(H − HR) ÷ (AB − SO − HR + SF)", status="新增", priority="P1", note="判斷運氣成分"),
     dict(key="wOBA", zh="加權上壘率", en="Weighted On-Base Average", group="打擊", formula="(wBB×(BB−IBB) + wHBP×HBP + w1B×1B + w2B×2B + w3B×3B + wHR×HR) ÷ (AB + BB − IBB + SF + HBP)", status="新增", priority="P1", note="權重見『設定』工作表（FanGraphs 線性權重，可更新）"),
     dict(key="wRC+", zh="加權得分創造指數", en="Weighted Runs Created Plus", group="打擊", formula="100 × ((wOBA − 隊wOBA) ÷ 1.232 + 隊R/PA) ÷ 隊R/PA", status="新增", priority="P1", note="以同一篩選範圍的全隊為基準（100 = 隊平均，130 = 多創造三成得分）；1.232 為 FanGraphs 2025 wOBA scale；不做球場修正"),
+    # ---------------- 獲勝機率模型 (網站專屬) ----------------
+    dict(key="WPA", zh="獲勝機率增加值", en="Win Probability Added", group="打擊", formula="每個打席（含自己的盜壘、盜壘失敗、牽制出局、壘死）前後我隊獲勝機率的差，加總；投手是他投球期間的變化", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。+1.00 約等於多贏一場；描述發生了什麼，不代表預測能力"),
+    dict(key="RE24", zh="局面得分增值", en="Run Expectancy (24 base-out states)", group="打擊", formula="RE(打席後局面) − RE(打席前局面) + 這個打席的得分；投手取負號", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。RE 依本隊比賽 24 種壘上與出局局面推算，不看比分"),
     dict(key="K%", zh="三振率", en="Strikeout Rate", group="打擊", formula="SO ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB%", zh="保送率", en="Walk Rate", group="打擊", formula="BB ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB/K", zh="保送三振比", en="Walk-to-Strikeout", group="打擊", formula="BB ÷ SO", status="新增", priority="P2", note=""),
     dict(key="RISP_AVG", zh="得點圈打擊率", en="AVG with RISP", group="打擊", formula="得點圈安打 ÷ 得點圈打數（打席前二/三壘有人）", status="新增", priority="P1", note="需要新欄位『壘上(前)』；CPBL 官方紀錄項目"),
-    dict(key="QAB%", zh="優質打席率", en="Quality At-Bat %", group="打擊", formula="優質打席 ÷ PA；優質打席 = 安打、保送、觸身、犧打、有打點、6球以上、或強勁擊球", status="新增", priority="P1", note="業餘球隊常用的過程指標"),
+    dict(key="QAB%", zh="優質打席率", en="Quality At-Bat %", group="打擊", formula="優質打席 ÷ PA；優質打席 = 安打、保送、觸身、犧打、有打點、6球以上、兩好球後又看 3 球以上（含最後一球）、或強勁擊球", status="新增", priority="P1", note="業餘球隊常用的過程指標；2026-10 起加入『兩好球後 3 球』（GameChanger 的定義），舊比賽一起重算，QAB% 會略升"),
     # ---------------- 打擊 process (from pitch-by-pitch) ----------------
     dict(key="P/PA", zh="每打席用球數", en="Pitches per PA", group="打擊過程", formula="用球數 ÷ PA", status="新增", priority="P1", note="從逐球紀錄取得"),
     dict(key="Swing%", zh="揮棒率", en="Swing Rate", group="打擊過程", formula="揮棒(SS+F+IP) ÷ 總球數", status="新增", priority="P2", note=""),
@@ -63,6 +69,8 @@ STAT_DICTIONARY = [
     dict(key="Hard%", zh="強勁擊球率", en="Hard-Hit % (proxy)", group="打擊過程", formula="強度=強 的場內球 ÷ 場內球", status="新增", priority="P1", note="Statcast Hard-Hit%(≥95 mph) 的人工近似"),
     dict(key="Pull%", zh="拉打率", en="Pull %", group="打擊過程", formula="依落點與打者慣用手計算（右打 5/6/7 與縫隙 56/78 為拉打；1/2/8/46 為中間）", status="新增", priority="P2", note="需要名單中的打擊慣用手"),
     dict(key="Oppo%", zh="反方向率", en="Opposite Field %", group="打擊過程", formula="右打 3/4/9 為反方向", status="新增", priority="P2", note=""),
+    dict(key="兩好球纏鬥", zh="兩好球後纏鬥", en="Two-Strike Battles", group="打擊過程", formula="球數到兩好球後，又看了 3 球以上（含最後一球）的打席數", status="新增", priority="P2", note="算優質打席的一種（GameChanger 的定義）；逐球要從『球1』起連續填"),
+    dict(key="6球以上", zh="6 球以上打席", en="6+ Pitch PAs", group="打擊過程", formula="用球數 ≥ 6 的打席數", status="新增", priority="P2", note="算優質打席的一種"),
     # ---------------- 投球 ----------------
     dict(key="pG", zh="出賽", en="Games Pitched", group="投球", formula="出現在投球紀錄的比賽數", status="新增", priority="P0", note=""),
     dict(key="GS", zh="先發", en="Games Started", group="投球", formula="該場第一位投手", status="新增", priority="P1", note=""),
@@ -80,7 +88,7 @@ STAT_DICTIONARY = [
     dict(key="pH", zh="被安打", en="Hits Allowed", group="投球", formula="", status="現有", priority="P0", note=""),
     dict(key="pHR", zh="被全壘打", en="Home Runs Allowed", group="投球", formula="", status="現有", priority="P0", note=""),
     dict(key="pR", zh="失分", en="Runs Allowed", group="投球", formula="結果代碼 R + ER", status="現有", priority="P0", note=""),
-    dict(key="ER", zh="責失分", en="Earned Runs", group="投球", formula="結果代碼 ER", status="現有", priority="P0", note="規則 9.16：去掉失誤與捕逸重建半局，三出局前回本壘的才算；網站逐球紀錄自動判定，可手動改"),
+    dict(key="ER", zh="自責分", en="Earned Runs", group="投球", formula="結果代碼 ER", status="現有", priority="P0", note="規則 9.16：去掉失誤與捕逸重建半局，三出局前回本壘的才算；網站逐球紀錄自動判定，可手動改"),
     dict(key="WP", zh="暴投", en="Wild Pitches", group="投球", formula="暴投欄加總", status="新增", priority="P1", note="CPBL 官方紀錄項目"),
     dict(key="BK", zh="投手犯規", en="Balks", group="投球", formula="跑壘事件裡的投手犯規（一次犯規壘上跑者各進一壘，算一次）", status="新增", priority="P2", note="CPBL 官方紀錄項目；只在網站計算，Excel 總表不算（公式數不出次數）"),
     dict(key="PK", zh="牽制出局", en="Pickoffs", group="投球", formula="牽制出局欄加總", status="新增", priority="P2", note=""),
@@ -106,7 +114,20 @@ STAT_DICTIONARY = [
     dict(key="P/IP", zh="每局用球數", en="Pitches per Inning", group="投球", formula="PC ÷ IP", status="新增", priority="P1", note="投手效率"),
     dict(key="P/BF", zh="每打席用球數", en="Pitches per Batter", group="投球", formula="PC ÷ BF", status="新增", priority="P2", note=""),
     dict(key="LOB%", zh="殘壘率", en="Left On Base %", group="投球", formula="(H + BB + HBP − R) ÷ (H + BB + HBP − 1.4×HR)", status="新增", priority="P2", note=""),
+    # site-only: they need the whole game (runners, score) that the 總表 formulas cannot follow
+    dict(key="GO/AO", zh="滾飛出局比", en="Ground Outs / Air Outs", group="投球", formula="打者滾地球出局 ÷ 飛球出局（內滾、內飛、外飛、界外飛、犧飛、雙殺；依軌跡 G 為滾地，F/P/L 為飛球；沒填軌跡依結果推定）", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；不含三振與犧牲觸擊"),
+    dict(key="IR", zh="繼承跑者", en="Inherited Runners", group="投球", formula="救援投手在半局中途上場時，壘上已經有的跑者人數", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；需要壘上(前)，半局一開始就換投不算繼承"),
+    dict(key="IRS%", zh="繼承跑者失分率", en="Inherited Runners Scored %", group="投球", formula="繼承的跑者在他投球時回來得分的人數 ÷ IR", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；那些分數仍算在前一位投手身上"),
+    dict(key="BS", zh="救援失敗", en="Blown Saves", group="投球", formula="在救援情境上場（領先 1–3 分，或追平分已在壘上、打擊區或下一棒），投球時被追平或逆轉的次數；依比分推算（MLB 定義）", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；不用『連投 3 局』那一條；沒有壘上(前)的中途換投不判斷"),
+    dict(key="BBS%", zh="保送得分率", en="Walks That Scored %", group="投球", formula="結果代碼 R/ER 的保送、故四 ÷ BB", status="新增", priority="P2", note="網站計算（Excel 總表沒有）"),
+    dict(key="LOO%", zh="首位打者出局率", en="Leadoff Out %", group="投球", formula="每局第一位打者被解決出局 ÷ 面對的首位打者", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；突破僵局的跑者不算打者，不死三振上壘不算出局"),
+    dict(key="123INN", zh="三上三下", en="1-2-3 Innings", group="投球", formula="一個人投完的半局，剛好三位打者、三人出局、開局壘上沒人", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；突破僵局的半局不算"),
+    dict(key="13P%", zh="13 球內結束的局", en="Innings of 13 Pitches or Fewer %", group="投球", formula="一個人投完、每位打者都有記逐球的半局中，用球 ≤ 13 的局數 ÷ 這種半局數", status="新增", priority="P2", note="網站計算（Excel 總表沒有）；沒記逐球的半局不算（分母也不算）；第三個出局發生在下一位打者的打席時（例如牽制），那幾球沒有紀錄，可能略為高估"),
+    dict(key="QualPA", zh="規定打席", en="Qualifying Plate Appearances", group="打擊", formula="隊內：PA ≥ 1；大專規程：PA ≥ 2.1 × 球隊場數（小數進位）", status="新增", priority="P1", note="網站計算（Excel 總表沒有）；大專規程同率時：打擊率比長打率、再比上壘率；打點比打數少、再比壘打數；全壘打比打數少、再比打點"),
+    dict(key="QualIP", zh="規定投球局", en="Qualifying Innings", group="投球", formula="隊內：IP ≥ 0.7 × 場數（進位，至少 1）；大專規程：IP ≥ 1 × 場數", status="新增", priority="P1", note="網站計算（Excel 總表沒有）；大專規程防禦率同率時：比投球局數（多的優先）、再比被安打（少的優先）"),
     dict(key="QS", zh="優質先發", en="Quality Start", group="投球", formula="先發且 IP ≥ 每場局數×2/3 且 ER ≤ 3", status="新增", priority="P2", note="依 7 局賽制調整為 IP ≥ 5"),
+    # 紀錄簿・生涯 (batch 5)
+    dict(key="ScorelessIP", zh="連續無失分局數", en="Scoreless Innings Streak", group="投球", formula="依比賽、局數順序，沒有被記失分（R／ER）的局把投出的出局數加起來；被記失分的局歸零", status="新增", priority="P2", note="逐局計算：被記失分那一局在失分前投出的出局數也不算，所以可能比實際略少。網站計算，總表不算"),
     # ---------------- 守備 ----------------
     dict(key="fG", zh="守備出賽", en="Games", group="守備", formula="守備紀錄列數", status="新增", priority="P1", note=""),
     dict(key="Inn", zh="守備局數", en="Innings", group="守備", formula="", status="新增", priority="P1", note=""),
@@ -125,6 +146,9 @@ STAT_DICTIONARY = [
     dict(key="WinPct", zh="勝率", en="Winning %", group="球隊", formula="W ÷ (W + L)", status="新增", priority="P0", note=""),
     dict(key="RunDiff", zh="得失分差", en="Run Differential", group="球隊", formula="得分 − 失分", status="新增", priority="P0", note=""),
     dict(key="LOB", zh="殘壘", en="Left On Base", group="球隊", formula="結果代碼 L", status="現有", priority="P1", note=""),
+    # ---------------- 獲勝機率模型 (網站專屬) ----------------
+    dict(key="LI", zh="關鍵程度", en="Leverage Index", group="球隊", formula="這個局面下一個打席獲勝機率平均可能變動多少 ÷ 全部打席的平均（1.0 = 一般情況）", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。2 以上是很關鍵的時刻"),
+    dict(key="WE", zh="獲勝機率", en="Win Expectancy", group="球隊", formula="依局數、比分、出局、壘上，由本隊比賽建立的模型估計我隊最後贏球的機率（假設兩隊實力相當）", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。和「勝率」（勝 ÷（勝＋敗））不同"),
 ]
 
 # fix a stray typo guard above (kept simple on purpose)

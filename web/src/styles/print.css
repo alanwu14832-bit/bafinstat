@@ -1,0 +1,89 @@
+/* 列印版面 (/print/…): a white sheet of A4 on screen, the same sheet on paper. Imported by pages/Print.tsx only, and
+   every rule is scoped to the print classes, so no other page changes. Fixed black-on-white colours (not the theme
+   tokens): a printout in dark mode is still white paper. @page (size, orientation) is set by PrintLayout. */
+.print-stage {
+  min-height: 100vh;
+  background: #e9e9ec;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  overflow-x: hidden;
+}
+.print-toolbar { width: 100%; max-width: 1180px; }
+
+.paper {
+  --paper-ink: #111;
+  --paper-muted: #555;
+  --paper-line: #222;
+  --paper-hair: #9a9a9a;
+  box-sizing: border-box;
+  width: 297mm;
+  min-height: 210mm;
+  padding: 8mm;
+  background: #fff;
+  color: var(--paper-ink);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 8pt;
+  line-height: 1.25;
+  transform-origin: top left;
+  color-scheme: light;
+}
+.paper.portrait { width: 210mm; min-height: 297mm; }
+.paper h1 { font-size: 13pt; font-weight: 700; margin: 0; }
+.paper h2 { font-size: 10pt; font-weight: 700; margin: 3mm 0 1.5mm; }
+.paper .muted { color: var(--paper-muted); }
+.paper .num { font-variant-numeric: tabular-nums; text-align: right; }
+.paper table { border-collapse: collapse; width: 100%; }
+.paper th, .paper td { border: 0.25mm solid var(--paper-hair); padding: 0.6mm 1mm; vertical-align: middle; }
+.paper thead th { background: #efefef; font-weight: 600; }
+.paper tr.total td { font-weight: 700; border-top: 0.5mm solid var(--paper-line); }
+.paper .foot { margin-top: 3mm; font-size: 7pt; color: var(--paper-muted); }
+
+/* 記分表 */
+.paper .sheet-grid td.cell { padding: 0; height: 11.5mm; /* = .pa-stack */ width: 17mm; vertical-align: top; position: relative; }
+.paper .sheet-grid td.cell.change { border-left: 0.9mm solid var(--paper-line); }
+.paper .sheet-grid .slot { width: 6mm; text-align: center; font-weight: 700; }
+.paper .sheet-grid .who { width: 24mm; }
+.paper .sheet-grid th.tot { width: 9mm; font-size: 6.5pt; font-weight: 600; line-height: 1.1; }
+.paper .sheet-grid .who div + div { border-top: 0.2mm dashed var(--paper-hair); }
+.paper .pa { display: grid; grid-template-columns: 1fr; position: relative; height: 100%; }
+/* two entries in one cell (a 代跑, a batter up twice in an inning) share its height instead of each taking all of it
+   and spilling into the next slot's row */
+.paper .pa-stack { display: flex; flex-direction: column; height: 11.5mm; }
+.paper .pa-stack > .pa { flex: 1 1 0; min-height: 0; height: auto; overflow: hidden; }
+.paper .pa:not(:only-child) .pa-mark { font-size: 6.5pt; }
+.paper .pa + .pa { border-top: 0.2mm dashed var(--paper-hair); }
+.paper .pa-mark { font-weight: 700; font-size: 8pt; position: absolute; left: 0.6mm; bottom: 0.3mm; }
+.paper .pa-mark.looking { display: inline-block; transform: scaleX(-1); }
+.paper .pa-out { position: absolute; right: 0.6mm; top: 0.3mm; font-size: 8pt; }
+.paper .pa-count { position: absolute; left: 0.6mm; top: 0.3mm; font-size: 5.5pt; color: var(--paper-muted); }
+.paper .pa-rbi { position: absolute; right: 0.6mm; bottom: 0.3mm; font-size: 6pt; letter-spacing: -0.3mm; }
+.paper .pa-notes { position: absolute; left: 0; right: 0; bottom: -0.2mm; text-align: center; font-size: 5pt; color: var(--paper-muted); white-space: nowrap; overflow: hidden; }
+.paper .pa-pitcher { position: absolute; left: 0.4mm; top: 50%; font-size: 5pt; writing-mode: vertical-rl; transform: translateY(-50%); }
+/* the vertical pitcher name runs down the left edge: the count and the result move right of it instead of under it */
+.paper .pa.with-pitcher .pa-mark, .paper .pa.with-pitcher .pa-count { left: 2.6mm; }
+.paper .pa svg { display: block; margin: 1mm auto 0; width: 7.5mm; height: 7.5mm; }
+.paper .pa:not(:only-child) svg { width: 5mm; height: 5mm; margin-top: 0.4mm; }
+/* a half-height cell has no room under the diamond: its notes sit over the diamond's foot on a white strip, centred
+   between the result and the RBI dots, so neither is drawn through the other */
+.paper .pa:not(:only-child) .pa-notes { left: 50%; right: auto; max-width: 62%; transform: translateX(-50%); background: #fff; padding: 0 0.3mm; bottom: 0; }
+
+/* 陣容卡 */
+.paper .lineup-card { min-height: 128mm; display: flex; flex-direction: column; gap: 2mm; font-size: 11pt; }
+.paper .lineup-card table td, .paper .lineup-card table th { padding: 1.6mm 2mm; height: 9mm; }
+.paper .lineup-card + .lineup-card { border-top: 0.5mm dashed var(--paper-line); padding-top: 8mm; margin-top: 6mm; }
+
+@media print {
+  /* the page canvas around the paper: white whatever the theme (with 背景圖形 on, a dark theme printed a black margin) */
+  :root:has(.print-stage) { color-scheme: light !important; }
+  .print-toolbar { display: none !important; }
+  .print-stage { background: #fff; padding: 0; display: block; min-height: 0; }
+  html:has(.print-stage), body:has(.print-stage) { background: #fff !important; }
+  .paper, .paper.portrait { zoom: 1 !important; box-shadow: none; margin: 0; padding: 0; width: auto; min-height: 0; break-after: page; }
+  .paper:last-child { break-after: auto; }
+  .paper, .paper * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .paper tr { break-inside: avoid; }
+}

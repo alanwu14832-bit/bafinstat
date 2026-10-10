@@ -100,7 +100,7 @@ jobs:
           mkdir -p "$A/v"
           if git fetch -q --depth=1 origin site-archive; then git archive FETCH_HEAD | tar -x -C "$A"; fi
           (cd web && VITE_BASE="/v/$ID/" VITE_ARCHIVE_ID="$ID" VITE_ARCHIVE_DATE="$DATE" VITE_ARCHIVE_NOTE="$NOTE" npx vite build --outDir "$A/v/$ID" --emptyOutDir)
-          rm -f "$A/v/$ID"/*.xlsx
+          rm -f "$A/v/$ID"/*.xlsx "$A/v/$ID"/og.png
           node web/scripts/archive-index.mjs "$A" "$ID" "$DATE" "$SHORT" "$NOTE"
           printf '# 網站版本\n\n網站每次上線時自動保存的唯讀副本（由 .github/workflows/auto-deploy.yml 產生，請勿手動修改）。\n' > "$A/README.md"
           # 這個分支只放檔案，不是網站：叫 Vercel 不要為它建置（每次建置都會佔 Deployment Storage）

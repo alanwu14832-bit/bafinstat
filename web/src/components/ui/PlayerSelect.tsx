@@ -46,14 +46,14 @@ export function PlayerSelect({ value, onChange, names, placeholder = '選擇球�
 }
 
 /** Multi-pick as wrap-around toggle chips (板凳): tap a name to add or remove it. Selected chips are filled. */
-export function PlayerChips({ names, selected, onToggle, className, empty = '沒有可以選的球員' }: { names: string[]; selected: string[]; onToggle: (name: string) => void; className?: string; empty?: string }) {
+export function PlayerChips({ names, selected, onToggle, className, empty = '沒有可以選的球員', disabled }: { names: string[]; selected: string[]; onToggle: (name: string) => void; className?: string; empty?: string; disabled?: Set<string> }) {
   const on = new Set(selected)
   if (!names.length) return <p className={cx('text-[12px] text-muted', className)}>{empty}</p>
   return (
     <div className={cx('flex flex-wrap gap-1.5', className)}>
       {names.map((n) => (
-        <button key={n} type="button" aria-pressed={on.has(n)} onClick={() => onToggle(n)}
-          className={cx('h-9 min-w-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', on.has(n) ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')}>{n}</button>
+        <button key={n} type="button" aria-pressed={on.has(n)} onClick={() => onToggle(n)} disabled={!on.has(n) && !!disabled?.has(n)}
+          className={cx('h-9 min-w-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none disabled:opacity-40 disabled:cursor-not-allowed', on.has(n) ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')}>{n}</button>
       ))}
     </div>
   )
