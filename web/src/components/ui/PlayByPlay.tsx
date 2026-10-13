@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { isPlaced, OPP_HAND_LABEL, pinchMark, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
+import { isPlaced, pinchMark, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
 import { balksIn, playText, playWhen } from '../../data/plays'
 import { inningsOf, placedBases } from '../../record/timeline'
 import { pitchTotals, isHitResult } from '../../data/stats'
@@ -10,6 +10,7 @@ import { countBeforeText, resultPhrase } from '../../data/gameText'
 import { signedPtsBetween } from '../../lib/fmt'
 import { WPA_DISCLAIMER, type RowWin } from '../../data/winTimeline'
 import { Badge } from './Badge'
+import { oppPitcherMarks as oppPitcherMarksOf } from '../../data/broadcast'
 import { AlertTriangle, X } from 'lucide-react'
 
 /** Pitch code → chip. 好球類：S/SS/CS/IP；界外 F；壞球 B */
@@ -135,24 +136,8 @@ function WpaCell({ w }: { w?: RowWin }) {
 
 /** Pitch-by-pitch log of our batters for one game. */
 /** `onRbi` (紀錄比賽) adds 打點 −／＋ on every row, for a run that was entered after the plate appearance was sent. */
-/**
- * The opponent pitcher each of these plate appearances was the first one against (keyed by row index): 「對方先發・右投 王」,
- * later 「對方換投・左投 林」. Rows without any opponent pitcher are skipped (the next one with one starts a new stint).
- */
-export function oppPitcherMarks(pas: BattingPA[]): Map<number, string> {
-  const out = new Map<number, string>()
-  const seen = new Map<string, string>()   // game → the last opponent pitcher key
-  pas.forEach((p, i) => {
-    if ((!p.oppHand && !p.oppPitcher) || isPlaced(p)) return
-    const key = `${p.oppPitcher ?? ''}|${p.oppHand ?? ''}`
-    const was = seen.get(p.gameId)
-    if (was === key) return
-    const who = [p.oppHand ? OPP_HAND_LABEL[p.oppHand] : '', p.oppPitcher ?? ''].filter(Boolean).join(' ')
-    out.set(i, `${was === undefined ? '對方先發' : '對方換投'}・${who}`)
-    seen.set(p.gameId, key)
-  })
-  return out
-}
+/** (moved to data/broadcast.ts with the rest of the play-by-play wording; kept here for its callers) */
+export { oppPitcherMarks } from '../../data/broadcast'
 
 /**
  * `visible` (the game page's filter chips) shows only those rows, by index; `wording` 'phrase' writes the result as
@@ -162,7 +147,7 @@ export function oppPitcherMarks(pas: BattingPA[]): Map<number, string> {
 export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
-  const marks = oppPitcherMarks(pas)
+  const marks = oppPitcherMarksOf(pas)
   const placed = placedMap(pas)
   let lastInning = 0
   return (

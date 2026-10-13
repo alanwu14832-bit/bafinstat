@@ -32,30 +32,30 @@ const show = (s: RecordState, base: Dataset = BASE) => {
 }
 afterEach(() => { writeDraft(null) })
 
+const valueOf = (label: string, scope: HTMLElement = document.body) => within(scope).getByText(label, { selector: 'span' }).nextElementSibling?.textContent
+
 describe('即時比分: who is up next, 本季, 本半局看點', () => {
-  it('our batter at the plate: 準備打擊／再下一棒, his 本季 line and the half-inning card, also in 大螢幕', async () => {
-    show({ ...newGame(LIVE, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), slot: 2 })
-    const onDeck = await screen.findByText('準備打擊')
-    expect(onDeck.nextElementSibling?.textContent).toBe('4 棒 丁.333')
-    expect(screen.getByText('再下一棒').nextElementSibling?.textContent).toBe('5 棒 戊')
-    expect(screen.getByText(/^本季 /).textContent).toBe('本季 .400・OPS 1.000（5 打席）')
-    expect(screen.getByText('本半局看點・照紀錄自動挑選')).toBeTruthy()
+  it('our batter at the plate: 下一棒 with the 本季 AVG, his 本季 line and the half-inning card, also in 大螢幕', async () => {
+    show({ ...newGame(LIVE, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), slot: 2, outs: 2 })
+    await screen.findByText('下一棒')
+    expect(valueOf('下一棒')).toBe('4 丁 .333・5 戊')
+    expect(screen.getByText(/^本季 /).textContent).toBe('本季 .400 OPS 1.000')
     expect(screen.getByText('3 棒 丙 本季得點圈 5 打數 2 安')).toBeTruthy()
-    // (while we bat, the other side is up next)
+    // (while we bat, the other side is up next; shown at two outs)
     expect(screen.getByText('攻守交換後').nextElementSibling?.textContent).toBe('對方第 1、2、3 棒')
     fireEvent.click(screen.getByRole('button', { name: /大螢幕/ }))
     const big = screen.getByRole('dialog', { name: '即時比分大螢幕' })
-    expect(within(big).getByText('準備打擊')).toBeTruthy()
-    expect(within(big).getByText('再下一棒')).toBeTruthy()
+    expect(valueOf('下一棒', big)).toBe('4 丁 .333・5 戊')
+    expect(within(big).getByText('最新')).toBeTruthy()
     expect(within(big).getByText('3 棒 丙 本季得點圈 5 打數 2 安')).toBeTruthy()
   })
 
   it('the opponent at bat: by batting order, and our first three after the side is retired', async () => {
-    show({ ...newGame({ ...LIVE, homeAway: '主' }, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), oppOrder: 5 })
-    const onDeck = await screen.findByText('準備打擊')
-    expect(onDeck.nextElementSibling?.textContent).toBe('第 6 棒')
-    expect(screen.getByText('再下一棒').nextElementSibling?.textContent).toBe('第 7 棒')
-    expect(screen.getByText('攻守交換後').nextElementSibling?.textContent).toBe('1 棒 甲・2 棒 乙・3 棒 丙')
+    show({ ...newGame({ ...LIVE, homeAway: '主' }, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), oppOrder: 5, outs: 2 })
+    await screen.findByText('下一棒')
+    expect(valueOf('下一棒')).toBe('第 6、7 棒')
+    expect(valueOf('打者')).toBe('5對方打者')
+    expect(screen.getByText('攻守交換後').nextElementSibling?.textContent).toBe('1 甲・2 乙・3 丙')
     expect(screen.queryByText(/^本季 /)).toBeNull()
   })
 
@@ -64,16 +64,16 @@ describe('即時比分: who is up next, 本季, 本半局看點', () => {
     const home = { ...LIVE, homeAway: '主' as const }
     const er = (i: number): PitchingPA => ({ gameId: LIVE.id, inning: 1, pitcher: '壬', oppOrder: i + 1, pitches: ['IP'], result: '全壘打', code: 'ER', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 })
     const s: RecordState = {
-      ...newGame(home, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), inning: 8, half: 'top', oppOrder: 6,
+      ...newGame(home, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), inning: 8, half: 'top', oppOrder: 6, outs: 2,
       batting: ['甲', '乙', '丙'].map((b) => bat(LIVE.id, b, '全壘打', { run: 1, rbi: 1, code: 'R' })),
       pitching: [0, 1, 2, 3, 4].map(er),
     }
     // (two earlier games against 對手 would give a 歷年對對手 card)
     show(s, { ...BASE, games: [G1, G2].map((g) => ({ ...g, opponent: '對手' })) })
-    await screen.findByText('我隊投手')
-    expect(screen.queryByText('準備打擊')).toBeNull()
+    await screen.findByText('比賽結束，等待紀錄員確認')
+    expect(screen.queryByText('下一棒')).toBeNull()
     expect(screen.queryByText('攻守交換後')).toBeNull()
-    expect(screen.queryByText('本半局看點・照紀錄自動挑選')).toBeNull()
+    expect(screen.queryByText(/歷年對/)).toBeNull()
   })
 
   it('E: their errors count 妨礙, 對方失誤 and the one pressed during the plate appearance in progress (batch 11)', async () => {
@@ -83,8 +83,8 @@ describe('即時比分: who is up next, 本季, 本半局看點', () => {
       runners: [], extras: { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0, oppErrors: ['C'] },
     }
     show(s)
-    await screen.findByText('準備打擊')
-    const row = screen.getAllByRole('row').find((r) => r.textContent?.startsWith('對手'))!
+    await screen.findByText('下一棒')
+    const row = screen.getAllByRole('row').find((r) => within(r).queryByText('對手'))!
     const cells = within(row).getAllByRole('cell')
     expect(cells[cells.length - 1].textContent).toBe('3')
   })

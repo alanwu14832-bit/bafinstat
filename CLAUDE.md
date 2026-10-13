@@ -29,6 +29,8 @@ A database change needs a migration in both repos, and the user must run it in b
   and checks the box score against a hand-scored answer key: rerun it after changes to recording or stats. `edit1.mjs`
   (修改資料) and `excel.mjs` (匯出／匯入 round trips, 單場模板, and the LibreOffice-recalculated 總表 against the site's own
   numbers): rerun them after changes to the game editor, import/export, stats or `tools/build_workbook.py`.
+- `web/src/data/broadcast.ts` is the text of /live and the game page's 文字轉播 tab (CPBL-style sentences, runner names from
+  `record/timeline.ts`); `tools/gamesim/live.mjs` checks it in the browser (run it next to game1–3 after changes to /live).
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

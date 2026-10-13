@@ -43,6 +43,8 @@ import { GameNotesCard } from '../components/game/GameNotesCard'
 import { GameMediaCard } from '../components/game/GameMediaCard'
 import { SharePanel } from '../components/game/SharePanel'
 import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
+import { Broadcast } from '../components/ui/Broadcast'
+import { buildFeed, seasonHrBefore } from '../data/broadcast'
 
 export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
 
@@ -153,7 +155,7 @@ function winNotes(trainGames: number, trainPas: number, rules: string, approxHal
 }
 
 
-export type GameTab = 'summary' | 'box' | 'bat' | 'pit' | 'roster'
+export type GameTab = 'summary' | 'box' | 'bat' | 'pit' | 'feed' | 'roster'
 
 /**
  * One game: score, then 摘要 (the recap, checkable), 攻守成績 (box score), 逐球 for each side, and the 當日登錄名單.
@@ -221,6 +223,8 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
   const notes = useMemo(() => gameNotes(current, s.dataset), [current, s.dataset])
   const sets = useMemo(() => ({ bat: pbpFilterSets(pbpBat, 'bat', keyRows.bat), pit: pbpFilterSets(pbpPit, 'pit', keyRows.pit) }), [pbpBat, pbpPit, keyRows])
   const issues = useMemo(() => auditGame(pbpBat, pbpPit), [pbpBat, pbpPit])
+  // 文字轉播: both sides in one story, with who ran where (the 逐球 tables stay the detailed view)
+  const feed = useMemo(() => (tab === 'feed' ? buildFeed({ homeAway: current.game.homeAway, opponent: current.game.opponent, batting: pbpBat, pitching: pbpPit, subs: current.game.dayRoster?.subs, priorHr: seasonHrBefore(s.dataset, current.game) }) : []), [tab, current.game, pbpBat, pbpPit, s.dataset])
   // from the unfiltered dataset: the 守位 filter would hide substitutes
   const appearances = useMemo(() => gameAppearances(s.dataset, current.game), [current.game, s.dataset])
   const recap = useMemo(() => gameRecap(current, s.dataset, TEAM_NAME), [current, s.dataset])
@@ -315,6 +319,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
   const tabs = [
     { value: 'summary' as const, label: '摘要' }, { value: 'box' as const, label: '攻守成績' },
     { value: 'bat' as const, label: '逐球・打擊', count: pbpBat.length }, { value: 'pit' as const, label: '逐球・投球', count: pbpPit.length },
+    { value: 'feed' as const, label: '文字轉播' },
     { value: 'roster' as const, label: '登錄名單' },
   ]
   const page = mode === 'page'
@@ -464,6 +469,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
             )}
             {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
             {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={pbpSubtitle(`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
+            {tab === 'feed' && <Broadcast halves={feed} weTop={current.game.homeAway === '客'} opponent={current.game.opponent} allOpen />}
             {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
           </>
