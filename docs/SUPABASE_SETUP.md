@@ -68,7 +68,7 @@ npm run dev
 - `supabase/migrations/2026-10-07_play_events.sql`、`2026-10-08_security.sql`、`2026-10-09_baserunning_outs.sql`、`2026-10-10_quick_login.sql`、`2026-10-12_quick_login_fix.sql`：逐球跑壘、資料安全、壘死、快速登入（說明見各檔開頭與 `docs/SECURITY.md`）。
 - `supabase/migrations/2026-10-13_save_games.sql`：**存檔保護**。一場比賽（比賽資料＋打擊／投球／守備紀錄）由資料庫一次存完，中途失敗就整筆不算、舊紀錄還在；也加上快速登入的「解除暫停」。沒執行時照舊分段儲存（修改比賽後會提醒）。
 - `supabase/migrations/2026-10-14_record_fields.sql`：**比賽結束時間、對方投手**。在 `games` 加 `end_time`（結束時間；開賽時間沿用 `time`，比賽時間由兩者算出），在 `batting_pa` 加 `opp_pitcher`（對方投手姓名，選填）、`opp_hand`（L 左投／R 右投），並把 `save_games()` 更新成也存結束時間。沒執行時網站照常運作：結束時間和對方投手只是不會存進雲端，紀錄比賽頁不會問對方投手、會在上方提醒，存檔時也會提醒。重複執行也安全。**系隊、校隊兩個 Supabase 專案都要各執行一次**：Supabase → 選專案 → 左側「SQL Editor」→「New query」→ 貼上整個檔案 →「Run」。
-- `supabase/migrations/2026-10-15_opp_runner.sql`：**對方代跑**。在 `pitching_pa` 加 `runner`（對方代跑的姓名或背號，選填，最多 40 字），記在那位跑者上壘的那一列。`save_games()` 本來就整列照存，不用改。沒執行時網站照常運作：紀錄時一樣可以記對方代跑，只是不會存進雲端，存檔時會提醒「對方代跑沒有存進雲端」。重複執行也安全。**系隊、校隊兩個 Supabase 專案都要各執行一次**：Supabase → 選專案 → 左側「SQL Editor」→「New query」→ 貼上整個檔案 →「Run」。
+- `supabase/migrations/2026-10-15_opp_runner.sql`：**對方代跑、對方失誤、對方打點**（讓紀錄對方打擊和我隊一樣完整）。加三個欄位：`pitching_pa.runner`（對方代跑的姓名或背號，選填，最多 40 字，記在那位跑者上壘的那一列）、`batting_pa.errors`（我隊打擊時對方守備員的失誤守位，每次一個，`?` 是不知道是誰，最多 20 個）、`pitching_pa.rbi`（對方打者的打點，0–4，預設 0）；`save_games()` 也換成同一版（投球紀錄沒帶打點時當 0，2026-10-13、2026-10-14 檔案裡的是同一版）。沒執行時網站照常運作：紀錄時一樣可以記，只是這三樣不會存進雲端，存檔時會提醒。重複執行也安全。**系隊、校隊兩個 Supabase 專案都要各執行一次**：Supabase → 選專案 → 左側「SQL Editor」→「New query」→ 貼上整個檔案 →「Run」。
 
 ## 誰能登入、誰能寫
 - 帳號：紀錄員在網站「資料匯入 → 紀錄員名單」新增 email，對方用邀請碼在登入框的「第一次使用」設定密碼（第一位紀錄員見上面第 3 節）。

@@ -5,6 +5,7 @@ import { inningsOf, placedBases } from '../../record/timeline'
 import { pitchTotals, isHitResult } from '../../data/stats'
 import { POSITION_BY_NUMBER } from '../../data/types'
 import { cx } from '../../lib/format'
+import { errorsText } from '../../data/errors'
 import { countBeforeText, resultPhrase } from '../../data/gameText'
 import { signedPtsBetween } from '../../lib/fmt'
 import { WPA_DISCLAIMER, type RowWin } from '../../data/winTimeline'
@@ -176,7 +177,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
             const pt = pitchTotals(p.pitches)
             const header = p.inning !== lastInning
             lastInning = p.inning
-            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.baserunningOuts ? `壘死 ${p.baserunningOuts}` : '', p.outOnBase - (p.baserunningOuts ?? 0) > 0 ? `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
+            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.baserunningOuts ? `壘死 ${p.baserunningOuts}` : '', p.outOnBase - (p.baserunningOuts ?? 0) > 0 ? `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : '', p.errors?.length ? `對方失誤 ${errorsText(p.errors)}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" cols={win ? 10 : 9} />}
@@ -213,7 +214,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
 }
 
 /** Pitch-by-pitch log of our pitchers vs the opponent for one game. */
-export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
+export function PitchingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; /** (紀錄比賽) their RBI −／＋, like ours */ onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const placed = placedMap(pas)
@@ -233,7 +234,7 @@ export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win 
             const header = p.inning !== lastInning
             const changed = changedAt[i]
             lastInning = p.inning
-            const extras = [p.runner ? pinchMark(p.runner) : '', p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : '', balksIn(p.events) ? `投手犯規 ${balksIn(p.events)}` : '', p.errors?.length ? `失誤 ${p.errors.join('、')}` : ''].filter(Boolean).join('・')
+            const extras = [p.runner ? pinchMark(p.runner) : '', p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : '', balksIn(p.events) ? `投手犯規 ${balksIn(p.events)}` : '', p.errors?.length ? `失誤 ${p.errors.join('、')}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" cols={win ? 10 : 9} />}
@@ -246,7 +247,17 @@ export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win 
                   <td className={cx(td, 'min-w-[7.5rem]', isPlaced(p) ? 'text-muted' : resultCls(p.result))}>{isPlaced(p) ? placedResult(placed[i]) : <ResultText p={p} wording={wording} />}</td>
                   {win && <WpaCell w={win.get(i)} />}
                   <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{hitLoc(p.loc, p.traj, p.quality) || '—'}</td>
-                  <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>{extras || '—'}</td>
+                  <td className={cx(td, 'text-ink-2 whitespace-nowrap')}>
+                    {onRbi && !isPlaced(p) && (
+                      <span className="inline-flex items-center gap-1 mr-2 align-middle">
+                        打點
+                        <button type="button" aria-label={`第 ${i + 1} 個打席 對方打點減一`} disabled={!p.rbi} onClick={() => onRbi(i, (p.rbi ?? 0) - 1)} className="size-8 pointer-fine:size-6 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer disabled:opacity-35 disabled:cursor-default">−</button>
+                        <span className="w-4 text-center font-medium text-ink">{p.rbi ?? 0}</span>
+                        <button type="button" aria-label={`第 ${i + 1} 個打席 對方打點加一`} disabled={(p.rbi ?? 0) >= 4} onClick={() => onRbi(i, (p.rbi ?? 0) + 1)} className="size-8 pointer-fine:size-6 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer disabled:opacity-35 disabled:cursor-default">＋</button>
+                      </span>
+                    )}
+                    {extras || (onRbi && !isPlaced(p) ? '' : '—')}
+                  </td>
                   <td className={td}>{codeBadge(p.code)}{p.note && <div className="text-[11px] text-muted mt-1">{p.note}</div>}</td>
                 </tr>
               </Fragment>

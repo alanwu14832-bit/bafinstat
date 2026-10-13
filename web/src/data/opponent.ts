@@ -6,17 +6,20 @@
  * A batter is his recorded name (對方打者姓名, when the recorder kept them), else his slot 「第 N 棒」, so a pinch
  * hitter without a name is merged into his slot. Placeholder names such as 「對方 3 棒」 or 「3棒」 count as no name.
  * 對方代跑 (PitchingPA.runner) is treated like our 代跑: the run after the batter reached is the runner's (his name, or
- * 「對方代跑」 when none was typed).
+ * 「對方代跑」 when none was typed). Their RBI is PitchingPA.rbi; their steals, caught stealing and outs on the bases are
+ * worked out per runner from the innings (oppRunning).
  */
 import { battingLines, summarizeGame, teamBatting, type BattingLine } from './stats'
-import { EMPTY_DATASET, OPP_PR_UNNAMED, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
+import { inferAll, midOf } from '../record/timeline'
+import { EMPTY_DATASET, OPP_PR_UNNAMED, oppBatterName, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 
 const PLACEHOLDER = /^(對方)?\s*(第\s*)?\d+\s*棒次?$/
 const NO_SLOT = '棒次未記'
 
 /** The recorded name, or 「第 N 棒」 (棒次未記 without a slot). */
 export function oppKey(pa: Pick<PitchingPA, 'oppBatter' | 'oppOrder'>): string {
-  const name = pa.oppBatter?.trim() ?? ''
+  // (a 對方代打 is his name after the mark; without one he is merged into his slot)
+  const name = oppBatterName(pa.oppBatter)
   if (name && !PLACEHOLDER.test(name) && !/^\d+$/.test(name)) return name
   return pa.oppOrder ? `第 ${pa.oppOrder} 棒` : NO_SLOT
 }
@@ -30,23 +33,70 @@ export function oppRunnerKey(pa: Pick<PitchingPA, 'runner'>): string | undefined
   return PLACEHOLDER.test(name) || /^\d+$/.test(name) ? OPP_PR_UNNAMED : name
 }
 
-/** A pitching row as the opponent's batting row (their runs: the row's R / ER code; no RBI or steals). A 對方代跑 is
- *  the row's runner, so his run is his, as with our 代跑. */
-export function asOppBatting(pa: PitchingPA): BattingPA {
+/** Base running of their runners, worked out from the innings (record/timeline.ts) as the recorder entered them. */
+export interface OppRunning { sb: number; cs: number; advOnError: number; outOnBase: number; baserunningOuts: number }
+/**
+ * Each of their runners' 盜壘 / 盜壘失敗 / 失誤進壘 / 壘上出局 / 壘死, on the row he reached on (like ours): our pitcher's
+ * rows count them only as 被盜壘 / 阻殺 / 牽制, so they are read off the runner plays and where everyone ended. An inning
+ * that cannot be followed adds nothing. Keyed by the row object.
+ */
+export function oppRunning(pas: PitchingPA[]): Map<PitchingPA, OppRunning> {
+  const out = new Map<PitchingPA, OppRunning>()
+  const byGame = new Map<string, PitchingPA[]>()
+  for (const p of pas) { const g = byGame.get(p.gameId) ?? []; g.push(p); byGame.set(p.gameId, g) }
+  for (const rows of byGame.values()) {
+    const get = (row: number) => { const r = rows[row]; let c = out.get(r); if (!c) { c = { sb: 0, cs: 0, advOnError: 0, outOnBase: 0, baserunningOuts: 0 }; out.set(r, c) } return c }
+    for (const half of inferAll(rows, 'pit').values()) {
+      if (!half) continue
+      for (const st of half.steps) {
+        for (const m of st.moves) {
+          const c = get(m.row)
+          if (m.kind === 'sb') c.sb++
+          else if (m.kind === 'cs') c.cs++
+          else if (m.kind === 'err') c.advOnError += (m.to === 'home' ? 4 : m.to === 'out' ? m.from : m.to) - m.from
+          else if (m.kind === 'pk' || m.kind === 'out') { c.outOnBase++; if (m.kind === 'out') c.baserunningOuts++ }
+        }
+        // put out on the batted ball (a force, a double play, thrown out taking an extra base): 壘死 when marked so
+        const outMarks = (rows[st.index].events ?? []).filter((e) => e.play && !e.batter && e.kind === 'out')
+        const mid = midOf(st)
+        for (const o of mid) {
+          if (st.dest[o.row] !== 'out') continue
+          const c = get(o.row)
+          c.outOnBase++
+          if (outMarks.some((e) => e.from === o.base)) c.baserunningOuts++
+        }
+        // 失誤進壘 on the batted ball: the bases beyond where the hit put him
+        for (const e of (rows[st.index].events ?? []).filter((x) => x.play && x.kind === 'err' && x.to !== 'out')) {
+          const to = e.to === 'home' ? 4 : (e.to as number)
+          const who = e.batter ? st.index : mid.find((o) => (st.dest[o.row] === e.to))?.row
+          if (who !== undefined) get(who).advOnError += Math.max(0, to - e.from)
+        }
+      }
+    }
+  }
+  return out
+}
+
+/** A pitching row as the opponent's batting row (their runs: the row's R / ER code; their RBI as recorded). A 對方代跑
+ *  is the row's runner, so his run is his, as with our 代跑. `running`: his base running (oppRunning), when known. */
+export function asOppBatting(pa: PitchingPA, running?: OppRunning): BattingPA {
   const batter = oppKey(pa)
   const runner = oppRunnerKey(pa)
+  const r = running ?? { sb: 0, cs: 0, advOnError: 0, outOnBase: 0, baserunningOuts: 0 }
   return {
     gameId: pa.gameId, inning: pa.inning, outsBefore: pa.outsBefore, basesBefore: pa.basesBefore, order: pa.oppOrder, batter, ...(runner && runner !== batter ? { runner } : {}),
     pitches: pa.pitches, result: pa.result, loc: pa.loc, traj: pa.traj, quality: pa.quality, code: pa.code,
-    sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: pa.code === 'R' || pa.code === 'ER' ? 1 : 0, rbi: 0,
+    sb: r.sb, cs: r.cs, advOnError: r.advOnError, outOnBase: r.outOnBase, ...(r.baserunningOuts ? { baserunningOuts: r.baserunningOuts } : {}),
+    run: pa.code === 'R' || pa.code === 'ER' ? 1 : 0, rbi: pa.rbi ?? 0,
   }
 }
+const asOppRows = (pas: PitchingPA[]): BattingPA[] => { const run = oppRunning(pas); return pas.map((p) => asOppBatting(p, run.get(p))) }
 
 export type OppBattingLine = BattingLine & { slot?: number; label: string }
 
 /** One line per opponent batter (name or slot), in batting-order slot, then first appearance (unknown slot last). */
 export function oppBattingLines(pas: PitchingPA[]): OppBattingLine[] {
-  const mapped = pas.map(asOppBatting)
+  const mapped = asOppRows(pas)
   const first = new Map<string, number>()
   const slot = new Map<string, number | undefined>()
   // (a 代跑 is listed in the slot he ran for)
@@ -58,7 +108,7 @@ export function oppBattingLines(pas: PitchingPA[]): OppBattingLine[] {
 }
 
 /** The opponent's team batting line (合計: its R and H equal the line score). */
-export const oppTotals = (pas: PitchingPA[]): BattingLine => teamBatting(EMPTY_DATASET, pas.map(asOppBatting))
+export const oppTotals = (pas: PitchingPA[]): BattingLine => teamBatting(EMPTY_DATASET, asOppRows(pas))
 
 const LEFT = new Set([5, 6, 7, 56, 78])
 const CENTER = new Set([1, 2, 8, 46])

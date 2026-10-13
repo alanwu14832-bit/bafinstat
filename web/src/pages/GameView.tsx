@@ -131,8 +131,8 @@ const boxPit: Column<PitchingLine>[] = [
 ]
 const boxOpp: Column<OppBattingLine>[] = [
   { key: 'label', header: '對方打者', className: 'font-medium' }, { key: 'slot', header: '棒次', align: 'right', format: (v) => (v as number | undefined) ?? '—' },
-  { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'h2', header: '2B', align: 'right' }, { key: 'h3', header: '3B', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' },
-  { key: 'bb', header: 'BB', align: 'right' }, { key: 'hbp', header: 'HBP', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'pitches', header: '用球', align: 'right' }, { key: 'avg', header: 'AVG', align: 'right', format: (v) => f3(v as number | null) },
+  { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'h2', header: '2B', align: 'right' }, { key: 'h3', header: '3B', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' }, { key: 'rbi', header: 'RBI', align: 'right' },
+  { key: 'bb', header: 'BB', align: 'right' }, { key: 'hbp', header: 'HBP', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'sb', header: 'SB', align: 'right' }, { key: 'pitches', header: '用球', align: 'right' }, { key: 'avg', header: 'AVG', align: 'right', format: (v) => f3(v as number | null) },
 ]
 
 /** 打擊 as the box score or the 逐局表: remembered on this device (every read and write may fail: private mode). */
@@ -217,7 +217,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
   const sheetUs = useMemo(() => buildScoresheet(pbpBat, 'bat', { innings, subs: current.game.dayRoster?.subs }), [pbpBat, innings, current.game.dayRoster])
   const sheetOpp = useMemo(() => buildScoresheet(pbpPit, 'pit', { innings }), [pbpPit, innings])
   const statUs = useMemo(() => { const m = new Map(boxB.map((l) => [l.name, l])); return (n: string) => m.get(n) }, [boxB])
-  const statOpp = useMemo(() => { const m = new Map(oppLines.map((l) => [l.label, { ab: l.ab, h: l.h, rbi: 0 }])); return (n: string) => m.get(n) }, [oppLines])
+  const statOpp = useMemo(() => { const m = new Map(oppLines.map((l) => [l.label, { ab: l.ab, h: l.h, rbi: l.rbi }])); return (n: string) => m.get(n) }, [oppLines])
   const notes = useMemo(() => gameNotes(current, s.dataset), [current, s.dataset])
   const sets = useMemo(() => ({ bat: pbpFilterSets(pbpBat, 'bat', keyRows.bat), pit: pbpFilterSets(pbpPit, 'pit', keyRows.pit) }), [pbpBat, pbpPit, keyRows])
   const issues = useMemo(() => auditGame(pbpBat, pbpPit), [pbpBat, pbpPit])
@@ -294,7 +294,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
       {boxView === 'grid'
         ? <InningGrid sheet={sheetOpp} side="pit" stat={statOpp} />
         : <DataTable columns={boxOpp} rows={oppLines} rowKey={(r) => r.label} dense
-            footer={{ label: '合計', pa: oppTot.pa, ab: oppTot.ab, r: oppTot.r, h: oppTot.h, h2: oppTot.h2, h3: oppTot.h3, hr: oppTot.hr, bb: oppTot.bb, hbp: oppTot.hbp, so: oppTot.so, pitches: oppTot.pitches, avg: f3(oppTot.avg) }} />}
+            footer={{ label: '合計', pa: oppTot.pa, ab: oppTot.ab, r: oppTot.r, h: oppTot.h, h2: oppTot.h2, h3: oppTot.h3, hr: oppTot.hr, rbi: oppTot.rbi, bb: oppTot.bb, hbp: oppTot.hbp, so: oppTot.so, sb: oppTot.sb, pitches: oppTot.pitches, avg: f3(oppTot.avg) }} />}
     </Card>
   )
   // 逐球 filter chips: only those with something to show (a chip that empties falls back to 全部)

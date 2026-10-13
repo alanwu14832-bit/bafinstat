@@ -3,7 +3,8 @@
  * not): 「蘇柏愷 一安・陳威儒 得分・2：0」「陳威儒 暴投 1B→2B」「三出局，換 3 局下」. Pitches alone say nothing.
  */
 import { playText } from '../data/plays'
-import { isPlaced, OPP_HAND_LABEL, OPP_PR_UNNAMED } from '../data/types'
+import { UNKNOWN_FIELDER } from '../data/errors'
+import { isPlaced, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName } from '../data/types'
 import { offense, score, type RecordState } from './model'
 
 const halfName = (s: RecordState) => `${s.inning} 局${s.half === 'top' ? '上' : '下'}`
@@ -21,7 +22,7 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
   const bat = b.batting.length > a.batting.length ? b.batting[b.batting.length - 1] : null
   const pit = b.pitching.length > a.pitching.length ? b.pitching[b.pitching.length - 1] : null
   if (bat) parts.push(`${bat.batter} ${bat.result}${bat.rbi ? `（${bat.rbi} 分打點）` : ''}`)
-  else if (pit) parts.push(`對方${pit.oppBatter ? ` ${pit.oppBatter}` : pit.oppOrder ? ` ${pit.oppOrder} 棒` : ''} ${pit.result}`)
+  else if (pit) parts.push(`對方${pit.oppBatter ? ` ${pit.oppBatter}` : pit.oppOrder ? ` ${pit.oppOrder} 棒` : ''} ${pit.result}${pit.rbi ? `（${pit.rbi} 分打點）` : ''}`)
   if (bat || pit) {
     // 趁傳進壘 on the hit
     for (const e of (bat ?? pit)!.events ?? []) if (e.play) parts.push(playText(e))
@@ -37,6 +38,12 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
     }
     if ((b.extras.pka ?? 0) > (a.extras.pka ?? 0)) parts.push('牽制（安全）')
     if ((b.extras.errors?.length ?? 0) > (a.extras.errors?.length ?? 0)) parts.push(`我隊失誤 ${b.extras.errors![b.extras.errors!.length - 1]}`)
+    // 對方失誤 (a 失誤進壘 already says so; a fielder named is said too)
+    if ((b.extras.oppErrors?.length ?? 0) > (a.extras.oppErrors?.length ?? 0)) {
+      const pos = b.extras.oppErrors![b.extras.oppErrors!.length - 1]
+      if (pos !== UNKNOWN_FIELDER) parts.push(`對方失誤 ${pos}`); else if (!plays.length) parts.push('對方失誤')
+    }
+    if (b.oppBatter && b.oppBatter !== a.oppBatter && b.pitching.length === a.pitching.length) parts.push(`對方代打${oppBatterName(b.oppBatter) ? ` ${oppBatterName(b.oppBatter)}` : ''}`)
     for (const k of ['wp', 'pb'] as const) if (b.extras[k] > a.extras[k] && !plays.length) parts.push(k === 'wp' ? '暴投' : '捕逸')
   }
   for (const x of (b.subs ?? []).slice((a.subs ?? []).length)) {

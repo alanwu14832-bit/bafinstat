@@ -8,13 +8,14 @@ import { Diamond } from '../record/Diamond'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BOARD, CountLights, LineScoreBoard } from '../components/ui/Scoreboard'
 import { TeamLogo } from '../components/ui/TeamLogo'
+import { oppErrorCount, ourErrorCount } from '../data/errors'
 import { OppMark } from '../components/ui/GameCard'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { useMediaQuery, usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
 import { EASE } from '../components/motion/Reveal'
 import { readDraft } from '../record/draft'
-import { count, offense, oppBatterOf, score, type RecordState } from '../record/model'
+import { count, offense, oppBatterOf, oppPitchCount, score, type RecordState } from '../record/model'
 import { oppPitcherText } from '../record/OppParts'
 import { hhmm } from '../lib/dates'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
@@ -146,9 +147,9 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const n = Math.max(sc.lineUs.length, s.game.innings ?? 0)
   const hitsUs = s.batting.filter((p) => p.result in HIT_BASE_COUNT).length
   const hitsOpp = s.pitching.filter((p) => p.result in HIT_BASE_COUNT).length
-  // E: each team's own errors (ours on the opponent's plate appearances, theirs when our batter reached on one)
-  const errorsUs = s.pitching.reduce((a, p) => a + (p.errors?.length ?? 0), 0) + (side === 'opp' ? s.extras.errors?.length ?? 0 : 0)
-  const errorsOpp = s.batting.filter((p) => p.result === '失誤').length
+  // E: each team's own errors, the game page's rule (data/errors.ts), plus those of the plate appearance in progress
+  const errorsUs = ourErrorCount(s.pitching) + (side === 'opp' ? s.extras.errors?.length ?? 0 : 0)
+  const errorsOpp = oppErrorCount(s.batting) + (side === 'us' ? s.extras.oppErrors?.length ?? 0 : 0)
   // innings not reached yet stay dark instead of showing 0
   const played = (i: number, half: 'top' | 'bottom') => i + 1 < s.inning || (i + 1 === s.inning && (half === 'top' || s.half === 'bottom'))
   const lineOf = (line: number[], half: 'top' | 'bottom') => line.map((v, i) => (played(i, half) ? v : null))
@@ -277,7 +278,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
               {season && <span>{`本季 ${season.ab ? f3(season.avg) : '—'}・OPS ${f3(season.ops)}（${season.pa} 打席）`}</span>}
             </div>
           )}
-          {side === 'us' && s.oppPitcher && <div className="text-[12px]" style={{ color: BOARD.muted }}>對 {oppPitcherText(s.oppPitcher)}</div>}
+          {side === 'us' && <div className="text-[12px] tabular-nums" style={{ color: BOARD.muted }}>{s.oppPitcher ? `對 ${oppPitcherText(s.oppPitcher)}・` : ''}對方投手 {oppPitchCount(s)} 球</div>}
           <div className="text-[12px] mt-0.5"><BoardPitches pitches={s.pitches} /></div>
           <UpNextRows rows={upRows} big={big} />
         </InfoPanel>

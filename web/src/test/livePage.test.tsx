@@ -75,4 +75,17 @@ describe('即時比分: who is up next, 本季, 本半局看點', () => {
     expect(screen.queryByText('攻守交換後')).toBeNull()
     expect(screen.queryByText('本半局看點・照紀錄自動挑選')).toBeNull()
   })
+
+  it('E: their errors count 妨礙, 對方失誤 and the one pressed during the plate appearance in progress (batch 11)', async () => {
+    const s: RecordState = {
+      ...newGame(LIVE, NAMES.map((name) => ({ name, pos: 'DH' })), '壬'), slot: 2,
+      batting: [bat(LIVE.id, '甲', '妨礙'), bat(LIVE.id, '乙', '一安', { errors: ['SS'] })],
+      runners: [], extras: { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0, oppErrors: ['C'] },
+    }
+    show(s)
+    await screen.findByText('準備打擊')
+    const row = screen.getAllByRole('row').find((r) => r.textContent?.startsWith('對手'))!
+    const cells = within(row).getAllByRole('cell')
+    expect(cells[cells.length - 1].textContent).toBe('3')
+  })
 })

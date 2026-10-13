@@ -139,6 +139,15 @@ export const OPP_HAND_LABEL: Record<OppHand, string> = { L: '左投', R: '右投
 
 /** 對方代跑 with no name typed: what PitchingPA.runner holds and what the runner is called everywhere. */
 export const OPP_PR_UNNAMED = '對方代跑'
+/** 對方代打 with no name typed: what PitchingPA.oppBatter holds for him. */
+export const OPP_PH_UNNAMED = '對方代打'
+/** 對方代打 with a name: PitchingPA.oppBatter holds 「代打 99號」, so the mark is kept on the row (the play-by-play reads
+ *  it as is); the batter himself is the name after the mark (oppBatterName). */
+export const oppPinchHitter = (typed: string) => (typed.trim() ? `代打 ${typed.trim()}` : OPP_PH_UNNAMED)
+/** Whether an oppBatter is a 對方代打 mark (with or without a name). */
+export const isOppPinchHit = (v?: string) => { const t = v?.trim() ?? ''; return t === OPP_PH_UNNAMED || /^代打\s+\S/.test(t) }
+/** The opponent batter's own name in an oppBatter ('' for an unnamed 對方代打): 「代打 99號」 → 「99號」. */
+export const oppBatterName = (v?: string) => { const t = v?.trim() ?? ''; return t === OPP_PH_UNNAMED ? '' : t.replace(/^代打\s+(?=\S)/, '') }
 /** The 代跑 mark on a play: 「代跑 12號」, or just 「代跑」 when no name was typed. */
 export const pinchMark = (runner: string) => (runner === OPP_PR_UNNAMED ? '代跑' : `代跑 ${runner}`)
 
@@ -173,6 +182,9 @@ export interface BattingPA {
   note?: string
   /** runner moves between this plate appearance's pitches, in order */
   events?: PlayEvent[]
+  /** 對方失誤: their fielders' positions that erred while he was up (one entry per error, '?' = not known), every error
+   *  but a 失誤 result's own; see data/errors.ts oppErrorsOf. Left out when there is none. */
+  errors?: string[]
   /** 對方投手 (name, optional). Left out (not undefined) when unknown, like runner / events. */
   oppPitcher?: string
   /** 對方投手 throwing hand. Left out when unknown. */
@@ -205,6 +217,8 @@ export interface PitchingPA {
   pk: number
   /** 守備失誤: our fielders' positions that erred during this plate appearance (one entry per error), see data/errors.ts */
   errors?: string[]
+  /** their batter's 打點 (the same rules as ours). Left out (0) when there is none. */
+  rbi?: number
   code?: string
   note?: string
   /** runner moves between this plate appearance's pitches, in order */

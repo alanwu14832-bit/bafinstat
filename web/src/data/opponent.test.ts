@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { oppBattingLines, oppKey, oppTotals, scoutLines, scoutSummary } from './opponent'
+import { hasOppName, oppBattingLines, oppKey, oppTotals, scoutLines, scoutSummary } from './opponent'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
-import { EMPTY_DATASET, type Dataset, type Game, type PitchingPA } from './types'
+import { EMPTY_DATASET, OPP_PH_UNNAMED, oppPinchHitter, type Dataset, type Game, type PitchingPA } from './types'
 
 const prow = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'G1', inning: 1, pitcher: '甲', oppOrder: 1, pitches: ['IP'], result: '內滾', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
 
@@ -24,6 +24,14 @@ describe('opponent batting', () => {
     expect(oppKey({})).toBe('棒次未記')
     const lines = oppBattingLines([prow({ oppOrder: undefined, result: '一安', code: 'R' }), prow({ result: '全壘打', code: 'ER' }), prow({ result: '一安', code: 'L' })])
     expect(lines.map((l) => [l.label, l.r])).toEqual([['第 1 棒', 1], ['棒次未記', 1]])
+  })
+  it('對方代打: unnamed is merged into his slot, a named one is the name after the mark (review)', () => {
+    expect(oppKey({ oppBatter: OPP_PH_UNNAMED, oppOrder: 7 })).toBe('第 7 棒')
+    expect(hasOppName({ oppBatter: OPP_PH_UNNAMED, oppOrder: 7 })).toBe(false)
+    expect(oppPinchHitter(' 99號 ')).toBe('代打 99號')
+    expect(oppKey({ oppBatter: oppPinchHitter('99號'), oppOrder: 7 })).toBe('99號')
+    const lines = oppBattingLines([prow({ oppOrder: 7 }), prow({ oppOrder: 7, oppBatter: OPP_PH_UNNAMED, result: '一安' }), prow({ oppOrder: 9, oppBatter: OPP_PH_UNNAMED }), prow({ oppOrder: 4, oppBatter: '代打 99號' }), prow({ oppOrder: 4, oppBatter: '99號' })])
+    expect(lines.map((l) => [l.label, l.pa])).toEqual([['99號', 2], ['第 7 棒', 2], ['第 9 棒', 1]])
   })
   it('a tie-break runner counts only his run', () => {
     const [l] = oppBattingLines([prow({ result: '突破僵局', pitches: [], code: 'R' })])

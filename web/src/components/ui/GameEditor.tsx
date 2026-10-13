@@ -6,8 +6,8 @@ import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
-import { cleanErrors, errorsText } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -114,13 +114,13 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
 }
 
 /* ------------------------------------------------------------------ drafts: pitches edited as text */
-type BatDraft = Omit<BattingPA, 'pitches'> & { pitchesText: string }
+type BatDraft = Omit<BattingPA, 'pitches' | 'errors'> & { pitchesText: string; errorsText: string }
 type PitDraft = Omit<PitchingPA, 'pitches' | 'errors'> & { pitchesText: string; errorsText: string }
-const toBatDraft = (p: BattingPA): BatDraft => { const { pitches, ...rest } = p; return { ...rest, pitchesText: pitches.join(' ') } }
+const toBatDraft = (p: BattingPA): BatDraft => { const { pitches, errors, ...rest } = p; return { ...rest, pitchesText: pitches.join(' '), errorsText: errorsText(errors) } }
 const toPitDraft = (p: PitchingPA): PitDraft => { const { pitches, errors, ...rest } = p; return { ...rest, pitchesText: pitches.join(' '), errorsText: errorsText(errors) } }
 const parsePitches = (t: string) => t.toUpperCase().split(/[\s,，、/]+/).filter(Boolean)
-const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, ...rest } = d; return { ...rest, pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, ...(+(rest.baserunningOuts ?? 0) ? { baserunningOuts: +(rest.baserunningOuts ?? 0) } : {}), run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
-const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, ...rest } = d; const errors = cleanErrors(et); return { ...rest, ...(errors.length ? { errors } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
+const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, errorsText: et, ...rest } = d; const errors = cleanOppErrors(et); return { ...rest, ...(errors.length ? { errors } : {}), pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, ...(+(rest.baserunningOuts ?? 0) ? { baserunningOuts: +(rest.baserunningOuts ?? 0) } : {}), run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
+const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, rbi, ...rest } = d; const errors = cleanErrors(et); const r = Math.max(0, Math.min(4, +(rbi ?? 0) || 0)); return { ...rest, ...(errors.length ? { errors } : {}), ...(r ? { rbi: r } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
 
 const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
@@ -137,6 +137,7 @@ const batCols: Col<BatDraft>[] = [
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
   { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '壘死', kind: 'int', w: 44 },
   { key: 'run', label: '得分', kind: 'int', w: 44 }, { key: 'rbi', label: '打點', kind: 'int', w: 44 }, { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
+  { key: 'errorsText', label: '對方失誤（守位）', kind: 'text', w: 96 },
   { key: 'oppPitcher', label: '對方投手', kind: 'text', w: 88 }, { key: 'oppHand', label: '對方左右', kind: 'select', options: ['L', 'R'], optionLabel: (v) => (v === 'L' ? '左投' : '右投'), w: 64 },
 ]
 const pitCols: Col<PitDraft>[] = [
@@ -147,6 +148,7 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'runner', label: '代跑', kind: 'text', w: 80 },
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
   { key: 'errorsText', label: '守備失誤（守位）', kind: 'text', w: 96 },
+  { key: 'rbi', label: '打點', kind: 'int', w: 44 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
 type StarterDraft = GameDayRoster['starters'][number]
@@ -265,6 +267,27 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     if (!baseline.current.has(`${side}-${i}`)) baseline.current.set(`${side}-${i}`, { ...step.dest })
     // no RBI on an error, a double play or a strikeout (a run then scored on a wild pitch, a steal…)
     const noRbi = rows[i].result === '失誤' || rows[i].result === '雙殺' || rows[i].result === '三振'
+    // 打點 on either side (theirs is PitchingPA.rbi, left out at 0)
+    const rbiOf = (r: BattingPA | PitchingPA) => r.rbi ?? 0
+    const withRbi = <T extends BattingPA | PitchingPA>(r: T, d: number): T => {
+      const v = Math.max(0, Math.min(4, rbiOf(r) + d))
+      if (side === 'bat') return { ...r, rbi: v }
+      const { rbi: _x, ...rest } = r as PitchingPA; void _x
+      return (v ? { ...rest, rbi: v } : rest) as T
+    }
+    // 對方失誤 (we bat): a 失誤進壘 is one of their errors; the row's list ('?' = 不知道) follows it (an older row
+    // without a list gets its implied errors written out first). Taking one off: the batted ball's 失誤進壘 is the
+    // list's last entry (紀錄比賽 writes the fielder picked for it last, this editor adds its '?' last); one between
+    // pitches is a '?' if the list has one, else the last entry.
+    const oppErrDelta = (r: BattingPA, d: 1 | -1, onPlay = false): BattingPA => {
+      const list = oppErrorList(r)
+      if (d > 0) return { ...r, errors: [...list, UNKNOWN_FIELDER] }
+      const q = list.lastIndexOf(UNKNOWN_FIELDER)
+      const k = onPlay || q < 0 ? list.length - 1 : q
+      const next = k >= 0 ? list.filter((_, j) => j !== k) : list
+      const { errors: _e, ...rest } = r; void _e
+      return next.length ? { ...rest, errors: next } : rest
+    }
     const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
       let next = base
       const old = who === 'batter' ? step.batter : step.dest[who]
@@ -272,23 +295,30 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const err = end !== old ? playOf(who, old) : undefined
       if (side === 'bat' && err?.kind === 'err') next = next.map((r, k) => (k === rowOf(who) ? { ...r, advOnError: Math.max(0, (r as BattingPA).advOnError - basesOf(err)) } : r))
       // a run brought home by this batter's play is his RBI (not on an error or a double play)
-      if (side === 'bat' && !noRbi) {
+      if (!noRbi) {
         const d = end === 'home' && old !== 'home' ? 1 : old === 'home' && end !== 'home' && err?.kind !== 'err' ? -1 : 0
-        if (d) next = next.map((r, k) => (k === i ? { ...r, rbi: Math.max(0, Math.min(4, (r as BattingPA).rbi + d)) } : r))
+        if (d) next = next.map((r, k) => (k === i ? withRbi(r, d) : r))
       }
+      // the 失誤進壘 mark is gone: so is its error (their list while we bat; ours is picked by hand)
+      if (side === 'bat' && err?.kind === 'err' && rows[i].result !== '失誤' && !(rows[i].events ?? []).some((e) => e.play && e.kind === 'err' && e !== err)) next = next.map((r, k) => (k === i ? oppErrDelta(r as BattingPA, -1, true) : r))
       commitHalf(side, next, setEnd(half, i, who, end))
     }
     // a runner play between pitches: its counts (盜壘 on the runner's row for us, 被盜壘 / 阻殺 / 牽制 / 暴投 / 捕逸 on this
     // plate appearance for the opponent) follow from commitHalf, which counts every play the inning has before and after
+    // (a 失誤進壘 between pitches: their error while we bat goes on the list as 不知道; ours needs the fielder, picked
+    // in 我隊守備失誤 — saving is blocked until then)
     const onPlay = (pitch: number, kind: string, who: number[]) => {
       const { half: h, added } = addPlay(half, i, pitch, kind, who)
       if (!added.length) return
-      commitHalf(side, rows, h)
+      const errs = side === 'bat' ? added.filter((m) => m.kind === 'err').length : 0
+      let next: Array<BattingPA | PitchingPA> = rows
+      for (let k = 0; k < errs; k++) next = next.map((r, j) => (j === i ? oppErrDelta(r as BattingPA, 1) : r))
+      commitHalf(side, next, h)
     }
     const onRemovePlay = (n: number) => {
       const { half: h, removed } = removePlay(half, i, n)
       if (!removed) return
-      commitHalf(side, rows, h)
+      commitHalf(side, side === 'bat' && removed.kind === 'err' ? rows.map((r, j) => (j === i ? oppErrDelta(r as BattingPA, -1) : r)) : rows, h)
     }
     // a new result: the batter goes where it puts him, runners in his way are forced ahead (and those runs are his RBI)
     const onResult = (result: string) => {
@@ -298,9 +328,15 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       const st = h.steps.find((x) => x.index === i)!
       const next = rows.map((r, k) => {
         if (k !== i) return r
-        const n = withResult(r, result)
-        if (side !== 'bat' || ['失誤', '雙殺', '三振'].includes(result)) return n
-        return { ...n, rbi: Math.max(0, Math.min(4, (n as BattingPA).rbi + homesIn(st) - homesIn(step))) }
+        let n = withResult(r, result)
+        // 對方失誤 follows the 失誤進壘 on the batted ball the way 紀錄比賽 writes it (none extra on a 失誤 result)
+        if (side === 'bat') {
+          const { errors: _e, ...rest } = n as BattingPA; void _e
+          const errors = oppErrorsForResult(r as BattingPA, result)
+          n = (errors.length ? { ...rest, errors } : rest) as typeof n
+        }
+        if (['失誤', '雙殺', '三振'].includes(result)) return n
+        return withRbi(n, homesIn(st) - homesIn(step))
       })
       commitHalf(side, next, h)
     }
@@ -346,16 +382,22 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         // 失誤進壘 while we bat: his own 失誤進壘 count goes up by the bases, and a run scored that way is no RBI
         const dAdv = errBases(mark) - errBases(old)
         const dRbi = to === 'home' && !noRbi ? (old?.kind === 'err' ? 1 : 0) - (mark?.kind === 'err' ? 1 : 0) : 0
+        // and it is one of their errors (one for the play, whoever moved; none extra on a 失誤 result)
+        const otherErr = rest.some((e) => e.play && e.kind === 'err')
+        const dErr = rows[i].result === '失誤' || otherErr ? 0 : (mark?.kind === 'err' ? 1 : 0) - (old?.kind === 'err' ? 1 : 0)
         setBat((b) => b.map((x, k) => {
           let r = fromBatDraft(x)
           if (k === i) r = patch(r)
           if (k === rowOf(who) && dAdv) r = { ...r, advOnError: Math.max(0, r.advOnError + dAdv) }
           if (k === i && dRbi) r = { ...r, rbi: Math.max(0, Math.min(4, r.rbi + dRbi)) }
+          if (k === i && dErr) r = oppErrDelta(r, dErr as 1 | -1, true)
           return k === i || k === rowOf(who) ? toBatDraft(r) : x
         }))
       } else {
-        // while we field it is our error (pick the fielder in 我隊守備失誤 below); the rules then make a run scored on it unearned
-        setPit(withEarned(pitRows.map((x, k) => (k === i ? patch(x) : x))).map(toPitDraft))
+        // while we field it is our error (pick the fielder in 我隊守備失誤 below); the rules then make a run scored on it
+        // unearned, and it is no RBI
+        const dRbi = to === 'home' && !noRbi ? (old?.kind === 'err' ? 1 : 0) - (mark?.kind === 'err' ? 1 : 0) : 0
+        setPit(withEarned(pitRows.map((x, k) => (k === i ? (dRbi ? withRbi(patch(x), dRbi) : patch(x)) : x))).map(toPitDraft))
       }
     }
     const onThrowUp = (who: number | 'batter') => {
@@ -372,7 +414,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // (kind 'out' from his base) that the timeline turns into his row's 壘死; 出局 clears it
     const midBase = (row: number) => midOf(step).find((o) => o.row === row)?.base
     const outMark = (row: number) => (rows[i].events ?? []).find((e) => e.play && !e.batter && e.kind === 'out' && e.to === 'out' && e.from === midBase(row))
-    const runningOut = side === 'bat' ? {
+    // (their runner too: only the mark, they have no 壘死 column)
+    const runningOut = {
       of: (row: number) => step.dest[row] === 'out' && !!outMark(row),
       set: (row: number, on: boolean) => {
         const from = midBase(row)
@@ -381,12 +424,12 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'out', from, to: 'out' as const, play: true as const }] : rest
         const next = rows.map((r, k) => {
           if (k === i) { const n = { ...r, events }; if (!events.length) delete (n as { events?: unknown }).events; return n }
-          if (k === row && !on) { const n = { ...(r as BattingPA) }; delete n.baserunningOuts; return n }
+          if (side === 'bat' && k === row && !on) { const n = { ...(r as BattingPA) }; delete n.baserunningOuts; return n }
           return r
         })
         onEnd(row, 'out', next)
       },
-    } : undefined
+    }
     const pinch = side === 'bat' ? {
       onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
       pinchNames: names,
@@ -433,7 +476,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   // names already in this game's roster stay selectable even when they left the team roster
   const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher), ...dayRosterNames(initial.game.dayRoster)])].filter(Boolean), [roster, bat, pit, initial.game.dayRoster])
   // 對方代跑 suggestions: the opponent names already in this game
-  const oppNames = useMemo(() => [...new Set(pit.flatMap((p) => [p.oppBatter ?? '', p.runner ?? '']))].filter((n) => n.trim() && n !== OPP_PR_UNNAMED), [pit])
+  const oppNames = useMemo(() => [...new Set(pit.flatMap((p) => [oppBatterName(p.oppBatter), p.runner ?? '']))].filter((n) => n.trim() && n !== OPP_PR_UNNAMED), [pit])
   const starterSet = useMemo(() => new Set(starters.map((x) => x.name.trim()).filter(Boolean)), [starters])
   const benchChoices = useMemo(() => names.filter((n) => !starterSet.has(n)), [names, starterSet])
   const toggleBench = (n: string) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))
@@ -465,6 +508,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     if (dupName) { setTab('roster'); setError(`登錄名單的先發有重複的球員：${dupName}`); return }
     const dupOrder = listed.map((x) => x.order).find((o, i, a) => o !== undefined && Number.isFinite(o) && a.indexOf(o) !== i)
     if (dupOrder !== undefined) { setTab('roster'); setError(`登錄名單的先發有兩個第 ${dupOrder} 棒`); return }
+    // 失誤進壘 on their plate appearance is our error: whose (like 紀錄比賽, which does not send it without one)
+    const noFielder = pitRows.findIndex((p) => (p.events ?? []).some((e) => e.kind === 'err') && !p.errors?.length && !(p.result === '失誤' && !(p.events ?? []).some((e) => e.kind === 'err' && !e.play)))
+    if (noFielder >= 0) { setTab('pit'); setSel({ side: 'pit', index: noFielder }); setError(`投球紀錄第 ${noFielder + 1} 個打席有「失誤進壘」，請在「我隊守備失誤」點是誰失誤再儲存`); return }
     // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster
     const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry })
     try {
@@ -476,7 +522,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim(), dayRoster }, batting, pitching, fielding })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % 9) + 1 : undefined })
+  const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', errorsText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % 9) + 1 : undefined })
   const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', errorsText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : undefined })
   const blankStarter = (prev?: StarterDraft): StarterDraft => ({ order: prev ? (prev.order && prev.order < 9 ? prev.order + 1 : undefined) : 1, pos: '', name: '' })
   const blankFld = (): FieldingLine => ({ gameId: game.id, player: '', pos: '', innings: game.innings, po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 })

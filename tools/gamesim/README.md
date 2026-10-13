@@ -6,7 +6,7 @@ Box Score、局分表拿去和手算的正確答案逐項比對——就像賽�
 - `game1.mjs`：5 局，我隊先攻。盜壘、暴投、對方失誤上壘、雙殺、全壘打、犧觸／犧飛、觸身、故四、盜壘失敗、
   代打、代跑、換投、牽制出局、我隊失誤後的非自責分。第一位打者之後在「對方投手是？」點「右投」（存下的我隊打席都要是
   對方右投，逐球・打擊有「對方先發・右投」），結束比賽勾一位中繼（比賽頁要顯示「中繼 某某」；勝投因此給先發）。
-- `game2.mjs`：4 局，我隊主場。安打＋失誤、趁傳進壘、場地二安、捕手妨礙、三振暴投上壘、捕逸後犧飛回來的分、
+- `game2.mjs`：4 局，我隊主場。安打＋失誤、趁傳進壘、對方失誤（右外野暴傳讓跑者多跑一壘＝趁傳失誤、捕手漏接界外飛球，E 都要算）、場地二安、捕手妨礙、三振暴投上壘、捕逸後犧飛回來的分、
   代守、半局在打席中結束（跑者被牽制）、再見二安。對方投手點「不記」（存下的打席都不能有對方投手）。4 上對方一壘跑者換上
   代跑「12號」（點跑者 → 填背號 →「換上代跑」），他之後跑回來得分：答案（S9 的失分、自責分）和沒有代跑時一樣，另外檢查
   紀錄頁和比賽頁的逐打席都標「代跑 12號」、存下的那一列 runner 是 12號。
@@ -28,7 +28,7 @@ cd web && SKIP_ARCHIVE=1 npm run build && npx vite preview --port 4173 &   # 本
 node tools/gamesim/game1.mjs /tmp/out && node tools/gamesim/check1.mjs /tmp/out/game1-shown.json
 node tools/gamesim/game2.mjs /tmp/out && node tools/gamesim/check2.mjs /tmp/out/game2-shown.json
 node tools/gamesim/game3.mjs /tmp/out && node tools/gamesim/check3.mjs /tmp/out/game3-shown.json
-node tools/gamesim/edit1.mjs /tmp/out && LANG=C.UTF-8 node tools/gamesim/excel.mjs /tmp/out   # excel 的 X3、X7 要有 soffice
+node tools/gamesim/edit1.mjs /tmp/out && LANG=C.UTF-8 node tools/gamesim/excel.mjs /tmp/out   # excel 的 X3、X7、X8 要有 soffice（X8：失誤守位用 6、游擊、「/」「；」填，總表和網站算的一樣）
 node tools/gamesim/practice.mjs
 ```
 `CHROMIUM=/path/to/chromium` 指定瀏覽器，`GAMESIM_URL` 指定網址。2026-10-08 第一次跑時找到：雙殺把 2 個出局算成 3 個、

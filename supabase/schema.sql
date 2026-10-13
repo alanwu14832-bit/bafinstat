@@ -63,6 +63,7 @@ create table if not exists batting_pa (
   events        jsonb,          -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
   opp_pitcher   text,           -- 對方投手（姓名，選填）
   opp_hand      text,           -- 對方投手 L 左投 / R 右投
+  errors        text[],         -- 對方失誤：對方守備員的守位（每次失誤一個，'?' 不知道是誰）；打擊結果「失誤」那次不在這裡
   primary key (game_id, seq)
 );
 
@@ -90,6 +91,7 @@ create table if not exists pitching_pa (
   note         text,
   events       jsonb,         -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
   runner       text,          -- 對方代跑（姓名或背號，選填）：記在那位跑者上壘的那一列
+  rbi          smallint not null default 0,  -- 對方打者的打點
   primary key (game_id, seq)
 );
 
@@ -683,12 +685,16 @@ begin
   begin alter table games add constraint games_end_time_size check (char_length(coalesce(end_time, '')) <= 8) not valid; exception when duplicate_object then null; end;
 end $$;
 
--- ---------------------------------------------------------------- 2026-10-15 對方代跑（舊資料庫補欄位）
+-- ---------------------------------------------------------------- 2026-10-15 對方代跑、對方失誤、對方打點（舊資料庫補欄位）
 -- 新建的已在上面。說明見 migrations/2026-10-15_opp_runner.sql。
 alter table pitching_pa add column if not exists runner text;
+alter table batting_pa add column if not exists errors text[];
+alter table pitching_pa add column if not exists rbi smallint not null default 0;
 do $$
 begin
   begin alter table pitching_pa add constraint pitching_pa_runner_size check (char_length(coalesce(runner, '')) <= 40) not valid; exception when duplicate_object then null; end;
+  begin alter table batting_pa add constraint batting_pa_errors_shape check (cardinality(coalesce(errors, '{}')) <= 20 and coalesce(array_to_string(errors, ','), '') ~ '^((P|C|1B|2B|3B|SS|LF|CF|RF|[?])(,(P|C|1B|2B|3B|SS|LF|CF|RF|[?]))*)?$') not valid; exception when duplicate_object then null; end;
+  begin alter table pitching_pa add constraint pitching_pa_rbi_range check (rbi between 0 and 4) not valid; exception when duplicate_object then null; end;
 end $$;
 
 -- ---------------------------------------------------------------- 2026-10-13 存檔保護
@@ -740,7 +746,7 @@ begin
    where j ->> 'game_id' = any(ids);
   insert into pitching_pa
   select r.* from jsonb_array_elements(coalesce(p_pitching, '[]')) j,
-         jsonb_populate_record(null::pitching_pa, '{"pitches": [], "result": "", "sba": 0, "cs": 0, "wp": 0, "pb": 0, "pk": 0}'::jsonb || _no_nulls(j)) r
+         jsonb_populate_record(null::pitching_pa, '{"pitches": [], "result": "", "sba": 0, "cs": 0, "wp": 0, "pb": 0, "pk": 0, "rbi": 0}'::jsonb || _no_nulls(j)) r
    where j ->> 'game_id' = any(ids);
   insert into fielding_lines
   select r.* from jsonb_array_elements(coalesce(p_fielding, '[]')) j,
