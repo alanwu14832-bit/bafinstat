@@ -12,7 +12,7 @@ import { RosterSortToggle } from '../components/ui/RosterSortToggle'
 import { BOARD, CountLights } from '../components/ui/Scoreboard'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { cx } from '../lib/format'
-import { POSITIONS } from '../data/types'
+import { POSITIONS, posNum } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { TEAM } from '../config/team'
 import { Diamond } from './Diamond'
@@ -207,7 +207,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
                 <span className="text-[12px] text-ink-2">{r.side === 'opp' ? '誰失誤（我隊守備失誤）' : '誰失誤（對方守備）'}，點一下就記</span>
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                   {[...FIELD_POSITIONS, ...(r.side === 'us' ? [UNKNOWN_FIELDER] : [])].map((pos) => (
-                    <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : pos}</button>
+                    <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)}</button>
                   ))}
                 </div>
               </div>
@@ -309,7 +309,7 @@ export function SubSheet(p: SubSheetProps) {
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-medium text-ink-2">守位</span>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="守位">{posOpts.map((x) => <button key={x} type="button" aria-pressed={sub.pos === x} onClick={() => p.onPickPos(x)} className={cx(chip(sub.pos === x), 'min-w-12 px-2.5')}>{x}</button>)}</div>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="守位">{posOpts.map((x) => <button key={x} type="button" aria-pressed={sub.pos === x} onClick={() => p.onPickPos(x)} className={cx(chip(sub.pos === x), 'min-w-12 px-2.5')}>{posNum(x)}</button>)}</div>
             </div>
           </>
         ) : (

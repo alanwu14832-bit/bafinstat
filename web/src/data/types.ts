@@ -49,6 +49,10 @@ export type OutcomeCode = 'I' | 'II' | 'III' | 'L' | 'R' | 'ER'
 export const POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH', 'PH', 'PR'] as const
 export type Position = (typeof POSITIONS)[number]
 export const POSITION_BY_NUMBER: Record<number, Position> = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF' }
+/** The scorebook number of a fielding position (P 1 … RF 9); undefined for DH, PH, PR, IF, OF, UT. */
+export const POSITION_NUMBER: Record<string, number | undefined> = Object.fromEntries(Object.entries(POSITION_BY_NUMBER).map(([n, p]) => [p, Number(n)]))
+/** A position with its scorebook number in front, for pickers: 「1 P」「6 SS」; others unchanged (「DH」). */
+export const posNum = (p: string): string => (POSITION_NUMBER[p] ? `${POSITION_NUMBER[p]} ${p}` : p)
 /** The nine fielding positions, in scorer's number order. */
 export const FIELD_POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'] as const
 /** What a roster entry can say a player plays: a specific spot, or a flexible group (內野手 / 外野手 / 工具人). */

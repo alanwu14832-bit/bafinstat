@@ -26,7 +26,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7 })
     start(s)
     fireEvent.click(screen.getByRole('button', { name: /^對方失誤/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'C' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 C' }))
     await wait(50)
     expect(draft().extras.oppErrors).toEqual(['C'])
     // our runner moves up on their error between pitches: whose error first
@@ -49,7 +49,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     expect(screen.getByRole('button', { name: /打者 趁傳（不算失誤）/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /打者 對方失誤進壘/ }))
     expect(screen.getByText(/趁傳：守備傳別的壘/)).toBeTruthy()
-    fireEvent.click(within(screen.getByRole('group', { name: '對方誰失誤' })).getByRole('button', { name: 'LF' }))
+    fireEvent.click(within(screen.getByRole('group', { name: '對方誰失誤' })).getByRole('button', { name: '7 LF' }))
     fireEvent.change(screen.getByRole('textbox', { name: '這個打席的備註' }), { target: { value: '左外野漏接' } })
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)
@@ -71,7 +71,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     fireEvent.click(screen.getByRole('button', { name: '失誤進壘' }))
     const who = screen.getByRole('group', { name: '誰失誤' })
     expect(within(who).queryByRole('button', { name: '不知道' })).toBeNull()
-    fireEvent.click(within(who).getByRole('button', { name: 'C' }))
+    fireEvent.click(within(who).getByRole('button', { name: '2 C' }))
     await wait(50)
     expect(draft().extras.errors).toEqual(['C'])
     // a single scores him: their RBI stepper is there

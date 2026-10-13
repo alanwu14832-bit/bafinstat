@@ -20,7 +20,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, POSITIONS, PRACTICE_PREFIX, type Game, type Registration } from '../data/types'
+import { isPA, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -233,7 +233,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
             <div key={i} className="flex items-center gap-2">
               <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
               <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
-              <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} className="w-[92px]" />
+              <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
@@ -601,7 +601,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <span className="text-[11px] text-muted basis-full">對方誰失誤（例如捕手漏接界外飛球點 C；打擊結果是「失誤」的那次不用再點；跑者因失誤多跑壘，在「壘上跑者」記失誤進壘）</span>
                     {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => {
                       const n = (state.extras.oppErrors ?? []).filter((x) => x === pos).length
-                      const label = pos === UNKNOWN_FIELDER ? '不知道' : pos
+                      const label = pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)
                       return (
                         <span key={pos} className="inline-flex items-center rounded-[var(--radius-sm)] border border-border overflow-hidden text-[13px]">
                           <button type="button" onClick={() => act((s) => addOppError(s, pos))} className="h-10 pointer-fine:h-9 px-3 hover:bg-surface-2 cursor-pointer">{label}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
@@ -618,7 +618,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                       const n = (state.extras.errors ?? []).filter((x) => x === pos).length
                       return (
                         <span key={pos} className="inline-flex items-center rounded-[var(--radius-sm)] border border-border overflow-hidden text-[13px]">
-                          <button type="button" onClick={() => act((s) => addError(s, pos))} className="h-10 pointer-fine:h-9 px-3 hover:bg-surface-2 cursor-pointer">{pos}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
+                          <button type="button" onClick={() => act((s) => addError(s, pos))} className="h-10 pointer-fine:h-9 px-3 hover:bg-surface-2 cursor-pointer">{posNum(pos)}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
                           {n > 0 && <button type="button" aria-label={`${pos} 失誤減一`} onClick={() => apply((s) => removeError(s, pos))} className="h-10 pointer-fine:h-9 px-2 border-l border-border text-muted hover:text-ink cursor-pointer">−</button>}
                         </span>
                       )
@@ -671,7 +671,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                       {FIELD_POSITIONS.map((pos) => {
                         const on = !!plan.errBy?.includes(pos)
-                        return <button key={pos} type="button" aria-pressed={on} onClick={() => setPlan({ ...plan, errBy: on ? plan.errBy!.filter((x) => x !== pos) : [...(plan.errBy ?? []), pos] })} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{pos}</button>
+                        return <button key={pos} type="button" aria-pressed={on} onClick={() => setPlan({ ...plan, errBy: on ? plan.errBy!.filter((x) => x !== pos) : [...(plan.errBy ?? []), pos] })} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{posNum(pos)}</button>
                       })}
                     </div>
                   </div>
