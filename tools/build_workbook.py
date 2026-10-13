@@ -96,18 +96,26 @@ PITCH_N = 12
 BAT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "棒次", "守位", "打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
             ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "代跑", "盜壘", "盜壘失敗", "失誤進壘", "壘上出局", "壘死", "得分", "打點", "結果代碼", "備註", "跑壘事件",
              # 對方投手 (L 左投 / R 右投), at the end of the inputs so copy-paste ranges made before still line up
-             "對方投手", "對方投手慣用"]
+             "對方投手", "對方投手慣用",
+             # 對方失誤 (their fielders' positions, one per error; 不明 = not known), after the last input for the same reason
+             "對方失誤"]
 BAT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "一安", "二安", "三安", "全壘打", "壘打數", "保送", "故四", "觸身", "三振",
             "犧觸", "犧飛", "雙殺", "失誤上壘", "得點圈打數", "得點圈安打", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "壞球不揮", "內野飛球",
             "首球揮棒", "優質打席", "慣用手", "拉打", "中間", "反方向", "首打席", "上壘", "代跑首場",
             # 優質打席 kinds, at the very end so every column before keeps its letter
-            "兩好球纏鬥", "6球以上"]
+            "兩好球纏鬥", "6球以上",
+            # the opponent's errors on this plate appearance (對方失誤 + a 失誤／妨礙 result), the website's rule
+            "對手失誤數"]
 PIT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "對方棒次", "投手", "對方打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
             ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "被盜壘", "阻殺", "暴投", "捕逸", "牽制出局", "守備失誤", "結果代碼", "備註", "跑壘事件",
              # 對方代跑, at the end of the inputs so copy-paste ranges made before still line up (no 總表 formula reads it)
-             "代跑"]
+             "代跑",
+             # their batter's 打點, after the last input too (no 總表 formula reads it; the website shows it in their box)
+             "打點"]
 PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "二安", "三安", "全壘打", "保送", "故四", "觸身", "三振", "犧飛",
-            "出局數", "失分", "自責", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "首球好球", "首人次", "先發", "內野飛球", "累計出局(前)", "累計出局碼"]
+            "出局數", "失分", "自責", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "首球好球", "首人次", "先發", "內野飛球", "累計出局(前)", "累計出局碼",
+            # our errors on this plate appearance (守備失誤 + a 失誤／妨礙 result), the website's rule
+            "守備失誤數"]
 FLD_INPUT = ["比賽ID", "球員", "守位", "局數", "刺殺PO", "助殺A", "失誤E", "雙殺DP", "捕逸PB", "被盜壘SB", "阻殺CS", "備註"]
 FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "首列"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
@@ -180,7 +188,7 @@ lines = [
     ("紀錄一場新比賽（三步驟）", True),
     ("1. 在『比賽清單』新增一列，填入比賽ID（格式 G+日期+場次，例如 G20251010-01）、日期、杯賽、對手、主客等。", False),
     ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄；賽後在同一區塊填勝投／敗投／救援／中繼和結束時間。", False),
-    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『對方投手慣用』欄，最後一個黃色欄；灰色自動欄不用）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』（A 欄到『代跑』欄）貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
+    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『對方失誤』欄，最後一個黃色欄；灰色自動欄不用）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』（A 欄到『打點』欄）貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
     ("   也可以把整個檔案上傳到網站版儀表板（資料匯入頁），網站會自動讀取這三張紀錄表。", False),
     ("", False),
     ("逐球代碼", True),
@@ -195,7 +203,9 @@ lines = [
     ("出局(前)：打席開始時的出局數 0/1/2。　壘上(前)：打席開始時壘上跑者，無／1／2／3／12／13／23／123 → 用來算得點圈打擊率。", False),
     ("落點：出局填處理球的守備員 1–9（1 投 2 捕 3 一壘 4 二壘 5 三壘 6 游擊 7 左 8 中 9 右）；沒人碰到的穿越安打填縫隙代碼 56 三游／46 二游／34 一二／78 左中／89 右中。軌跡 G 滾地／F 飛球／L 平飛／P 內野飛球（算飛球的一種）。強度 強／中／弱 → 近似 Statcast 的 Hard-Hit%。", False),
     ("盜壘失敗、暴投、捕逸、牽制出局、阻殺、刺殺、助殺：CPBL 官方紀錄項目，舊表缺少。", False),
-    ("守備失誤（投球紀錄）：這個打席我隊誰失誤，填守位（SS、LF…，兩次就填 SS、SS）；例如一安＋左外野漏接填 LF。結果是「失誤」而沒填時，照舊依落點算一次。守備紀錄的失誤E 請同步填。", False),
+    ("守備失誤（投球紀錄）：這個打席我隊誰失誤，填守位（SS、LF…，兩次就填 SS、SS）；例如一安＋左外野漏接填 LF、對方跑者因捕手暴傳多跑一壘填 C。結果是「失誤」的那次另外依落點算一次（已經填了同一個守位就不重複算；同一人在這個打席另外又失誤一次，就填兩次，例如游擊失誤上壘後又漏接填 SS、SS）。只填守位（SS、6、游擊都可以），其他字不要填。守備紀錄的失誤E 請同步填。", False),
+    ("對方失誤（打席紀錄，最後一個黃色欄）：我隊打擊時對方誰失誤，填守位（例如捕手漏接界外飛球填 C，跑者因對方暴傳多跑壘填 SS），不知道是誰就填「不明」；兩次就填 C、SS。結果是「失誤」的那次不用填（依落點算；同一人另外的失誤照填），趁傳進壘不算失誤。只填守位或「不明」，其他字不要填。比賽清單的對手失誤＝失誤／妨礙結果＋這一欄。", False),
+    ("打點（投球紀錄，最後一個黃色欄）：對方打者的打點，規則和我隊一樣（失誤、雙殺的那一分不算）；總表不讀這一欄，網站的對方打擊成績會用。", False),
     ("跑壘事件（可不填，網站逐球紀錄會自動寫）：這個打席投球之間的跑壘，依序用「；」分開，格式「第幾球 事件 起點-終點」，例如「2 暴投 1-2；3 盜壘 2-3」「2 投手犯規 1-2」；H 是回本壘得分、X 是出局，0 是第一球前；安打時趁傳多推進的壘，在最後加「打者」或「跑者」，例如「3 趁傳進壘 1-2 打者」。", False),
     ("突破僵局：延長賽照規則放上壘的跑者各記一列，放在那局最前面（先二壘、再一壘）；打擊結果填「突破僵局」、逐球空白；壘上(前)、出局(前)照放上去的順序填；得分、盜壘、結果代碼照一般跑者記。這列不算打席、打數；對方的突破僵局跑者回來得分記 R（非自責）。投手犯規記在跑壘事件，總表不算次數。", False),
     ("壘上出局：上壘後在壘上被刺殺、封殺、牽制出局的次數（盜壘失敗另外記）。壘死：其中因為自己跑壘失誤出局的次數（衝過頭、飛球被雙殺回不去、離壘被觸殺等），算這位跑者的。", False),
@@ -311,10 +321,11 @@ def game_formulas(rr):
     f["對手得分"] = f'=IF({A}="","",SUMIFS(投球紀錄!${PL["失分"]}$2:${PL["失分"]}${LAST},投球紀錄!$A$2:$A${LAST},{A}))'
     f["我隊安打"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["安打"]}$2:${BL["安打"]}${LAST},打席紀錄!$A$2:$A${LAST},{A}))'
     f["對手安打"] = f'=IF({A}="","",SUMIFS(投球紀錄!${PL["安打"]}$2:${PL["安打"]}${LAST},投球紀錄!$A$2:$A${LAST},{A}))'
-    f["我隊失誤"] = f'=IF({A}="","",SUMIFS(守備紀錄!${FL["失誤E"]}$2:${FL["失誤E"]}${LAST},守備紀錄!$A$2:$A${LAST},{A}))'
-    # the opponent's errors: our batters reaching on one, and 妨礙 (their catcher's interference is his error)
-    f["對手失誤"] = (f'=IF({A}="","",SUMIFS(打席紀錄!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${LAST},打席紀錄!$A$2:$A${LAST},{A})'
-                     f'+COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["打擊結果"]}$2:${BL["打擊結果"]}${LAST},"妨礙"))')
+    # our errors: the fielding lines, or the 投球紀錄 errors when they say more (an error without a 落點 is on no line)
+    f["我隊失誤"] = (f'=IF({A}="","",MAX(SUMIFS(守備紀錄!${FL["失誤E"]}$2:${FL["失誤E"]}${LAST},守備紀錄!$A$2:$A${LAST},{A}),'
+                     f'SUMIFS(投球紀錄!${PL["守備失誤數"]}$2:${PL["守備失誤數"]}${LAST},投球紀錄!$A$2:$A${LAST},{A})))')
+    # the opponent's errors: 失誤／妨礙 results and every 對方失誤 (失誤進壘 included; 趁傳 is no error), per plate appearance
+    f["對手失誤"] = f'=IF({A}="","",SUMIFS(打席紀錄!${BL["對手失誤數"]}$2:${BL["對手失誤數"]}${LAST},打席紀錄!$A$2:$A${LAST},{A}))'
     f["我隊殘壘"] = f'=IF({A}="","",COUNTIFS(打席紀錄!$A$2:$A${LAST},{A},打席紀錄!${BL["結果代碼"]}$2:${BL["結果代碼"]}${LAST},"L"))'
     # 比賽時間 (a game past midnight wraps)
     f["比賽時間"] = f'=IF(OR({GL["時間"]}{rr}="",{GL["結束時間"]}{rr}=""),"",MOD({GL["結束時間"]}{rr}-{GL["時間"]}{rr},1))'
@@ -443,7 +454,29 @@ def bat_formulas(rr):
     RN = f"${BL['代跑']}{rr}"
     f["代跑首場"] = (f'=IF({RN}="",0,IF(COUNTIFS($A$2:$A${LAST},$A{rr},${BL["打者"]}$2:${BL["打者"]}${LAST},{RN})>0,0,'
                      f'IF(COUNTIFS($A$2:$A{rr},$A{rr},${BL["代跑"]}$2:${BL["代跑"]}{rr},{RN})=1,1,0)))')
+    f["對手失誤數"] = error_count(f"${BL['對方失誤']}{rr}", X, Y, ours=False)
     return f
+
+def error_count(listcell, X, Y, ours=True):
+    """Errors on one plate appearance, the website's rule (data/errors.ts): the positions typed (SS、LF; 不明 counts),
+    plus a 失誤 result at its 落點 and 妨礙 as the catcher's. Ours (守備失誤): the result's own is already in when that
+    position is listed (with no 落點: when anything is listed). Theirs (對方失誤): the list never holds it, always added."""
+    # the same separators the site reads (、 ， , ； ; / and spaces)
+    S = TRIM_ = f'TRIM({listcell})'
+    for sep in ["，", ",", "；", ";", "/", " "]:
+        S = f'SUBSTITUTE({S},"{sep}","、")'
+    n = f'IF({TRIM_}="",0,LEN({S})-LEN(SUBSTITUTE({S},"、",""))+1)'
+    if not ours:
+        return f'={n}+IF(OR({X}="失誤",{X}="妨礙"),1,0)'
+    has = lambda p: f'ISNUMBER(SEARCH("、"&{p}&"、","、"&{S}&"、"))'
+    # the result's position as the site reads it: the code, the number, or the Chinese name (游擊 / 游)
+    pos = f'IFERROR(CHOOSE({Y},"P","C","1B","2B","3B","SS","LF","CF","RF"),"")'
+    zh = f'IFERROR(CHOOSE({Y},"投手","捕手","一壘","二壘","三壘","游擊","左外野","中外野","右外野"),"")'
+    zh1 = f'IFERROR(CHOOSE({Y},"投","捕","一壘","二壘","三壘","游","左","中","右"),"")'
+    listed = f'OR({has(pos)},{has(f"{Y}&" + chr(34) + chr(34))},{has(zh)},{has(zh1)})'
+    catcher = f'OR({has(chr(34) + "C" + chr(34))},{has(chr(34) + "2" + chr(34))},{has(chr(34) + "捕手" + chr(34))},{has(chr(34) + "捕" + chr(34))})'
+    return (f'={n}+IF({X}="失誤",IF({n}=0,1,IF({pos}="",0,IF({listed},0,1))),0)'
+            f'+IF({X}="妨礙",IF({catcher},0,1),0)')
 
 def pit_formulas(rr):
     X = f"${PL['打擊結果']}{rr}"; Z = f"${PL['軌跡']}{rr}"; F = f"${PL['投手']}{rr}"; CODE = f"${PL['結果代碼']}{rr}"
@@ -489,6 +522,7 @@ def pit_formulas(rr):
     f["首球好球"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="S",${P1}{rr}="SS",${P1}{rr}="CS",${P1}{rr}="F",${P1}{rr}="IP")),1,0)'
     f["首人次"] = f'=IF(AND({F}<>"",COUNTIFS($A$2:$A{rr},$A{rr},${PL["投手"]}$2:${PL["投手"]}{rr},{F})=1),1,0)'
     f["先發"] = f'=IF(AND({F}<>"",COUNTIF($A$2:$A{rr},$A{rr})=1),1,0)'
+    f["守備失誤數"] = error_count(f"${PL['守備失誤']}{rr}", X, f"${PL['落點']}{rr}")
     return f
 
 def fld_formulas(rr):
@@ -923,7 +957,7 @@ for i in range(1, 10):
     put(ws, LS + 2, 2 + i, f'=SUMIFS({BP}!${BL["得分"]}$2:${BL["得分"]}${TROWS},{BP}!$B$2:$B${TROWS},{i})', f_base, None, "0", center)
 put(ws, LS + 1, 12, f"=SUM(C{LS + 1}:K{LS + 1})", f_bold, None, "0", center); put(ws, LS + 2, 12, f"=SUM(C{LS + 2}:K{LS + 2})", f_bold, None, "0", center)
 put(ws, LS + 1, 13, f'=SUM({PP}!${PL["安打"]}$2:${PL["安打"]}${TROWS})', f_base, None, "0", center); put(ws, LS + 2, 13, f'=SUM({BP}!${BL["安打"]}$2:${BL["安打"]}${TROWS})', f_base, None, "0", center)
-put(ws, LS + 1, 14, f'=SUM({BP}!${BL["失誤上壘"]}$2:${BL["失誤上壘"]}${TROWS})+COUNTIF({BP}!${BL["打擊結果"]}$2:${BL["打擊結果"]}${TROWS},"妨礙")', f_base, None, "0", center); put(ws, LS + 2, 14, f"=SUM(G{LS + 22}:G{LS + 37})", f_base, None, "0", center)
+put(ws, LS + 1, 14, f'=SUM({BP}!${BL["對手失誤數"]}$2:${BL["對手失誤數"]}${TROWS})', f_base, None, "0", center); put(ws, LS + 2, 14, f"=SUM(G{LS + 22}:G{LS + 37})", f_base, None, "0", center)
 put(ws, LS + 1, 15, f'=COUNTIF({PP}!${PL["結果代碼"]}$2:${PL["結果代碼"]}${TROWS},"L")', f_base, None, "0", center); put(ws, LS + 2, 15, f'=COUNTIF({BP}!${BL["結果代碼"]}$2:${BL["結果代碼"]}${TROWS},"L")', f_base, None, "0", center)
 put(ws, LS + 3, 2, "勝敗", f_bold, fill_band); put(ws, LS + 3, 3, f'=IF(L{LS + 2}>L{LS + 1},"W",IF(L{LS + 2}<L{LS + 1},"L","T"))', f_bold, None, None, center)
 # lineup + batting line
@@ -992,8 +1026,8 @@ for i, row in enumerate(FLD_SEED):
     for k, v in row.items():
         if k == "比賽ID" or v in (None, ""): continue
         ws.cell(row=FB + 1 + i, column=1 + FLD[k], value=v)
-# fix E column reference in line score (our errors) to fielding block
-ws.cell(row=LS + 2, column=14, value=f"=SUM(H{FB + 1}:H{FB + 16})")
+# fix E column reference in line score (our errors) to fielding block — or 單場-投球's 守備失誤 when they say more
+ws.cell(row=LS + 2, column=14, value=f"=MAX(SUM(H{FB + 1}:H{FB + 16}),SUM({PP}!${PL['守備失誤數']}$2:${PL['守備失誤數']}${TROWS}))")
 ws.freeze_panes = "A9"
 
 def build_template_log(name, inputs, autos, formulas_fn, seed_fn, rows_data):

@@ -1,4 +1,4 @@
-// 模擬比賽 2 (see README.md): we are the home team — 安打＋失誤, 趁傳, 場地二安, 妨礙, 不死三振, 捕逸後的犧飛, 代守, 對方代跑, 半局在打席中結束, 再見安打
+// 模擬比賽 2 (see README.md): we are the home team — 安打＋失誤, 趁傳, 對方失誤（趁傳失誤、掉界外飛）, 場地二安, 妨礙, 不死三振, 捕逸後的犧飛, 代守, 對方代跑, 半局在打席中結束, 再見安打
 // 模擬比賽: play a scripted 5-inning game through the real 紀錄比賽 screen (local mode, nothing goes to the cloud),
 // then read what the site shows (line score, box score) and compare it with the answer key written below by hand,
 // the way a recorder would check the stats against the game video.
@@ -59,6 +59,7 @@ async function pa(side, spec) {
     else if (st.run) await runnerEv(st.run, st.ev)
     else if (st.wp) { await main.getByRole('button', { name: /^暴投/ }).first().click(); await p.waitForTimeout(250) }
     else if (st.pb) { await main.getByRole('button', { name: /^捕逸/ }).first().click(); await p.waitForTimeout(250) }
+    else if (st.opperr) { await main.getByRole('button', { name: /^對方失誤/ }).click(); await main.getByRole('button', { name: st.opperr, exact: true }).first().click(); await p.waitForTimeout(150); await main.getByRole('button', { name: /^對方失誤/ }).click() }
     else if (st.myerr) { await main.getByRole('button', { name: /^我隊失誤/ }).click(); await main.getByRole('button', { name: st.myerr, exact: true }).first().click(); await p.waitForTimeout(150) }
   }
   if (!(await planOpen())) { await main.getByRole('button', { name: spec.result, exact: true }).first().click(); await p.waitForTimeout(120) }
@@ -149,12 +150,15 @@ await check('1上結束', '1下 0出局 0:0')
   if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「不記」後「對方投手是？」還在')
 }
 await us({ steps: ['B', 'B', 'B', 'CS', 'B'], result: '保送' })                                                // S1 保送
-await us({ steps: ['IP'], result: '一安', loc: 9, runners: { 1: 3 }, batter: 1, adv: { 1: '趁傳進壘' } })      // S2 一安，S1 趁傳上三
+// (batch 11) the video: S1 took third on the right fielder's wild throw to second — an error on the throw (趁傳失誤),
+// so it is 對方失誤進壘 (RF), not 趁傳; their E counts it now
+await us({ steps: ['IP'], result: '一安', loc: 9, runners: { 1: 3 }, batter: 1, adv: { 1: '對方失誤進壘' }, errBy: ['RF'] })      // S2 一安，S1 趁對方暴傳上三
 await us({ steps: ['CS', 'SS', 'SS'], result: '三振', runners: { 3: 3, 1: 2 }, batter: 1 })                   // S3 三振但暴投上一壘（滿壘）
 await us({ steps: ['IP'], result: '場地二安', loc: 8, runners: { 3: 'home', 2: 'home', 1: 3 }, batter: 2, rbi: 2 })  // S4 場地二安 2 分
 await us({ steps: ['B'], result: '妨礙', batter: 1 })                                                         // S5 捕手妨礙
 await us({ steps: ['IP'], result: '內滾', loc: 6, runners: { 3: 'home', 2: 3, 1: 2 }, batter: 'out', rbi: 1 })  // S6 內滾 打點 1
-await us({ steps: ['IP'], result: '外飛', loc: 8, batter: 'out' })                                            // S7
+// (batch 11) the video: before S7's fly out their catcher dropped a foul pop (no pitch counted, nobody moved): 對方失誤 C
+await us({ steps: [{ opperr: 'C' }, 'IP'], result: '外飛', loc: 8, batter: 'out' })                            // S7
 await us({ steps: ['IP'], result: '一安', loc: 7, runners: { 3: 'home', 2: 'home' }, batter: 1, rbi: 2 })     // S8 一安 2 分
 await runnerEv(1, '牽制出局')                                                                                 // S8 被牽制，S9 下局再打
 await check('1下結束', '2上 0出局 5:0')
@@ -198,7 +202,7 @@ await oppPr(1, '12號')
 }
 await newPitcher(B4)
 await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 9, runners: { 1: 3 }, batter: 2 })
-await opp({ steps: ['IP'], result: '一安', loc: 8, runners: { 3: 'home', 2: 'home' }, batter: 2, adv: { batter: '趁傳進壘' } })
+await opp({ steps: ['IP'], result: '一安', loc: 8, runners: { 3: 'home', 2: 'home' }, batter: 2, adv: { batter: '趁傳（不算失誤）' } })
 await opp({ steps: ['IP'], result: '全壘打', loc: 7, runners: { 2: 'home' }, batter: 'home' })
 await opp({ steps: ['SS', 'SS', 'SS'], result: '三振' })
 await opp({ steps: ['IP'], result: '三安', loc: 9, batter: 3 })

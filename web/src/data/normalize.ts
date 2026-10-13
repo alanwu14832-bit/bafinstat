@@ -17,7 +17,7 @@
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
 import { outsCredited } from './stats'
-import { cleanErrors, errorsOf } from './errors'
+import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
 import { cleanTime } from './gameTime'
 
@@ -121,11 +121,22 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
   const firstPA = (name: string) => Math.min(...batting.filter((b) => b.batter === name).map((b) => at(b.inning, batHalf)))
   const entry = (name: string) => { if (starters.has(name)) return 0; const s = subs.find((x) => x.in === name); return s ? at(s.inning, s.half) : firstPA(name) }
   const exit = (name: string) => { const s = subs.find((x) => x.out === name); return s ? at(s.inning, s.half) : Infinity }
+  // nobody at that position in the batting log (a defensive sub who never batted): the 當日登錄名單 names him
+  const rosterAt = (pos: string, when: number): string | undefined => {
+    const who = [...(game.dayRoster?.starters ?? []).filter((x) => x.pos === pos).map((x) => ({ name: x.name, from: 0 })),
+      ...subs.filter((x) => x.pos === pos && x.in).map((x) => ({ name: x.in, from: at(x.inning, x.half) }))]
+    return (who.filter((x) => x.from <= when).sort((a, b) => b.from - a.from)[0] ?? who[0])?.name
+  }
   for (const err of fieldErrors) {
-    const cands = lines.filter((l) => l.pos === err.pos)
+    let cands = lines.filter((l) => l.pos === err.pos)
+    if (!cands.length) {
+      const name = rosterAt(err.pos, err.when)
+      if (name) { const l: FieldingLine = { gameId: game.id, player: name, pos: err.pos, innings, ...blank, e: 0, note: '由登錄名單推定' }; lines.push(l); cands = [l] }
+    }
     const pick = cands.find((l) => entry(l.player) <= err.when && err.when < exit(l.player))
       ?? [...cands].filter((l) => entry(l.player) <= err.when).sort((a, b) => entry(b.player) - entry(a.player))[0] ?? cands[0]
-    if (pick) { pick.e++; pick.note = '失誤依落點推定' }
+    // never dropped: an error nobody can be found for is reported with the ones without a 落點
+    if (pick) { pick.e++; pick.note = '失誤依落點推定' } else unknownErrors++
   }
   const outs = new Map<string, number>()
   const order: string[] = []
@@ -136,7 +147,7 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
     outs.set(p.pitcher, outs.get(p.pitcher)! + (credited.get(p) ?? 0))
   }
   order.forEach((name, i) => lines.push({ gameId: game.id, player: name, pos: 'P', innings: Math.round(((outs.get(name) ?? 0) / 3) * 10) / 10, ...blank, e: (errByPitcher.get(name) ?? 0) + (i === 0 ? pitcherUnknown : 0), note: i === 0 ? 'SP' : 'RP' }))
-  if (unknownErrors && lines.length) lines[0].note = `${lines[0].note ?? ''}；另有 ${unknownErrors} 次失誤未記落點，未歸屬個人`
+  if (unknownErrors && lines.length) lines[0].note = `${lines[0].note ?? ''}；另有 ${unknownErrors} 次失誤未記落點或找不到守備員，未歸屬個人`
   return { lines, unknownErrors }
 }
 
@@ -258,18 +269,20 @@ const oppRunnerOf = (runner?: string, batter?: string): { runner?: string } => {
   const r = runner?.trim().slice(0, 40)
   return r && r !== batter?.trim() ? { runner: r } : {}
 }
+/** Their RBI: a whole number 0–4 (anything else is 0, which is left out). */
+const oppRbiOf = (v: unknown): number => { const n = Math.trunc(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0 }
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
-  const batting: BattingPA[] = input.batting.map(({ runner, oppPitcher, oppHand, ...p }) => ({
-    ...p, ...oppOf(oppPitcher, oppHand), batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const batting: BattingPA[] = input.batting.map(({ runner, oppPitcher, oppHand, errors, ...p }) => ({
+    ...p, ...oppOf(oppPitcher, oppHand), ...(cleanOppErrors(errors).length ? { errors: cleanOppErrors(errors) } : {}), batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, ...p }) => ({
-    ...p, ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, ...p }) => ({
+    ...p, ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
@@ -307,7 +320,7 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
       fielding.push(...d.lines)
       gameLines = d.lines
       warn('沒有守備紀錄，已依打席守位與對方失誤落點推定失誤')
-      if (d.unknownErrors) warn(`${d.unknownErrors} 次對方打者靠失誤上壘但沒記落點，無法歸屬到個人`)
+      if (d.unknownErrors) warn(`${d.unknownErrors} 次我隊失誤沒記落點（或那個守位找不到人），算進球隊失誤，但無法歸屬到個人`)
     }
     // putouts / assists: when nobody recorded any, credit them from the opponent's plate appearances
     if (gameLines.length && pit.length && gameLines.every((f) => !f.po && !f.a)) {

@@ -13,6 +13,7 @@ import { BOARD, CountLights } from '../components/ui/Scoreboard'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { cx } from '../lib/format'
 import { POSITIONS } from '../data/types'
+import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { TEAM } from '../config/team'
 import { Diamond } from './Diamond'
 import { RunnerDiamond } from './RunnerDiamond'
@@ -129,10 +130,11 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
 
 /* ------------------------------------------------------------------ runner sheet */
 export const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: Side; out?: boolean }> = [
-  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘', side: 'us' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' },
+  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' },
   { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'out', label: '壘死', out: true },
 ]
-const bigBtn = (out?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors', out && 'text-critical')
+// (pressed: the ink colours replace the surface ones — added after them, bg-surface would still win in the stylesheet)
+const bigBtn = (out?: boolean, on?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border text-[14px] font-medium cursor-pointer transition-colors', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2 active:bg-surface-3', out && 'text-critical'))
 
 export interface RunnerSheetProps {
   open: boolean
@@ -141,7 +143,8 @@ export interface RunnerSheetProps {
   side: Side
   picked: number | null
   onPick: (row: number) => void
-  onEvent: (r: Runner, ev: RunnerEvent) => void
+  /** `errBy` (失誤進壘): whose error — their fielder ('?' = 不知道) for our runner, ours for theirs */
+  onEvent: (r: Runner, ev: RunnerEvent, errBy?: string) => void
   /** 暴投 / 捕逸 / 投手犯規 with everyone moving up */
   onAll: (kind: 'wp' | 'pb' | 'bk') => void
   /** 代跑 for our runner: the names that can come in, and whether that runner has a batting slot to take over */
@@ -174,6 +177,10 @@ function OppPinchForm({ runner, names, onPinch }: { runner: Runner; names: strin
 export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEvent, onAll, pinch, oppPinch, context }: RunnerSheetProps) {
   const ours = runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base)
   const r = ours.find((x) => x.row === picked) ?? (ours.length === 1 ? ours[0] : null)
+  // 失誤進壘 asks whose error first (one tap): ours for their runner, theirs (or 不知道) for ours
+  const [errFor, setErrFor] = useState<number | null>(null)
+  useEffect(() => { if (!open) setErrFor(null) }, [open])
+  const asking = r && errFor === r.row
   return (
     <Sheet open={open} onClose={onClose} ariaLabel="壘上跑者" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
       <div className="p-5 flex flex-col gap-4">
@@ -193,8 +200,18 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
           <div className="flex flex-col gap-3" role="group" aria-label={`${r.base}B ${r.name} 的動作`}>
             <div className="text-[13px] text-ink-2"><span className="tnum text-muted mr-1">{r.base}B</span><span className="font-semibold text-ink">{r.name}</span> 發生了什麼？</div>
             <div className="grid grid-cols-3 gap-2">
-              {RUNNER_EVENTS.filter((e) => !e.side || e.side === r.side).map((e) => <button key={e.ev} type="button" onClick={() => onEvent(r, e.ev)} className={bigBtn(e.out)}>{e.label}</button>)}
+              {RUNNER_EVENTS.filter((e) => !e.side || e.side === r.side).map((e) => <button key={e.ev} type="button" aria-expanded={e.ev === 'err' ? !!asking : undefined} onClick={() => (e.ev === 'err' ? setErrFor(asking ? null : r.row) : onEvent(r, e.ev))} className={bigBtn(e.out, e.ev === 'err' && !!asking)}>{e.label}</button>)}
             </div>
+            {asking && (
+              <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border bg-surface-2/50 p-3">
+                <span className="text-[12px] text-ink-2">{r.side === 'opp' ? '誰失誤（我隊守備失誤）' : '誰失誤（對方守備）'}，點一下就記</span>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
+                  {[...FIELD_POSITIONS, ...(r.side === 'us' ? [UNKNOWN_FIELDER] : [])].map((pos) => (
+                    <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : pos}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             {pinch && r.side === 'us' && pinch.can(r) && (
               <div className="flex flex-col gap-2 pt-3 border-t border-border">
                 <span className="text-[12px] text-ink-2">代跑：點一位換上 {r.name}</span>

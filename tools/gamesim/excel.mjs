@@ -8,6 +8,8 @@
 //   X6 單場模板 filled in by hand — warned when the template's example 守備紀錄 is left in; the same Box Score without it
 //   X7 the 總表 sheet, recalculated by LibreOffice, against the site's own 打擊／投球／守備 numbers and game list
 //   node tools/gamesim/excel.mjs /tmp/out     (reads game1-shown.json + edit1-dataset.json or game1-dataset.json)
+//   X8 守備失誤／對方失誤 typed as numbers or Chinese names (6、游擊、左外野, / and ； between): the 總表 still counts
+//      them like the site
 //   X7 also runs on game3-dataset.json (延長賽突破僵局、投手犯規) when game3.mjs has run before it
 // X3 and X7 need LibreOffice (soffice); they are skipped without it.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -236,6 +238,33 @@ if (lo) {
     totalsVsSite('X7 突破僵局', ds3, recalc(`${S}/export3.xlsx`, `${S}/lo3`))
     if (T.errs.length) problem(`網頁錯誤：${T.errs.join(' / ')}`)
   } else log('－ X7 突破僵局略過（還沒跑 game3.mjs）')
+  // X8 errors typed the way people type them (numbers, Chinese names, / and ； between): the 總表 counts them like the
+  // site does — the fielder at a 失誤 row's 落點 named again (as 游擊 for 6) is that same error on our side; their list
+  // is always on top of the result's own
+  // (from LibreOffice's copy: its formulas are plain cells that survive being written back)
+  const typed = X.readFile(lo)
+  const ZH = ['', '投手', '捕手', '一壘', '二壘', '三壘', '游擊', '左外野', '中外野', '右外野']
+  const isErr = (r) => r['打擊結果'] === '失誤' && Number(r['落點']) >= 1 && Number(r['落點']) <= 9
+  let ours = 0, other = 0, theirs = 0
+  const e1 = editSheet(typed, '投球紀錄', '投手', (r) => (isErr(r) && !ours++ ? { 守備失誤: ZH[Number(r['落點'])] } : r['比賽ID'] === G && !r['守備失誤'] && r['打擊結果'] !== '失誤' && !other++ ? { 守備失誤: '6；左外野' } : null))
+  const e2 = editSheet(typed, '打席紀錄', '打者', (r) => (isErr(r) && !theirs++ ? { 對方失誤: '游擊/左' } : null))
+  if (e1 !== 2 || e2 !== 1) problem(`X8 要改的格子找到 ${e1}、${e2} 個（應 2、1 個）`)
+  // no saved results, so LibreOffice works every formula out again
+  for (const ws of Object.values(typed.Sheets)) for (const [k, c] of Object.entries(ws)) if (k[0] !== '!' && c.f) { delete c.v; delete c.w; c.t = 'z' }
+  X.writeFile(typed, `${S}/typed-errors.xlsx`)
+  const E8 = await fresh(seed)
+  log('X8 守位用數字／中文填再匯入：', JSON.stringify(await importFile(E8, `${S}/typed-errors.xlsx`, 'replace')))
+  const lo8 = recalc(`${S}/typed-errors.xlsx`, `${S}/lo8`)
+  totalsVsSite('X8 失誤守位的寫法', await dataset(E8), lo8)
+  // and row by row (比賽清單 我隊失誤 takes the larger of this and 守備紀錄, which can hide it): 游擊 on an E6 is that
+  // error (1), 6；左外野 two (2), their 游擊/左 on an E-anything two more than the result (3)
+  const w8 = X.readFile(lo8)
+  for (const [sheet, key, list, count, want] of [['投球紀錄', '投手', '守備失誤', '守備失誤數', [1, 2]], ['打席紀錄', '打者', '對方失誤', '對手失誤數', [3]]]) {
+    const got = rowsOf(w8, sheet, key).filter((r) => String(r[list]).trim()).map((r) => r[count])
+    if (JSON.stringify(got) !== JSON.stringify(want)) problem(`X8 ${sheet} ${count}：總表 ${JSON.stringify(got)}，網站 ${JSON.stringify(want)}`)
+    else log(`✓ X8 ${sheet} ${count} ${JSON.stringify(got)}`)
+  }
+  if (E8.errs.length) problem(`網頁錯誤：${E8.errs.join(' / ')}`)
 } else log('－ X7 略過（沒有 LibreOffice）')
 
 for (const p of [A, B, D, H]) if (p.errs.length) problem(`網頁錯誤：${p.errs.join(' / ')}`)

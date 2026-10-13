@@ -7,7 +7,7 @@
  */
 import { inferAll, inningsOf, placedBases, scored as scoredRow, batterEndFor, type End, type Side } from '../record/timeline'
 import { REACH_RESULTS } from '../record/model'
-import { errorsOf } from './errors'
+import { errorsOf, oppErrorsOf } from './errors'
 import { countBefore, gridCell, type GridTone } from './gameText'
 import { oppKey } from './opponent'
 import { isHitResult, pitchTotals } from './stats'
@@ -173,13 +173,13 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
     const run = side === 'bat' ? (r as BattingPA).run : r.code === 'R' || r.code === 'ER' ? 1 : 0
     t.r += run; totals.r += run
     if (isHitResult(r.result)) { t.h++; totals.h++ }
-    const e = side === 'bat' ? (r.result === '失誤' || r.result === '妨礙' ? 1 : 0) : pitErrors(r)
+    const e = side === 'bat' ? oppErrorsOf(r as BattingPA).count : pitErrors(r)
     if (t.e !== null) t.e += e
     if (totals.e !== null) totals.e += e
     if (r.code === 'L') { t.lob++; totals.lob++ }
     const placedRow = isPlaced(r)
     if (!placedRow && r.result) { totals.pa++; if (!NON_AB.has(r.result)) totals.ab++ }
-    const rbi = side === 'bat' ? (r as BattingPA).rbi ?? 0 : 0
+    const rbi = (side === 'bat' ? (r as BattingPA).rbi : (r as PitchingPA).rbi) ?? 0
     totals.rbi += rbi
 
     const slot = slotOf(r)

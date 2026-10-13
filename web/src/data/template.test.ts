@@ -52,6 +52,17 @@ describe('公版 Excel keeps up with the website', () => {
       expect(head.slice(0, 7), name).toEqual(['比賽ID', '局', '出局(前)', '壘上(前)', '對方棒次', '投手', '對方打者'])
     }
   })
+  it('打席紀錄 has 對方失誤 after 對方投手慣用, 投球紀錄 打點 after 代跑, and the E helpers use them (batch 11)', () => {
+    for (const [name, who, last, added] of [['打席紀錄', '打者', '對方投手慣用', '對方失誤'], ['單場-打擊', '打者', '對方投手慣用', '對方失誤'], ['投球紀錄', '投手', '代跑', '打點'], ['單場-投球', '投手', '代跑', '打點']]) {
+      const head = headerRow(template.Sheets[name], who)
+      expect(head.indexOf(added), name).toBe(head.indexOf(last) + 1)
+    }
+    const head = headerRow(template.Sheets['打席紀錄'], '打者')
+    const ws = withStubs().Sheets['打席紀錄']
+    const rowOfHead = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }).findIndex((r) => r.some((c) => String(c).trim() === '打者'))
+    const f = ws[`${XLSX.utils.encode_col(head.indexOf('對手失誤數'))}${rowOfHead + 2}`]?.f as string
+    expect(f).toContain(`${XLSX.utils.encode_col(head.indexOf('對方失誤'))}${rowOfHead + 2}`)
+  }, 30000)
   it('has the 當日登錄名單 cells in the single-game template', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')

@@ -4,7 +4,7 @@
  */
 import { resultPhrase } from '../data/gameText'
 import { pitchTotals } from '../data/stats'
-import { isPA } from '../data/types'
+import { isPA, oppBatterName } from '../data/types'
 import { offense, oppBatterOf, type RecordState } from './model'
 
 /** 「3球 中外野飛球出局（強）・1 分打點」 */
@@ -26,6 +26,6 @@ export function earlierPAs(s: RecordState): EarlierPA[] {
   }
   const cur = oppBatterOf(s)
   return s.pitching
-    .filter((p) => isPA(p) && p.oppOrder === s.oppOrder && !(cur && p.oppBatter && p.oppBatter !== cur))
+    .filter((p) => isPA(p) && p.oppOrder === s.oppOrder && !(cur && oppBatterName(p.oppBatter) && oppBatterName(p.oppBatter) !== oppBatterName(cur)))
     .map((p, i) => ({ n: i + 1, inning: p.inning, text: paBrief(p), ...(p.pitcher !== s.pitcher ? { vs: p.pitcher } : {}) }))
 }

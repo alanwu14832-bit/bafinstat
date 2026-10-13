@@ -93,6 +93,14 @@ select pg_temp.ok(save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', '[{"game
 select pg_temp.ok(pg_temp.val($q$select runner from pitching_pa where game_id = 'G4'$q$) = '12號', 'pitching_pa.runner reads back');
 select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', ('[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","result":"一安","runner":"' || repeat('x', 41) || '"}]')::jsonb)$q$, 'a 41-character opponent pinch runner is refused');
 select pg_temp.ok(pg_temp.val($q$select runner from pitching_pa where game_id = 'G4'$q$) = '12號', 'and the row keeps its runner');
+-- 2026-10-15: 對方失誤 (batting_pa.errors) and 對方打點 (pitching_pa.rbi) go through save_games too
+select pg_temp.ok(save_games('[{"id":"G4","date":"2026-10-05"}]', '[{"game_id":"G4","seq":1,"inning":1,"batter":"甲","pitches":["F"],"result":"三振","errors":["C","?"]}]', '[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","pitches":["IP"],"result":"二安","rbi":2},{"game_id":"G4","seq":2,"inning":1,"pitcher":"甲","pitches":["IP"],"result":"一安"}]') = 1, 'A saves 對方失誤 and 對方打點');
+select pg_temp.ok(pg_temp.val($q$select array_to_string(errors, ',') from batting_pa where game_id = 'G4'$q$) = 'C,?', 'batting_pa.errors reads back');
+select pg_temp.ok(pg_temp.val($q$select string_agg(rbi::text, ',' order by seq) from pitching_pa where game_id = 'G4'$q$) = '2,0', 'pitching_pa.rbi reads back, 0 when the row has none');
+select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', '[{"game_id":"G4","seq":1,"inning":1,"batter":"甲","result":"三振","errors":["DH"]}]')$q$, 'an 對方失誤 that is not a position is refused');
+select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', ('[{"game_id":"G4","seq":1,"inning":1,"batter":"甲","result":"三振","errors":' || (select jsonb_agg('C'::text) from generate_series(1, 21))::text || '}]')::jsonb)$q$, '21 對方失誤 on one plate appearance are refused');
+select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', '[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","result":"全壘打","rbi":5}]')$q$, 'an 對方打點 of 5 is refused');
+select pg_temp.ok(pg_temp.val($q$select array_to_string(errors, ',') from batting_pa where game_id = 'G4'$q$) = 'C,?', 'and the game keeps its rows');
 select pg_temp.ok(pg_temp.val('select count(*) from editors')::int >= 3, 'A sees the 紀錄員名單');
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'A sees the 操作紀錄');
 select pg_temp.ok(length(add_editor('e@x.com', '新人')) = 10, 'A adds a recorder and gets a 10-character 邀請碼');

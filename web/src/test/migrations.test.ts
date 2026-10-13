@@ -1,5 +1,5 @@
 /**
- * save_games() is defined in three places (schema.sql for new projects, and the two migrations people re-run on old
+ * save_games() is defined in four places (schema.sql for new projects, and the three migrations people re-run on old
  * ones). Re-running an older file must never bring back a save_games() that forgets a column, so all three must be
  * the same function.
  */
@@ -19,10 +19,15 @@ describe('save_games() in schema.sql and the migrations', () => {
   const schema = saveGamesOf(supabase('schema.sql'))
   const m13 = saveGamesOf(supabase('migrations/2026-10-13_save_games.sql'))
   const m14 = saveGamesOf(supabase('migrations/2026-10-14_record_fields.sql'))
-  it('is the same function in all three files', () => {
+  const m15 = saveGamesOf(supabase('migrations/2026-10-15_opp_runner.sql'))
+  it('is the same function in all four files', () => {
     expect(schema).not.toBe('')
     expect(m13).toBe(schema)
     expect(m14).toBe(schema)
+    expect(m15).toBe(schema)
+  })
+  it('a pitching row without 打點 saves as 0 (pitching_pa.rbi is not null; a page open from before sends none)', () => {
+    expect(schema).toContain('"pk": 0, "rbi": 0}')
   })
   it('saves the end time', () => {
     expect(schema).toContain('end_time = excluded.end_time')

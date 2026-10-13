@@ -3,6 +3,7 @@
  * plate-appearance editor, so fixing a game later looks and works exactly like recording it.
  */
 import { LOC_HOLES } from '../data/types'
+import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import { OUT_RESULTS } from './model'
 
@@ -82,14 +83,17 @@ export function BattedBallPicker({ result, value, onChange, requireLoc }: { resu
 }
 
 export type ExtraBases = 'throw' | 'err'
+/** What the two chips mean, in one line (shown once under the runners). */
+export const ADV_HINT = '趁傳：守備傳別的壘或回傳時多跑，不算誰失誤；失誤進壘：漏接、暴傳等守備失誤讓他多跑，算一次失誤（那一分也不算打點）'
 /**
- * Next to someone who ended further than the result alone takes him: how he got the extra bases — 趁傳進壘 (on the
- * throw, nobody's fault) or 失誤進壘 (a fielder's error). Tap the lit one again to clear it.
+ * Next to someone who ended further than the result alone takes him: how he got the extra bases — 趁傳 (on the throw,
+ * nobody's fault, no error) or 失誤進壘 (a fielder's error: theirs while we bat, ours while we field; counted in E).
+ * Tap the lit one again to clear it.
  */
-export function AdvChoice({ kind, onPick, name }: { kind: ExtraBases | null; onPick: (k: ExtraBases | null) => void; name: string }) {
-  const opts: Array<{ k: ExtraBases; l: string }> = [{ k: 'throw', l: '趁傳進壘' }, { k: 'err', l: '失誤進壘' }]
+export function AdvChoice({ kind, onPick, name, erring }: { kind: ExtraBases | null; onPick: (k: ExtraBases | null) => void; name: string; /** whose error a 失誤進壘 is: we field (us) or we bat (them) */ erring?: 'us' | 'them' }) {
+  const opts: Array<{ k: ExtraBases; l: string }> = [{ k: 'throw', l: '趁傳（不算失誤）' }, { k: 'err', l: erring === 'us' ? '我隊失誤進壘' : erring === 'them' ? '對方失誤進壘' : '失誤進壘' }]
   return (
-    <div className="inline-flex items-center gap-1" role="group" aria-label={`${name} 多跑的壘怎麼來的`}>
+    <div className="inline-flex items-center gap-1 flex-wrap" role="group" aria-label={`${name} 多跑的壘怎麼來的`}>
       {!kind && <span className="text-[11px] text-muted mr-0.5">多跑的壘：</span>}
       {opts.map((o) => {
         const on = kind === o.k
@@ -100,6 +104,22 @@ export function AdvChoice({ kind, onPick, name }: { kind: ExtraBases | null; onP
             {on ? `✓ ${o.l}` : o.l}
           </button>
         )
+      })}
+    </div>
+  )
+}
+
+/**
+ * 誰失誤: position chips (one tap each; tap again to take it off). With `unknown`, a 「不知道」 chip too (their errors:
+ * the recorder may not see who it was).
+ */
+export function ErrorByChips({ value, onChange, unknown, label = '誰失誤' }: { value: string[]; onChange: (v: string[]) => void; unknown?: boolean; label?: string }) {
+  const opts = [...FIELD_POSITIONS, ...(unknown ? [UNKNOWN_FIELDER] : [])]
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
+      {opts.map((pos) => {
+        const on = value.includes(pos)
+        return <button key={pos} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== pos) : [...value, pos])} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{pos === UNKNOWN_FIELDER ? '不知道' : pos}</button>
       })}
     </div>
   )

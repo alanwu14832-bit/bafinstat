@@ -3,6 +3,7 @@
  * website and the spreadsheet always agree. See data/stat_dictionary.json.
  */
 import { balksIn } from './plays'
+import { oppErrorCount, ourErrorCount } from './errors'
 import { countTrail, isTwoStrikeBattle } from './counts'
 import { pitcherSituations } from './pitchingSituations'
 import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, isPlaced, isSingle, LOC_CODES, TRAJ_OF, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
@@ -512,9 +513,10 @@ export function summarizeGame(ds: Dataset, game: Game): GameSummary {
     game, runsUs, runsOpp,
     hitsUs: bat.filter((p) => HIT_RESULTS.has(p.result)).length,
     hitsOpp: pit.filter((p) => HIT_RESULTS.has(p.result)).length,
-    errorsUs: fld.reduce((a, f) => a + f.e, 0),
-    // their errors we know of: we reached on one (失誤), or on catcher's interference (妨礙, charged to the catcher)
-    errorsOpp: bat.filter((p) => p.result === '失誤' || p.result === '妨礙').length,
+    // ours: the fielding lines, or the plate appearances' errors when they say more (an error without a 落點 is on no line)
+    errorsUs: Math.max(fld.reduce((a, f) => a + f.e, 0), ourErrorCount(pit)),
+    // their errors: 失誤 / 妨礙 results, 對方失誤 and 失誤進壘 (趁傳進壘 is no error), one rule (data/errors.ts)
+    errorsOpp: oppErrorCount(bat),
     lobUs: bat.filter((p) => p.code === 'L').length,
     lineUs, lineOpp,
     result: runsUs > runsOpp ? 'W' : runsUs < runsOpp ? 'L' : 'T',

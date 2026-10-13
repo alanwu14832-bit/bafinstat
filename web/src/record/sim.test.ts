@@ -15,6 +15,8 @@ import { playGame, playGameWith, roster } from '../test/simGame'
 import { pitcherSituations, reliefEntries } from '../data/pitchingSituations'
 import { onDeckOf } from './upNext'
 import { halfCards, liveContext } from '../data/liveFacts'
+import { ourErrorCount } from '../data/errors'
+import { oppTotals } from '../data/opponent'
 
 describe('random games through the recording model', () => {
   const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
@@ -128,6 +130,29 @@ describe('what the recorder adds on the side', () => {
     expect(runners.some((p) => p.runner === '對方代跑')).toBe(true)
     expect(runners.some((p) => p.runner!.startsWith('代跑'))).toBe(true)
     expect(runners.some((p) => p.code === 'R' || p.code === 'ER')).toBe(true)
+  })
+})
+
+describe('both sides recorded alike (batch 11)', () => {
+  const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
+  it.each(seeds)('game %i: E counts every error of theirs; their RBI and our 備註 are kept', (seed) => {
+    const g = playGame(seed)
+    const { fragment } = normalizeGameEdit(roster, toGameEdit(g))
+    const sum = summarizeGame(fragment, fragment.games[0])
+    expect(sum.errorsOpp).toBe(g.expect.oppErrors)
+    expect(sum.errorsUs).toBe(ourErrorCount(fragment.pitching))
+    // their RBI never more than the runs that scored on the play
+    const runsOn = (i: number) => g.pitching.filter((p, k) => (k === i || (p.inning === g.pitching[i].inning && k < i)) && (p.code === 'R' || p.code === 'ER')).length
+    g.pitching.forEach((p, i) => expect(p.rbi ?? 0).toBeLessThanOrEqual(runsOn(i)))
+    expect(oppTotals(fragment.pitching).rbi).toBe(g.pitching.reduce((a, p) => a + (p.rbi ?? 0), 0))
+    expect([...g.batting, ...g.pitching].filter((p) => p.note?.includes('備註')).length).toBe(g.expect.notes)
+  })
+  it('the games have errors of theirs, their RBI and their runners on our errors at all', () => {
+    const games = seeds.slice(0, 40).map(playGame)
+    expect(games.some((g) => g.batting.some((b) => b.errors?.includes('?')))).toBe(true)
+    expect(games.some((g) => g.batting.some((b) => b.errors?.some((e) => e !== '?')))).toBe(true)
+    expect(games.some((g) => g.pitching.some((p) => (p.rbi ?? 0) > 0))).toBe(true)
+    expect(games.some((g) => g.pitching.some((p) => p.events?.some((e) => e.kind === 'err')))).toBe(true)
   })
 })
 

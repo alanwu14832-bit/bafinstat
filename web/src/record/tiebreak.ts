@@ -9,7 +9,7 @@
  * 修改資料 they can be added to or taken off a finished inning (addPlacedRows / removePlacedRows).
  */
 import { TEAM } from '../config/team'
-import { isPlaced, TIEBREAK, type BattingPA, type PitchingPA } from '../data/types'
+import { isPlaced, oppBatterName, TIEBREAK, type BattingPA, type PitchingPA } from '../data/types'
 import { basesString, lastOppName, offense, oppFields, type Base, type RecordState, type Runner, type TiebreakRule } from './model'
 import { inferHalf, inningsOf, shiftHalf, withoutRunners, withPlaced, type Half, type OnBase, type Side } from './timeline'
 
@@ -95,7 +95,7 @@ export function tiebreakPreview(s: RecordState): PlacedPreview[] {
   const at = (back: number): Omit<PlacedPreview, 'base'> => {
     if (us) { const slot = mod(s.slot - back, n); return { order: slot + 1, name: s.lineup[slot]?.name ?? '' } }
     const order = mod(s.oppOrder - 1 - back, 9) + 1
-    const name = back === 0 ? (s.oppBatter || (s.oppNames ? s.oppLineup?.[order - 1] : '') || '') : oppNameOf(s, order) ?? ''
+    const name = back === 0 ? (oppBatterName(s.oppBatter) || (s.oppNames ? s.oppLineup?.[order - 1] : '') || '') : oppNameOf(s, order) ?? ''
     return { order, name: name || `對方 ${order} 棒`, ...(name ? { named: true } : {}) }
   }
   // the base at ascending place i is i + 1 batters before the one up
@@ -182,7 +182,7 @@ export function addPlacedRows<T extends Row>(rows: T[], inning: number, side: Si
     } else {
       const p = lead as PitchingPA
       const order = p.oppOrder ? mod(p.oppOrder - 1 - back, 9) + 1 : undefined
-      const oppBatter = order ? [...(rows as PitchingPA[]).slice(0, at)].reverse().find((x) => x.oppOrder === order && x.oppBatter)?.oppBatter : undefined
+      const oppBatter = order ? oppBatterName([...(rows as PitchingPA[]).slice(0, at)].reverse().find((x) => x.oppOrder === order && x.oppBatter)?.oppBatter) || undefined : undefined
       made.push({ ...common, ...(order ? { oppOrder: order } : {}), pitcher: p.pitcher, ...(oppBatter ? { oppBatter } : {}), sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 } as PitchingPA)
     }
     placed.push({ row: at + placed.length, base })

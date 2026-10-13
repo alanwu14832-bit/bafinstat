@@ -10,7 +10,9 @@ const BAT = {
 }
 // 投手: IP BF PC 好球 K BB HBP H R ER ERA(7 局制)
 const PIT = { S9: ['3.0', 12, 27, 17, 2, 1, 0, 5, 3, 2, '4.67'], B4: ['1.0', 7, 11, 9, 1, 0, 0, 4, 4, 4, '28.00'] }
-const LINE = { us: '5 0 1 2 8 8 1', opp: '0 1 0 6 7 9 1' }
+// (batch 11) their E 1 → 3: the 妨礙 as before, plus the right fielder's wild throw S1 took third on (趁傳失誤, the old
+// count missed it) and the catcher's dropped foul pop before S7's fly out
+const LINE = { us: '5 0 1 2 8 8 1', opp: '0 1 0 6 7 9 3' }
 let bad = 0
 const cmp = (what, got, want) => { if (String(got) !== String(want)) { bad++; console.log(`✗ ${what}: 網站 ${got}，正確 ${want}`) } }
 const batCols = ['PA', 'AB', 'R', 'H', '2B', 'HR', 'RBI', 'BB', 'SO', 'SB']

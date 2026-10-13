@@ -75,7 +75,7 @@ begin
    where j ->> 'game_id' = any(ids);
   insert into pitching_pa
   select r.* from jsonb_array_elements(coalesce(p_pitching, '[]')) j,
-         jsonb_populate_record(null::pitching_pa, '{"pitches": [], "result": "", "sba": 0, "cs": 0, "wp": 0, "pb": 0, "pk": 0}'::jsonb || _no_nulls(j)) r
+         jsonb_populate_record(null::pitching_pa, '{"pitches": [], "result": "", "sba": 0, "cs": 0, "wp": 0, "pb": 0, "pk": 0, "rbi": 0}'::jsonb || _no_nulls(j)) r
    where j ->> 'game_id' = any(ids);
   insert into fielding_lines
   select r.* from jsonb_array_elements(coalesce(p_fielding, '[]')) j,
