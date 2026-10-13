@@ -34,7 +34,7 @@ describe('修改資料: their side', () => {
     expect(await screen.findByText(/第 2 個打席有「失誤進壘」，請在「我隊守備失誤」點是誰失誤/)).toBeTruthy()
     expect(onSave).not.toHaveBeenCalled()
     // pick the catcher: it saves
-    fireEvent.click(screen.getByRole('button', { name: 'C' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 C' }))
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled())
     expect((onSave.mock.calls[0] as unknown as [GameEdit])[0].pitching[1].errors).toEqual(['C'])
@@ -66,7 +66,7 @@ describe('修改資料 counts errors like 紀錄比賽 (batch 11 review)', () =>
     fireEvent.click(screen.getByRole('tab', { name: /投球/ }))
     fireEvent.click(screen.getByRole('button', { name: /^修改第 2 個打席/ }))
     const box = (await screen.findByText('我隊守備失誤')).closest('section') as HTMLElement
-    fireEvent.click(within(box).getByRole('button', { name: 'SS' }))
+    fireEvent.click(within(box).getByRole('button', { name: '6 SS' }))
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled())
     const saved = (onSave.mock.calls[0] as unknown as [GameEdit])[0].pitching[1]

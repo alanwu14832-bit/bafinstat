@@ -10,7 +10,7 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { isPlaced, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
+import { isPlaced, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
 import { count, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
@@ -312,7 +312,7 @@ function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => 
       <div className="flex flex-wrap gap-1.5">
         {FIELD_POSITIONS.map((pos) => {
           const k = (pa.errors ?? []).filter((x) => x === pos).length
-          return <CountButton key={pos} label={pos} value={k} onChange={(v) => { const errors = setOurErrorCount(pa, pos, v); const nx: PitchingPA = { ...pa, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
+          return <CountButton key={pos} label={posNum(pos)} value={k} onChange={(v) => { const errors = setOurErrorCount(pa, pos, v); const nx: PitchingPA = { ...pa, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
         })}
       </div>
       {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：沒點守位時，依落點算一次失誤。</p>}
@@ -337,7 +337,7 @@ function TheirErrors({ pa, onChange }: { pa: BattingPA; onChange: (pa: AnyPA) =>
   return (
     <Section title="對方守備失誤" aside={<span className="text-[11px] text-muted">例如捕手漏接界外飛球 → 點 C；打擊結果「失誤」那次不用再點</span>}>
       <div className="flex flex-wrap gap-1.5">
-        {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => <CountButton key={pos} label={pos === UNKNOWN_FIELDER ? '不知道' : pos} value={list.filter((x) => x === pos).length} onChange={(v) => set(pos, v)} />)}
+        {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => <CountButton key={pos} label={pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)} value={list.filter((x) => x === pos).length} onChange={(v) => set(pos, v)} />)}
       </div>
     </Section>
   )
@@ -600,7 +600,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
           <div className="flex items-end gap-2 flex-wrap">
             <label className="flex flex-col gap-1 text-[12px] text-ink-2">棒次<Select value={bat.order ? String(bat.order) : ''} onChange={(e) => set({ order: e.target.value ? Number(e.target.value) : undefined })} options={[{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]} className="w-[104px]" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[160px]">打者<PlayerSelect aria-label="打者" value={bat.batter} onChange={(v) => set({ batter: v })} names={bat.batter && !names.includes(bat.batter) ? [bat.batter, ...names] : names} className="w-full" /></label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-2">守位<Select value={bat.pos ?? ''} onChange={(e) => set({ pos: e.target.value || undefined })} options={[{ value: '', label: '—' }, ...POSITIONS.map((p) => ({ value: p, label: p }))]} className="w-[88px]" /></label>
+            <label className="flex flex-col gap-1 text-[12px] text-ink-2">守位<Select value={bat.pos ?? ''} onChange={(e) => set({ pos: e.target.value || undefined })} options={[{ value: '', label: '—' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[88px]" /></label>
           </div>
         </Section>
       ) : pit && (
