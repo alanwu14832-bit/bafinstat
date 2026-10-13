@@ -45,6 +45,8 @@ import { earnedAll } from '../record/earned'
 import { LiveBar, PracticeTag, RunnerSheet, SubSheet } from '../record/LiveParts'
 
 import { DRAFT_KEY, PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
+import { liveGameEnded } from '../hooks/useLiveGames'
+import { forgetLiveGame } from '../data/liveGames'
 import { earlierPAs } from '../record/history'
 import { liveRestHint, md, mdWeek, pitchesToday, restStatus } from '../data/pitchRest'
 import { RestHint, useOutings } from '../components/ui/RestHint'
@@ -961,8 +963,9 @@ function RecordScreen({ practice }: { practice: boolean }) {
     if (!state || practice || !window.confirm('放棄這場未完成的紀錄？（已儲存到雲端的打席不受影響，只會清掉接續用的進度）')) return
     const id = state.game.id
     writeDraft(null); setState(null); setHistory([])
-    // after a save still on its way, so it cannot put the progress back
-    if (cloud.configured) void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined).then(() => refreshDrafts())
+    // after a save still on its way, so it cannot put the progress back (then the game is no longer 比賽進行中)
+    if (cloud.configured) { forgetLiveGame(id); void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined).then(() => { void refreshDrafts(); void liveGameEnded(id) }) }
+    else void liveGameEnded(id)
   }
   // with the cloud every play is saved by itself: a status line, and a button only to retry a failed save
   const pending = !!state && state.updatedAt !== synced
@@ -988,8 +991,10 @@ function RecordScreen({ practice }: { practice: boolean }) {
       // the actual first-pitch time replaces the schedule's planned one
       const w = await saveGame(toGameEdit({ ...state, finished: true }, { winningPitcher: finish.w || undefined, losingPitcher: finish.l || undefined, savePitcher: finish.sv || undefined, holds: finish.holds.length ? finish.holds : undefined, time: finish.start || undefined, endTime: finish.end || undefined }))
       const id = state.game.id
-      if (cloud.configured) void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined)
+      if (cloud.configured) void Promise.resolve(syncing.current).then(() => deleteCloudDraft(id)).catch(() => undefined).then(() => liveGameEnded(id))
       writeDraft(null); setState(null); setHistory([]); setFinish(null)
+      // the game page shows its result at once (the shared list of games in progress is read again)
+      forgetLiveGame(id); if (!cloud.configured) void liveGameEnded(id)
       navigate(`/games?game=${encodeURIComponent(id)}`)
       if (w.length) window.alert(`已儲存。請核對：\n${w.map((x) => `・${x.message}`).join('\n')}`)
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }

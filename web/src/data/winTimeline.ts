@@ -18,6 +18,7 @@ import { basesMask, buildRunModel, buildWinModel, END, resultClass, stateOf, typ
 import { batterEndFor, homesIn, inferHalf, inningsOf, midOf, OUT_PLAYS, rebuildHalf, stepAfter, type Base, type End, type Half, type Move, type Side, type Step } from '../record/timeline'
 import { playText } from './plays'
 import { countBeforeText } from './gameText'
+import { liveKey } from './liveGames'
 import { summarizeGame, type BattingLine, type PitchingLine } from './stats'
 import { isPA, isPlaced, OPP_PR_UNNAMED, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 
@@ -247,7 +248,7 @@ const RUNNER_PLAYS = new Set(['sb', ...OUT_PLAYS])
 const EPS = 1e-12
 
 interface HalfInfo { inning: number; half: HalfName; side: Side; idx: number[]; steps: Step[]; approx: boolean; /** runner plays after the last result (splitTail) */ tail: Move[] }
-interface GameInfo { game: Game; bat: BattingPA[]; pit: PitchingPA[]; halves: HalfInfo[]; lineUs: number[]; lineOpp: number[]; result: number }
+interface GameInfo { game: Game; bat: BattingPA[]; pit: PitchingPA[]; halves: HalfInfo[]; lineUs: number[]; lineOpp: number[]; /** 1 win, 0 loss, 0.5 tie; null while the game is being recorded (no end point) */ result: number | null }
 
 /** Mask after a runner play from `s`. */
 function applyMove(outs: number, bases: number, m: Move): { outs: number; bases: number; runs: number } {
@@ -313,7 +314,7 @@ function readGame(game: Game, bat: BattingPA[], pit: PitchingPA[]): GameInfo {
       halves.push({ inning: i, half, side, idx, steps: split ? [...h.steps.slice(0, -1), split.step] : h.steps, approx, tail: split?.tail ?? [] })
     }
   }
-  return { game, bat, pit, halves, lineUs: sum.lineUs, lineOpp: sum.lineOpp, result: sum.result === 'W' ? 1 : sum.result === 'L' ? 0 : 0.5 }
+  return { game, bat, pit, halves, lineUs: sum.lineUs, lineOpp: sum.lineOpp, result: sum.result === 'live' ? null : sum.result === 'W' ? 1 : sum.result === 'L' ? 0 : 0.5 }
 }
 
 /** Training plate appearances of one game: followed halves only, both offenses, real plate appearances. */
@@ -446,6 +447,7 @@ function gameEvents(g: GameInfo, model: WinModel): { events: GameEvent[]; liStar
   }
   // the last value is the result: a rounding hair is taken off the last event, anything more is an 'end' point
   const lastEv = events[events.length - 1]
+  if (g.result === null) return { events, liStarts, approxHalves }
   if (lastEv && cur !== null && cur !== g.result && Math.abs(cur - g.result) <= 1e-9) { lastEv.weAfter = g.result; lastEv.wpa = g.result - lastEv.weBefore; cur = g.result }
   if (cur !== null && Math.abs(cur - g.result) > 1e-9) {
     const last = events[events.length - 1]
@@ -474,7 +476,8 @@ const rulesKey = (r: WinRules) => `${r.innings}|${r.tiebreakFrom ?? ''}|${r.tieb
 
 /** The model and every game's events, cached per Dataset object (effectiveDataset keeps it stable until a save). */
 export function buildWinData(ds: Dataset, rules: WinRules): WinData {
-  const key = rulesKey(rules)
+  // (a game being recorded has no end point: the cache knows which games were live)
+  const key = `${rulesKey(rules)}|${liveKey()}`
   const hit = cache.get(ds)?.get(key)
   if (hit) return hit
   const batBy = byGame(ds.batting), pitBy = byGame(ds.pitching)

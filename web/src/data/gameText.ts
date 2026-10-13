@@ -5,7 +5,7 @@
  */
 import { count, impliedResult } from '../record/model'
 import { batterEndFor } from '../record/timeline'
-import { isHitResult } from './stats'
+import { isHitResult, resultText } from './stats'
 import { isPlaced } from './types'
 import type { GameSummary } from './stats'
 
@@ -117,7 +117,7 @@ export interface ShareInput {
  */
 export function gameShareText({ teamName, summary, recap, url, videos = [], issues = 0 }: ShareInput): string {
   const g = summary.game
-  const res = summary.result === 'W' ? '勝' : summary.result === 'L' ? '敗' : '和'
+  const res = resultText(summary.result)
   const day = weekdayOf(g.date)
   const lines = [
     `${teamName} ${summary.runsUs}:${summary.runsOpp} ${g.opponent}（${res}）`,

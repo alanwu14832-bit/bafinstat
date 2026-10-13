@@ -145,12 +145,12 @@ export function scoutLines(ds: Dataset, opponent: string): ScoutLine[] {
 }
 
 /** Our record against `opponent` and their team batting in those games. */
-export function scoutSummary(ds: Dataset, opponent: string): { games: number; w: number; l: number; t: number; team: BattingLine } {
+export function scoutSummary(ds: Dataset, opponent: string): { games: number; w: number; l: number; t: number; /** still being recorded (in no column of the record) */ live: number; team: BattingLine } {
   const games = gamesAgainst(ds, opponent)
   const res = games.map((g) => summarizeGame(ds, g).result)
   const ids = new Set(games.map((g) => g.id))
   return {
-    games: games.length, w: res.filter((r) => r === 'W').length, l: res.filter((r) => r === 'L').length, t: res.filter((r) => r === 'T').length,
+    games: games.length, w: res.filter((r) => r === 'W').length, l: res.filter((r) => r === 'L').length, t: res.filter((r) => r === 'T').length, live: res.filter((r) => r === 'live').length,
     team: oppTotals(ds.pitching.filter((p) => ids.has(p.gameId))),
   }
 }

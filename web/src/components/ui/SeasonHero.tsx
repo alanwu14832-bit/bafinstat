@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, CalendarDays } from 'lucide-react'
 import { cx } from '../../lib/format'
@@ -8,7 +9,8 @@ import { TeamLogo } from './TeamLogo'
 import { Stitches } from './Scoreboard'
 import { HeroGlow } from './HeroGlow'
 import type { Story } from '../../data/stories'
-import type { GameSummary, TeamSummary } from '../../data/stats'
+import { finishedSummaries, LIVE_TEXT, resultText, teamSummary, type GameSummary, type TeamSummary } from '../../data/stats'
+import { LiveDot } from './ResultBadge'
 import type { Game } from '../../data/types'
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
@@ -16,11 +18,24 @@ const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); retur
 
 function ResultChip({ s }: { s: GameSummary }) {
   const r = s.result
+  // a game still being recorded: the live dot and 進行中 in the same small box as a 勝／敗 chip (the row of five
+  // stays one line on a phone), the current score under it; the full words are in its label
+  if (r === 'live') {
+    const label = `${s.game.date} vs ${s.game.opponent} ${LIVE_TEXT}，目前 ${s.runsUs}：${s.runsOpp}`
+    return (
+      <Link to={`/games?game=${encodeURIComponent(s.game.id)}`} title={label} aria-label={label}
+        className="press relative inline-flex flex-col items-center justify-center w-11 h-12 rounded-[10px] text-[11px] leading-none gap-1 bg-accent-soft text-[color-mix(in_srgb,var(--accent)_70%,var(--ink))]">
+        <span className="absolute top-1 right-1 inline-flex"><LiveDot /></span>
+        <span className="font-semibold whitespace-nowrap">進行中</span>
+        <span className="figure tabular-nums opacity-80">{s.runsUs}:{s.runsOpp}</span>
+      </Link>
+    )
+  }
   return (
     <Link to={`/games?game=${encodeURIComponent(s.game.id)}`} title={`${s.game.date} vs ${s.game.opponent} ${s.runsUs}：${s.runsOpp}`}
       className={cx('press inline-flex flex-col items-center justify-center w-11 h-12 rounded-[10px] text-[11px] leading-none gap-1 transition-colors',
         r === 'W' ? 'bg-accent text-accent-ink' : r === 'L' ? 'bg-surface-3 text-ink-2' : 'border border-border-strong text-ink-2')}>
-      <span className="figure text-[17px] font-bold">{r === 'W' ? '勝' : r === 'L' ? '敗' : '和'}</span>
+      <span className="figure text-[17px] font-bold">{resultText(r)}</span>
       <span className="figure tabular-nums opacity-80">{s.runsUs}:{s.runsOpp}</span>
     </Link>
   )
@@ -63,17 +78,20 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
   const last5 = summaries.slice(-5)
   const last = summaries[summaries.length - 1]
   const record = `${summary.w}-${summary.l}${summary.t ? `-${summary.t}` : ''}`
+  // the numbers beside the record count the same games: a game being recorded is in none of them (戰績先不算)
+  const done = useMemo(() => (summary.live ? teamSummary(finishedSummaries(summaries)) : summary), [summary, summaries])
   return (
     <section aria-label="球季概況" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)]">
       <HeroGlow />
       <div className="relative p-5 md:p-7 flex flex-col gap-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5">
           <div className="min-w-0">
-            <div className="flex items-center gap-2.5 text-[12px] text-ink-2">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-ink-2">
               <TeamLogo size={26} />
               <span className="font-medium text-ink">{title}</span>
               <span className="text-muted">·</span>
               <span className="tnum">{summary.games} 場</span>
+              {summary.live > 0 && <span className="inline-flex items-center gap-1 text-accent"><LiveDot />{summary.live > 1 ? `${summary.live} 場` : ''}{LIVE_TEXT}，戰績先不算</span>}
             </div>
             <div className="mt-3 flex items-end gap-4 md:gap-6 flex-wrap">
               <div className="figure font-bold text-ink leading-[0.85] text-[64px] md:text-[88px] tracking-[-0.01em]" aria-label={`戰績 ${summary.w} 勝 ${summary.l} 敗${summary.t ? ` ${summary.t} 和` : ''}`}>
@@ -81,15 +99,15 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
               </div>
               <dl className="flex gap-5 pb-1.5 md:pb-2.5">
                 <div><dt className="text-[11px] text-muted">勝率</dt><dd className="figure text-[22px] font-semibold text-ink leading-tight">{f3(summary.winPct)}</dd></div>
-                <div><dt className="text-[11px] text-muted">得失分差</dt><dd className={cx('figure text-[22px] font-semibold leading-tight', summary.diff > 0 ? 'text-good' : summary.diff < 0 ? 'text-critical' : 'text-ink')}>{signedInt(summary.diff)}</dd></div>
-                <div className="hidden sm:block"><dt className="text-[11px] text-muted">得分／失分</dt><dd className="figure text-[22px] font-semibold text-ink leading-tight">{summary.rs}<span className="text-muted mx-0.5">/</span>{summary.ra}</dd></div>
+                <div><dt className="text-[11px] text-muted">得失分差</dt><dd className={cx('figure text-[22px] font-semibold leading-tight', done.diff > 0 ? 'text-good' : done.diff < 0 ? 'text-critical' : 'text-ink')}>{signedInt(done.diff)}</dd></div>
+                <div className="hidden sm:block"><dt className="text-[11px] text-muted">得分／失分</dt><dd className="figure text-[22px] font-semibold text-ink leading-tight">{done.rs}<span className="text-muted mx-0.5">/</span>{done.ra}</dd></div>
               </dl>
             </div>
           </div>
           <div className="flex flex-col gap-3 md:items-end">
             {last5.length > 0 && (
               <div className="flex items-center gap-2.5">
-                <span className="text-[11px] text-muted md:order-last">近 {last5.length} 場</span>
+                <span className="text-[11px] text-muted whitespace-nowrap shrink-0 md:order-last">近 {last5.length} 場</span>
                 <div className="flex gap-1.5">{last5.map((s) => <ResultChip key={s.game.id} s={s} />)}</div>
               </div>
             )}
@@ -97,7 +115,7 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
             <div className="flex flex-wrap gap-2 md:justify-end">
               {last && (
                 <Link to={`/games/${encodeURIComponent(last.game.id)}`} className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8">
-                  <span>最近一場 <span className="tnum font-semibold text-ink">{last.runsUs}:{last.runsOpp}</span> <span className="font-medium text-ink">{last.game.opponent}</span>（{last.result === 'W' ? '勝' : last.result === 'L' ? '敗' : '和'}）</span>
+                  <span>最近一場 <span className="tnum font-semibold text-ink">{last.runsUs}:{last.runsOpp}</span> <span className="font-medium text-ink">{last.game.opponent}</span>（{resultText(last.result)}）</span>
                 </Link>
               )}
               <Link to="/games?view=schedule" className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8">

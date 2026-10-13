@@ -13,10 +13,10 @@ import { GameView, resultBadge } from './GameView'
 import { useDataStore } from '../store/data'
 import { auditGame } from '../data/audit'
 import { useStats } from '../hooks/useStats'
-import { summarizeGame } from '../data/stats'
+import { summarizeGame, type SummaryResult } from '../data/stats'
 import { TEAM_NAME } from '../data/seed'
 
-interface GameRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; venue: string; result: 'W' | 'L' | 'T'; score: string; hitsUs: number; hitsOpp: number; errorsUs: number; lob: number; pitches: number; isDemo: boolean }
+interface GameRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; venue: string; result: SummaryResult; score: string; hitsUs: number; hitsOpp: number; errorsUs: number; lob: number; pitches: number; isDemo: boolean }
 
 export function GamesPage() {
   const s = useStats()

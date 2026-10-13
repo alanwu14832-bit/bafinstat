@@ -14,11 +14,10 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { useMediaQuery, usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
 import { EASE } from '../components/motion/Reveal'
-import { readDraft } from '../record/draft'
 import { count, offense, oppBatterOf, oppPitchCount, score, type RecordState } from '../record/model'
 import { oppPitcherText } from '../record/OppParts'
 import { hhmm } from '../lib/dates'
-import { cloudConfigured, listCloudDrafts } from '../data/supabase'
+import { useLiveGames } from '../hooks/useLiveGames'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { HIT_BASE_COUNT, oppBatterName } from '../data/types'
@@ -39,36 +38,14 @@ const FEED_FILTER_KEY = 'bafin.live.feedFilter'
 
 /** Public live scoreboard. Reads the in-progress state the recorder's device keeps in sync (cloud), or this device's own draft. */
 export function LivePage() {
-  const [drafts, setDrafts] = useState<Array<{ state: RecordState; updatedAt: string; by?: string | null }>>([])
-  const [error, setError] = useState<string | null>(null)
-  const [tick, setTick] = useState(0)
+  // (the shared list of games in progress with their recording states, read every 5 s while this page is open:
+  // hooks/useLiveGames.ts)
+  const { drafts, error } = useLiveGames({ pollMs: POLL_MS, full: true })
   const base = useDataStore((s) => s.base)
-  useEffect(() => {
-    let alive = true
-    const load = async () => {
-      try {
-        if (cloudConfigured) {
-          const d = await listCloudDrafts<RecordState>()
-          if (!alive) return
-          if (d === null) { setError('雲端尚未建立 record_drafts 表，無法顯示即時比分'); return }
-          setDrafts(d.map((x) => ({ state: x.state, updatedAt: x.updated_at, by: x.updated_by })))
-        } else {
-          const local = readDraft()
-          setDrafts(local ? [{ state: local, updatedAt: local.updatedAt ?? local.startedAt }] : [])
-        }
-        setError(null)
-      } catch (e) { if (alive) setError(e instanceof Error ? e.message : String(e)) }
-    }
-    void load()
-    const id = window.setInterval(() => { if (document.visibilityState === 'visible') { void load(); setTick((t) => t + 1) } }, POLL_MS)
-    return () => { alive = false; window.clearInterval(id) }
-  }, [])
-
-  const live = useMemo(() => drafts.filter((d) => !d.state.finished).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0] ?? null, [drafts])
+  const live = drafts[0] ?? null
   const lastFinal = useMemo(() => [...base.games].filter((g) => !g.status).sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
   const today = new Date().toISOString().slice(0, 10)
   const nextGame = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0], [base.games, today])
-  void tick
 
   if (!live) {
     return (

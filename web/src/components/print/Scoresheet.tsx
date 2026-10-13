@@ -1,5 +1,5 @@
 import type { Game } from '../../data/types'
-import type { GameSummary, PitchingLine } from '../../data/stats'
+import { LIVE_TEXT, shownLine, type GameSummary, type PitchingLine } from '../../data/stats'
 import { TEAM_NAME } from '../../data/seed'
 import { TEAM } from '../../config/team'
 import type { Scoresheet as ScoresheetData, SheetCell, SheetLine } from '../../data/scoresheet'
@@ -73,10 +73,12 @@ export interface ScoresheetProps {
 export function Scoresheet({ game, summary, side, sheet, pitchers, homeX }: ScoresheetProps) {
   const innings = Array.from({ length: Math.max(sheet.innings, summary.lineUs.length, summary.lineOpp.length) }, (_, i) => i + 1)
   const weHome = game.homeAway === '主'
+  // a game being recorded: this page's per-inning totals stop at the last inning batted (the rest stays blank, not 0)
+  const shownTo = summary.result === 'live' ? shownLine(summary, side).length : Infinity
   // each team's E is the errors that team made (as GameView's line score): ours from our fielding, theirs from our
   // batters reaching on 失誤
-  const us = { name: TEAM_NAME, line: summary.lineUs, r: summary.runsUs, h: summary.hitsUs, e: summary.errorsUs }
-  const opp = { name: game.opponent, line: summary.lineOpp, r: summary.runsOpp, h: summary.hitsOpp, e: summary.errorsOpp }
+  const us = { name: TEAM_NAME, line: shownLine(summary, 'us'), r: summary.runsUs, h: summary.hitsUs, e: summary.errorsUs }
+  const opp = { name: game.opponent, line: shownLine(summary, 'opp'), r: summary.runsOpp, h: summary.hitsOpp, e: summary.errorsOpp }
   const teams = weHome ? [{ ...opp, home: false }, { ...us, home: true }] : [{ ...us, home: false }, { ...opp, home: true }]
   const batting = side === 'us' ? TEAM_NAME : game.opponent
   const decisions = [
@@ -87,7 +89,7 @@ export function Scoresheet({ game, summary, side, sheet, pitchers, homeX }: Scor
     <article className="paper" aria-label={`${batting}打擊記分表`} data-testid="scoresheet">
       <header style={{ display: 'flex', justifyContent: 'space-between', gap: '6mm', alignItems: 'flex-start' }}>
         <div style={{ minWidth: 0 }}>
-          <h1>{TEAM_NAME} vs {game.opponent}　記分表</h1>
+          <h1>{TEAM_NAME} vs {game.opponent}　記分表{summary.result === 'live' && <span style={{ fontSize: '0.7em', fontWeight: 600 }}>　（{LIVE_TEXT}：印出時的比分）</span>}</h1>
           <div className="muted">{[`${game.date}${game.time ? ` ${game.time}${game.endTime ? `–${game.endTime}` : ''}` : ''}`, game.tournament, weHome ? '主場（後攻）' : '客場（先攻）', game.venue, game.weather, game.recorder && `紀錄員 ${game.recorder}`].filter(Boolean).join('・')}</div>
           <div style={{ marginTop: '1mm', fontWeight: 600 }}>本頁：{batting} 打擊{decisions.length ? <span className="muted" style={{ fontWeight: 400 }}>　{decisions.join('・')}</span> : null}</div>
         </div>
@@ -134,7 +136,7 @@ export function Scoresheet({ game, summary, side, sheet, pitchers, homeX }: Scor
           {([['得分 R', 'r'], ['安打 H', 'h'], ['失誤 E', 'e'], ['殘壘 LOB', 'lob']] as const).map(([label, key]) => (
             <tr key={key} className={key === 'r' ? 'total' : undefined}>
               <td colSpan={2} style={{ fontWeight: 600 }}>{label}</td>
-              {innings.map((i) => { const v = sheet.perInning[i]?.[key]; return <td key={i} className="num" style={{ textAlign: 'center' }}>{v === null || v === undefined ? '' : v}</td> })}
+              {innings.map((i) => { const v = i > shownTo ? null : sheet.perInning[i]?.[key]; return <td key={i} className="num" style={{ textAlign: 'center' }}>{v === null || v === undefined ? '' : v}</td> })}
               <td colSpan={side === 'us' ? 6 : 5} />
             </tr>
           ))}

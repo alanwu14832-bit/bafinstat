@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { LiveBadge } from '../components/ui/ResultBadge'
+import { useLiveIds } from '../hooks/useLiveGames'
 import { CalendarPlus, MapPin, Pencil, PenLine, Plus, Trash2, X } from 'lucide-react'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -78,6 +81,8 @@ export function ScheduleSection() {
   const saveGame = useDataStore((s) => s.saveGame)
   const deleteGame = useDataStore((s) => s.deleteGame)
   const canEdit = useDataStore((s) => s.canEdit)()
+  // a scheduled game already being recorded (before its first plate appearance is saved) says so
+  const liveIds = useLiveIds()
   const [editing, setEditing] = useState<Game | null | 'new'>(null)
   const [error, setError] = useState<string | null>(null)
   const t = today()
@@ -105,6 +110,7 @@ export function ScheduleSection() {
             {g.tournament && <span className="text-[12px] text-muted">{g.tournament}</span>}
             {tone === 'up' && <span className={cx('text-[12px] font-medium', soon ? 'text-accent' : 'text-muted')}>{whenLabel(g.date)}</span>}
             {tone === 'off' && <Badge variant="critical">已取消</Badge>}
+            {liveIds.has(g.id) && <Link to="/live" aria-label="比賽進行中，看即時比分" className="inline-flex items-center min-h-9"><LiveBadge /></Link>}
           </div>
           <div className="text-[13px] text-ink-2 mt-0.5 flex items-center gap-x-3 gap-y-0.5 flex-wrap tnum">
             {g.time && <span>{g.time}</span>}

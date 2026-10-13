@@ -32,8 +32,9 @@ export function gameRecap(s: GameSummary, ds: Dataset, teamName: string): RecapL
   const bat = ds.batting.filter((p) => p.gameId === g.id)
   const pit = ds.pitching.filter((p) => p.gameId === g.id)
 
-  // 勝負轉折: the last half-inning in which the eventual winner went ahead
-  if (s.result !== 'T') {
+  // 勝負轉折: the last half-inning in which the eventual winner went ahead (none yet while the game is being recorded)
+  if (s.result === 'live') out.push({ kind: 'turn', label: '比賽進行中', text: `比賽還在進行，目前 ${teamName} ${s.runsUs}:${s.runsOpp} ${g.opponent}。` })
+  else if (s.result !== 'T') {
     const winnerUs = s.result === 'W'
     let us = 0, opp = 0, turn: (typeof halves)[number] | null = null, score = ''
     for (const h of halves) {

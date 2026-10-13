@@ -4,7 +4,7 @@
  * Thresholds keep them honest for amateur sample sizes: a leader needs a fair share of the team's plate
  * appearances / innings, a hot streak needs at-bats behind it.
  */
-import { battingLines, isHitResult, NON_AB_RESULTS, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from './stats'
+import { battingLines, finishedSummaries, isHitResult, NON_AB_RESULTS, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from './stats'
 import type { BattingPA, Dataset, PitchingPA, Player, StatParams } from './types'
 import { DEFAULT_PARAMS, isPA } from './types'
 import { hitStreaks, hitTest, historyPlayers, streakRuns, type HistoryIndex } from './history'
@@ -26,12 +26,13 @@ export interface Story {
 const f3 = (v: number | null) => (v === null ? '—' : v.toFixed(3).replace(/^0/, ''))
 const f2 = (v: number | null) => (v === null ? '—' : v.toFixed(2))
 
-/** Most recent run of the same result (W or L; a tie ends it). */
+/** Most recent run of the same result (W or L; a tie ends it; a game still being recorded is skipped). */
 export function currentStreak(summaries: GameSummary[]): { result: 'W' | 'L'; n: number } | null {
-  const last = summaries[summaries.length - 1]
-  if (!last || last.result === 'T') return null
+  const done = finishedSummaries(summaries)
+  const last = done[done.length - 1]
+  if (!last || last.result === 'T' || last.result === 'live') return null
   let n = 0
-  for (let i = summaries.length - 1; i >= 0 && summaries[i].result === last.result; i--) n++
+  for (let i = done.length - 1; i >= 0 && done[i].result === last.result; i--) n++
   return { result: last.result, n }
 }
 
@@ -148,10 +149,15 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
   const games = summaries.length
   if (!games) return out
 
+  // (W-L stories count finished games only: a game being recorded has no result yet)
+  const done = finishedSummaries(summaries)
   const streak = currentStreak(summaries)
-  if (streak && streak.n >= 2) {
+  const lastDone = done[done.length - 1]
+  // (when the latest game is still being recorded, the streak's game is the latest finished one, and says so)
+  const lastWord = summaries[games - 1].result === 'live' ? '最近完賽的一場' : '最近一場'
+  if (streak && streak.n >= 2 && lastDone) {
     add({ id: 'streak', kicker: streak.result === 'W' ? '連勝中' : '連敗中', figure: String(streak.n), tone: streak.result === 'W' ? 'good' : 'bad',
-      text: streak.result === 'W' ? `目前 ${streak.n} 連勝，最近一場 ${summaries[games - 1].runsUs}：${summaries[games - 1].runsOpp} 擊敗${summaries[games - 1].game.opponent}` : `目前 ${streak.n} 連敗，最近一場 ${summaries[games - 1].runsUs}：${summaries[games - 1].runsOpp} 輸給${summaries[games - 1].game.opponent}` })
+      text: streak.result === 'W' ? `目前 ${streak.n} 連勝，${lastWord} ${lastDone.runsUs}：${lastDone.runsOpp} 擊敗${lastDone.game.opponent}` : `目前 ${streak.n} 連敗，${lastWord} ${lastDone.runsUs}：${lastDone.runsOpp} 輸給${lastDone.game.opponent}` })
   }
 
   const byGame = hitsByGame(batting, order)
@@ -186,8 +192,8 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
   const k = top(pl.filter((l) => l.k >= 5), (l) => l.k)
   if (k) add({ id: `k-${k.name}`, kicker: '三振', figure: String(k.k), tone: 'neutral', player: k.name, text: `${k.name} 投 ${k.ipDisplay} 局送出 ${k.k} 次三振，全隊最多` })
 
-  if (out.length < max && games >= 5) {
-    const last5 = summaries.slice(-5)
+  if (out.length < max && done.length >= 5) {
+    const last5 = done.slice(-5)
     const w = last5.filter((s) => s.result === 'W').length, l = last5.filter((s) => s.result === 'L').length
     const rs = last5.reduce((a, s) => a + s.runsUs, 0)
     add({ id: 'last5', kicker: '近 5 場', figure: `${w}-${l}`, tone: w > l ? 'good' : w < l ? 'bad' : 'neutral', text: `近 5 場 ${w} 勝 ${l} 敗${5 - w - l ? ` ${5 - w - l} 和` : ''}，場均得 ${(rs / 5).toFixed(1)} 分` })

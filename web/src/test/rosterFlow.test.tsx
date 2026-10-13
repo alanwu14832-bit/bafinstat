@@ -147,5 +147,5 @@ describe('roster feature end to end (local mode)', () => {
     expect(screen.getAllByText('已報名')).toHaveLength(12)
     fireEvent.click(screen.getByRole('tab', { name: '報名名單' }))
     expect(screen.getByText('12 / 17 人')).toBeInTheDocument()
-  })
+  }, 30000)   // (about 4 s on its own: over the default 5 s when the whole suite runs in parallel)
 })

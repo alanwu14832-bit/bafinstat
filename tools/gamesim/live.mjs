@@ -3,7 +3,8 @@
 // board and the 文字轉播 the way a fan would read them: the CPBL-style sentences, the score after each scoring play,
 // the half summary against a hand-scored one, row 最新 in the bottom half (bug 1), 投手 N 球 against 紀錄比賽's count
 // (bug 2), no 攻守交換後 before two outs (bug 3), the 得分 chip, the phone layout at 360×800, 大螢幕, and the game page's
-// 文字轉播 tab after 結束比賽. Exit code 1 when anything does not match.
+// 文字轉播 tab after 結束比賽. Batch 13: mid-game the game page and the game list say 比賽進行中 (no 勝／敗) with the
+// current score, and once the game is finished they say 勝 again. Exit code 1 when anything does not match.
 import { createRequire } from 'node:module'
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
@@ -198,10 +199,48 @@ await lv.screenshot({ path: `${S}/live-360-big.png` })
 await lv.keyboard.press('Escape')
 await lv.setViewportSize({ width: 1400, height: 1000 })
 
+// ---------------------------------------------------------------- batch 13: mid-game the game says 比賽進行中, not 勝／敗
+// (the second tab opens the game page and the game list while tab 1 is still recording; 3:1 after 2 innings)
+// (local mode saves the game's rows only on 儲存 — with the cloud every play does — so press it first, as a cloud
+// recorder's phone would have by now)
+await main.getByRole('button', { name: '儲存', exact: true }).first().click(); await p.waitForTimeout(800)
+const gid = (await draft()).game.id
+const badges = async (scope) => Object.fromEntries(await Promise.all(['勝', '敗', '和', '比賽進行中'].map(async (t) => [t, await scope.getByText(t, { exact: true }).count()])))
+await lv.goto(`${URL}/games/${encodeURIComponent(gid)}`, { waitUntil: 'networkidle' }); await lv.waitForTimeout(500)
+const midHead = lv.locator('main h2').first()
+const midText = (await midHead.innerText()).replace(/\s+/g, ' ')
+const mid = await badges(midHead)
+if (!mid['比賽進行中'] || mid['勝'] || mid['敗'] || mid['和']) fails.push(`比賽中的比賽頁標題應寫「比賽進行中」、不寫勝敗：${midText}`)
+if (!midText.includes('3:1') && !midText.includes('3 : 1')) fails.push(`比賽中的比賽頁比分不是目前的 3:1：${midText}`)
+if (!(await midHead.getByRole('link', { name: '看即時比分' }).count())) fails.push('比賽中的比賽頁沒有「看即時比分」連結')
+// the innings not reached yet are blank on the game page's line score (not 0), as on 即時比分
+const midRows = lv.locator('main table').first().locator('tbody tr')
+for (let r = 0; r < Math.min(2, await midRows.count()); r++) {
+  const cells = await midRows.nth(r).locator('td').allInnerTexts()
+  const later = cells.slice(3, 7).map((t) => t.trim())   // innings 4–7
+  if (later.some((t) => t !== '')) fails.push(`比賽中的比賽頁局分表，還沒打到的局應空白：${cells.join(' ')}`)
+}
+await lv.screenshot({ path: `${S}/live-gamepage-midgame.png` })
+await lv.goto(`${URL}/games?view=results`, { waitUntil: 'networkidle' }); await lv.waitForTimeout(500)
+const midCard = lv.locator('main').getByRole('button', { name: /模擬隊，比賽進行中，目前比分，看這場/ })
+if ((await midCard.count()) !== 1) fails.push('比賽中的比賽列表卡片沒有寫「比賽進行中」')
+else { const c = await badges(midCard); if (c['勝'] || c['敗'] || c['和']) fails.push('比賽中的比賽列表卡片還寫著勝敗') }
+// back to the game page in tab 2: it should turn to 勝 by itself once tab 1 finishes the game (same browser)
+await lv.goto(`${URL}/games/${encodeURIComponent(gid)}`, { waitUntil: 'networkidle' }); await lv.waitForTimeout(400)
+
 // ---------------------------------------------------------------- 結束比賽: the game page's 文字轉播 tab says the same
 await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
 await p.getByRole('button', { name: '儲存並結束' }).click(); await p.waitForTimeout(1200)
 const dlg = p.getByRole('dialog').last()
+// batch 13: finished, the game shows 勝 again (the recorder's game sheet, the other tab without reloading, after a reload)
+const endHead = await badges(dlg.locator('h2').first())
+if (!endHead['勝'] || endHead['比賽進行中']) fails.push(`結束比賽後的比賽頁應寫「勝」：${JSON.stringify(endHead)}`)
+await lv.waitForTimeout(500)
+const otherTab = await badges(lv.locator('main h2').first())
+if (!otherTab['勝'] || otherTab['比賽進行中']) fails.push(`結束比賽後，另一個分頁的比賽頁沒有自己變回「勝」：${JSON.stringify(otherTab)}`)
+await lv.reload({ waitUntil: 'networkidle' }); await lv.waitForTimeout(400)
+const reloaded = await badges(lv.locator('main h2').first())
+if (!reloaded['勝'] || reloaded['比賽進行中']) fails.push(`結束比賽後重新整理的比賽頁應寫「勝」：${JSON.stringify(reloaded)}`)
 await dlg.getByRole('tab', { name: /文字轉播/ }).click(); await p.waitForTimeout(400)
 const gameFeed = (await dlg.innerText()).replace(/\s+/g, ' ')
 const lines = [`${S1} 擊出中外野平飛球，一壘安打。`, `${S1}盜壘上二壘`, '2 分打點；', `${S4} 揮棒落空，三振出局。`, `${S5} 好球沒揮棒，三振出局。`, '對方第 1 棒遭牽制出局', '投手暴投，對方第 3 棒回本壘得分', `更換代打：${S7} → ${B1}`, `更換代跑：${B1} → ${B2}`, `更換投手：${S9} → ${B4}`, '犧牲飛球，1 分打點', '2 分・2 安打・0 失誤・1 殘壘']

@@ -9,7 +9,8 @@ import { Field, Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
 import { albumDate, albumProvider, albumTitle, ALBUMS_SETUP_NOTE, isValidAlbumUrl, isVideoLink, isVideoUrl, VIDEO_TITLE, type AlbumLink } from '../data/albums'
-import { summarizeGame } from '../data/stats'
+import { LIVE_TEXT, summarizeGame } from '../data/stats'
+import { useLiveIds } from '../hooks/useLiveGames'
 import { playedGames } from '../data/filters'
 import { cx } from '../lib/format'
 
@@ -66,6 +67,7 @@ function AlbumForm({ initial, presetGameId, onSave, onCancel, onDelete }: { init
 /* ------------------------------------------------------------------ page */
 export function PhotosPage() {
   const base = useDataStore((s) => s.base)
+  useLiveIds()   // (scoreOf below: a game being recorded says 比賽進行中)
   const albums = useDataStore((s) => s.albums)
   const supported = useDataStore((s) => s.albumsSupported)
   const saveAlbum = useDataStore((s) => s.saveAlbum)
@@ -117,7 +119,7 @@ export function PhotosPage() {
                         {/* the 影片 badge sits on the date line, so on a phone it does not cut off the game's title */}
                         <div className="text-[12px] text-muted mt-0.5 tnum flex items-center gap-1.5 flex-wrap">{isVideo && <Badge variant="accent">影片</Badge>}<span>{fmtDate(albumDate(a, base.games))}{a.photographer ? `・${a.photographer} 攝` : ''}</span></div>
                       </div>
-                      {sc && <Badge variant={sc.result === 'W' ? 'good' : sc.result === 'L' ? 'critical' : 'neutral'} className="tnum">{sc.text}</Badge>}
+                      {sc && <Badge variant={sc.result === 'W' ? 'good' : sc.result === 'L' ? 'critical' : sc.result === 'live' ? 'accent' : 'neutral'} className="tnum">{sc.result === 'live' ? `${LIVE_TEXT} ${sc.text}` : sc.text}</Badge>}
                     </div>
                     {a.note && <p className="text-[13px] text-ink-2 leading-relaxed">{a.note}</p>}
                     <div className="relative z-[2] mt-auto flex items-center gap-2">

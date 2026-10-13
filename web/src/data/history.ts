@@ -230,11 +230,13 @@ export function largestComeback(s: GameSummary): number {
 }
 
 export interface WinStreak { n: number; from: string; to: string; fromId: string; toId: string; active: boolean }
-/** Every run of wins (a loss or a tie ends one), oldest first; `active` when it reaches the last game. */
+/** Every run of wins (a loss or a tie ends one), oldest first; `active` when it reaches the last game. A game still
+ *  being recorded is no result: it neither extends nor ends a run. */
 export function winRuns(summaries: GameSummary[]): WinStreak[] {
   const runs: WinStreak[] = []
   let cur: WinStreak | null = null
   for (const s of summaries) {
+    if (s.result === 'live') continue
     if (s.result === 'W') {
       if (cur) { cur.n++; cur.to = s.game.date; cur.toId = s.game.id } else { cur = { n: 1, from: s.game.date, to: s.game.date, fromId: s.game.id, toId: s.game.id, active: false }; runs.push(cur) }
     } else cur = null
@@ -270,13 +272,14 @@ export function teamSeasons(summaries: GameSummary[], batting: BattingPA[], pitc
   return [...by.keys()].sort((a, b) => a - b).map((season) => {
     const ss = by.get(season)!
     const ids = new Set(ss.map((s) => s.game.id))
-    const w = ss.filter((s) => s.result === 'W').length, l = ss.filter((s) => s.result === 'L').length
+    // (a game being recorded counts for runs and stats, not for the record)
+    const w = ss.filter((s) => s.result === 'W').length, l = ss.filter((s) => s.result === 'L').length, t = ss.filter((s) => s.result === 'T').length
     const rs = ss.reduce((a, s) => a + s.runsUs, 0), ra = ss.reduce((a, s) => a + s.runsOpp, 0)
     const bat = teamBatting(ds, batting.filter((p) => ids.has(p.gameId)), params)
     const pit = teamPitching(pitching.filter((p) => ids.has(p.gameId)), params, ss.map((s) => s.game))
     return {
       season, label: seasonLabel(season, start), ...(season ? seasonRange(season, start) : { from: '', to: '' }),
-      games: ss.length, w, l, t: ss.length - w - l, winPct: div(w, w + l), rs, ra, diff: rs - ra,
+      games: ss.length, w, l, t, winPct: div(w, w + l), rs, ra, diff: rs - ra,
       avg: bat.avg, ops: bat.ops, era: pit.era, small: w + l < 10, current: season !== 0 && season === now,
     }
   })

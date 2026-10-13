@@ -18,6 +18,8 @@ export interface WinProbChartProps {
   teamName: string
   /** 勝 / 敗 / 和 at the end of the line */
   resultLabel: string
+  /** the game is still being recorded: the line ends at 「目前」, not at the result */
+  live?: boolean
   /** a point was picked: open that half-inning */
   onPick?: (e: GameEvent) => void
 }
@@ -26,7 +28,7 @@ export interface WinProbChartProps {
  * 獲勝機率走勢: our win probability after every plate appearance and runner play, straight lines between them, team
  * colour above 50% and grey below, a faint line where each half-inning starts. Tap / hover for what happened.
  */
-export function WinProbChart({ events, rows, teamName, resultLabel, onPick }: WinProbChartProps) {
+export function WinProbChart({ events, rows, teamName, resultLabel, live = false, onPick }: WinProbChartProps) {
   const mobile = useIsMobile()
   const anim = useChartAnimation()
   const theme = useChartTheme()
@@ -51,7 +53,7 @@ export function WinProbChart({ events, rows, teamName, resultLabel, onPick }: Wi
     else labels.set(x, halfLabel(e))
   }
   labels.set(0, '開賽')
-  labels.set(n, resultLabel)
+  labels.set(n, live ? '目前' : resultLabel)
   const ticks = [...labels.keys()].sort((a, z) => a - z)
   // the fill splits at 50%: the area runs from the line to the 50% line, so its box is [min(v, 50), max(v, 50)]
   const hi = Math.max(50, ...points.map((p) => p.v)), lo = Math.min(50, ...points.map((p) => p.v))
@@ -64,9 +66,9 @@ export function WinProbChart({ events, rows, teamName, resultLabel, onPick }: Wi
     const lastOf = new Map<number, GameEvent>()
     for (const e of events) if (e.kind !== 'end') lastOf.set(e.inning, e)
     for (const [inning, e] of lastOf) parts.push(`第 ${inning} 局結束 ${pct(e.weAfter)}`)
-    parts.push(`比賽結束 ${pct(events[events.length - 1].weAfter)}（${resultLabel}）`)
+    parts.push(live ? `目前 ${pct(events[events.length - 1].weAfter)}（比賽進行中）` : `比賽結束 ${pct(events[events.length - 1].weAfter)}（${resultLabel}）`)
     return parts.join('；')
-  }, [events, teamName, resultLabel])
+  }, [events, teamName, resultLabel, live])
   if (!events.length) return <p className="text-[13px] text-muted">這場沒有逐打席紀錄，畫不出走勢。</p>
   const height = mobile ? 200 : 240
   return (

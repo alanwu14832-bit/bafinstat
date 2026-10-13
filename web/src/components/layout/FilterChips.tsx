@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDataStore, effectiveDataset } from '../../store/data'
+import { useLiveIds } from '../../hooks/useLiveGames'
 import { filterGames } from '../../data/filters'
 import { DEFAULT_FILTERS, type Filters } from '../../data/types'
 import { POSITION_LABEL } from '../../lib/fmt'
@@ -101,7 +102,8 @@ export function FilterChips() {
   const resetFilters = useDataStore((s) => s.resetFilters)
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
-  const games = useMemo(() => filterGames(effectiveDataset(base, demo), filters).games, [base, demo, filters])
+  const live = useLiveIds()   // (勝／敗 filter: a game being recorded is neither)
+  const games = useMemo(() => filterGames(effectiveDataset(base, demo), filters).games, [base, demo, filters, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const chips: Array<{ key: string; label: string; clear: Partial<Filters> }> = []
   if (filters.tournament !== 'all') chips.push({ key: 't', label: filters.tournament, clear: { tournament: 'all' } })
   if (filters.from || filters.to) chips.push({ key: 'd', label: `${filters.from ? md(filters.from) : '開始'} – ${filters.to ? md(filters.to) : '至今'}`, clear: { from: '', to: '' } })

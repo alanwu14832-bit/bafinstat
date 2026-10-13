@@ -7,7 +7,7 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -131,7 +131,7 @@ const locOption = (v: string) => (Number(v) > 9 ? `${v} ${locLabel(Number(v))}` 
 
 const batCols: Col<BatDraft>[] = [
   { key: 'inning', label: '局', kind: 'int', w: 40 }, { key: 'outsBefore', label: '出局前', kind: 'int', w: 48 }, { key: 'basesBefore', label: '壘上前', kind: 'select', options: BASES, w: 64 },
-  { key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'batter', label: '打者', kind: 'name', w: 96 },
+  { key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'batter', label: '打者', kind: 'name', w: 96 },
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: RESULT_OPTIONS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
@@ -152,12 +152,12 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
 ]
 type StarterDraft = GameDayRoster['starters'][number]
-const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
+const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
 const chip = (active: boolean) => cx('h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
 const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === 'bottom' ? '下' : '上'} ` : ''}${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}${s.pos ? `（${s.pos}）` : ''}`
 
 const fldCols: Col<FieldingLine>[] = [
-  { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, w: 60 }, { key: 'innings', label: '局數', kind: 'int', w: 48 },
+  { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'innings', label: '局數', kind: 'int', w: 48 },
   { key: 'po', label: 'PO', kind: 'int', w: 44 }, { key: 'a', label: 'A', kind: 'int', w: 44 }, { key: 'e', label: 'E', kind: 'int', w: 44 }, { key: 'dp', label: 'DP', kind: 'int', w: 44 },
   { key: 'pb', label: 'PB', kind: 'int', w: 44 }, { key: 'sb', label: 'SB', kind: 'int', w: 44 }, { key: 'cs', label: 'CS', kind: 'int', w: 44 }, { key: 'note', label: '備註', kind: 'text', w: 140 },
 ]
