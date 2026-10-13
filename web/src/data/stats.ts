@@ -6,6 +6,7 @@ import { balksIn } from './plays'
 import { oppErrorCount, ourErrorCount } from './errors'
 import { countTrail, isTwoStrikeBattle } from './counts'
 import { pitcherSituations } from './pitchingSituations'
+import { liveGameIds } from './liveGames'
 import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isDouble, isPlaced, isSingle, LOC_CODES, TRAJ_OF, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
@@ -494,11 +495,40 @@ export interface GameSummary {
   game: Game
   runsUs: number; runsOpp: number; hitsUs: number; hitsOpp: number; errorsUs: number; errorsOpp: number; lobUs: number
   lineUs: number[]; lineOpp: number[]
-  result: GameResult
+  /** the last inning each side has a plate appearance in (its line goes no further while the game is being recorded) */
+  playedUs?: number; playedOpp?: number
+  /** 'live' while the game is being recorded (data/liveGames.ts): no 勝／敗 yet, the score is the current one */
+  result: SummaryResult
   pitchesUs: number
 }
 
-export function summarizeGame(ds: Dataset, game: Game): GameSummary {
+/** A game's outcome as the pages show it: W / L / T, or 'live' while it is still being recorded. */
+export type SummaryResult = GameResult | 'live'
+export const LIVE_TEXT = '比賽進行中'
+/** 勝 / 敗 / 和, or 比賽進行中 */
+export const resultText = (r: SummaryResult) => (r === 'W' ? '勝' : r === 'L' ? '敗' : r === 'live' ? LIVE_TEXT : '和')
+/** The games with a result: every team tally (W-L-T, streaks, records) counts only these. */
+export const finishedSummaries = <S extends { result: SummaryResult }>(summaries: S[]): S[] => summaries.filter((s) => s.result !== 'live')
+
+/**
+ * One side's line score as the pages show it. A finished game: every inning (0 for a scoreless one). A game being
+ * recorded: only the innings that side has batted in so far, so the innings not reached yet stay blank instead of
+ * reading 0 (as 即時比分 shows them). Renderers keep the full number of columns and leave the rest empty.
+ */
+export function shownLine(s: GameSummary, side: 'us' | 'opp'): number[] {
+  const line = side === 'us' ? s.lineUs : s.lineOpp
+  const played = side === 'us' ? s.playedUs : s.playedOpp
+  return s.result === 'live' && played !== undefined ? line.slice(0, played) : line
+}
+
+/** `s` with its result as of the live set now (a summary computed before the game started or ended being live). */
+export function withLiveResult(s: GameSummary, live: ReadonlySet<string> = liveGameIds()): GameSummary {
+  const result: SummaryResult = live.has(s.game.id) ? 'live' : s.runsUs > s.runsOpp ? 'W' : s.runsUs < s.runsOpp ? 'L' : 'T'
+  return result === s.result ? s : { ...s, result }
+}
+
+/** One game's line score and totals. `live` = the ids of the games being recorded (default: the site-wide set). */
+export function summarizeGame(ds: Dataset, game: Game, live: ReadonlySet<string> = liveGameIds()): GameSummary {
   const bat = ds.batting.filter((p) => p.gameId === game.id)
   const pit = ds.pitching.filter((p) => p.gameId === game.id)
   const fld = ds.fielding.filter((f) => f.gameId === game.id)
@@ -519,13 +549,17 @@ export function summarizeGame(ds: Dataset, game: Game): GameSummary {
     errorsOpp: oppErrorCount(bat),
     lobUs: bat.filter((p) => p.code === 'L').length,
     lineUs, lineOpp,
-    result: runsUs > runsOpp ? 'W' : runsUs < runsOpp ? 'L' : 'T',
+    playedUs: Math.max(0, ...bat.map((p) => p.inning)), playedOpp: Math.max(0, ...pit.map((p) => p.inning)),
+    result: live.has(game.id) ? 'live' : runsUs > runsOpp ? 'W' : runsUs < runsOpp ? 'L' : 'T',
     pitchesUs: pit.reduce((a, p) => a + pitchTotals(p.pitches).pitches, 0),
   }
 }
 
 export interface TeamSummary {
+  /** every played game, a live one too (runs and stats count it); w / l / t only the finished ones */
   games: number; w: number; l: number; t: number; winPct: number | null; rs: number; ra: number; diff: number
+  /** games still being recorded (not in w / l / t) */
+  live: number
   runsPerGame: number | null; runsAllowedPerGame: number | null
   runsByInningUs: number[]; runsByInningOpp: number[]
 }
@@ -533,7 +567,8 @@ export interface TeamSummary {
 export function teamSummary(summaries: GameSummary[]): TeamSummary {
   const w = summaries.filter((s) => s.result === 'W').length
   const l = summaries.filter((s) => s.result === 'L').length
-  const t = summaries.length - w - l
+  const t = summaries.filter((s) => s.result === 'T').length
+  const live = summaries.length - w - l - t
   const rs = summaries.reduce((a, s) => a + s.runsUs, 0)
   const ra = summaries.reduce((a, s) => a + s.runsOpp, 0)
   const maxInn = Math.max(9, ...summaries.map((s) => s.lineUs.length))
@@ -541,7 +576,7 @@ export function teamSummary(summaries: GameSummary[]): TeamSummary {
   const byOpp = Array.from({ length: maxInn }, () => 0)
   for (const s of summaries) { s.lineUs.forEach((v, i) => (byUs[i] += v)); s.lineOpp.forEach((v, i) => (byOpp[i] += v)) }
   return {
-    games: summaries.length, w, l, t, winPct: div(w, w + l), rs, ra, diff: rs - ra,
+    games: summaries.length, w, l, t, live, winPct: div(w, w + l), rs, ra, diff: rs - ra,
     runsPerGame: div(rs, summaries.length), runsAllowedPerGame: div(ra, summaries.length),
     runsByInningUs: byUs.slice(0, 9), runsByInningOpp: byOpp.slice(0, 9),
   }

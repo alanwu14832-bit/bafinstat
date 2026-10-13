@@ -21,7 +21,10 @@ import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearanc
 import { gameRecap } from '../data/recap'
 import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
-import { battingLines, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
+import { battingLines, pitchingLines, resultText, shownLine, withLiveResult, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
+import { PendingBadge, resultBadge } from '../components/ui/ResultBadge'
+import { mayBeLive } from '../data/liveGames'
+import { useLiveGames } from '../hooks/useLiveGames'
 import { f2, f3, pct, signedPts } from '../lib/fmt'
 import { WinProbChart } from '../components/charts/WinProbChart'
 import { KeyPlays } from '../components/ui/KeyPlays'
@@ -46,7 +49,7 @@ import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
 import { Broadcast } from '../components/ui/Broadcast'
 import { buildFeed, seasonHrBefore } from '../data/broadcast'
 
-export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
+export { resultBadge } from '../components/ui/ResultBadge'
 
 /** What the game check (data/audit.ts) actually looks at, so 已核對 never claims more than it checked. */
 const AUDIT_SCOPE = '出局順序、逐球與結果、得分代碼、打點與得分、盜壘次數與跑壘紀錄'
@@ -104,10 +107,11 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
 }
 
 function LineScore({ s }: { s: GameSummary }) {
-  const n = Math.max(s.lineUs.length, s.lineOpp.length)
+  // (every inning a column; a game being recorded leaves the innings not reached yet blank)
+  const n = Math.max(s.game.innings ?? 0, s.lineUs.length, s.lineOpp.length)
   // each team's E is the errors that team made (ours from our fielding lines, theirs from our batters reaching on 失誤)
-  const opp = { name: s.game.opponent, line: s.lineOpp, r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
-  const us = { name: TEAM_NAME, line: s.lineUs, r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
+  const opp = { name: s.game.opponent, line: shownLine(s, 'opp'), r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
+  const us = { name: TEAM_NAME, line: shownLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
   const top = s.game.homeAway === '主' ? opp : us
   const bottom = s.game.homeAway === '主' ? us : opp
   return (
@@ -165,8 +169,14 @@ export type GameTab = 'summary' | 'box' | 'bat' | 'pit' | 'feed' | 'roster'
 /**
  * The 逐球 tabs' 關鍵打席 chip shows the 本場關鍵 5 打席 (data/winTimeline keyPlays); a game without them has no such chip.
  */
-export function GameView({ summary: current, mode, onClose, initialTab = 'summary', inning }: { summary: GameSummary; mode: 'sheet' | 'page'; onClose: () => void; initialTab?: GameTab; inning?: number }) {
+export function GameView({ summary: given, mode, onClose, initialTab = 'summary', inning }: { summary: GameSummary; mode: 'sheet' | 'page'; onClose: () => void; initialTab?: GameTab; inning?: number }) {
   const s = useStats()
+  // a game being recorded says 比賽進行中 (and links to 即時比分) instead of 勝／敗; the list is refreshed while the page is open
+  const { ids: liveIds, known: liveKnown } = useLiveGames()
+  const current = useMemo(() => withLiveResult(given, liveIds), [given, liveIds])
+  const live = current.result === 'live'
+  // (until the list has been read once, a game of today or yesterday may still be in progress: no 勝／敗 yet)
+  const unsure = !liveKnown && !live && mayBeLive(current.game)
   const navigate = useNavigate()
   const openPlayer = (r: { name: string }) => navigate(`/players?player=${encodeURIComponent(r.name)}`)
   const openPitcher = (r: { name: string }) => navigate(`/players?player=${encodeURIComponent(r.name)}&tab=pitching`)
@@ -280,7 +290,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
     const g = current.game
     downloadGameImage({
       teamName: TEAM_NAME, opponent: g.opponent, date: g.date, meta: [g.date, g.tournament, g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・'),
-      result: current.result, runsUs: current.runsUs, runsOpp: current.runsOpp, lineUs: current.lineUs, lineOpp: current.lineOpp,
+      result: current.result, runsUs: current.runsUs, runsOpp: current.runsOpp, lineUs: shownLine(current, 'us'), lineOpp: shownLine(current, 'opp'), innings: Math.max(current.lineUs.length, current.lineOpp.length),
       hitsUs: current.hitsUs, hitsOpp: current.hitsOpp, errorsUs: current.errorsUs, errorsOpp: current.errorsOpp, weTop: g.homeAway === '客',
       lines: recap.map((l) => ({ label: l.label, text: l.text })),
       footer: `${TEAM_NAME} 數據平台・單場紀錄 ${g.id}${issues.length ? `・有 ${issues.length} 項待核對` : ''}`,
@@ -331,7 +341,8 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
             <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
             <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
               <span>{TEAM_NAME} <span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
-              <span className="inline-flex gap-1.5">{resultBadge(current.result)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
+              <span className="inline-flex items-center gap-1.5">{unsure ? <PendingBadge /> : resultBadge(current.result)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
+              {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent underline underline-offset-2">看即時比分</Link>}
             </h2>
             {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
               <p className="text-[12px] text-ink-2 mt-1.5 flex flex-wrap gap-x-3">
@@ -434,7 +445,7 @@ export function GameView({ summary: current, mode, onClose, initialTab = 'summar
                 <Card title="獲勝機率走勢" subtitle={`${TEAM_NAME}每個打席後的獲勝機率。描述這場發生了什麼，不代表預測能力。`}
                   action={<Button variant="ghost" size="sm" icon={<Info />} aria-expanded={modelNote} onClick={() => setModelNote((v) => !v)}>模型說明</Button>}>
                   <div className="flex flex-col gap-3">
-                    <WinProbChart events={winEvents} rows={{ bat: pbpBat, pit: pbpPit }} teamName={TEAM_NAME} resultLabel={current.result === 'W' ? '勝' : current.result === 'L' ? '敗' : '和'} onPick={pickEvent} />
+                    <WinProbChart events={winEvents} rows={{ bat: pbpBat, pit: pbpPit }} teamName={TEAM_NAME} resultLabel={resultText(current.result)} live={live} onPick={pickEvent} />
                     {winEvents.length > 0 && (
                       <div className="flex flex-col gap-0.5 text-[12px] text-muted">
                         {winNotes(win.coverage.trainGames, win.coverage.trainPas, winRulesText(win.rules), win.approxHalves.get(id) ?? 0, win.model.run.sample.halves).map((t) => <p key={t}>{t}</p>)}

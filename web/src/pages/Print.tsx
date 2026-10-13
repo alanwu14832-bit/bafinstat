@@ -15,6 +15,7 @@ import { Tabs } from '../components/ui/Tabs'
 import { Checkbox } from '../components/ui/Input'
 import { effectiveDataset, useDataStore } from '../store/data'
 import { pitchingLines, summarizeGame } from '../data/stats'
+import { useLiveGames } from '../hooks/useLiveGames'
 import { readLineup } from '../record/lineup'
 import { TEAM_NAME } from '../data/seed'
 
@@ -45,13 +46,15 @@ function GameSheets() {
   const demo = useDataStore((s) => s.demo)
   const rawParams = useDataStore((s) => s.params)
   const ds = useMemo(() => effectiveDataset(base, demo), [base, demo])
+  // a game being recorded prints 比賽進行中 (the list is refreshed while the page is open)
+  const { ids: live } = useLiveGames()
   const game = ds.games.find((g) => g.id === id)
   const side: Side = params.get('side') === 'us' || params.get('side') === 'opp' ? (params.get('side') as Side) : 'both'
   const data = useMemo(() => {
     if (!game) return null
     const us = ds.batting.filter((p) => p.gameId === game.id)
     const opp = ds.pitching.filter((p) => p.gameId === game.id)
-    const summary = summarizeGame(ds, game)
+    const summary = summarizeGame(ds, game, live)
     const innings = Math.max(game.innings ?? TEAM.innings, summary.lineUs.length, summary.lineOpp.length)
     const sheetUs = withAllSlots(buildScoresheet(us, 'bat', { innings, subs: game.dayRoster?.subs }))
     const sheetOpp = withAllSlots(buildScoresheet(opp, 'pit', { innings }))
@@ -59,9 +62,10 @@ function GameSheets() {
     const lastPlayed = Math.max(0, ...us.map((r) => r.inning), ...opp.map((r) => r.inning))
     const homeRows = weHome ? us : opp
     const homeAhead = weHome ? summary.runsUs > summary.runsOpp : summary.runsOpp > summary.runsUs
-    const homeX = lastPlayed > 0 && homeAhead && !homeRows.some((r) => r.inning === lastPlayed) ? lastPlayed : undefined
+    // (no X while the game is still being recorded: the home half may still come)
+    const homeX = summary.result !== 'live' && lastPlayed > 0 && homeAhead && !homeRows.some((r) => r.inning === lastPlayed) ? lastPlayed : undefined
     return { summary, sheetUs, sheetOpp, pitchers: pitchingLines(opp, [game], rawParams), weHome, homeX }
-  }, [ds, game, rawParams])
+  }, [ds, game, rawParams, live])
   if (!game || !data) {
     return <PrintEmpty title="找不到這場比賽" description="網址可能打錯，或這場比賽已經刪除。" action={<Button variant="primary" to="/games">回到比賽列表</Button>} />
   }

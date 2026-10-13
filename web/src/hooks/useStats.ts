@@ -3,6 +3,7 @@ import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
 import { battingLines, errorsByPosition, fieldingLines, ourRunsOf, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
+import { useLiveIds } from './useLiveGames'
 
 export interface Computed extends FilteredData {
   dataset: Dataset
@@ -18,7 +19,7 @@ export interface Computed extends FilteredData {
   params: StatParams
 }
 
-type Inputs = [base: unknown, demo: unknown, filters: unknown, params: unknown]
+type Inputs = [base: unknown, demo: unknown, filters: unknown, params: unknown, live: unknown]
 /** The last pass, shared by every component that calls useStats (a page and its 情境拆分 card…): one pass per change. */
 let last: { inputs: Inputs; out: Computed } | null = null
 
@@ -28,13 +29,15 @@ export function useStats(): Computed {
   const demo = useDataStore((s) => s.demo)
   const filters = useDataStore((s) => s.filters)
   const rawParams = useDataStore((s) => s.params)
+  // the games being recorded right now: their result is 比賽進行中 and the W-L leaves them out (hooks/useLiveGames.ts)
+  const live = useLiveIds()
   return useMemo(() => {
-    const inputs: Inputs = [base, demo, filters, rawParams]
+    const inputs: Inputs = [base, demo, filters, rawParams, live]
     if (last && last.inputs.every((x, i) => x === inputs[i])) return last.out
     const out = compute(base, demo, filters, rawParams)
     last = { inputs, out }
     return out
-  }, [base, demo, filters, rawParams])
+  }, [base, demo, filters, rawParams, live])
 }
 
 type State = ReturnType<typeof useDataStore.getState>

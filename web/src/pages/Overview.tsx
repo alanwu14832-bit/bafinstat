@@ -4,7 +4,6 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { BarChartCard } from '../components/charts/BarChartCard'
@@ -28,7 +27,7 @@ import { TeamSeasonsTable } from '../components/ui/TeamSeasonsTable'
 import { DEFAULT_FILTERS } from '../data/types'
 import { scopeText } from '../components/layout/FilterChips'
 
-export const resultBadge = (r: 'W' | 'L' | 'T') => (r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
+export { resultBadge } from '../components/ui/ResultBadge'
 
 function SummaryHead({ title, to }: { title: string; to: string }) {
   return (

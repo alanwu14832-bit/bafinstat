@@ -2,6 +2,8 @@ import { useMemo, type ReactNode } from 'react'
 import { Card } from '../ui/Card'
 import { DataTable, type Column } from '../ui/DataTable'
 import { scoutLines, scoutSummary, type ScoutLine } from '../../data/opponent'
+import { LIVE_TEXT } from '../../data/stats'
+import { useLiveIds } from '../../hooks/useLiveGames'
 import type { Dataset } from '../../data/types'
 import { f3, pct0, shortDate } from '../../lib/fmt'
 import { cx } from '../../lib/format'
@@ -29,13 +31,14 @@ const columns: Column<ScoutLine>[] = [
  */
 export function OpponentScoutCard({ ds, opponent, title }: { ds: Dataset; opponent: string; title?: string }) {
   const lines = useMemo(() => scoutLines(ds, opponent), [ds, opponent])
-  const sum = useMemo(() => scoutSummary(ds, opponent), [ds, opponent])
+  const live = useLiveIds()
+  const sum = useMemo(() => scoutSummary(ds, opponent), [ds, opponent, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const heading = title ?? `對手情蒐：${opponent}`
   if (!sum.games) return <Card title={heading}><p className="text-[13px] text-muted">還沒有和 {opponent} 的比賽紀錄</p></Card>
   const t = sum.team
   return (
     <Card title={heading} flush
-      subtitle={`歷來對戰 ${sum.games} 場（${sum.w} 勝 ${sum.l} 敗${sum.t ? ` ${sum.t} 和` : ''}）・有記姓名的打者分開列，沒記的以棒次代替；打席少於 ${SMALL} 變淡`}>
+      subtitle={`歷來對戰 ${sum.games} 場（${sum.w} 勝 ${sum.l} 敗${sum.t ? ` ${sum.t} 和` : ''}${sum.live ? `、${sum.live} 場${LIVE_TEXT}` : ''}）・有記姓名的打者分開列，沒記的以棒次代替；打席少於 ${SMALL} 變淡`}>
       <DataTable columns={columns} rows={lines} rowKey={(r) => r.label} dense />
       <p className="px-5 py-3 border-t border-border text-[12px] text-ink-2">對方全隊：打擊率 {f3(t.avg)}、三振率 {pct0(t.kPct)}、保送率 {pct0(t.bbPct)}</p>
     </Card>

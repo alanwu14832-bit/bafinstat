@@ -11,7 +11,7 @@
  * the same card, and the same card (id) never shows twice in one game. Texts use counts only: nothing is written by
  * a language model, and thin samples pick nothing.
  */
-import { battingLines, ipDisplay, isHitResult, outsCredited, pitchingLines, summarizeGame, type BattingLine, type GameSummary, type PitchingLine } from './stats'
+import { battingLines, finishedSummaries, ipDisplay, isHitResult, outsCredited, pitchingLines, summarizeGame, type BattingLine, type GameSummary, type PitchingLine } from './stats'
 import { currentStreak, hitsByGame, hitStreak, qualifiedBatters, qualifiedPitchers, type Story } from './stories'
 import { f2, f3, pct0 } from '../lib/fmt'
 import { OUT_RESULTS, weBatTop, type Half, type RecordState } from '../record/model'
@@ -263,8 +263,8 @@ function computeCandidates(ctx: LiveContext, h: HalfRef, inp: ReturnType<typeof 
   }
 
   // either half: the record against today's opponent, a winning streak coming in
-  if (opp && ctx.vs.summaries.length >= 2) {
-    const w = ctx.vs.summaries.filter((x) => x.result === 'W').length, l = ctx.vs.summaries.filter((x) => x.result === 'L').length, t = ctx.vs.summaries.length - w - l
+  if (opp && finishedSummaries(ctx.vs.summaries).length >= 2) {
+    const w = ctx.vs.summaries.filter((x) => x.result === 'W').length, l = ctx.vs.summaries.filter((x) => x.result === 'L').length, t = ctx.vs.summaries.filter((x) => x.result === 'T').length
     add(4, { id: `vsRec:${opp}`, priority: 30, kicker: `歷年對${opp}`, figure: `${w}-${l}`, text: `歷年對${opp} ${w} 勝 ${l} 敗${t ? ` ${t} 和` : ''}` })
   }
   const streak = currentStreak(ctx.summaries)

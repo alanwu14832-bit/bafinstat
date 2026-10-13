@@ -58,8 +58,9 @@ function download(c: HTMLCanvasElement, name: string) {
 }
 
 export interface GameImage {
-  teamName: string; opponent: string; date: string; meta: string; result: 'W' | 'L' | 'T'
-  runsUs: number; runsOpp: number; lineUs: number[]; lineOpp: number[]; hitsUs: number; hitsOpp: number; errorsUs: number; errorsOpp: number
+  teamName: string; opponent: string; date: string; meta: string; result: 'W' | 'L' | 'T' | 'live'
+  /** the line score; a game being recorded gives only the innings played so far (`innings` = the columns to draw) */
+  runsUs: number; runsOpp: number; lineUs: number[]; lineOpp: number[]; innings?: number; hitsUs: number; hitsOpp: number; errorsUs: number; errorsOpp: number
   weTop: boolean; lines: Array<{ label: string; text: string }>; footer: string
 }
 
@@ -68,7 +69,9 @@ export function downloadGameImage(d: GameImage) {
   const { c, g } = canvas()
   const acc = lifted(accent())
   text(g, d.meta, 72, 110, 30, MUTED, { weight: 500 })
-  text(g, d.result === 'W' ? '勝' : d.result === 'L' ? '敗' : '和', W - 72, 112, 44, d.result === 'W' ? acc : INK, { align: 'right', weight: 800 })
+  // (a game still being recorded says so instead of 勝／敗, in the team colour like a win)
+  if (d.result === 'live') text(g, '比賽進行中', W - 72, 110, 34, acc, { align: 'right', weight: 800 })
+  else text(g, d.result === 'W' ? '勝' : d.result === 'L' ? '敗' : '和', W - 72, 112, 44, d.result === 'W' ? acc : INK, { align: 'right', weight: 800 })
   const rows = d.weTop ? [{ n: d.teamName, r: d.runsUs, us: true }, { n: d.opponent, r: d.runsOpp, us: false }] : [{ n: d.opponent, r: d.runsOpp, us: false }, { n: d.teamName, r: d.runsUs, us: true }]
   rows.forEach((t, i) => {
     const y = 270 + i * 170
@@ -76,14 +79,15 @@ export function downloadGameImage(d: GameImage) {
     text(g, String(t.r), W - 72, y + 24, 150, t.us ? INK : MUTED, { align: 'right', font: FIG, weight: 700 })
   })
   // line score
-  const n = Math.max(d.lineUs.length, d.lineOpp.length), top = 560, cw = Math.min(64, 640 / Math.max(n, 1))
+  const n = Math.max(d.innings ?? 0, d.lineUs.length, d.lineOpp.length), top = 560, cw = Math.min(64, 640 / Math.max(n, 1))
   g.strokeStyle = LINE; g.lineWidth = 2; g.strokeRect(60, top - 50, W - 120, 210)
   const lines = d.weTop ? [d.lineUs, d.lineOpp] : [d.lineOpp, d.lineUs]
   const rhe = d.weTop ? [[d.runsUs, d.hitsUs, d.errorsUs], [d.runsOpp, d.hitsOpp, d.errorsOpp]] : [[d.runsOpp, d.hitsOpp, d.errorsOpp], [d.runsUs, d.hitsUs, d.errorsUs]]
   for (let i = 0; i < n; i++) text(g, String(i + 1), 100 + i * cw + cw / 2, top, 26, MUTED, { align: 'center', font: FIG })
   ;['R', 'H', 'E'].forEach((h, k) => text(g, h, W - 300 + k * 80, top, 26, k === 0 ? INK : MUTED, { align: 'center', font: FIG }))
   lines.forEach((l, r) => {
-    for (let i = 0; i < n; i++) text(g, String(l[i] ?? 0), 100 + i * cw + cw / 2, top + 60 + r * 64, 38, INK, { align: 'center', font: FIG, weight: 600 })
+    // (a game being recorded: the innings not reached yet stay blank)
+    for (let i = 0; i < n; i++) if (l[i] !== undefined || d.result !== 'live') text(g, String(l[i] ?? 0), 100 + i * cw + cw / 2, top + 60 + r * 64, 38, INK, { align: 'center', font: FIG, weight: 600 })
     rhe[r].forEach((v, k) => text(g, String(v), W - 300 + k * 80, top + 60 + r * 64, 40, INK, { align: 'center', font: FIG, weight: k === 0 ? 800 : 600 }))
   })
   // recap

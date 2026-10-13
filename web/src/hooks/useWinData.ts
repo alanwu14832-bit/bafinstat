@@ -3,6 +3,7 @@ import { TEAM } from '../config/team'
 import { defaultWinRules, type WinRules } from '../data/winModel'
 import { buildWinData, type WinData } from '../data/winTimeline'
 import { effectiveDataset, useDataStore } from '../store/data'
+import { useLiveIds } from './useLiveGames'
 
 /**
  * The team's rules for the win-probability model: TEAM.innings (not the per-device 每場局數 setting, so everyone sees
@@ -18,5 +19,7 @@ export const teamWinRules = (): WinRules => defaultWinRules(TEAM.innings, TEAM.t
 export function useWinData(): WinData {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
-  return useMemo(() => buildWinData(effectiveDataset(base, demo), teamWinRules()), [base, demo])
+  // (a game being recorded has no end point yet: rebuilt when one starts or stops being live)
+  const live = useLiveIds()
+  return useMemo(() => buildWinData(effectiveDataset(base, demo), teamWinRules()), [base, demo, live]) // eslint-disable-line react-hooks/exhaustive-deps
 }

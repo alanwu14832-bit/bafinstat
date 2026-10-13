@@ -8,7 +8,7 @@ import { careerMinOuts, careerMinPA, minOutsPitched, minPlateAppearances } from 
 import { hitStreaks, isActive, largestComeback, onBaseStreaks, scorelessStreaks, winRuns, type GameRef, type HistoryIndex, type Streak } from './history'
 import { compareNames } from './rosterSort'
 import { currentSeason, seasonLabel, seasonSpan } from './seasons'
-import { div, ipDisplay, type BattingLine, type PitchingLine } from './stats'
+import { div, finishedSummaries, ipDisplay, resultText, type BattingLine, type PitchingLine } from './stats'
 import { f2, f3 } from '../lib/fmt'
 import { localDate } from '../lib/dates'
 
@@ -233,9 +233,10 @@ const seasonOf = (h: HistoryIndex, gameId: string) => h.gameById.get(gameId)?.se
 export function teamRecords(h: HistoryIndex, opts: { today?: string } = {}): { game: RecordList[]; season: RecordList[]; streak: RecordList[] } {
   const inningsPerGame = h.params.inningsPerGame
   type Row = { name: string; date: string; ref: GameRef; v: number; inning?: number; score: string }
-  const rows = h.summaries.map((s) => {
+  // a game still being recorded is no record yet (its score and its 勝／敗 are not final)
+  const rows = finishedSummaries(h.summaries).map((s) => {
     const ref = h.gameById.get(s.game.id)!
-    return { s, ref, ex: h.extras.get(s.game.id) ?? { sb: 0, k: 0, outs: 0 }, score: `${s.result === 'W' ? '勝' : s.result === 'L' ? '敗' : '和'} ${s.runsUs}：${s.runsOpp}` }
+    return { s, ref, ex: h.extras.get(s.game.id) ?? { sb: 0, k: 0, outs: 0 }, score: `${resultText(s.result)} ${s.runsUs}：${s.runsOpp}` }
   })
   const teamEntry = (r: Row): RecordEntry => ({ ...blank, title: vs(r.ref), context: r.inning ? `第 ${r.inning} 局・${r.score}` : r.score, gameId: r.ref.id, demo: r.ref.isDemo, opponent: r.ref.opponent, when: r.ref.date })
   const make = (id: string, title: string, rule: string, unit: string, items: Row[], low = false) => {

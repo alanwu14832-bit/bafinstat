@@ -8,12 +8,16 @@ import { useLocation } from 'react-router-dom'
 import { PageTransition } from '../motion/Reveal'
 import { useDataStore } from '../../store/data'
 import { CloudOff, History } from 'lucide-react'
+import { useLiveGames } from '../../hooks/useLiveGames'
 
 export interface AppShellProps {
   children: ReactNode
   /** Override the TopBar filter slot (defaults to the global FilterBar). */
   filters?: ReactNode
 }
+
+/** Keeps the site-wide list of games being recorded fresh (every 30 s, on focus): their result shows 比賽進行中. */
+function LiveGamesPoller() { useLiveGames(); return null }
 
 export function AppShell({ children, filters }: AppShellProps) {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar)
@@ -55,6 +59,7 @@ export function AppShell({ children, filters }: AppShellProps) {
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] print:block bg-bg text-ink">
+      <LiveGamesPoller />
       <Sidebar />
       <MobileDrawer />
       <div className="min-w-0 flex flex-col">

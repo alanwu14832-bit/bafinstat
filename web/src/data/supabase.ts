@@ -382,6 +382,17 @@ export async function listCloudDrafts<T = unknown>(): Promise<CloudDraft<T>[] | 
   if (error) throw new Error(error.message)
   return (data ?? []) as CloudDraft<T>[]
 }
+/** What the site-wide 「比賽進行中」 check reads of each draft: a few fields, never the whole recording state. */
+export interface CloudDraftHead { game_id: string; updated_at: string; finished: boolean | null; practice: boolean | null }
+/** The drafts' heads (game id, time, finished / practice), for the 30 s check every page runs; null = no table yet. */
+export async function listCloudDraftHeads(): Promise<CloudDraftHead[] | null> {
+  const { data, error } = await supabase().from('record_drafts')
+    .select('game_id, updated_at, finished:state->finished, practice:state->practice')
+    .order('updated_at', { ascending: false })
+  if (draftsMissing(error)) return null
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as CloudDraftHead[]
+}
 export async function deleteCloudDraft(gameId: string) {
   const { error } = await supabase().from('record_drafts').delete().eq('game_id', gameId)
   if (error && !draftsMissing(error)) throw new Error(error.message)

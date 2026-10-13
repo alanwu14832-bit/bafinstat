@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import { GameView, type GameTab } from './GameView'
 import { useStats } from '../hooks/useStats'
 import { summarizeGame } from '../data/stats'
+import { useLiveIds } from '../hooks/useLiveGames'
 
 const TABS: GameTab[] = ['summary', 'box', 'bat', 'pit', 'feed', 'roster']
 
@@ -19,7 +20,9 @@ export function GamePage() {
   const navigate = useNavigate()
   const s = useStats()
   const game = s.dataset.games.find((g) => g.id === id)
-  const summary = useMemo(() => (game ? summarizeGame(s.dataset, game) : null), [game, s.dataset])
+  // (and again when the game starts or stops being recorded: 比賽進行中 instead of 勝／敗)
+  const live = useLiveIds()
+  const summary = useMemo(() => (game ? summarizeGame(s.dataset, game, live) : null), [game, s.dataset, live])
   const tab = params.get('tab') as GameTab | null
   const inning = Number(params.get('inning')) || undefined
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/games?view=results'))

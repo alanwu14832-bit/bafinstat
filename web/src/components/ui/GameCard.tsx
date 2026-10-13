@@ -2,14 +2,17 @@ import { cx } from '../../lib/format'
 import { Badge } from './Badge'
 import { HeroGlow } from './HeroGlow'
 import { TeamLogo } from './TeamLogo'
-import { battingLines, type BattingLine, type GameSummary } from '../../data/stats'
+import { battingLines, resultText, shownLine, type BattingLine, type GameSummary } from '../../data/stats'
+import { LiveBadge } from './ResultBadge'
 import type { Dataset } from '../../data/types'
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return Number.isNaN(d.getTime()) ? iso : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）` }
 
-/** 勝 / 敗 / 和 as a small scoreboard plate: the team colour carries the wins (as on the homepage). */
+/** 勝 / 敗 / 和 as a small scoreboard plate: the team colour carries the wins (as on the homepage). A game still being
+ *  recorded has no result yet: 「比賽進行中」 with the live dot. */
 export function ResultPlate({ result, className }: { result: GameSummary['result']; className?: string }) {
+  if (result === 'live') return <LiveBadge className={cx('h-7 px-2.5 text-[12px]', className)} />
   return (
     <span className={cx('figure inline-flex items-center justify-center size-9 rounded-[10px] text-[17px] font-bold leading-none shrink-0',
       result === 'W' ? 'bg-accent text-accent-ink' : result === 'L' ? 'bg-surface-3 text-ink-2' : 'border border-border-strong text-ink-2', className)}>
@@ -45,16 +48,17 @@ export function gameStar(ds: Dataset, gameId: string): GameStar | undefined {
 export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void; className?: string; issues?: number }) {
   const g = s.game
   const win = s.result === 'W'
+  const live = s.result === 'live'
   const n = Math.max(g.innings ?? 0, s.lineUs.length, s.lineOpp.length, 1)
   const teams = [
-    { key: 'us', name: teamName, mark: <TeamLogo size={22} />, runs: s.runsUs, line: s.lineUs, h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
-    { key: 'opp', name: g.opponent, mark: <OppMark name={g.opponent} />, runs: s.runsOpp, line: s.lineOpp, h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
+    { key: 'us', name: teamName, mark: <TeamLogo size={22} />, runs: s.runsUs, line: shownLine(s, 'us'), h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
+    { key: 'opp', name: g.opponent, mark: <OppMark name={g.opponent} />, runs: s.runsOpp, line: shownLine(s, 'opp'), h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
   ]
   // innings at a fixed width (a 5-inning game does not stretch), R / H / E pinned right behind a divider
   const cols = `repeat(${n}, minmax(0, 1.5rem)) minmax(0.25rem, 1fr) 1.6rem 1.6rem 1.6rem`
   const decided = [g.winningPitcher && `勝投 ${g.winningPitcher}`, g.losingPitcher && `敗投 ${g.losingPitcher}`, g.savePitcher && `救援 ${g.savePitcher}`].filter(Boolean).join('・')
   return (
-    <button type="button" onClick={onOpen} aria-label={`${g.date} ${teamName} ${s.runsUs} 比 ${s.runsOpp} ${g.opponent}，${win ? '勝' : s.result === 'L' ? '敗' : '和'}，看這場`}
+    <button type="button" onClick={onOpen} aria-label={`${g.date} ${teamName} ${s.runsUs} 比 ${s.runsOpp} ${g.opponent}，${live ? '比賽進行中，目前比分' : resultText(s.result)}，看這場`}
       className={cx('lift group relative overflow-hidden text-left rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-3.5 cursor-pointer min-w-0', className)}>
       {win && <HeroGlow size="sm" strength={0.75} />}
       <div className="relative flex items-start justify-between gap-3">
@@ -62,7 +66,8 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
           <div className="text-[12px] text-ink-2 tnum">{dayLabel(g.date)}</div>
           <div className="text-[11px] text-muted mt-0.5 truncate">{[g.tournament, g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・')}</div>
         </div>
-        <span className="inline-flex items-center gap-1.5">{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} /></span>
+        {/* (a game being recorded: its wider 比賽進行中 plate goes under the other badges, so the date line keeps its width) */}
+        <span className={cx('inline-flex gap-1.5 shrink-0', live ? 'flex-col items-end' : 'items-center')}>{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} /></span>
       </div>
       <div className="relative flex flex-col gap-1.5">
         {teams.map((t) => (
@@ -81,8 +86,9 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
         {teams.map((t) => (
           <div key={t.key} className={cx('grid gap-x-0.5 text-center figure text-[13px] mt-0.5', t.key === 'us' ? 'text-ink' : 'text-ink-2')} style={{ gridTemplateColumns: cols }}>
             {Array.from({ length: n }, (_, i) => {
+              // (a game being recorded: the innings not reached yet stay blank)
               const v = t.line[i]
-              return <span key={i} className={v ? 'font-semibold' : 'text-muted'}>{v ?? 0}</span>
+              return <span key={i} className={v ? 'font-semibold' : 'text-muted'}>{v === undefined && live ? '' : v ?? 0}</span>
             })}
             <span /><span className="font-bold border-l border-border">{t.runs}</span><span>{t.h}</span><span>{t.e}</span>
           </div>
