@@ -7,13 +7,13 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, errorsText } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, PA_RESULTS, POSITIONS, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { applyOppPitcher, blankBattingAt, blankPitchingAt, stillOn } from '../../record/paEdit'
+import { applyOppPitcher, blankBattingAt, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
 import { HoldPicker } from './HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
@@ -144,6 +144,7 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'oppOrder', label: '對方棒次', kind: 'int', w: 56 }, { key: 'pitcher', label: '投手', kind: 'name', w: 96 }, { key: 'oppBatter', label: '對方打者', kind: 'text', w: 88 },
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: RESULT_OPTIONS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
+  { key: 'runner', label: '代跑', kind: 'text', w: 80 },
   { key: 'sba', label: '被盜', kind: 'int', w: 44 }, { key: 'cs', label: '阻殺', kind: 'int', w: 44 }, { key: 'wp', label: '暴投', kind: 'int', w: 44 }, { key: 'pb', label: '捕逸', kind: 'int', w: 44 }, { key: 'pk', label: '牽制', kind: 'int', w: 44 },
   { key: 'errorsText', label: '守備失誤（守位）', kind: 'text', w: 96 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
@@ -207,19 +208,18 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   // so trying 保送 and going back to 三振 undoes the runners it forced
   const baseline = useRef(new Map<string, Record<number, End>>())
   useEffect(() => { setTlNotice(null); baseline.current.clear() }, [sel])
-  const nameOf = (side: PaSide) => (row: number) => {
-    if (side === 'bat') { const r = batRows[row]; return r ? r.runner || r.batter || '（未填）' : '' }
-    const r = pitRows[row]
-    return r ? `對方${r.oppBatter ? ` ${r.oppBatter}` : r.oppOrder ? ` ${r.oppOrder} 棒` : ''}` : ''
-  }
+  const nameOf = (side: PaSide) => (row: number) => rowName(side, side === 'bat' ? batRows[row] : pitRows[row])
+  /** the man who batted on that row (not his 代跑) */
+  const batterOf = (side: PaSide) => (row: number) => rowName(side, side === 'bat' ? batRows[row] : pitRows[row], true)
   /** Check an edited inning, then write it onto the rows (or say why not). */
   /** `was` and `shift`: the inning before the change with its rows moved (rows were added or removed in front of it) */
   const commitHalf = (side: PaSide, rows: Array<BattingPA | PitchingPA>, half: Half, was?: Half, shift?: { at: number; k: number }): string | null => {
-    const name = nameOf(side)
+    const runner = nameOf(side), batter = batterOf(side)
     let outs = 0
     for (let j = 0; j < half.steps.length; j++) {
       const st = half.steps[j]
-      const p = stepProblems(st, name)
+      // on his own plate appearance the row's man is the batter, later he is the runner (or his 代跑)
+      const p = stepProblems(st, (row) => (row === st.index ? batter(row) : runner(row)))
       if (p.length) { const m = `${p[0]}，這個改法沒有套用`; setTlNotice(m); return m }
       outs += st.moves.filter((m) => m.to === 'out').length
       if (outs >= 3) { const m = '跑壘出局已經是這局第三個出局，這個打席不會有結果；請改在上一個打席把這位跑者設為出局'; setTlNotice(m); return m }
@@ -391,8 +391,14 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       onPinchRunner: (row: number, name: string) => setBat((b) => b.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
-    } : {}
-    return { step, nameOf: nameOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut,
+    } : {
+      // 對方代跑: typed (a name or jersey number), on the row where that runner reached
+      onPinchRunner: (row: number, name: string) => setPit((p) => p.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
+      pinchNames: oppNames,
+      pinchText: true,
+      runnerOf: (row: number) => pitRows[row]?.runner,
+    }
+    return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut,
       ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', rule: (row: number) => earnedNow.get(row), toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
@@ -426,6 +432,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [infoOpen, setInfoOpen] = useState(false)
   // names already in this game's roster stay selectable even when they left the team roster
   const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher), ...dayRosterNames(initial.game.dayRoster)])].filter(Boolean), [roster, bat, pit, initial.game.dayRoster])
+  // 對方代跑 suggestions: the opponent names already in this game
+  const oppNames = useMemo(() => [...new Set(pit.flatMap((p) => [p.oppBatter ?? '', p.runner ?? '']))].filter((n) => n.trim() && n !== OPP_PR_UNNAMED), [pit])
   const starterSet = useMemo(() => new Set(starters.map((x) => x.name.trim()).filter(Boolean)), [starters])
   const benchChoices = useMemo(() => names.filter((n) => !starterSet.has(n)), [names, starterSet])
   const toggleBench = (n: string) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))

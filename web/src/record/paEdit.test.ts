@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyOppPitcher, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
+import { applyOppPitcher, rowName, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
 import type { BattingPA, PitchingPA } from '../data/types'
 
 const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 1, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
@@ -119,5 +119,20 @@ describe('對方投手 and 對方打者 in 修改資料', () => {
     const rows = [pit({ oppOrder: 1, oppBatter: 'A1' }), pit({ oppOrder: 2, oppBatter: 'A2' }), pit({ oppOrder: 9 })]
     expect(blankPitchingAt(rows, 3, 'G')).toMatchObject({ oppOrder: 1, oppBatter: 'A1' })
     expect('oppBatter' in blankPitchingAt([pit({ oppOrder: 1 })], 1, 'G')).toBe(false)
+  })
+})
+
+describe('rowName (修改資料 runner timeline)', () => {
+  it('names the runner on base but the man who batted on his own line', () => {
+    const o = pit({ oppOrder: 3, result: '一安', runner: '12號' })
+    expect(rowName('pit', o)).toBe('對方 12號')
+    expect(rowName('pit', o, true)).toBe('對方 3 棒')
+    expect(rowName('pit', { ...o, oppBatter: '王' }, true)).toBe('對方 王')
+    expect(rowName('pit', { ...o, runner: '對方代跑' })).toBe('對方代跑')
+    const b = bat({ batter: '甲', runner: '乙' })
+    expect(rowName('bat', b)).toBe('乙')
+    expect(rowName('bat', b, true)).toBe('甲')
+    expect(rowName('bat', bat({ batter: '' }))).toBe('（未填）')
+    expect(rowName('pit', undefined)).toBe('')
   })
 })

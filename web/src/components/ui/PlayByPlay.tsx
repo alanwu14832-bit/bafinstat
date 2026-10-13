@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { isPlaced, OPP_HAND_LABEL, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
+import { isPlaced, OPP_HAND_LABEL, pinchMark, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
 import { balksIn, playText, playWhen } from '../../data/plays'
 import { inningsOf, placedBases } from '../../record/timeline'
 import { pitchTotals, isHitResult } from '../../data/stats'
@@ -233,7 +233,7 @@ export function PitchingPlayByPlay({ pas, flags, visible, wording = 'code', win 
             const header = p.inning !== lastInning
             const changed = changedAt[i]
             lastInning = p.inning
-            const extras = [p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : '', balksIn(p.events) ? `投手犯規 ${balksIn(p.events)}` : '', p.errors?.length ? `失誤 ${p.errors.join('、')}` : ''].filter(Boolean).join('・')
+            const extras = [p.runner ? pinchMark(p.runner) : '', p.sba ? `被盜壘 ${p.sba}` : '', p.cs ? `阻殺 ${p.cs}` : '', p.wp ? `暴投 ${p.wp}` : '', p.pb ? `捕逸 ${p.pb}` : '', p.pk ? `牽制出局 ${p.pk}` : '', balksIn(p.events) ? `投手犯規 ${balksIn(p.events)}` : '', p.errors?.length ? `失誤 ${p.errors.join('、')}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" cols={win ? 10 : 9} />}

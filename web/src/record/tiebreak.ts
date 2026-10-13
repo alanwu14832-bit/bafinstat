@@ -10,7 +10,7 @@
  */
 import { TEAM } from '../config/team'
 import { isPlaced, TIEBREAK, type BattingPA, type PitchingPA } from '../data/types'
-import { basesString, offense, oppFields, type Base, type RecordState, type Runner, type TiebreakRule } from './model'
+import { basesString, lastOppName, offense, oppFields, type Base, type RecordState, type Runner, type TiebreakRule } from './model'
 import { inferHalf, inningsOf, shiftHalf, withoutRunners, withPlaced, type Half, type OnBase, type Side } from './timeline'
 
 const BASE_ZH: Record<Base, string> = { 1: '一壘', 2: '二壘', 3: '三壘' }
@@ -77,11 +77,12 @@ export function tiebreakDue(s: RecordState): boolean {
 export interface PlacedPreview { base: Base | 0; order: number; name: string; /** the opponent's name is known */ named?: boolean }
 
 const mod = (a: number, n: number) => ((a % n) + n) % n
-/** The opponent batter of `order`: their lineup (記對方打者姓名), else the name typed the last time that slot came up. */
+/** The opponent batter of `order`: their lineup (記對方打者姓名), else the name typed the last time that slot came up
+ *  (not before a 對方代跑 who took over that slot since). */
 function oppNameOf(s: RecordState, order: number): string | undefined {
   const fromLineup = s.oppNames ? s.oppLineup?.[order - 1] : ''
   if (fromLineup) return fromLineup
-  return [...s.pitching].reverse().find((p) => p.oppOrder === order && p.oppBatter)?.oppBatter || undefined
+  return lastOppName(s.pitching, order) || undefined
 }
 
 /** Who goes where, lead runner first, then the batter up. */

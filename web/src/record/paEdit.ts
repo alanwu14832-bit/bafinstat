@@ -3,13 +3,26 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { isDouble, type BattingPA, type OppHand, type PitchingPA } from '../data/types'
+import { isDouble, OPP_PR_UNNAMED, type BattingPA, type OppHand, type PitchingPA } from '../data/types'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
 
 type PA = BattingPA | PitchingPA
 const OUT_CODES = new Set(['I', 'II', 'III'])
 const ROMAN = ['I', 'II', 'III'] as const
+
+/**
+ * Who a row is in the 修改資料 runner timeline. On base he is the runner (a 代跑 on that row takes over from the
+ * plate appearance on); `asBatter` names the man who batted, for the batter's own line and messages about him.
+ */
+export function rowName(side: 'bat' | 'pit', r: BattingPA | PitchingPA | undefined, asBatter = false): string {
+  if (!r) return ''
+  if (side === 'bat') { const b = r as BattingPA; return (!asBatter && b.runner) || b.batter || '（未填）' }
+  const o = r as PitchingPA
+  // (a 對方代跑 is called by his name, like ours)
+  if (!asBatter && o.runner) return o.runner === OPP_PR_UNNAMED ? OPP_PR_UNNAMED : `對方 ${o.runner}`
+  return `對方${o.oppBatter ? ` ${o.oppBatter}` : o.oppOrder ? ` ${o.oppOrder} 棒` : ''}`
+}
 
 /** Code for a new result: an out gets I／II／III from 出局(前) (雙殺 counts two), a non-out drops a stale out code. */
 export function codeFor(result: string, outsBefore: number | undefined, code: string | undefined): string | undefined {

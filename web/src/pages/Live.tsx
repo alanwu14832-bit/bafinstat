@@ -20,7 +20,7 @@ import { hhmm } from '../lib/dates'
 import { cloudConfigured, listCloudDrafts } from '../data/supabase'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
-import { HIT_BASE_COUNT, isPA, isPlaced } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, pinchMark } from '../data/types'
 import { cx } from '../lib/format'
 import { NON_AB_RESULTS } from '../data/stats'
 import { f3 } from '../lib/fmt'
@@ -332,7 +332,7 @@ function RecentPlays({ s, side }: { s: RecordState; side: 'us' | 'opp' }) {
           <motion.li key={rows.length - i} layout="position" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.28, ease: EASE }}
             className="px-4 py-2 flex items-center gap-3">
             <span className="text-muted tnum w-8 shrink-0">{p.inning}局</span>
-            <span className="font-medium text-ink truncate flex-1">{'batter' in p ? p.batter : (p.oppBatter || `對方 ${p.oppOrder} 棒`)}</span>
+            <span className="font-medium text-ink truncate flex-1">{'batter' in p ? p.batter : (p.oppBatter || `對方 ${p.oppOrder} 棒`)}{p.runner && <span className="text-[11px] text-muted font-normal ml-1.5">→ {pinchMark(p.runner)}</span>}</span>
             <span className={cx(p.result in HIT_BASE_COUNT ? 'font-semibold text-ink' : isPlaced(p) ? 'text-muted' : 'text-ink-2')}>{p.result || '—'}</span>
             {p.code && <Badge variant={p.code === 'R' || p.code === 'ER' ? 'good' : 'neutral'}>{p.code}</Badge>}
           </motion.li>

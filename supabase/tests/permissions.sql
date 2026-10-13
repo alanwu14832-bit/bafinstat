@@ -88,6 +88,11 @@ select pg_temp.ok(pg_temp.val($q$select end_time from games where id = 'G3'$q$) 
 select pg_temp.ok(pg_temp.val($q$select opp_hand || opp_pitcher from batting_pa where game_id = 'G3'$q$) = 'L王', 'opp_hand and opp_pitcher read back');
 select pg_temp.refused($q$select save_games('[{"id":"G3","date":"2026-10-04","time":"13:07","end_time":"16:00"}]', '[{"game_id":"G3","seq":1,"inning":1,"batter":"甲","result":"一安","opp_hand":"左"}]')$q$, 'an opp_hand other than L / R is refused');
 select pg_temp.ok(pg_temp.val($q$select end_time from games where id = 'G3'$q$) = '15:22', 'and the game keeps its end time');
+-- 2026-10-15: 對方代跑 (pitching_pa.runner) goes through save_games too
+select pg_temp.ok(save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', '[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","pitches":["IP"],"result":"一安","code":"R","runner":"12號"}]') = 1, 'A saves a pitching row with an opponent pinch runner');
+select pg_temp.ok(pg_temp.val($q$select runner from pitching_pa where game_id = 'G4'$q$) = '12號', 'pitching_pa.runner reads back');
+select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', ('[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","result":"一安","runner":"' || repeat('x', 41) || '"}]')::jsonb)$q$, 'a 41-character opponent pinch runner is refused');
+select pg_temp.ok(pg_temp.val($q$select runner from pitching_pa where game_id = 'G4'$q$) = '12號', 'and the row keeps its runner');
 select pg_temp.ok(pg_temp.val('select count(*) from editors')::int >= 3, 'A sees the 紀錄員名單');
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'A sees the 操作紀錄');
 select pg_temp.ok(length(add_editor('e@x.com', '新人')) = 10, 'A adds a recorder and gets a 10-character 邀請碼');

@@ -137,6 +137,11 @@ export const PLAY_EVENT_LABELS: Record<string, string> = {
 export type OppHand = 'L' | 'R'
 export const OPP_HAND_LABEL: Record<OppHand, string> = { L: '左投', R: '右投' }
 
+/** 對方代跑 with no name typed: what PitchingPA.runner holds and what the runner is called everywhere. */
+export const OPP_PR_UNNAMED = '對方代跑'
+/** The 代跑 mark on a play: 「代跑 12號」, or just 「代跑」 when no name was typed. */
+export const pinchMark = (runner: string) => (runner === OPP_PR_UNNAMED ? '代跑' : `代跑 ${runner}`)
+
 export interface BattingPA {
   gameId: string
   inning: number
@@ -182,6 +187,9 @@ export interface PitchingPA {
   oppOrder?: number
   pitcher: string
   oppBatter?: string
+  /** 對方代跑: who ran for this opponent batter after he reached (a name or jersey number, OPP_PR_UNNAMED when not typed).
+   *  Only the name changes: the run, SB, CS and out on base stay on this row. Left out when there is none. */
+  runner?: string
   pitches: string[]
   result: string
   loc?: number

@@ -2,7 +2,7 @@
  * What earlier games against an opponent tell the recorder: the names of their batters (記對方打者姓名), their last
  * batting order, and the pitchers we faced (對方投手 with the hand). For datalists and one-tap chips on 紀錄比賽.
  */
-import type { BattingPA, Dataset, Game, OppHand } from './types'
+import { OPP_PR_UNNAMED, type BattingPA, type Dataset, type Game, type OppHand } from './types'
 
 const same = (a: string, b: string) => a.trim() === b.trim()
 /** Played games (no status) against this opponent, newest first (by date, then id). */
@@ -11,10 +11,15 @@ function gamesVs(ds: Dataset, opponent: string): Game[] {
   return ds.games.filter((g) => !g.status && same(g.opponent, opponent)).sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
 }
 
-/** Every opponent batter name seen against this opponent, newest game first, each once. */
+/** Every opponent batter (and named pinch runner) seen against this opponent, newest game first, each once. */
 export function oppBatterNames(ds: Dataset, opponent: string): string[] {
   const out = new Set<string>()
-  for (const g of gamesVs(ds, opponent)) for (const p of ds.pitching) if (p.gameId === g.id && p.oppBatter?.trim()) out.add(p.oppBatter.trim())
+  for (const g of gamesVs(ds, opponent)) for (const p of ds.pitching) {
+    if (p.gameId !== g.id) continue
+    if (p.oppBatter?.trim()) out.add(p.oppBatter.trim())
+    // (their pinch runners too, by name)
+    if (p.runner?.trim() && p.runner.trim() !== OPP_PR_UNNAMED) out.add(p.runner.trim())
+  }
   return [...out]
 }
 

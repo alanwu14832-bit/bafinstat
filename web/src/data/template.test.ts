@@ -44,6 +44,14 @@ describe('公版 Excel keeps up with the website', () => {
     expect(qab.f).toContain(`${col('兩好球纏鬥')}${rowOfHead + 2}`)
     expect(qab.f).toContain(`${col('6球以上')}${rowOfHead + 2}`)
   }, 30000)
+  it('投球紀錄 and 單場-投球 have the 對方代跑 input right after 跑壘事件 (old copy-paste ranges still line up)', () => {
+    for (const name of ['投球紀錄', '單場-投球']) {
+      const head = headerRow(template.Sheets[name], '投手')
+      expect(head.indexOf('代跑'), name).toBe(head.indexOf('跑壘事件') + 1)
+      // every input before it keeps its column
+      expect(head.slice(0, 7), name).toEqual(['比賽ID', '局', '出局(前)', '壘上(前)', '對方棒次', '投手', '對方打者'])
+    }
+  })
   it('has the 當日登錄名單 cells in the single-game template', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')

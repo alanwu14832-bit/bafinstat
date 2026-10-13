@@ -190,3 +190,19 @@ describe('突破僵局 and 投手犯規', () => {
     expect(describeChange(s, balk(s))).toBe('乙 投手犯規 3B→得分・甲 投手犯規 1B→2B・得 1 分・1：0')
   })
 })
+
+describe('對方代跑 in the line shown after the tap', () => {
+  const home = () => newGame({ ...game, homeAway: '主' }, ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name) => ({ name, pos: 'C' })), '壬', { oppNames: true, oppLineup: ['A1', 'A2', '王'] })
+  it('names who came in and for whom (slot and name), and does not also say the order changed', async () => {
+    const { pinchRunOpp, setOppOrder } = await import('./model')
+    const s = send(setOppOrder(home(), 3), '一安')
+    expect(describeChange(s, pinchRunOpp(s, 0, '12號'))).toBe('對方代跑：12號 替 第 3 棒 王')
+    const t = pinchRunOpp(s, 0, '12號')
+    expect(describeChange(t, pinchRunOpp(t, 0, '15號'))).toBe('對方代跑：15號 替 第 3 棒 12號')
+  })
+  it('without a name: 「對方代跑」, and without their names just the slot', async () => {
+    const { pinchRunOpp } = await import('./model')
+    const s = send(newGame({ ...game, homeAway: '主' }, [{ name: '甲', pos: 'C' }], '壬'), '保送')
+    expect(describeChange(s, pinchRunOpp(s, 0, ''))).toBe('對方代跑：替 第 1 棒')
+  })
+})

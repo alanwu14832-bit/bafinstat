@@ -2,7 +2,7 @@
  * Post-game editing that looks like 紀錄比賽: every plate appearance is a row; tapping one opens it with the same
  * pitch pad, result chips and batted-ball picker used while recording. Changes stay in the editor until 儲存修改.
  */
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, List, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Input } from './Input'
@@ -10,7 +10,7 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { isPlaced, OPP_HAND_LABEL, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
+import { isPlaced, OPP_HAND_LABEL, pinchMark, POSITIONS, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
 import { count, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
@@ -32,7 +32,7 @@ const whoOf = (side: PaSide, p: AnyPA) => {
 const BASE_ZH: Record<number, string> = { 1: '一壘', 2: '二壘', 3: '三壘' }
 const extrasOf = (side: PaSide, p: AnyPA) => [...(isBat(side, p)
   ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `壘死 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`]
-  : [(p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
+  : [(p as PitchingPA).runner && pinchMark((p as PitchingPA).runner!), (p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`]
 ), balksIn(p.events) && `投手犯規 ${balksIn(p.events)}`].filter(Boolean).join('・')
 
 /* ------------------------------------------------------------------ list */
@@ -188,9 +188,13 @@ export interface TimelineProps {
   pinchNames?: string[]
   /** current 代跑 of a runner's row */
   runnerOf?: (row: number) => string | undefined
+  /** 對方代跑: typed (a name or jersey number) instead of picked from our players */
+  pinchText?: boolean
   /** a new result moves the batter (and forces runners) through the timeline */
   onResult: (result: string) => void
   nameOf: (row: number) => string
+  /** the man who batted on a row, not the 代跑 who took over on base (the batter's own line) */
+  batterOf?: (row: number) => string
   onEnd: (who: number | 'batter', end: End) => void
   /** runner play(s) after `pitch` pitches (0 = before the first): each runner in `rows` moves up one or is out */
   onPlay: (pitch: number, kind: string, rows: number[]) => void
@@ -322,10 +326,22 @@ function ThrowChip({ tl, who, name }: { tl: TimelineProps; who: number | 'batter
   return <AdvChoice kind={t.kind} onPick={(k) => tl.onThrow(who, k)} name={name} />
 }
 
+/** 對方代跑 typed in 修改資料: a name or jersey number (optional), datalist of the opponent names in this game. */
+function OppRunnerField({ label, value, onChange, names, className }: { label: string; value: string; onChange: (v: string) => void; names: string[]; className?: string }) {
+  const id = `opp-runner-${useId()}`
+  return (
+    <label className={cx('flex items-center gap-2 text-[12px] text-ink-2', className)}><span className="shrink-0 whitespace-nowrap">代跑</span>
+      {/* Input is w-full: the wrapper sets its width */}
+      <span className="w-[180px] max-w-full min-w-0"><Input aria-label={label} size="sm" value={value} maxLength={40} list={id} onChange={(e) => onChange(e.target.value)} placeholder="姓名或背號（沒有就空著）" /></span>
+      <datalist id={id}>{names.map((n) => <option key={n} value={n} />)}</datalist>
+    </label>
+  )
+}
+
 /** 壘上跑者 for one plate appearance: who was on base, where each of them (and the batter) ended up, and what happened. */
 function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl: TimelineProps; picked: number | null }) {
   const { step, nameOf } = tl
-  const batterName = side === 'bat' ? (pa as BattingPA).batter || '打者' : nameOf(step.index)
+  const batterName = side === 'bat' ? (pa as BattingPA).batter || '打者' : (tl.batterOf ?? nameOf)(step.index)
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2">
@@ -341,7 +357,9 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
                 {tl.earned && tl.step.dest[o.row] === 'home' && <EarnedChip on={tl.earned.of(o.row)} onToggle={() => tl.earned!.toggle(o.row)} />}
               </div>
               {tl.step.dest[o.row] === 'home' && <EarnedNote tl={tl} row={o.row} />}
-              {tl.onPinchRunner && <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>}
+              {tl.onPinchRunner && (tl.pinchText
+                ? <OppRunnerField label={`${name} 的代跑`} value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} />
+                : <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>)}
             </li>
           )
         })}
@@ -464,6 +482,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
           <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" /></label>
           <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={orderOpts} className="w-[104px]" /></label>
           <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[140px]">對方打者<Input value={pit.oppBatter ?? ''} onChange={(e) => set({ oppBatter: e.target.value || undefined })} placeholder="可不填" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[160px]">代跑<Input aria-label="對方代跑" value={pit.runner ?? ''} maxLength={40} onChange={(e) => { const n = { ...pit, runner: e.target.value || undefined }; if (!e.target.value) delete n.runner; onChange(n) }} placeholder="沒有代跑就空著" /></label>
         </div>
       )}
       <div className="flex items-center gap-2 flex-wrap text-[13px] text-ink-2">
@@ -549,7 +568,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       {!whoOpen && (bat ? bat.batter : pit?.pitcher) ? (
         <div className="flex items-center gap-2 text-[14px] text-ink">
           {bat ? <span><span className="text-muted tnum">{bat.order ? `第 ${bat.order} 棒` : '棒次—'}</span> <span className="font-semibold">{bat.batter}</span> <span className="text-muted">{bat.pos}</span></span>
-            : <span>投手 <span className="font-semibold">{pit!.pitcher}</span><span className="text-muted">・對方{pit!.oppOrder ? `第 ${pit!.oppOrder} 棒` : ''}{pit!.oppBatter ? ` ${pit!.oppBatter}` : ''}</span></span>}
+            : <span>投手 <span className="font-semibold">{pit!.pitcher}</span><span className="text-muted">・對方{pit!.oppOrder ? `第 ${pit!.oppOrder} 棒` : ''}{pit!.oppBatter ? ` ${pit!.oppBatter}` : ''}{pit!.runner ? `・${pinchMark(pit!.runner)}` : ''}</span></span>}
           <button type="button" onClick={() => setWhoOpen(true)} className="ml-auto -mr-2 h-9 min-w-9 px-2 pointer-fine:h-7 pointer-fine:min-w-0 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">修改</button>
         </div>
       ) : bat ? (
@@ -566,6 +585,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[160px]">我隊投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={[{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]} className="w-[104px]" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[140px]">對方打者<Input value={pit.oppBatter ?? ''} onChange={(e) => set({ oppBatter: e.target.value || undefined })} placeholder="可不填" /></label>
+            <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[160px]">代跑<Input aria-label="對方代跑" value={pit.runner ?? ''} maxLength={40} onChange={(e) => { const n = { ...pit, runner: e.target.value || undefined }; if (!e.target.value) delete n.runner; onChange(n) }} placeholder="他上壘後換人才填" /></label>
           </div>
         </Section>
       )}

@@ -12,7 +12,7 @@
  *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
  *  - credits 被盜壘 / 阻殺 / 捕逸 to whoever was catching (當日登錄名單) when a game has none recorded
  *  - fills game.innings when blank, and returns human-readable warnings per game
- *  - 對方投手 (L / R, name) and 對方打者 trimmed and dropped when blank, 結束時間 as 'HH:MM'
+ *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM'
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player } from './types'
 import { auditGame } from './audit'
@@ -253,6 +253,11 @@ function oppOf(name: string | undefined, hand: unknown): Pick<BattingPA, 'oppPit
   return { ...(n ? { oppPitcher: n } : {}), ...(h ? { oppHand: h } : {}) }
 }
 
+/** 對方代跑: trimmed, at most 40 characters (the cloud's limit); left out when blank or the batter himself. */
+const oppRunnerOf = (runner?: string, batter?: string): { runner?: string } => {
+  const r = runner?.trim().slice(0, 40)
+  return r && r !== batter?.trim() ? { runner: r } : {}
+}
 export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
@@ -263,8 +268,8 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, ...p }) => ({
-    ...p, ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, ...p }) => ({
+    ...p, ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,

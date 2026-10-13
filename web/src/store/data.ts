@@ -13,7 +13,7 @@ import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
 import { ARCHIVE } from '../config/archive'
-import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, END_TIME_COLUMN, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, OPP_HAND_COLUMN, OPP_PITCHER_COLUMN, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
+import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, END_TIME_COLUMN, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, OPP_HAND_COLUMN, OPP_PITCHER_COLUMN, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, PITCHING_RUNNER, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
@@ -118,7 +118,7 @@ const droppedWarnings = (dropped: string[], saved: Parameters<typeof recordField
   ...(dropped.includes(ERRORS_COLUMN) ? [{ gameId, message: ERRORS_UNSUPPORTED }] : []),
   ...(dropped.includes(EVENTS_COLUMN) ? [{ gameId, message: EVENTS_UNSUPPORTED }] : []),
   ...(dropped.includes(SAVE_GAMES_FN) ? [{ gameId, message: SAVE_GAMES_UNSUPPORTED }] : []),
-  ...recordFieldWarnings({ endTime: !dropped.includes(END_TIME_COLUMN), oppPitcher: !dropped.includes(OPP_PITCHER_COLUMN) && !dropped.includes(OPP_HAND_COLUMN) }, saved, gameId),
+  ...recordFieldWarnings({ endTime: !dropped.includes(END_TIME_COLUMN), oppPitcher: !dropped.includes(OPP_PITCHER_COLUMN) && !dropped.includes(OPP_HAND_COLUMN), oppRunner: !dropped.includes(PITCHING_RUNNER) }, saved, gameId),
 ]
 /** The same warning once (a dropped column and the columns check can both report it). */
 const dedupe = (ws: GameWarning[]): GameWarning[] => { const seen = new Set<string>(); return ws.filter((w) => !seen.has(w.message) && !!seen.add(w.message)) }
@@ -273,10 +273,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       const lastSync = new Date().toISOString()
       writeJSON(DATA_KEY, { base: ds, importedAt: lastSync } satisfies Persisted)
       // the 2026-10-14 columns: read off the rows just loaded, so the notes go away right after the admin runs the SQL
-      const recordFields: RecordFields = { endTime: !missing.includes(END_TIME_COLUMN), oppPitcher: !missing.includes(OPP_HAND_COLUMN) }
+      const recordFields: RecordFields = { endTime: !missing.includes(END_TIME_COLUMN), oppPitcher: !missing.includes(OPP_HAND_COLUMN), oppRunner: !missing.includes(PITCHING_RUNNER) }
       const was = get().recordFields
       set({ base: ds, source: 'cloud', importedAt: lastSync, cloud: { ...get().cloud, status: 'ready', error: null, lastSync },
-        ...(was.endTime !== recordFields.endTime || was.oppPitcher !== recordFields.oppPitcher ? { recordFields } : {}) })
+        ...(was.endTime !== recordFields.endTime || was.oppPitcher !== recordFields.oppPitcher || was.oppRunner !== recordFields.oppRunner ? { recordFields } : {}) })
     } catch (e) {
       set({ cloud: { ...get().cloud, status: 'error', error: e instanceof Error ? e.message : String(e) } })
     }

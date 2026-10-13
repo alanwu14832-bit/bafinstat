@@ -35,7 +35,7 @@ import { FIELD_POSITIONS } from '../data/errors'
 import { cx } from '../lib/format'
 import {
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
-  finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  finishTimes, oppBatterOf, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
@@ -319,6 +319,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const oppOptions = useMemo(() => oppPitcherOptions(base, state.game.opponent, state.batting), [base, state.game.opponent, state.batting])
   const oppNameList = useMemo(() => (state.oppNames ? oppBatterNames(base, state.game.opponent) : []), [base, state.game.opponent, state.oppNames])
   const lastOpp = useMemo(() => (state.oppNames ? lastOppLineup(base, state.game.opponent) : null), [base, state.game.opponent, state.oppNames])
+  // 對方代跑: names (and earlier pinch runners) seen against this opponent, for the runner sheet's datalist
+  const oppPinchNames = useMemo(() => (side === 'opp' ? oppBatterNames(base, state.game.opponent) : []), [base, state.game.opponent, side])
   const oppName = oppBatterOf(state)
   const askOppHand = side === 'us' && oppHandOn && !state.oppPitcher && !state.oppHandOff
   // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
@@ -689,7 +691,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
             {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
               <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">
                 <span>失分性質：</span>
-                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} title={liveCalls.get(i)?.why ?? '點一下切換自責／非自責'} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code === 'ER' ? '自責' : '非自責'}</span></button> : null)}
+                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} title={liveCalls.get(i)?.why ?? '點一下切換自責／非自責'} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.runner || p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code === 'ER' ? '自責' : '非自責'}</span></button> : null)}
               </div>
             )}
           </Card>
@@ -700,6 +702,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         context={`${state.outs} 出局・${state.pitches.length ? `第 ${state.pitches.length} 球後` : '第一球前'}`}
         onEvent={(r, ev) => { act((s) => runnerEvent(s, r.row, r.side, ev)); setRunnerOpen(false) }}
         onAll={allUp}
+        oppPinch={side === 'opp' ? { names: oppPinchNames, onPinch: (r, name) => { act((s) => pinchRunOpp(s, r.row, name)); setRunnerOpen(false) } } : undefined}
         pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) } } : undefined} />
       <SubSheet open={tool !== 'none'} onClose={() => setTool('none')} mode={tool === 'pitcher' ? 'pitcher' : 'lineup'} onMode={(m) => openTool(m)} state={state} side={side}
         batters={batterCands} pitchers={pitcherCands} pitchCount={pitchCount} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')} restNote={(n) => restNotes.get(n)}

@@ -29,6 +29,12 @@ describe('opponent batting', () => {
     const [l] = oppBattingLines([prow({ result: '突破僵局', pitches: [], code: 'R' })])
     expect(l).toMatchObject({ pa: 0, r: 1 })
   })
+  it('a 對方代跑 gets the run (like our 代跑), listed in the slot he ran for; the team line is unchanged', () => {
+    const rows = [prow({ oppBatter: '王', result: '一安', code: 'ER', runner: '12號' }), prow({ oppOrder: 2, result: '保送', code: 'R', runner: '對方代跑' }), prow({ oppOrder: 3, result: '三振', pitches: ['S', 'S', 'S'] })]
+    const lines = oppBattingLines(rows)
+    expect(lines.map((l) => [l.label, l.slot, l.pa, l.h, l.r])).toEqual([['王', 1, 1, 1, 0], ['12號', 1, 0, 0, 1], ['第 2 棒', 2, 1, 0, 0], ['對方代跑', 2, 0, 0, 1], ['第 3 棒', 3, 1, 0, 0]])
+    expect(oppTotals(rows)).toEqual(oppTotals(rows.map(({ runner: _r, ...p }) => p)))
+  })
   it('the 合計 row matches the line score of every seed game', () => {
     for (const g of SEED_DATASET.games.filter((x) => !x.status)) {
       const s = summarizeGame(SEED_DATASET, g)
@@ -65,5 +71,9 @@ describe('scoutLines', () => {
     expect(sum).toMatchObject({ games: 2, w: 1, l: 0, t: 1 })
     expect(sum.team.pa).toBe(4)
     expect(scoutLines(ds, '清大')).toEqual([])
+  })
+  it('lists a 對方代跑 with the day he ran', () => {
+    const withPr = { ...ds, pitching: ds.pitching.map((p, i) => (i === 0 ? { ...p, runner: '8號' } : p)) }
+    expect(scoutLines(withPr, '台大').find((l) => l.label === '8號')).toMatchObject({ pa: 0, r: 1, lastDate: '2026-03-01', field: { left: 0, center: 0, right: 0 } })
   })
 })

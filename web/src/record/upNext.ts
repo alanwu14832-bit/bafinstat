@@ -4,7 +4,7 @@
  * The opponent is usually known by batting order only (第 5 棒); a name is added when the recorder typed one
  * (記對方打者姓名, or the name on an earlier row in that slot).
  */
-import { offense, oppBatterOf, weBatTop, type RecordState, type Score } from './model'
+import { lastOppName, offense, oppBatterOf, weBatTop, type RecordState, type Score } from './model'
 
 export interface UpBatter { us: boolean; order: number; name: string }
 
@@ -35,11 +35,8 @@ export function oppNameAt(s: RecordState, order: number): string {
   if (offense(s) === 'opp' && order === s.oppOrder) return oppBatterOf(s)
   const typed = s.oppNames ? s.oppLineup?.[order - 1] ?? '' : ''
   if (typed) return typed
-  for (let i = s.pitching.length - 1; i >= 0; i--) {
-    const p = s.pitching[i]
-    if (p.oppOrder === order && p.oppBatter) return p.oppBatter
-  }
-  return ''
+  // (a 對方代跑 who took over the slot counts as its latest name)
+  return lastOppName(s.pitching, order)
 }
 
 /** 準備打擊 (on deck) and 再下一棒 (in the hole) of the team at bat; never the batter at the plate. */

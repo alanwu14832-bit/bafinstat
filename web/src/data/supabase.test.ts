@@ -67,4 +67,17 @@ describe('supabase row mapping', () => {
     expect(missingRecordColumns({ games: [{ id: 'G1', end_time: null }], batting: [{ game_id: 'G1', opp_hand: null }] })).toEqual([])
     expect(missingRecordColumns({ games: [], batting: [] })).toEqual([])
   })
+
+  it('對方代跑 (2026-10-15): pitching_pa.runner written only when set, read back, and missing when no loaded row has it', () => {
+    const opp = { gameId: 'G1', inning: 2, outsBefore: 0, oppOrder: 3, pitcher: '乙', pitches: ['IP'], result: '一安', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, code: 'R' }
+    const withRunner = toPitchingRow({ ...opp, runner: '12號' }, 1)
+    expect(withRunner.runner).toBe('12號')
+    expect('runner' in toPitchingRow(opp, 2)).toBe(false)
+    const back = rowsToDataset({ players: [], games: [], batting: [], pitching: [withRunner, { ...toPitchingRow(opp, 2), runner: null }], fielding: [] }).pitching
+    expect(back[0].runner).toBe('12號')
+    expect('runner' in back[1]).toBe(false)
+    expect(missingRecordColumns({ games: [], batting: [], pitching: [{ game_id: 'G1' }] })).toEqual(['pitching_runner'])
+    expect(missingRecordColumns({ games: [], batting: [], pitching: [{ game_id: 'G1', runner: null }] })).toEqual([])
+    expect(missingRecordColumns({ games: [], batting: [], pitching: [] })).toEqual([])
+  })
 })

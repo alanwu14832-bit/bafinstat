@@ -89,6 +89,7 @@ create table if not exists pitching_pa (
   code         text,
   note         text,
   events       jsonb,         -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
+  runner       text,          -- 對方代跑（姓名或背號，選填）：記在那位跑者上壘的那一列
   primary key (game_id, seq)
 );
 
@@ -680,6 +681,14 @@ begin
   begin alter table batting_pa add constraint batting_pa_opp_hand check (opp_hand in ('L', 'R')) not valid; exception when duplicate_object then null; end;
   begin alter table batting_pa add constraint batting_pa_opp_pitcher_size check (char_length(coalesce(opp_pitcher, '')) <= 40) not valid; exception when duplicate_object then null; end;
   begin alter table games add constraint games_end_time_size check (char_length(coalesce(end_time, '')) <= 8) not valid; exception when duplicate_object then null; end;
+end $$;
+
+-- ---------------------------------------------------------------- 2026-10-15 對方代跑（舊資料庫補欄位）
+-- 新建的已在上面。說明見 migrations/2026-10-15_opp_runner.sql。
+alter table pitching_pa add column if not exists runner text;
+do $$
+begin
+  begin alter table pitching_pa add constraint pitching_pa_runner_size check (char_length(coalesce(runner, '')) <= 40) not valid; exception when duplicate_object then null; end;
 end $$;
 
 -- ---------------------------------------------------------------- 2026-10-13 存檔保護

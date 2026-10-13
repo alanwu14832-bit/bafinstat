@@ -9,10 +9,13 @@
  *
  * Every third game (seed % 3 === 0) goes on to the 9th with the tie-break from the 8th (一、二壘, 二壘 or 滿壘 by seed),
  * and runners now and then move up on a balk.
+ *
+ * 對方代跑: now and then an opponent runner is pinch-run (a name, or none), also from the second stream; with
+ * `{ oppPR: false }` the same draws are made but not applied, so a game can be compared with and without them.
  */
 import {
   addError, addExtra, addPitch, balk, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, offense, planProblems, runnerEvent, setOppLineup, setOppNames,
-  setOppPitcher, stampTimes, substitute,
+  pinchRunOpp, setOppPitcher, stampTimes, substitute,
   type Dest, type OppPitcher, type RecordState,
 } from '../record/model'
 import type { BattingPA, Game, OppHand, Player } from '../data/types'
@@ -31,7 +34,7 @@ export const FIELDER: Record<string, number[]> = { 內滾: [1, 3, 4, 5, 6], 內�
 export const playGame = (seed: number) => playGameWith(seed)
 
 /** playGame, calling onPA with the state just before each plate appearance is sent (live-board checks). */
-export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
+export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts: { oppPR?: boolean } = {}) {
   const r = rng(seed)
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)]
   const game: Game = { id: `G2026010${seed % 9 + 1}-01`, date: '2026-01-01', tournament: '模擬', opponent: '對手', homeAway: r() < 0.5 ? '主' : '客', innings: 7 }
@@ -54,7 +57,9 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
   let lineupNow = Array.from({ length: 9 }, (_, i) => (x() < 0.8 ? `對${i + 1}` : ''))
   if (names) s = setOppLineup(setOppNames(s, true), lineupNow)
   let oppNow: OppPitcher | undefined
-  const want = { bat: [] as Array<Pick<BattingPA, 'oppHand' | 'oppPitcher'>>, pit: [] as Array<string | undefined> }
+  /** the latest name each of their slots had today (the rows' order): what a 突破僵局 runner is called without a lineup name */
+  const slotSeen = new Map<number, string>()
+  const want = { bat: [] as Array<Pick<BattingPA, 'oppHand' | 'oppPitcher'>>, pit: [] as Array<string | undefined>, runner: new Map<number, string>() }
   let clock = Date.UTC(2026, 0, 1, 5, 0)
   let stamped = s
   const recorder = () => {
@@ -72,6 +77,20 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
     if (names && offense(s) === 'opp' && x() < 0.05) {
       lineupNow = lineupNow.map((n, i) => (i === Math.floor(x() * 9) ? `代打${guard}` : n))
       s = setOppLineup(s, lineupNow)
+    }
+    // 對方代跑 for one of their runners (the draws are made either way, so the rest of the extras stay the same)
+    const theirs = s.runners.filter((r) => r.side === 'opp')
+    if (offense(s) === 'opp' && theirs.length && x() < 0.08) {
+      const who = theirs[Math.floor(x() * theirs.length)]
+      const name = x() < 0.7 ? `代跑${guard}` : ''
+      if (opts.oppPR !== false) {
+        s = pinchRunOpp(s, who.row, name)
+        want.runner.set(who.row, name || '對方代跑')
+        // (the slot is his now: an earlier name no longer applies; without the lineup his own name is not used)
+        if (s.pitching[who.row].oppOrder) slotSeen.set(s.pitching[who.row].oppOrder!, '')
+        const slot = s.pitching[who.row].oppOrder
+        if (names && slot) lineupNow = lineupNow.map((n, i) => (i === slot - 1 ? name : n))
+      }
     }
     stamped = s
   }
@@ -100,7 +119,12 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
         truth[key].set(n0 + k, on)
         start[key].set(n0 + k, on)
         if (key === 'bat') want.bat[n0 + k] = fields(oppNow)
-        else { const order = t.pitching[n0 + k].oppOrder!; want.pit[n0 + k] = names ? lineupNow[order - 1] || undefined : undefined }
+        else {
+          // their lineup's name, else the latest name that slot had today (a 對方代跑 who took it over, even unnamed)
+          const order = t.pitching[n0 + k].oppOrder!
+          want.pit[n0 + k] = (names ? lineupNow[order - 1] : '') || slotSeen.get(order) || undefined
+          if (want.pit[n0 + k]) slotSeen.set(order, want.pit[n0 + k]!)
+        }
       })
       s = t
       upNow = snap(s)
@@ -142,7 +166,7 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void) {
     truth[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, snap(s))
     start[sideKey].set(sideKey === 'bat' ? s.batting.length : s.pitching.length, upNow)
     if (sideKey === 'bat') want.bat[s.batting.length] = fields(oppNow)
-    else want.pit[s.pitching.length] = names ? lineupNow[s.oppOrder - 1] || undefined : undefined
+    else { want.pit[s.pitching.length] = names ? lineupNow[s.oppOrder - 1] || undefined : undefined; if (want.pit[s.pitching.length]) slotSeen.set(s.oppOrder, want.pit[s.pitching.length]!) }
     onPA?.(s)
     s = commitPA(s, plan)
     upNow = snap(s)

@@ -7,10 +7,10 @@ import { describe, expect, it } from 'vitest'
 import { offense, score, toGameEdit, type RecordState } from './model'
 import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
-import { battingLines, summarizeGame } from '../data/stats'
+import { battingLines, pitchingLines, summarizeGame } from '../data/stats'
 import { DEFAULT_PARAMS, EMPTY_DATASET, isPA, isPlaced, type Dataset } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf } from './timeline'
-import { earnedRepairs } from './earned'
+import { earnedAll, earnedRepairs } from './earned'
 import { playGame, playGameWith, roster } from '../test/simGame'
 import { pitcherSituations, reliefEntries } from '../data/pitchingSituations'
 import { onDeckOf } from './upNext'
@@ -107,10 +107,27 @@ describe('what the recorder adds on the side', () => {
     expect(g.firstPitchAt).toBeDefined()
     expect(g.lastPlayAt! >= g.firstPitchAt!).toBe(true)
   })
+  it.each(seeds)('game %i: 對方代跑 lands on the row where that runner reached, and changes no run, earned run or out', (seed) => {
+    const g = playGame(seed)
+    expect(new Map(g.pitching.flatMap((p, i) => (p.runner ? [[i, p.runner] as const] : [])))).toEqual(g.expect.runner)
+    const plain = playGameWith(seed, undefined, { oppPR: false })
+    expect(plain.pitching.some((p) => p.runner)).toBe(false)
+    const strip = (rows: typeof g.pitching) => rows.map(({ runner: _r, oppBatter: _b, ...p }) => p)
+    expect(strip(g.pitching)).toEqual(strip(plain.pitching))
+    expect(g.batting).toEqual(plain.batting)
+    const lines = (x: typeof g) => pitchingLines(x.pitching, []).map((l) => [l.name, l.outs, l.r, l.er, l.h, l.bb])
+    expect(lines(g)).toEqual(lines(plain))
+    expect(earnedAll(g.pitching)).toEqual(earnedAll(plain.pitching))
+  })
   it('some games have names and opponent pitchers at all', () => {
     const games = seeds.slice(0, 40).map(playGame)
     expect(games.some((g) => g.names && g.pitching.some((p) => p.oppBatter?.startsWith('代打')))).toBe(true)
     expect(games.some((g) => g.batting.some((b) => b.oppHand) && g.batting.some((b) => !b.oppHand))).toBe(true)
+    // 對方代跑: named and unnamed, and some of them score
+    const runners = games.flatMap((g) => g.pitching.filter((p) => p.runner))
+    expect(runners.some((p) => p.runner === '對方代跑')).toBe(true)
+    expect(runners.some((p) => p.runner!.startsWith('代跑'))).toBe(true)
+    expect(runners.some((p) => p.code === 'R' || p.code === 'ER')).toBe(true)
   })
 })
 
