@@ -79,4 +79,13 @@ describe('匯出備份 in the 總表 layout', () => {
     const { dataset } = parseWorkbook(toBuf(file), 'backup.xlsx')
     expect(dataset.games[0]).toMatchObject({ time: '13:07', endTime: '15:22' })
   }, SLOW)
+
+  it('writes 對方代跑 into the 投球紀錄 代跑 column and reads it back', () => {
+    const ds: Dataset = { ...SEED_DATASET, pitching: SEED_DATASET.pitching.map((p, i) => (i === 0 ? { ...p, runner: '12號' } : p)) }
+    const { file, warnings } = fillTemplate(template, backupTables(ds))
+    expect(warnings).toEqual([])
+    const { dataset } = parseWorkbook(toBuf(file), 'backup.xlsx')
+    expect(dataset.pitching[0].runner).toBe('12號')
+    expect(dataset.pitching.slice(1).some((p) => 'runner' in p)).toBe(false)
+  }, SLOW)
 })

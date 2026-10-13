@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Flame, Target, Undo2 } from 'lucide-react'
 import { Sheet } from '../components/ui/Sheet'
 import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
 import { RosterSortToggle } from '../components/ui/RosterSortToggle'
 import { BOARD, CountLights } from '../components/ui/Scoreboard'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
@@ -145,12 +146,32 @@ export interface RunnerSheetProps {
   onAll: (kind: 'wp' | 'pb' | 'bk') => void
   /** 代跑 for our runner: the names that can come in, and whether that runner has a batting slot to take over */
   pinch?: { names: string[]; disabled: Set<string>; tag: (n: string) => string | undefined; can: (r: Runner) => boolean; onPinch: (r: Runner, name: string) => void }
+  /** 對方代跑 for their runner: names seen against this opponent (datalist) */
+  oppPinch?: { names: string[]; onPinch: (r: Runner, name: string) => void }
   /** where the plate appearance stands, e.g. 「1 出局・第 3 球後」 */
   context: string
 }
 
+/** 對方代跑: a name or jersey number (optional), then one tap. The runner keeps his base; only the name changes. */
+function OppPinchForm({ runner, names, onPinch }: { runner: Runner; names: string[]; onPinch: (r: Runner, name: string) => void }) {
+  const [name, setName] = useState('')
+  useEffect(() => setName(''), [runner.row])
+  const list = `opp-pinch-names-${runner.row}`
+  return (
+    <form className="flex flex-col gap-2 pt-3 border-t border-border" onSubmit={(e) => { e.preventDefault(); onPinch(runner, name) }}>
+      <span className="text-[12px] text-ink-2">代跑：換上 {runner.name}</span>
+      <div className="flex gap-2 items-center">
+        <Input aria-label="對方代跑的姓名或背號" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} list={list} placeholder="姓名或背號（選填）" className="flex-1 min-w-0" />
+        <datalist id={list}>{names.filter((n) => n !== runner.name).map((n) => <option key={n} value={n} />)}</datalist>
+        <button type="submit" className="h-10 px-3 shrink-0 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">換上代跑</button>
+      </div>
+      <p className="text-[11px] text-muted">不填姓名就記成「對方代跑」。只換名字，失分和自責分不變。</p>
+    </form>
+  )
+}
+
 /** Tap a base → this sheet: who (the diamond), then one tap for what happened. Everyone moving up on a wild pitch is a single tap. */
-export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEvent, onAll, pinch, context }: RunnerSheetProps) {
+export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEvent, onAll, pinch, oppPinch, context }: RunnerSheetProps) {
   const ours = runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base)
   const r = ours.find((x) => x.row === picked) ?? (ours.length === 1 ? ours[0] : null)
   return (
@@ -188,6 +209,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
                 ) : <p className="text-[12px] text-muted">沒有可以上場的人</p>}
               </div>
             )}
+            {oppPinch && r.side === 'opp' && <OppPinchForm runner={r} names={oppPinch.names} onPinch={oppPinch.onPinch} />}
           </div>
         ) : <p className="text-[13px] text-muted text-center">點壘包上的跑者</p>}
       </div>

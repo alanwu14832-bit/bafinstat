@@ -1,4 +1,4 @@
-// 模擬比賽 2 (see README.md): we are the home team — 安打＋失誤, 趁傳, 場地二安, 妨礙, 不死三振, 捕逸後的犧飛, 代守, 半局在打席中結束, 再見安打
+// 模擬比賽 2 (see README.md): we are the home team — 安打＋失誤, 趁傳, 場地二安, 妨礙, 不死三振, 捕逸後的犧飛, 代守, 對方代跑, 半局在打席中結束, 再見安打
 // 模擬比賽: play a scripted 5-inning game through the real 紀錄比賽 screen (local mode, nothing goes to the cloud),
 // then read what the site shows (line score, box score) and compare it with the answer key written below by hand,
 // the way a recorder would check the stats against the game video.
@@ -111,6 +111,15 @@ const setPos = async (slot, pos) => {
   await sheet.getByRole('button', { name: '確定', exact: true }).click(); await p.waitForTimeout(250)
 }
 const pr = async (base, name) => { const sheet = await runnerSheet(base); await sheet.getByRole('button', { name: new RegExp('^' + name) }).click(); await p.waitForTimeout(250) }
+// 對方代跑: tap their runner, type a name (or a jersey number), 換上代跑
+const oppPr = async (base, name) => {
+  const sheet = await runnerSheet(base)
+  const box = sheet.getByLabel('對方代跑的姓名或背號')
+  if (!(await box.count())) { notes.push(`${base}B 的對方跑者沒有「代跑」可以填`); await p.keyboard.press('Escape'); return }
+  await box.fill(name)
+  await sheet.getByRole('button', { name: '換上代跑', exact: true }).click(); await p.waitForTimeout(300)
+  if (!(await p.getByText(new RegExp(`對方代跑：${name} 替`)).count())) notes.push(`對方代跑 ${name}：沒有出現「對方代跑：${name} 替…」的提示`)
+}
 const newPitcher = async (name) => {
   await main.getByRole('button', { name: '換投' }).click(); await p.waitForTimeout(250)
   const sheet = p.getByRole('dialog', { name: '換投' })
@@ -178,6 +187,15 @@ await check('3下結束', '4上 0出局 6:1')
 // --- 4 上：對手大局，換投 B4
 await opp({ steps: ['B', 'IP'], result: '全壘打', loc: 8, batter: 'home' })
 await opp({ steps: ['IP'], result: '一安', loc: 7, batter: 1 })
+// 對方代跑 12號 for the runner on first; he scores on the 一安 below (S9's runner: the answer key is the same as before)
+await oppPr(1, '12號')
+{
+  const d = await draft()
+  const r = d.runners.find((x) => x.side === 'opp' && x.base === 1)
+  if (r?.name !== '12號' || d.pitching[r.row]?.runner !== '12號') notes.push(`對方代跑後壘上是「${r?.name}」、那一列代跑「${d.pitching[r?.row]?.runner}」，預期都是 12號`)
+  // the 逐打席 (投球) on the record page marks it
+  if (!(await main.getByText('代跑 12號').count())) notes.push('紀錄頁的逐打席沒有標「代跑 12號」')
+}
 await newPitcher(B4)
 await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 9, runners: { 1: 3 }, batter: 2 })
 await opp({ steps: ['IP'], result: '一安', loc: 8, runners: { 3: 'home', 2: 'home' }, batter: 2, adv: { batter: '趁傳進壘' } })
@@ -221,6 +239,19 @@ writeFileSync(`${S}/game2-dataset.json`, JSON.stringify(ds))
   const withHand = rows.filter((x) => 'oppHand' in x || 'oppPitcher' in x)
   if (!rows.length || withHand.length) { log(`✗ 不記對方投手，卻有 ${withHand.length} / ${rows.length} 個打席記了`); process.exitCode = 1 }
   else log('不記對方投手: ok')
+}
+// 對方代跑: saved on the row where that runner reached, who scored (R/ER of S9, unchanged), and shown in the play-by-play
+{
+  const saved = ds?.base?.games?.find((g) => g.opponent === '模擬隊二')
+  const rows = saved ? ds.base.pitching.filter((x) => x.gameId === saved.id) : []
+  const prRows = rows.filter((x) => x.runner)
+  if (prRows.length !== 1 || prRows[0].runner !== '12號' || prRows[0].inning !== 4 || prRows[0].result !== '一安' || !['R', 'ER'].includes(prRows[0].code)) { log(`✗ 對方代跑存成 ${JSON.stringify(prRows.map((x) => [x.inning, x.result, x.runner, x.code]))}，預期 4 局一安那列 runner 12號 且得分`); process.exitCode = 1 }
+  else log('對方代跑存檔: ok')
+  // 比賽頁「逐球・投球」
+  const pitTab = dlg.getByRole('tab', { name: /^逐球・投球/ })
+  if (await pitTab.count()) { await pitTab.first().click(); await p.waitForTimeout(400) }
+  if (!(await dlg.getByText(/代跑 12號/).count())) { log('✗ 比賽頁逐打席沒有出現「代跑 12號」'); process.exitCode = 1; await p.screenshot({ path: `${S}/game2-pbp.png`, fullPage: true }) }
+  else log('對方代跑顯示在逐打席: ok')
 }
 log('dialogs:', JSON.stringify(dialogs))
 log('notes while recording:', JSON.stringify(notes, null, 1))

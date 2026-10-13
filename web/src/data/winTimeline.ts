@@ -19,7 +19,7 @@ import { batterEndFor, homesIn, inferHalf, inningsOf, midOf, OUT_PLAYS, rebuildH
 import { playText } from './plays'
 import { countBeforeText } from './gameText'
 import { summarizeGame, type BattingLine, type PitchingLine } from './stats'
-import { isPA, isPlaced, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
+import { isPA, isPlaced, OPP_PR_UNNAMED, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 
 type Row = BattingPA | PitchingPA
 
@@ -631,6 +631,8 @@ export function eventText(e: GameEvent, rows: { bat: BattingPA[]; pit: PitchingP
   const r = rows.pit[e.row]
   if (!r) return ''
   const who = (p?: PitchingPA) => (p ? `對方${p.oppOrder ? `第 ${p.oppOrder} 棒` : '打者'}${p.oppBatter ? ` ${p.oppBatter}` : ''}` : '對方跑者')
-  if (e.kind === 'play' && e.move) return `${who(rows.pit[e.move.row])} ${playText(e.move)}（投手 ${r.pitcher}）`
+  // a runner play: the 對方代跑 by his name when he has one (like ours)
+  const runnerWho = (p?: PitchingPA) => (p?.runner ? (p.runner === OPP_PR_UNNAMED ? OPP_PR_UNNAMED : `對方代跑 ${p.runner}`) : who(p))
+  if (e.kind === 'play' && e.move) return `${runnerWho(rows.pit[e.move.row])} ${playText(e.move)}（投手 ${r.pitcher}）`
   return `${who(r)} ${res(r)}（投手 ${r.pitcher}）`
 }

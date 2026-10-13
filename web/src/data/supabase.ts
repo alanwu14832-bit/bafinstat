@@ -27,7 +27,7 @@ export function supabase(): SupabaseClient {
 interface PlayerRow { name: string; number: string | null; primary_pos: string | null; secondary_pos: string | null; bats: string | null; throws: string | null; status: string | null; note: string | null }
 interface GameRow { id: string; date: string; time: string | null; end_time?: string | null; tournament: string; opponent: string; home_away: string; venue: string | null; weather: string | null; recorder: string | null; innings: number | null; winning_pitcher: string | null; losing_pitcher: string | null; save_pitcher: string | null; holds: string[] | null; note: string | null; status?: string | null; day_roster?: GameDayRoster | null }
 interface BattingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; batting_order: number | null; pos: string | null; batter: string; runner?: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sb: number; cs: number; adv_on_error: number; out_on_base: number; baserunning_outs?: number; run: number; rbi: number; code: string | null; note: string | null; events?: PlayEvent[] | null; opp_pitcher?: string | null; opp_hand?: string | null }
-interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; errors?: string[] | null; code: string | null; note: string | null; events?: PlayEvent[] | null }
+interface PitchingRow { game_id: string; seq: number; inning: number; outs_before: number | null; bases_before: string | null; opp_order: number | null; pitcher: string; opp_batter: string | null; pitches: string[]; result: string; loc: number | null; traj: string | null; quality: string | null; sba: number; cs: number; wp: number; pb: number; pk: number; errors?: string[] | null; code: string | null; note: string | null; events?: PlayEvent[] | null; runner?: string | null }
 interface FieldingRow { game_id: string; seq: number; player: string; pos: string; innings: number | null; po: number; a: number; e: number; dp: number; pb: number; sb: number; cs: number; note: string | null }
 
 const u = <T,>(v: T | null | undefined): T | undefined => (v === null || v === undefined ? undefined : v)
@@ -51,7 +51,7 @@ export function toBattingRow(p: BattingPA, seq: number): BattingRow {
 }
 export function toPitchingRow(p: PitchingPA, seq: number): PitchingRow {
   return { game_id: p.gameId, seq, inning: p.inning, outs_before: p.outsBefore ?? null, bases_before: n(p.basesBefore), opp_order: p.oppOrder ?? null, pitcher: p.pitcher, opp_batter: n(p.oppBatter), pitches: p.pitches, result: p.result, loc: p.loc ?? null, traj: n(p.traj), quality: n(p.quality), sba: p.sba, cs: p.cs, wp: p.wp, pb: p.pb, pk: p.pk, code: n(p.code), note: n(p.note),
-    ...(p.errors?.length ? { errors: p.errors } : {}), ...(p.events?.length ? { events: p.events } : {}) }
+    ...(p.errors?.length ? { errors: p.errors } : {}), ...(p.events?.length ? { events: p.events } : {}), ...(p.runner ? { runner: p.runner } : {}) }
 }
 export function toFieldingRow(f: FieldingLine, seq: number): FieldingRow {
   return { game_id: f.gameId, seq, player: f.player, pos: f.pos, innings: f.innings ?? null, po: f.po, a: f.a, e: f.e, dp: f.dp, pb: f.pb, sb: f.sb, cs: f.cs, note: n(f.note) }
@@ -63,7 +63,7 @@ export function rowsToDataset(rows: { players: PlayerRow[]; games: GameRow[]; ba
     games: rows.games.map((r) => ({ id: r.id, date: r.date, time: u(r.time), ...(r.end_time ? { endTime: r.end_time } : {}), tournament: r.tournament, opponent: r.opponent, homeAway: (r.home_away === '客' ? '客' : '主') as HomeAway, venue: u(r.venue), weather: u(r.weather), recorder: u(r.recorder), innings: u(r.innings), winningPitcher: u(r.winning_pitcher), losingPitcher: u(r.losing_pitcher), savePitcher: u(r.save_pitcher), holds: u(r.holds), note: u(r.note), status: (r.status === 'scheduled' || r.status === 'cancelled' ? r.status : undefined), dayRoster: parseDayRoster(r.day_roster) })),
     batting: rows.batting.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), order: u(r.batting_order), pos: u(r.pos), batter: r.batter, ...(r.runner ? { runner: r.runner } : {}), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sb: r.sb, cs: r.cs, advOnError: r.adv_on_error, outOnBase: r.out_on_base, run: r.run, rbi: r.rbi, code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}), ...(r.baserunning_outs ? { baserunningOuts: r.baserunning_outs } : {}),
       ...(r.opp_pitcher ? { oppPitcher: r.opp_pitcher } : {}), ...(r.opp_hand === 'L' || r.opp_hand === 'R' ? { oppHand: r.opp_hand as OppHand } : {}) })),
-    pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, ...(r.errors?.length ? { errors: r.errors } : {}), code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}) })),
+    pitching: rows.pitching.map((r) => ({ gameId: r.game_id, inning: r.inning, outsBefore: u(r.outs_before), basesBefore: u(r.bases_before), oppOrder: u(r.opp_order), pitcher: r.pitcher, oppBatter: u(r.opp_batter), pitches: r.pitches ?? [], result: r.result, loc: u(r.loc), traj: u(r.traj), quality: u(r.quality), sba: r.sba, cs: r.cs, wp: r.wp, pb: r.pb, pk: r.pk, ...(r.errors?.length ? { errors: r.errors } : {}), code: u(r.code), note: u(r.note), ...(r.events?.length ? { events: r.events } : {}), ...(r.runner ? { runner: r.runner } : {}) })),
     fielding: rows.fielding.map((r) => ({ gameId: r.game_id, player: r.player, pos: r.pos, innings: u(r.innings === null ? null : Number(r.innings)), po: r.po, a: r.a, e: r.e, dp: r.dp, pb: r.pb, sb: r.sb, cs: r.cs, note: u(r.note) })),
   }
 }
@@ -86,13 +86,15 @@ async function selectAll<T>(table: string, order: string[], columns = '*'): Prom
 /**
  * Columns of the 2026-10-14 migration (supabase/migrations/2026-10-14_record_fields.sql) the cloud does not have yet,
  * read off rows already loaded with select('*'): 'end_time' when there are games and none has that key, 'opp_hand'
- * likewise for batting rows. Empty tables count as having them (a new project is built from schema.sql). This is the
+ * likewise for batting rows; 'pitching_runner' (PITCHING_RUNNER) for pitching rows without `runner` (2026-10-15). Empty tables count as having them (a new project is built from schema.sql). This is the
  * only way to tell: save_games() silently ignores keys a table lacks.
  */
-export function missingRecordColumns(rows: { games: object[]; batting: object[] }): string[] {
+export function missingRecordColumns(rows: { games: object[]; batting: object[]; pitching?: object[] }): string[] {
   const out: string[] = []
   if (rows.games.length && !rows.games.some((r) => END_TIME_COLUMN in r)) out.push(END_TIME_COLUMN)
   if (rows.batting.length && !rows.batting.some((r) => OPP_HAND_COLUMN in r)) out.push(OPP_HAND_COLUMN)
+  // pitching_pa.runner (對方代跑, the 2026-10-15 migration)
+  if (rows.pitching?.length && !rows.pitching.some((r) => RUNNER_COLUMN in r)) out.push(PITCHING_RUNNER)
   return out
 }
 
@@ -102,7 +104,7 @@ export async function fetchCloudDataset(): Promise<{ dataset: Dataset; missing: 
     selectAll<PlayerRow>('players', ['name']), selectAll<GameRow>('games', ['date', 'id']), selectAll<BattingRow>('batting_pa', ['game_id', 'seq']),
     selectAll<PitchingRow>('pitching_pa', ['game_id', 'seq']), selectAll<FieldingRow>('fielding_lines', ['game_id', 'seq']),
   ])
-  return { dataset: normalizeDataset(rowsToDataset({ players, games, batting, pitching, fielding })).dataset, missing: missingRecordColumns({ games, batting }) }
+  return { dataset: normalizeDataset(rowsToDataset({ players, games, batting, pitching, fielding })).dataset, missing: missingRecordColumns({ games, batting, pitching }) }
 }
 
 async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 500) {
@@ -117,6 +119,9 @@ export const OPP_HAND_COLUMN = 'opp_hand'
 const OPTIONAL_GAME_COLUMNS = ['day_roster', 'status', 'updated_by', END_TIME_COLUMN] as const
 /** batting_pa.runner (代跑), added with the rosters migration. */
 export const RUNNER_COLUMN = 'runner'
+/** pitching_pa.runner (對方代跑), added with the 2026-10-15 migration. Reported under this name (not 'runner', which is
+ *  batting_pa's 代跑) in `dropped` and missingRecordColumns. */
+export const PITCHING_RUNNER = 'pitching_runner'
 /** batting_pa.baserunning_outs (壘死), added with the 2026-10-09 migration. */
 export const BASERUNNING_OUTS_COLUMN = 'baserunning_outs'
 /** pitching_pa.errors (守備失誤), added with the rosters migration. */
@@ -238,20 +243,22 @@ async function pushPiecewise(ds: Dataset, mode: 'replace' | 'append' | 'upsert')
       await chunked(idList, async (chunk) => { const { error: e } = await sb.from(table).delete().in('game_id', chunk); fail(table, e) }, 200)
     }
     // a column added by a later migration (代跑, 守備失誤) that the project lacks: save the rows without it and say so
-    const insertRows = async <R extends object>(table: string, ctx: string, rows: R[], cols: string[]) => {
+    // (`as` names a dropped column in `dropped` when it is not the column's own name: pitching_pa.runner)
+    const insertRows = async <R extends object>(table: string, ctx: string, rows: R[], cols: string[], as: Record<string, string> = {}) => {
       let { error: e } = await sb.from(table).insert(rows)
       // drop each missing optional column the error names, one at a time, until the rows go in
       for (let tries = 0; e && tries < cols.length; tries++) {
         const col = cols.find((c) => rows.some((r) => c in r) && /could not find|does not exist/i.test(e!.message) && new RegExp(`\\b${c}\\b`).test(e!.message))
         if (!col) break
-        if (!dropped.includes(col)) dropped.push(col)
+        const tag = as[col] ?? col
+        if (!dropped.includes(tag)) dropped.push(tag)
         rows = rows.map((r) => { const o = { ...r } as Record<string, unknown>; delete o[col]; return o as R })
         ;({ error: e } = await sb.from(table).insert(rows))
       }
       fail(ctx, e)
     }
     await chunked(seqBy(ds.batting, ids).map(([r, s]) => toBattingRow(r, s)), (rows) => insertRows('batting_pa', '打席紀錄', rows, [RUNNER_COLUMN, EVENTS_COLUMN, BASERUNNING_OUTS_COLUMN, OPP_PITCHER_COLUMN, OPP_HAND_COLUMN]))
-    await chunked(seqBy(ds.pitching, ids).map(([r, s]) => toPitchingRow(r, s)), (rows) => insertRows('pitching_pa', '投球紀錄', rows, [ERRORS_COLUMN, EVENTS_COLUMN]))
+    await chunked(seqBy(ds.pitching, ids).map(([r, s]) => toPitchingRow(r, s)), (rows) => insertRows('pitching_pa', '投球紀錄', rows, [ERRORS_COLUMN, EVENTS_COLUMN, RUNNER_COLUMN], { [RUNNER_COLUMN]: PITCHING_RUNNER }))
     await chunked(seqBy(ds.fielding, ids).map(([r, s]) => toFieldingRow(r, s)), async (rows) => { const { error: e } = await sb.from('fielding_lines').insert(rows); fail('守備紀錄', e) })
   }
   if (mode === 'replace') await removeGamesExcept(new Set(ds.games.map((g) => g.id)))

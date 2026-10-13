@@ -11,7 +11,7 @@ import { errorsOf } from './errors'
 import { countBefore, gridCell, type GridTone } from './gameText'
 import { oppKey } from './opponent'
 import { isHitResult, pitchTotals } from './stats'
-import { isPlaced, type BattingPA, type DayRosterSub, type PitchingPA } from './types'
+import { isPlaced, pinchMark, type BattingPA, type DayRosterSub, type PitchingPA } from './types'
 
 type Row = BattingPA | PitchingPA
 
@@ -188,8 +188,9 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
     addPlayer(line, side === 'bat' ? { name, pos: (r as BattingPA).pos } : { name })
     const g = gridCell({ ...r, rbi })
     const { mark, looking } = scoreMark(r.result, r.loc, r.traj, r.pitches)
-    const runner = side === 'bat' ? (r as BattingPA).runner : undefined
-    const cellNotes = [...(runner && runner !== name ? [`代跑 ${runner}`] : []), ...notes[k]]
+    // 代跑 (ours, or theirs: PitchingPA.runner, OPP_PR_UNNAMED when no name was typed) — marked the same way
+    const runner = r.runner
+    const cellNotes = [...(runner && runner !== name ? [pinchMark(runner)] : []), ...notes[k]]
     const prev = k > 0 ? rows[k - 1] : undefined
     const cell: SheetCell = {
       row: k, player: name, kind: placedRow ? 'placed' : 'pa', text: g.text, tone: g.tone, title: g.title, mark,

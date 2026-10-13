@@ -187,6 +187,40 @@ describe('結束時間, 中繼 and 對方投手 in Excel', () => {
   })
 })
 
+describe('對方代跑 in Excel', () => {
+  const pit = SEED_DATASET.pitching.map((p, i) => (i === 0 ? { ...p, runner: '12號' } : p))
+  const ds = { ...SEED_DATASET, pitching: pit }
+  it('survives a backup round trip; rows without one get no key', () => {
+    const wb = datasetToWorkbook(ds)
+    const head = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets['投球紀錄'], { header: 1 })[0] as string[]
+    expect(head.indexOf('代跑')).toBe(head.indexOf('跑壘事件') + 1)
+    const back = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+    expect(back.pitching[0].runner).toBe('12號')
+    expect(back.pitching.slice(1).some((p) => 'runner' in p)).toBe(false)
+  })
+  it('an old workbook without the column gives no keys', () => {
+    const old = datasetToWorkbook(ds)
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(old.Sheets['投球紀錄']).map((x) => { const o = { ...x }; delete o['代跑']; return o })
+    old.Sheets['投球紀錄'] = XLSX.utils.json_to_sheet(rows)
+    const back = parseWorkbook(XLSX.write(old, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+    expect(back.pitching.some((p) => 'runner' in p)).toBe(false)
+    expect(back.pitching.length).toBe(SEED_DATASET.pitching.length)
+  })
+  it('the single-game template reads its 代跑 column', () => {
+    const wb = XLSX.read(new Uint8Array(readFileSync(resolve(process.cwd(), '..', 'data', 'BAFIN_棒球數據總表.xlsx'))), { type: 'array' })
+    const ws = wb.Sheets['單場-投球']
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+    const hr = grid.findIndex((r) => r.some((c) => String(c).trim() === '投手'))
+    const col = (grid[hr] as unknown[]).findIndex((c) => String(c).trim() === '代跑')
+    expect(col).toBeGreaterThan(0)
+    XLSX.utils.sheet_add_aoa(ws, [['7號']], { origin: XLSX.utils.encode_cell({ r: hr + 1, c: col }) })
+    for (const n of wb.SheetNames.filter((n) => !n.startsWith('單場-'))) { delete wb.Sheets[n] }
+    wb.SheetNames = wb.SheetNames.filter((n) => n.startsWith('單場-'))
+    const { dataset } = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(dataset.pitching[0].runner).toBe('7號')
+  })
+})
+
 describe('突破僵局 rows and 投手犯規 in Excel', () => {
   it('survive a backup round trip (both sides)', () => {
     const bat = SEED_DATASET.batting.map((p, i) => (i === 0 ? { ...p, result: '突破僵局', pitches: [], loc: undefined, traj: undefined, quality: undefined, basesBefore: '無', outsBefore: 0, run: 1, rbi: 0, code: 'R' } : i === 1 ? { ...p, events: [{ at: 1, kind: 'bk', from: 3 as const, to: 'home' as const }, { at: 1, kind: 'bk', from: 1 as const, to: 2 as const }] } : p))

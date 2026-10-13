@@ -91,6 +91,25 @@ describe('buildScoresheet: rows alone', () => {
     expect(cellsOf(sh, '甲')).toHaveLength(2)
   })
 
+  it('their pinch runner (對方代跑) is marked exactly like ours, named or not', () => {
+    const rows = [prow({ oppBatter: '王', result: '一安', loc: 8, runner: '12號', code: 'ER' }), prow({ oppOrder: 2, result: '全壘打', code: 'ER' }), prow({ oppOrder: 3, result: '保送', runner: '對方代跑', code: 'L' })]
+    const sh = buildScoresheet(rows, 'pit', { innings: 7 })
+    const slot1 = sh.lines[0]
+    expect(slot1.players.map((p) => p.name)).toEqual(['王', '12號'])
+    expect(slot1.players[1].pos).toBe('代跑')
+    expect(slot1.cells[1].map((c) => c.kind)).toEqual(['pa', 'pr'])
+    expect(slot1.cells[1][1]).toMatchObject({ player: '12號', text: '代跑', mark: 'PR', title: '代跑（替 王）' })
+    expect(slot1.cells[1][0].notes).toContain('代跑 12號')
+    // no name typed: 「代跑」 on the batter's cell, the runner listed as 對方代跑
+    const slot3 = sh.lines[2]
+    expect(slot3.players.map((p) => p.name)).toEqual(['第 3 棒', '對方代跑'])
+    expect(slot3.cells[1][0].notes).toContain('代跑')
+    // the runs and totals are the same as without the runners
+    const plain = buildScoresheet(rows.map(({ runner: _r, ...p }) => p), 'pit', { innings: 7 })
+    expect(sh.totals).toEqual(plain.totals)
+    expect(sh.perInning).toEqual(plain.perInning)
+  })
+
   it('falls back to the row: scored, left, out after reaching', () => {
     const sh = buildScoresheet([row({ result: '二安', run: 1 }), row({ order: 2, batter: '乙', result: '一安', code: 'L' }), row({ order: 3, batter: '丙', result: '一安', code: 'II' }), row({ order: 4, batter: '丁', result: '保送', sb: 1 })], 'bat', { innings: 7 })
     expect(sh.unfollowed).toEqual([1])

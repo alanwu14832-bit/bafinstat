@@ -18,8 +18,10 @@
  *   - 延長賽突破僵局 (record/tiebreak.ts): the runners the rule puts on base are rows of their own (result 突破僵局, no
  *     pitches) before the half's first plate appearance; they are not plate appearances. A balk (投手犯規, balk())
  *     moves every runner up one base and is only logged in the plays (kind 'bk'), no column.
+ *   - 代跑: ours through substitute() (BattingPA.runner + a PR substitution); theirs through pinchRunOpp()
+ *     (PitchingPA.runner, a name or 對方代跑): either way the runner keeps the row he reached on, only the name changes.
  */
-import { HIT_BASE_COUNT, isPA, isPlaced, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { inferHalf, leftMarks } from './timeline'
 import { earnedCalls } from './earned'
@@ -184,6 +186,17 @@ export function finishTimes(s: RecordState): { start: string; end: string; live:
 const lineupOf = (names: string[]) => Array.from({ length: 9 }, (_, i) => (names[i] ?? '').trim())
 /** The opponent batter up now: a name typed for this plate appearance, else (記對方打者姓名) their batting order's. */
 export const oppBatterOf = (s: RecordState): string => s.oppBatter || (s.oppNames ? s.oppLineup?.[s.oppOrder - 1] ?? '' : '')
+/** The latest batter's name in one of their batting-order slots from today's rows ('' when none has one). A 對方代跑
+ *  replaced that batter, so the search stops there: the slot is his now (with 記對方打者姓名 on, the lineup has his name). */
+export function lastOppName(pitching: PitchingPA[], order: number): string {
+  for (let i = pitching.length - 1; i >= 0; i--) {
+    const p = pitching[i]
+    if (p.oppOrder !== order) continue
+    if (p.runner) return ''
+    if (p.oppBatter) return p.oppBatter
+  }
+  return ''
+}
 export const setOppNames = (s: RecordState, on: boolean): RecordState => ({ ...s, oppNames: on, oppLineup: s.oppLineup ?? Array(9).fill('') })
 /** Their batting order (9 names). A slot changed in the middle of the game is a pinch hitter: rows already sent keep their names. */
 export const setOppLineup = (s: RecordState, names: string[]): RecordState => ({ ...s, oppLineup: lineupOf(names) })
@@ -273,6 +286,30 @@ export function substitute(s: RecordState, slot: number, name: string, pos: stri
   return next
 }
 export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s, reentry: on })
+
+/**
+ * 對方代跑: the opponent runner on `row` (the pitching row where he reached, a 突破僵局 runner too) is replaced by `name`
+ * (a name or jersey number, optional: blank = OPP_PR_UNNAMED). He keeps his base and everything stays on that row (the
+ * run, our pitcher's R/ER, a pickoff or CS of him): only the name changes, on the runner and as the row's `runner`, the
+ * same rule as our BattingPA.runner. A second 代跑 for the same runner replaces the first. With 記對方打者姓名 on and
+ * the row's batting slot known, that slot of their order becomes the pinch runner (rows already sent keep their names),
+ * so his next plate appearance shows him.
+ */
+export function pinchRunOpp(s: RecordState, row: number, name: string): RecordState {
+  const runner = s.runners.find((r) => r.side === 'opp' && r.row === row)
+  const pa = s.pitching[row]
+  if (!runner || !pa) return s
+  const typed = name.trim().slice(0, 40)
+  const label = typed || OPP_PR_UNNAMED
+  const next: RecordState = {
+    ...s,
+    runners: s.runners.map((r) => (r === runner ? { ...r, name: label } : r)),
+    pitching: s.pitching.map((p, i) => (i === row ? { ...p, runner: label } : p)),
+  }
+  const slot = pa.oppOrder
+  if (s.oppNames && slot && slot >= 1 && slot <= 9) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === slot - 1 ? typed : n))
+  return next
+}
 
 /* ------------------------------------------------ who is in the game (all tolerant of drafts without the roster fields) */
 /** In the game right now: the batting order plus the pitcher (under a DH he is not in `lineup`). */

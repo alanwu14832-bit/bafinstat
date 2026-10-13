@@ -560,3 +560,80 @@ describe('延長賽突破僵局 and 投手犯規 in the live model', () => {
     expect(setRbi(s, 0, 1)).toBe(s)
   })
 })
+
+describe('對方代跑 (pinchRunOpp)', () => {
+  // home: they bat first. Leadoff single, 代跑 12號 for him, then a double scores him.
+  const start = () => {
+    let s = newGame(game, lineup, '壬', { oppNames: true, oppLineup: ['王', 'A2', 'A3'] })
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 6, traj: 'G' })
+    return s
+  }
+  it('renames the runner, keeps his base, and his run stays on the row where he reached', async () => {
+    const { pinchRunOpp } = await import('./model')
+    const before = start()
+    let s = pinchRunOpp(before, 0, ' 12號 ')
+    expect(s.runners).toEqual([{ base: 1, side: 'opp', row: 0, name: '12號' }])
+    expect(s.pitching[0].runner).toBe('12號')
+    expect(s.pitching[0].oppBatter).toBe('王')
+    // 記對方打者姓名 on: his slot is now the pinch runner (his next plate appearance shows him)
+    expect(s.oppLineup![0]).toBe('12號')
+    // undo = the state before: untouched
+    expect(before.runners[0].name).toBe('王')
+    expect('runner' in before.pitching[0]).toBe(false)
+    expect(before.oppLineup![0]).toBe('王')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '二安'), loc: 8, traj: 'F', runners: { 0: 'home' } })
+    expect(s.pitching[0]).toMatchObject({ code: 'ER', runner: '12號', oppBatter: '王' })
+    expect(score(s).opp).toBe(1)
+    // the same game without the 代跑: our pitcher's R / ER are identical
+    const plain = commitPA(addPitch(start(), 'IP'), { ...defaultPlan(start(), '二安'), loc: 8, traj: 'F', runners: { 0: 'home' } })
+    const strip = (rows: typeof s.pitching) => rows.map(({ runner: _r, ...p }) => p)
+    expect(strip(s.pitching)).toEqual(strip(plain.pitching))
+    expect(pitchingLines(s.pitching, [])).toEqual(pitchingLines(plain.pitching, []))
+  })
+  it('a second 代跑 for the same runner replaces the first; a blank name is 「對方代跑」', async () => {
+    const { pinchRunOpp } = await import('./model')
+    let s = pinchRunOpp(start(), 0, '12號')
+    s = pinchRunOpp(s, 0, '15號')
+    expect(s.pitching[0].runner).toBe('15號')
+    expect(s.runners[0].name).toBe('15號')
+    const blank = pinchRunOpp(start(), 0, '  ')
+    expect(blank.pitching[0].runner).toBe('對方代跑')
+    expect(blank.runners[0].name).toBe('對方代跑')
+    expect(blank.oppLineup![0]).toBe('')
+    // a name longer than the cloud allows is cut at 40
+    expect(pinchRunOpp(start(), 0, 'x'.repeat(50)).pitching[0].runner).toHaveLength(40)
+  })
+  it('leaves their batting order alone when 記對方打者姓名 is off, and ignores a row nobody is on', async () => {
+    const { pinchRunOpp } = await import('./model')
+    let s = newGame(game, lineup, '壬')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 6, traj: 'G' })
+    const t = pinchRunOpp(s, 0, '12號')
+    expect(t.oppLineup).toBeUndefined()
+    expect(t.pitching[0].runner).toBe('12號')
+    expect(pinchRunOpp(t, 5, '7號')).toBe(t)
+  })
+  it('a pickoff of the pinch runner is still counted on the row he reached on', async () => {
+    const { pinchRunOpp } = await import('./model')
+    let s = pinchRunOpp(start(), 0, '12號')
+    s = runnerEvent(s, 0, 'opp', 'pk')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '內飛'), loc: 6, traj: 'F' })
+    expect(s.pitching[0]).toMatchObject({ code: 'I', runner: '12號' })
+    expect(s.pitching[1].pk).toBe(1)
+  })
+  it('a 突破僵局 runner of theirs can be pinch-run too', async () => {
+    const { pinchRunOpp } = await import('./model')
+    const { placeTiebreak } = await import('./tiebreak')
+    let s = placeTiebreak({ ...newGame(game, lineup, '壬', { tiebreak: { from: 8, bases: [2] } }), inning: 8, oppOrder: 3 })
+    expect(s.runners).toHaveLength(1)
+    s = pinchRunOpp(s, 0, '9號')
+    expect(s.pitching[0]).toMatchObject({ result: '突破僵局', runner: '9號' })
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 8, traj: 'L', runners: { 0: 'home' } })
+    expect(s.pitching[0].code).toBe('R')   // a placed runner's run is never earned
+  })
+  it('survives the trip to a saved game (normalize keeps it, trimmed)', async () => {
+    const { pinchRunOpp } = await import('./model')
+    const s = pinchRunOpp(start(), 0, '12號')
+    const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
+    expect(fragment.pitching[0].runner).toBe('12號')
+  })
+})
