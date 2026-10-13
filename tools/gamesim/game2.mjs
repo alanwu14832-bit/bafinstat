@@ -41,6 +41,8 @@ const runnerSheet = async (base, label) => {
   if (await pick.count()) { await pick.first().click(); await p.waitForTimeout(80) }
   return sheet
 }
+const POSNUM = { P: 1, C: 2, '1B': 3, '2B': 4, '3B': 5, SS: 6, LF: 7, CF: 8, RF: 9 }
+const posLabel = (pos) => (POSNUM[pos] ? `${POSNUM[pos]} ${pos}` : pos)   // pickers show 「6 SS」
 const runnerEv = async (base, ev) => { const sheet = await runnerSheet(base); await sheet.getByRole('button', { name: ev, exact: true }).click(); await p.waitForTimeout(250) }
 const destRow = (prefix) => main.locator('span[class*="w-[132px]"]', { hasText: new RegExp('^' + prefix) }).first().locator('xpath=..')
 const setDest = async (prefix, d) => {
@@ -59,8 +61,8 @@ async function pa(side, spec) {
     else if (st.run) await runnerEv(st.run, st.ev)
     else if (st.wp) { await main.getByRole('button', { name: /^暴投/ }).first().click(); await p.waitForTimeout(250) }
     else if (st.pb) { await main.getByRole('button', { name: /^捕逸/ }).first().click(); await p.waitForTimeout(250) }
-    else if (st.opperr) { await main.getByRole('button', { name: /^對方失誤/ }).click(); await main.getByRole('button', { name: st.opperr, exact: true }).first().click(); await p.waitForTimeout(150); await main.getByRole('button', { name: /^對方失誤/ }).click() }
-    else if (st.myerr) { await main.getByRole('button', { name: /^我隊失誤/ }).click(); await main.getByRole('button', { name: st.myerr, exact: true }).first().click(); await p.waitForTimeout(150) }
+    else if (st.opperr) { await main.getByRole('button', { name: /^對方失誤/ }).click(); await main.getByRole('button', { name: posLabel(st.opperr), exact: true }).first().click(); await p.waitForTimeout(150); await main.getByRole('button', { name: /^對方失誤/ }).click() }
+    else if (st.myerr) { await main.getByRole('button', { name: /^我隊失誤/ }).click(); await main.getByRole('button', { name: posLabel(st.myerr), exact: true }).first().click(); await p.waitForTimeout(150) }
   }
   if (!(await planOpen())) { await main.getByRole('button', { name: spec.result, exact: true }).first().click(); await p.waitForTimeout(120) }
   const shown = (await main.locator('.text-\\[15px\\].font-semibold').first().textContent().catch(() => ''))?.trim() ?? ''
@@ -74,7 +76,7 @@ async function pa(side, spec) {
     if (!(await btn.count())) { notes.push(`#${paNo} ${spec.result}: 沒有出現「${kind}」可以點`); continue }
     await btn.first().click(); await p.waitForTimeout(60)
   }
-  if (spec.errBy) for (const pos of spec.errBy) { await main.getByRole('group', { name: '誰失誤' }).getByRole('button', { name: pos, exact: true }).click(); await p.waitForTimeout(60) }
+  if (spec.errBy) for (const pos of spec.errBy) { await main.getByRole('group', { name: '誰失誤' }).getByRole('button', { name: posLabel(pos), exact: true }).click(); await p.waitForTimeout(60) }
   if (side === 'us') {
     // the recorder checks the RBI the screen suggests against the rule book
     const shownRbi = Number(await main.locator('span.tnum.font-semibold.w-4').first().textContent())
@@ -108,7 +110,7 @@ const setPos = async (slot, pos) => {
   const fix = main.getByRole('button', { name: '設定守位' })
   if (!(await fix.count())) notes.push(`第 ${slot} 棒換人後沒有提醒「設定守位」`)
   const sheet = await sub(slot)
-  await sheet.getByRole('group', { name: '守位' }).getByRole('button', { name: pos, exact: true }).click()
+  await sheet.getByRole('group', { name: '守位' }).getByRole('button', { name: posLabel(pos), exact: true }).click()
   await sheet.getByRole('button', { name: '確定', exact: true }).click(); await p.waitForTimeout(250)
 }
 const pr = async (base, name) => { const sheet = await runnerSheet(base); await sheet.getByRole('button', { name: new RegExp('^' + name) }).click(); await p.waitForTimeout(250) }

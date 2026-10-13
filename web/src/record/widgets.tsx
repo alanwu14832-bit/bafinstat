@@ -2,7 +2,7 @@
  * The buttons of the 紀錄比賽 screen — pitch pad, result chips, batted-ball picker — shared with the post-game
  * plate-appearance editor, so fixing a game later looks and works exactly like recording it.
  */
-import { LOC_HOLES } from '../data/types'
+import { LOC_HOLES, posNum } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import { OUT_RESULTS } from './model'
@@ -119,7 +119,7 @@ export function ErrorByChips({ value, onChange, unknown, label = '誰失誤' }: 
     <div className="flex flex-wrap gap-1.5" role="group" aria-label={label}>
       {opts.map((pos) => {
         const on = value.includes(pos)
-        return <button key={pos} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== pos) : [...value, pos])} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{pos === UNKNOWN_FIELDER ? '不知道' : pos}</button>
+        return <button key={pos} type="button" aria-pressed={on} onClick={() => onChange(on ? value.filter((x) => x !== pos) : [...value, pos])} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)}</button>
       })}
     </div>
   )

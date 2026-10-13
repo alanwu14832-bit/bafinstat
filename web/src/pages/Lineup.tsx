@@ -13,7 +13,7 @@ import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../compo
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { useDataStore } from '../store/data'
-import { FIELD_POSITIONS } from '../data/types'
+import { FIELD_POSITIONS, posNum } from '../data/types'
 import { registrationByKey, registrationFor, registrationKey, unscheduledRegistrations } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { POSITION_LABEL } from '../lib/fmt'
@@ -47,7 +47,7 @@ function FieldDiagram({ lineup, names, onPick }: { lineup: Lineup; names: string
       </svg>
       {FIELD_POSITIONS.map((p) => (
         <div key={p} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1" style={{ left: `${SPOTS[p].x}%`, top: `${SPOTS[p].y}%` }}>
-          <span className={cx('text-[11px] font-semibold leading-none px-1.5 py-0.5 rounded-[4px]', lineup.field[p] ? 'bg-ink text-bg' : 'bg-surface text-ink-2 border border-border')}>{p}<span className="font-normal opacity-80 ml-1 hidden sm:inline">{POSITION_LABEL[p]}</span></span>
+          <span className={cx('text-[11px] font-semibold leading-none px-1.5 py-0.5 rounded-[4px]', lineup.field[p] ? 'bg-ink text-bg' : 'bg-surface text-ink-2 border border-border')}>{posNum(p)}<span className="font-normal opacity-80 ml-1 hidden sm:inline">{POSITION_LABEL[p]}</span></span>
           <PlayerSelect size="sm" aria-label={`${p} ${POSITION_LABEL[p]}`} value={lineup.field[p] ?? ''} onChange={(n) => onPick(p, n)} names={names} taken={taken} tag={benchTag(lineup)} placeholder="—" className={cx('w-[84px] sm:w-[120px] md:w-[136px] shadow-[var(--shadow-card)]', lineup.field[p] && 'border-ink/40')} />
         </div>
       ))}
@@ -62,7 +62,7 @@ function PositionList({ lineup, names, onPick }: { lineup: Lineup; names: string
     <ul className="rounded-[12px] border border-border divide-y divide-[var(--border)] overflow-hidden">
       {FIELD_POSITIONS.map((p) => (
         <li key={p} className="flex items-center gap-2.5 px-2.5 py-2 bg-surface">
-          <span className={cx('w-9 shrink-0 text-center text-[12px] font-semibold leading-none px-1 py-1.5 rounded-[6px]', lineup.field[p] ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{p}</span>
+          <span className={cx('w-12 shrink-0 text-center text-[12px] font-semibold leading-none px-1 py-1.5 rounded-[6px]', lineup.field[p] ? 'bg-ink text-bg' : 'bg-surface-2 text-ink-2')}>{posNum(p)}</span>
           <span className="w-12 shrink-0 text-[12px] text-muted">{POSITION_LABEL[p]}</span>
           <PlayerSelect aria-label={`${p} ${POSITION_LABEL[p]}`} value={lineup.field[p] ?? ''} onChange={(n) => onPick(p, n)} names={names} taken={taken} tag={benchTag(lineup)} placeholder="—"
             className={cx('flex-1 min-w-0', lineup.field[p] && 'border-ink/40')} />
@@ -87,7 +87,7 @@ function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { it
       </button>
       <PlateBadge size={28} active={!!item.name}>{index + 1}</PlateBadge>
       <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
-      <span className={cx('w-[42px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? pos || '無守位' : ''}</span>
+      <span className={cx('w-[48px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? (pos ? posNum(pos) : '無守位') : ''}</span>
       <div className="hidden sm:flex shrink-0">
         <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
         <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
