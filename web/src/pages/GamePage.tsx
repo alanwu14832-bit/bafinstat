@@ -7,7 +7,7 @@ import { GameView, type GameTab } from './GameView'
 import { useStats } from '../hooks/useStats'
 import { summarizeGame } from '../data/stats'
 
-const TABS: GameTab[] = ['summary', 'box', 'bat', 'pit', 'roster']
+const TABS: GameTab[] = ['summary', 'box', 'bat', 'pit', 'feed', 'roster']
 
 /**
  * The full game page (/games/:id): the same game as the quick view on 比賽, on its own page so it can be read at
