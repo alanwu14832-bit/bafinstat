@@ -10,6 +10,9 @@ import { TeamLogo } from '../components/ui/TeamLogo'
 import { oppErrorCount, ourErrorCount } from '../data/errors'
 import { OppMark } from '../components/ui/GameCard'
 import { Broadcast } from '../components/ui/Broadcast'
+import { BoxScore } from '../components/game/BoxScore'
+import { Tabs } from '../components/ui/Tabs'
+import { liveBoxScore } from '../data/boxScore'
 import { Maximize2, Minimize2 } from 'lucide-react'
 import { useMediaQuery, usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
@@ -35,6 +38,17 @@ import {
 const POLL_MS = 5000
 /** 全部／得分 of the 文字轉播, per viewer */
 const FEED_FILTER_KEY = 'bafin.live.feedFilter'
+/** 文字轉播｜Box Score under the board, per viewer (every read and write may fail: private mode) */
+type LivePanel = 'feed' | 'box'
+const PANEL_KEY = 'bafin.live.panel'
+const readPanel = (): LivePanel => { try { return localStorage.getItem(PANEL_KEY) === 'box' ? 'box' : 'feed' } catch { return 'feed' } }
+const writePanel = (v: LivePanel) => { try { localStorage.setItem(PANEL_KEY, v) } catch { /* storage unavailable */ } }
+const PANELS = [{ value: 'feed' as const, label: '文字轉播' }, { value: 'box' as const, label: 'Box Score' }]
+/** wide enough for the board and the 文字轉播 column side by side: the Box Score goes under the board, no switch */
+const WIDE = '(min-width: 1280px)'
+/** 大螢幕 (the feed is hidden there) wide enough for the Box Score beside the board: a 1920-wide TV or monitor, not a
+ *  laptop (narrower, the board's matchup row would cut the batter's name) */
+const BIG_WIDE = '(min-width: 1880px)'
 
 /** Public live scoreboard. Reads the in-progress state the recorder's device keeps in sync (cloud), or this device's own draft. */
 export function LivePage() {
@@ -135,8 +149,9 @@ function MRow({ label, value, num, sub, subNum, big, wrap = false }: { label: st
 /**
  * 即時比分 as a ballpark video board, in one order of reading: ① the score with the inning, the bases and S/B/O,
  * ② the line score, ③ the matchup (投手, 打者, 本打席, 壘上, 下一棒), ④ the newest play in one sentence, then the
- * 文字轉播 under it (beside it on a wide screen). 大螢幕 fills the whole screen (a laptop or TV at the field). A run or
- * a home run flashes across the score.
+ * 文字轉播 or the Box Score under it (a switch per viewer; on a wide screen the box under the board and the feed beside
+ * it). 大螢幕 fills the whole screen (a laptop or TV at the field), the Box Score beside the board when the screen is
+ * about 1920 px wide. A run or a home run flashes across the score.
  */
 function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: string; by?: string | null }; error: string | null }) {
   const s = live.state
@@ -196,6 +211,16 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [live.updatedAt, s.batting.length, s.pitching.length, s.pitches.length, s.plays?.length, s.subs?.length, s.inning, s.half, inPlay, leadoff, priorHr])
   const latest = latestItem(feed)
+  // Box Score (data/boxScore.ts): the same lines as the game page, from the draft's rows; the pitches of the plate
+  // appearance in progress count in 用球數. Only built while it is on screen.
+  const wide = useMediaQuery(WIDE)
+  const [panel, setPanel] = useState<LivePanel>(readPanel)
+  const pickPanel = (v: LivePanel) => { setPanel(v); writePanel(v) }
+  const bigWide = useMediaQuery(BIG_WIDE)
+  const showBox = big ? bigWide : wide || panel === 'box'
+  const box = useMemo(() => (showBox ? liveBoxScore(s, { inPlay, roster: base.roster, params }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showBox, live.updatedAt, s.updatedAt, s.batting.length, s.pitching.length, s.pitches.length, s.slot, s.oppOrder, s.oppBatter, s.pitcher, s.inning, s.half, s.subs?.length, inPlay, base.roster, params])
   const liveItem = feed.at(-1)?.items.at(-1)
   const livePlays = liveItem?.kind === 'live' ? liveItem.plays : []
   // the pills between the pitch squares: one per play (grouped like the feed's lines, whose sentence is the title)
@@ -367,19 +392,34 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
     </div>
   )
 
+  const boxCard = box && <Card title="Box Score" subtitle="今天這場到目前為止；底色是打擊中的打者" still flush><BoxScore box={box} /></Card>
   if (big) {
+    // a TV or a big monitor: the Box Score beside the board (it scrolls on its own; the board keeps the full height and
+    // about 1290 px of width, where its matchup row has room for the names)
     return (
-      <div role="dialog" aria-label="即時比分大螢幕" className={cx('fixed inset-0 z-[80] bg-black p-3 overflow-auto', !tight && 'md:p-6')}>{board}</div>
+      <div role="dialog" aria-label="即時比分大螢幕" className={cx('fixed inset-0 z-[80] bg-black p-3 overflow-auto', !tight && 'md:p-6')}>
+        {boxCard
+          ? <div className="grid min-h-full gap-6 grid-cols-[minmax(0,1fr)_min(560px,calc(100vw_-_1360px))]">
+              <div className="min-w-0 flex flex-col [&>*]:flex-1">{board}</div>
+              <div className="min-w-0 self-start sticky top-0 max-h-[calc(100dvh-48px)] overflow-y-auto rounded-[var(--radius)]">{boxCard}</div>
+            </div>
+          : board}
+      </div>
     )
   }
+  // a phone or a tablet: 文字轉播｜Box Score under the board; a wide screen: the box under the board, the feed beside it
+  // (大螢幕 hides the feed and puts the box beside the board when the screen is wide enough)
   return (
     <>
       <PageHeader title="即時比分" />
       <div className="grid gap-4 xl:gap-6 xl:grid-cols-[minmax(0,1fr)_420px] xl:items-start">
-        <div className="min-w-0">{board}</div>
-        <div className="min-w-0 xl:sticky xl:top-[68px]">
-          <Broadcast halves={feed} weTop={weTop} opponent={s.game.opponent} storageKey={FEED_FILTER_KEY}
-            className="xl:max-h-[calc(100dvh-80px)]" bodyClassName="xl:overflow-y-auto xl:min-h-0" />
+        <div className="min-w-0 flex flex-col gap-4 xl:gap-6">{board}{wide && boxCard}</div>
+        <div className="min-w-0 flex flex-col gap-3 xl:sticky xl:top-[68px]">
+          {!wide && <Tabs aria-label="看文字轉播或 Box Score" value={panel} onChange={pickPanel} items={PANELS} className="self-start" />}
+          {wide || panel === 'feed'
+            ? <Broadcast halves={feed} weTop={weTop} opponent={s.game.opponent} storageKey={FEED_FILTER_KEY}
+                className="xl:max-h-[calc(100dvh-80px)]" bodyClassName="xl:overflow-y-auto xl:min-h-0" />
+            : boxCard}
         </div>
       </div>
     </>

@@ -3,7 +3,8 @@
 // board and the 文字轉播 the way a fan would read them: the CPBL-style sentences, the score after each scoring play,
 // the half summary against a hand-scored one, row 最新 in the bottom half (bug 1), 投手 N 球 against 紀錄比賽's count
 // (bug 2), no 攻守交換後 before two outs (bug 3), the 得分 chip, the phone layout at 360×800, 大螢幕, and the game page's
-// 文字轉播 tab after 結束比賽. Batch 13: mid-game the game page and the game list say 比賽進行中 (no 勝／敗) with the
+// 文字轉播 tab after 結束比賽. Batch 16: the Box Score mid-game (beside the feed on a wide screen, behind the switch on a
+// phone) against a hand-scored box. Batch 13: mid-game the game page and the game list say 比賽進行中 (no 勝／敗) with the
 // current score, and once the game is finished they say 勝 again. Exit code 1 when anything does not match.
 import { createRequire } from 'node:module'
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
@@ -27,7 +28,7 @@ await p.goto(`${URL}/lineup`, { waitUntil: 'networkidle' })
 const names = (await p.locator('select[aria-label="DH 指定打擊"] option').allTextContents()).filter((t) => t && !t.includes('不用')).map((t) => t.replace(/（.*$/, ''))
 const [S1, S2, S3, S4, S5, S6, S7, S8, S9, B1, B2, B3, B4] = names
 log('lineup', JSON.stringify({ S1, S2, S3, S4, S5, S6, S7, S8, S9, B1, B2, B4 }))
-await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); localStorage.removeItem('bafin.registrations.v1'); localStorage.removeItem('bafin.live.feedFilter'); localStorage.setItem('bafin.lineup.v1', JSON.stringify(L)) },
+await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); localStorage.removeItem('bafin.registrations.v1'); localStorage.removeItem('bafin.live.feedFilter'); localStorage.removeItem('bafin.live.panel'); localStorage.setItem('bafin.lineup.v1', JSON.stringify(L)) },
   { L: { field: { SS: S1, C: S2, '1B': S3, '2B': S4, '3B': S5, LF: S6, CF: S7, RF: S8, P: S9 }, dh: '', order: [S1, S2, S3, S4, S5, S6, S7, S8, S9], bench: [B1, B2, B3, B4], gameId: '', regKey: '', reentry: false, updatedAt: new Date().toISOString() } })
 await p.goto(`${URL}/record`, { waitUntil: 'networkidle' })
 await main.getByLabel('對手', { exact: true }).last().fill('模擬隊')
@@ -170,8 +171,46 @@ await look('2下 換投', { feed: [`更換投手：${S9} → ${B4}`], pitchCount
 await opp({ steps: ['IP'], result: '外飛', loc: 8, batter: 'out' })
 await opp({ steps: ['IP'], result: '內飛', loc: 4, batter: 'out' })
 
-// ---------------------------------------------------------------- the whole feed, the 得分 chip, the phone, 大螢幕
+// ---------------------------------------------------------------- batch 16: the Box Score, mid-game (3上, nobody out)
+// hand-scored after two innings: S1 1 AB 1 R 1 H 1 RBI (一安, 犧飛), S3 1 AB 1 H 2 RBI (二安), B1 二安 as 代打 under S7
+// and B2 代跑 under him; S9 1.0 IP 2 H 1 R 9 pitches (3 + 2 + 1 + 3), B4 1.0 IP 3 pitches; their 第 3 棒 1 AB 1 R 1 H
+// (三安, home on the wild pitch); S3 is up now
+const boxRows = (part) => lv.getByRole('region', { name: part }).locator('tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((td, i) => ((i === 0 ? td.querySelector('.font-medium')?.textContent : null) ?? td.textContent).trim())))
+async function checkBox(label) {
+  const want = {
+    我隊打擊: { [S1]: ['1', '1', '1', '1', '0', '0'], [S3]: ['1', '0', '1', '2', '0', '0'], [B1]: ['1', '0', '1', '0', '0', '0'], [B2]: ['0', '1', '0', '0', '0', '0'] },
+    我隊投球: { [S9]: ['1.0', '2', '1', '1', '0', '1', '9'], [B4]: ['1.0', '0', '0', '0', '0', '0', '3'] },
+    對方打擊: { '第 3 棒': ['1', '1', '1', '0', '0', '0'], '第 1 棒': ['1', '0', '1', '0', '0', '0'] },
+  }
+  for (const [part, rows] of Object.entries(want)) {
+    const got = await boxRows(part).catch(() => [])
+    for (const [name, cells] of Object.entries(rows)) {
+      const r = got.find((x) => x[0] === name)
+      if (!r || r.slice(1).join(' ') !== cells.join(' ')) fails.push(`${label} Box Score ${part} ${name}：${r ? r.slice(1).join(' ') : '沒有這一列'}，應為 ${cells.join(' ')}`)
+    }
+  }
+  const bat = await boxRows('我隊打擊').catch(() => [])
+  const order = bat.map((r) => r[0])
+  if (order.indexOf(B1) !== order.indexOf(S7) + 1 || order.indexOf(B2) !== order.indexOf(B1) + 1) fails.push(`${label} Box Score 代打／代跑沒有排在 ${S7} 下面：${order.join(' ')}`)
+  const at = (await lv.getByRole('region', { name: '我隊打擊' }).locator('tr[data-highlight]').innerText().catch(() => '')).replace(/\s+/g, ' ')
+  if (!at.includes(S3)) fails.push(`${label} Box Score 打擊中的打者應是 ${S3}：${at}`)
+  // (his row is tinted: 「底色是打擊中的打者」)
+  const tint = await lv.getByRole('region', { name: '我隊打擊' }).locator('tbody tr').evaluateAll((trs) => trs.map((tr) => getComputedStyle(tr).backgroundColor))
+  const marked = await lv.getByRole('region', { name: '我隊打擊' }).locator('tbody tr').evaluateAll((trs) => trs.findIndex((tr) => tr.hasAttribute('data-highlight')))
+  if (marked < 0 || tint.filter((c) => c === tint[marked]).length !== 1) fails.push(`${label} Box Score 打擊中的那一列沒有底色：${JSON.stringify(tint)}`)
+  const notes = (await lv.getByRole('region', { name: '我隊打擊' }).innerText().catch(() => '')).replace(/\s+/g, ' ')
+  if (!notes.includes(`二安 ${S3}、${B1}`) || !notes.includes(`盜壘 ${S1}`)) fails.push(`${label} Box Score 附註應有「二安 ${S3}、${B1}」「盜壘 ${S1}」：${notes.slice(-80)}`)
+  // 對方投手: nobody named, every pitch of ours so far (the draft's rows: nobody is batting yet in 3上)
+  const ours = String((await draft()).batting.reduce((n, r) => n + r.pitches.length, 0))
+  const oppP = await boxRows('對方投手').catch(() => [])
+  if (oppP.length !== 1 || oppP[0][0] !== '對方投手' || oppP[0].at(-1) !== ours) fails.push(`${label} Box Score 對方投手：${JSON.stringify(oppP)}，應為 對方投手 ${ours} 球`)
+}
 await reload()
+// a wide screen: the box under the board, the 文字轉播 beside it, no switch
+if (await lv.getByRole('tablist', { name: '看文字轉播或 Box Score' }).count()) fails.push('1400 寬時不該有「文字轉播｜Box Score」切換')
+if (!(await card().count()) || !(await lv.getByRole('region', { name: '我隊打擊' }).count())) fails.push('1400 寬時 Box Score 和文字轉播應該同時出現')
+await checkBox('1400 寬')
+await lv.screenshot({ path: `${S}/live-box-1400.png`, fullPage: true })
 // (older half-innings start folded: open them all)
 for (let i = 0; i < 30 && (await card().locator('section > button[aria-expanded="false"]').count()); i++) await card().locator('section > button[aria-expanded="false"]').first().click()
 await lv.waitForTimeout(300)
@@ -194,6 +233,17 @@ if (phone.sw > 360) fails.push(`360 寬時頁面可以左右捲動（scrollWidth
 if (phone.heads.length !== 3 || phone.heads.some((r) => r > 360)) fails.push(`360 寬時 R/H/E 不在畫面內：${JSON.stringify(phone.heads)}`)
 if (phone.nameOk.length !== 2 || phone.nameOk.some((x) => !x.ok)) fails.push(`360 寬時隊名被截成一個字：${JSON.stringify(phone.nameOk)}`)
 await lv.screenshot({ path: `${S}/live-360.png`, fullPage: true })
+// batch 16: the Box Score on a phone — one tap, the same cells, the tables scroll inside the card, the page does not
+await lv.getByRole('tablist', { name: '看文字轉播或 Box Score' }).getByRole('tab', { name: 'Box Score' }).click(); await lv.waitForTimeout(300)
+await checkBox('360 寬')
+const phoneBox = await lv.evaluate(() => ({ sw: document.documentElement.scrollWidth, scrollers: [...document.querySelectorAll('main section[aria-label] table')].map((t) => { const box = t.parentElement; return { inside: getComputedStyle(box).overflowX, right: box.getBoundingClientRect().right } }) }))
+if (phoneBox.sw > 360) fails.push(`360 寬的 Box Score 頁面可以左右捲動（scrollWidth ${phoneBox.sw}）`)
+if (!phoneBox.scrollers.length || phoneBox.scrollers.some((x) => x.inside !== 'auto' || x.right > 360)) fails.push(`360 寬的 Box Score 表格應在卡片內左右捲動：${JSON.stringify(phoneBox.scrollers)}`)
+await lv.screenshot({ path: `${S}/live-360-box.png`, fullPage: true })
+// (remembered: a reload opens on the Box Score; back to 文字轉播 for the rest)
+await reload()
+if (!(await lv.getByRole('region', { name: '我隊打擊' }).count())) fails.push('重新整理後沒有記住 Box Score')
+await lv.getByRole('tab', { name: '文字轉播' }).click(); await lv.waitForTimeout(200)
 await lv.getByRole('button', { name: '大螢幕', exact: true }).click(); await lv.waitForTimeout(500)
 const big = lv.getByRole('dialog', { name: '即時比分大螢幕' })
 if (!(await big.count()) || !(await big.getByText('最新', { exact: true }).count())) fails.push('大螢幕沒有打開或沒有「最新」')

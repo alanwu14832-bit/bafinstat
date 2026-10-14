@@ -38,6 +38,8 @@ export interface DataTableProps<Row> {
   revealSort?: boolean
   /** rowKey of a row to mark and scroll to (a player's tile linked here: 「看全隊排行」 shows where he stands) */
   highlightKey?: string
+  /** false: mark the highlighted row without scrolling to it (a live table that changes under the reader: 即時比分) */
+  scrollToHighlight?: boolean
   className?: string
 }
 
@@ -56,7 +58,7 @@ function compare(a: unknown, b: unknown): number {
  * The first column is pinned so names stay visible while wide stat tables scroll sideways.
  */
 export function DataTable<Row extends object>({
-  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, revealSort, highlightKey, className,
+  columns, rows, rowKey, onRowClick, footer, emptyTitle = '沒有資料', emptyDescription, maxHeight, defaultSort, dense, revealSort, highlightKey, scrollToHighlight = true, className,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState(defaultSort ?? null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -73,10 +75,10 @@ export function DataTable<Row extends object>({
 
   // bring the highlighted row into view inside the table (and the table into view on the page)
   useLayoutEffect(() => {
-    if (!highlightKey) return
+    if (!highlightKey || !scrollToHighlight) return
     const row = scroller.current?.querySelector<HTMLElement>('tr[data-highlight]')
     if (row) requestAnimationFrame(() => row.scrollIntoView({ block: 'center', behavior: 'auto' }))
-  }, [highlightKey])
+  }, [highlightKey, scrollToHighlight])
 
   const sorted = useMemo(() => {
     if (!sort) return rows
@@ -145,8 +147,10 @@ export function DataTable<Row extends object>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={onRowClick ? 0 : undefined}
                 onKeyDown={onRowClick ? (e) => { if (e.key === 'Enter') onRowClick(row) } : undefined}
-                className={cx('bg-surface border-b border-border last:border-b-0 transition-colors duration-[var(--dur-fast)] motion-reduce:transition-none hover:bg-surface-2', onRowClick && 'cursor-pointer active:bg-surface-3/70',
-                  highlightKey !== undefined && rowKey(row, i) === highlightKey && 'bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_20%,var(--surface))] [&>td]:font-semibold')}
+                // (the marked row gets its tint instead of bg-surface: two background utilities on one row, and the
+                // stylesheet's order would decide which one shows)
+                className={cx('border-b border-border last:border-b-0 transition-colors duration-[var(--dur-fast)] motion-reduce:transition-none', onRowClick && 'cursor-pointer active:bg-surface-3/70',
+                  highlightKey !== undefined && rowKey(row, i) === highlightKey ? 'bg-[color-mix(in_srgb,var(--accent)_14%,var(--surface))] hover:bg-[color-mix(in_srgb,var(--accent)_20%,var(--surface))] [&>td]:font-semibold' : 'bg-surface hover:bg-surface-2')}
               >
                 {columns.map((col, ci) => (
                   <td key={col.key} className={cx(cellPad, alignCls[col.align ?? 'left'], 'text-ink', pin(ci), ci === 0 && 'pl-4', ci === columns.length - 1 && 'pr-4', col.className)}>

@@ -101,7 +101,7 @@ describe('即時比分 board (batch 12)', () => {
     s = pa(s, ['IP'], '全壘打', (p) => { p.loc = 7; p.traj = 'F' })
     s = pa(s, ['S', 'S', 'SS'], '三振')
     show(s)
-    const card = (await screen.findByText('文字轉播')).closest('section')!
+    const card = (await screen.findByText('文字轉播', { selector: 'h3' })).closest('section')!  // (the h3: the 文字轉播｜Box Score switch says it too)
     expect(within(card).getByText('一局上 我隊進攻')).toBeTruthy()
     expect(within(card).getByText(/擊出左外野高飛球，全壘打，2 分打點；甲回本壘得分。/)).toBeTruthy()
     expect(within(card).getByLabelText('比分 客 2 比 主 0')).toBeTruthy()
@@ -127,7 +127,7 @@ describe('文字轉播 card: 得分 and the half header', () => {
     s = runnerEvent(s, r(), 'us', 'wp'); s = runnerEvent(s, r(), 'us', 'wp'); s = runnerEvent(s, r(), 'us', 'wp')
     expect(s.runners).toHaveLength(0)
     show(s)
-    const card = (await screen.findByText('文字轉播')).closest('section')!
+    const card = (await screen.findByText('文字轉播', { selector: 'h3' })).closest('section')!  // (the h3: the 文字轉播｜Box Score switch says it too)
     fireEvent.click(within(card).getByRole('button', { name: '得分' }))
     await waitFor(() => expect(within(card).queryByText(/一壘安打/)).toBeNull())
     // the live row (with the wild pitch that scored) stays, with the score
