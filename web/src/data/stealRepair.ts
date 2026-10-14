@@ -4,7 +4,7 @@
  * grew each time it was added back. This lowers each count that is higher than the plays show — never raises one —
  * and says exactly what it would change, for the recorder to confirm.
  */
-import { inferAll, playCounts } from '../record/timeline'
+import { hasRunnerPlays, inferAll, playCounts } from '../record/timeline'
 import type { BattingPA, PitchingPA } from './types'
 
 export interface StealFix { side: 'bat' | 'pit'; index: number; inning: number; name: string; from: number; to: number }
@@ -12,7 +12,7 @@ export interface StealFix { side: 'bat' | 'pit'; index: number; inning: number; 
 export function stealRepairs(batting: BattingPA[], pitching: PitchingPA[]): StealFix[] {
   const out: StealFix[] = []
   const run = <T extends BattingPA | PitchingPA>(rows: T[], side: 'bat' | 'pit') => {
-    if (!rows.some((r) => r.events?.length)) return
+    if (!hasRunnerPlays(rows)) return
     for (const half of inferAll(rows, side).values()) {
       if (!half) continue
       const counts = playCounts(half, side)

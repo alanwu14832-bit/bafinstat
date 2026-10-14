@@ -15,7 +15,7 @@
  *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM'
  */
 import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player } from './types'
-import { auditGame } from './audit'
+import { auditGame, type AuditPlace } from './audit'
 import { outsCredited } from './stats'
 import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
 import { parseDayRoster } from './gameRoster'
@@ -271,7 +271,8 @@ const oppRunnerOf = (runner?: string, batter?: string): { runner?: string } => {
 }
 /** Their RBI: a whole number 0–4 (anything else is 0, which is left out). */
 const oppRbiOf = (v: unknown): number => { const n = Math.trunc(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0 }
-export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: GameWarning[] } {
+/** `place`: where its 待核對 warnings are read (an Excel import names the workbook's columns); the site by default. */
+export function normalizeDataset(input: Dataset, place: AuditPlace = 'page'): { dataset: Dataset; warnings: GameWarning[] } {
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
@@ -340,7 +341,7 @@ export function normalizeDataset(input: Dataset): { dataset: Dataset; warnings: 
     for (const p of pit) if ((p.code ?? '') in OUT_CODES) byInning.set(p.inning, Math.max(byInning.get(p.inning) ?? 0, OUT_CODES[p.code!]))
     for (const [inn, outs] of byInning) if (outs !== 3 && inn < maxInn) warn(`投球紀錄第 ${inn} 局出局數為 ${outs}（應為 3），請檢查結果代碼`)
     for (const p of [...bat, ...pit]) if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) warn(`第 ${p.inning} 局有 2 出局後的「雙殺」，只計 1 個出局`)
-    const issues = auditGame(bat, pit).filter((i) => !i.message.includes('落點'))
+    const issues = auditGame(bat, pit, place).filter((i) => !i.message.includes('落點'))
     if (issues.length) { for (const i of issues.slice(0, 6)) warn(`待核對：${i.message}`); if (issues.length > 6) warn(`另有 ${issues.length - 6} 項待核對，開啟比賽頁可逐一查看`) }
     const noResult = bat.filter((p) => p.batter && !p.result).length + pit.filter((p) => p.pitcher && !p.result).length
     if (noResult) warn(`${noResult} 個打席沒有「打擊結果」，不計入統計`)

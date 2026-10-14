@@ -36,11 +36,12 @@ import { cx } from '../lib/format'
 import {
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
-  finishTimes, oppBatterOf, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  correctOppPitcher, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
 import { describeChange } from '../record/summary'
+import { reachedOn } from '../record/timeline'
 import { earnedAll } from '../record/earned'
 import { LiveBar, PracticeTag, RunnerSheet, SubSheet } from '../record/LiveParts'
 
@@ -380,7 +381,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
     // a 趁傳 mark goes away once he no longer goes further than the result gives
     // (a 壘死 mark goes away once he is no longer out)
-    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)), runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out') }
+    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)), runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out'), batterRunningOut: moved.batter === 'out' ? moved.batterRunningOut : undefined }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
@@ -537,7 +538,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               <div className="flex items-center gap-1.5 shrink-0">
                 {side === 'opp' && <Button variant="outline" size="sm" onClick={() => openTool('pitcher')} icon={<ArrowRightLeft />}>換投</Button>}
                 <Button variant="outline" size="sm" onClick={() => openTool('lineup')} icon={<ArrowRightLeft />}>{side === 'us' ? '代打' : '換人'}</Button>
-                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppPitcherOpen(true); setToast(null) }} title="對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
+                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppPitcherOpen(true); setToast(null) }} title="記錯了要更正，或對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
                 {side === 'us' && <span className="text-[12px] text-muted tnum whitespace-nowrap" title="對方現在這位投手投給我們的球數（從他上場或上次換投算起）">對方投手 <span className="text-ink font-medium">{oppPitchCount(state)}</span> 球</span>}
                 {side === 'opp' && <Button variant="outline" size="sm" aria-expanded={phOpen} onClick={() => { setPhOpen(!phOpen); setPhName(''); setToast(null) }} title="對方換人代打時點這裡">對方代打</Button>}
               </div>
@@ -657,7 +658,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                       <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)}
                         mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined} />
                     ))}
-                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')} />
+                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
+                      // (we bat) he reached and was put out on the same play: 壘上出局 by itself, 壘死 when it was his own mistake
+                      mistake={side === 'us' && reachedOn(plan.result) ? { on: !!plan.batterRunningOut, set: (on) => { setDest('batter', 'out'); setPlan((p) => (p ? { ...p, batterRunningOut: on } : p)) } } : undefined} />
                   </div>
                 </div>
                 {(!!plan.throws?.length || !!plan.errAdv?.length || [...state.runners.map((r) => r.row as number | 'batter'), 'batter' as const].some((w) => beyondDefault(state, plan, w))) && <p className="text-[11px] text-muted -mt-1">{ADV_HINT}</p>}
@@ -759,7 +762,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         newPitcher={newPitcher} setNewPitcher={setNewPitcher} pitcherHint={pitcherHint} onConfirmPitcher={() => { if (newPitcher) { act((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }}
         extras={toolExtras} />
       <OppPitcherSheet open={oppPitcherOpen} onClose={() => setOppPitcherOpen(false)} current={state.oppPitcher} options={oppOptions} earlierRows={halfRowsWithoutOpp}
-        onConfirm={(p) => act((s) => setOppPitcher(s, p))} />
+        stintRows={state.oppPitcher ? state.batting.slice(oppStintStart(state.batting, state.oppPitcher, state.oppPitcherFrom)).filter(isPA).length : 0}
+        onConfirm={(p) => act((s) => setOppPitcher(s, p))} onCorrect={(p) => act((s) => correctOppPitcher(s, p))} />
       {state.oppNames && <OppLineupSheet open={oppLineupOpen} onClose={() => setOppLineupOpen(false)} lineup={state.oppLineup ?? Array(9).fill('')} current={state.oppOrder} names={oppNameList} last={lastOpp} opponent={state.game.opponent}
         onDone={(names) => act((s) => setOppLineup(s, names))} />}
       <Toast toast={toast} onDone={() => setToast(null)} />
@@ -780,7 +784,7 @@ function DestRow({ label, value, onChange, min, batter, extra, mistake }: { labe
         {opts.filter((o) => batter || o.v === 'out' || o.v === 'home' || (typeof o.v === 'number' && o.v >= min)).map((o) => (
           <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.m !== undefined && mistake ? mistake.set(o.m) : onChange(o.v))}
             title={o.m ? '自己跑壘失誤出局（算這位跑者的壘死）' : o.m === false && mistake ? '被守備刺殺／封殺出局' : undefined}
-            className={cx('h-8 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical')}>{o.l}</button>
+            className={cx('h-9 pointer-fine:h-8 min-w-9 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical')}>{o.l}</button>
         ))}
       </div>
       {extra}

@@ -2,8 +2,9 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, LOC_HOLES, type BattingPA, type PitchingPA } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, LOC_HOLES, type BattingPA, type PitchingPA, type PlayEvent } from './types'
 import { pitchTotals } from './stats'
+import { hasRunnerPlays } from '../record/timeline'
 
 export interface Issue { side: 'bat' | 'pit'; index: number; message: string }
 
@@ -26,7 +27,29 @@ function batterOut(p: { result: string; code?: string; outsBefore?: number }, si
   return true
 }
 
-function checkSequence<T extends { inning: number; code?: string; result: string; outsBefore?: number; pitches: string[]; loc?: number; traj?: string }>(rows: T[], side: 'bat' | 'pit', out: Issue[]) {
+/**
+ * Our batter reached (a hit, walk, 觸身) and his row has an out code, but nothing says he was put out on the bases (壘上出局
+ * or 盜壘失敗): a triple, then tagged out at home. 修改資料 fixes it in one click (設成壘上出局), or in 壘上跑者 by setting
+ * him to 出局, which counts it as 壘上出局 by itself.
+ */
+export function needsOutOnBase(p: Pick<BattingPA, 'result' | 'code' | 'outOnBase' | 'cs'>): boolean {
+  return (p.code ?? '') in OUT_CODES && (HIT_RESULTS.has(p.result) || BALL_RESULTS.has(p.result) || p.result === '觸身') && !p.outOnBase && !p.cs
+}
+/**
+ * Where an audit message is read, so it names only what is there: 修改資料 itself (the batter's own line in 壘上跑者 and
+ * the 設成壘上出局 button), a page without those controls (the game page's 待核對 list, the notice after a save: it
+ * says to open 修改資料), or an Excel import (the workbook's own 壘上出局 column).
+ */
+export type AuditPlace = 'editor' | 'page' | 'excel'
+const outOnBaseFix: Record<AuditPlace, string> = {
+  editor: '在「壘上跑者」把他設成出局，或按「設成壘上出局」（會記成壘上出局）',
+  page: '到「修改資料」打開這個打席，在「壘上跑者」把他設成出局，或按「設成壘上出局」（會記成壘上出局）',
+  excel: '在 Excel 這一列的「壘上出局」填 1（舊表沒有這欄就填「壘死」）',
+}
+const outOnBaseMessage = (where: string, result: string, code: string, place: AuditPlace) =>
+  `${where}：上壘（${result}）卻記出局碼 ${code}。若是打完被觸殺出局：${outOnBaseFix[place]}`
+
+function checkSequence<T extends { inning: number; code?: string; result: string; outsBefore?: number; pitches: string[]; loc?: number; traj?: string }>(rows: T[], side: 'bat' | 'pit', out: Issue[], place: AuditPlace = 'page') {
   const whereOf = (p: T) => `第 ${p.inning} 局・${side === 'bat' ? (p as unknown as BattingPA).batter : `${(p as unknown as PitchingPA).pitcher} 對第 ${(p as unknown as PitchingPA).oppOrder ?? '?'} 棒`}`
   const roman = ['', 'I', 'II', 'III']
   // out codes, one inning at a time. A runner put out on the bases carries the out on the row where he reached,
@@ -73,9 +96,7 @@ function checkSequence<T extends { inning: number; code?: string; result: string
     const code = p.code ?? ''
     // result vs code
     if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
-    if (code in OUT_CODES && (HIT_RESULTS.has(p.result) || BALL_RESULTS.has(p.result) || p.result === '觸身') && !(side === 'bat' ? (p as unknown as BattingPA).outOnBase || (p as unknown as BattingPA).cs : true)) {
-      if (side === 'bat') out.push({ side, index: i, message: `${where}：上壘（${p.result}）卻記出局碼 ${code}，若是壘上被觸殺請填「壘死」` })
-    }
+    if (side === 'bat' && needsOutOnBase(p as unknown as BattingPA)) out.push({ side, index: i, message: outOnBaseMessage(where, p.result, code, place) })
     if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) out.push({ side, index: i, message: `${where}：2 出局後不可能雙殺` })
     // pitches vs result
     const t = pitchTotals(p.pitches)
@@ -116,8 +137,8 @@ function checkRunsAndSteals(batting: BattingPA[], pitching: PitchingPA[], out: I
     if (p.basesBefore !== undefined && p.rbi > max && p.rbi <= 4) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」時壘上 ${on} 人，最多 ${max} 分打點，卻記了 ${p.rbi}` })
     if (p.sb > 3) out.push({ side: 'bat', index: i, message: `${where}：這次上壘記了盜壘 ${p.sb}，一次上壘最多盜 3 個壘（二、三、本壘）` })
   })
-  const steals = <T extends { inning: number; events?: Array<{ kind: string }> }>(rows: T[], count: (r: T) => number, side: 'bat' | 'pit', label: string) => {
-    if (!rows.some((r) => r.events?.length)) return
+  const steals = <T extends { inning: number; events?: PlayEvent[] }>(rows: T[], count: (r: T) => number, side: 'bat' | 'pit', label: string) => {
+    if (!hasRunnerPlays(rows)) return
     const halves = new Map<number, number[]>()
     rows.forEach((r, i) => halves.set(r.inning, [...(halves.get(r.inning) ?? []), i]))
     const lastInning = Math.max(...rows.map((r) => r.inning))
@@ -135,9 +156,10 @@ function checkRunsAndSteals(batting: BattingPA[], pitching: PitchingPA[], out: I
   steals(pitching, (r) => r.sba, 'pit', '對方盜壘（被盜壘）')
 }
 
-export function auditGame(batting: BattingPA[], pitching: PitchingPA[]): Issue[] {
+/** `place`: where the messages are read (see AuditPlace); the game page by default. */
+export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: AuditPlace = 'page'): Issue[] {
   const out: Issue[] = []
-  checkSequence(batting, 'bat', out)
+  checkSequence(batting, 'bat', out, place)
   checkSequence(pitching, 'pit', out)
   batting.forEach((p, i) => {
     const where = `第 ${p.inning} 局・${p.batter}`

@@ -13,11 +13,11 @@ import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { applyOppPitcher, blankBattingAt, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
+import { applyOppPitcher, blankBattingAt, oppStintOf, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
 import { HoldPicker } from './HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
-import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, midOf, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, isBatterOutMark, batterOutMark, midOf, reachedOn, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
@@ -190,7 +190,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const pitRows = useMemo(() => pit.map(fromPitDraft), [pit])
   const flags = useMemo(() => {
     const out = { bat: new Map<number, string[]>(), pit: new Map<number, string[]>() }
-    for (const i of auditGame(batRows, pitRows)) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
+    for (const i of auditGame(batRows, pitRows, 'editor')) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
     return out
   }, [batRows, pitRows])
   // batted balls without their 落點／軌跡 (required while recording; old games are not blocked, only counted)
@@ -444,7 +444,20 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       pinchText: true,
       runnerOf: (row: number) => pitRows[row]?.runner,
     }
-    return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut,
+    // our batter put out on his own play after he reached (記成壘上出局 by the timeline): 跑壘失誤（壘死） or not
+    const me = side === 'bat' ? (rows[i] as BattingPA) : null
+    const batterMistake = me ? {
+      can: reachedOn(me.result),
+      on: (me.baserunningOuts ?? 0) > 0,
+      set: (on: boolean) => setBat((b) => b.map((x, k) => {
+        if (k !== i) return x
+        const n = { ...x, outOnBase: Math.max(1, +x.outOnBase || 0) }
+        if (!(n.events ?? []).some(isBatterOutMark)) n.events = [...(n.events ?? []), batterOutMark(me.result, me.pitches.length)]
+        if (on) n.baserunningOuts = 1; else delete n.baserunningOuts
+        return n
+      })),
+    } : undefined
+    return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut, batterMistake,
       ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', rule: (row: number) => earnedNow.get(row), toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {
@@ -461,7 +474,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         // runners of this inning who reached before this plate appearance and are still out there
         timeline={timelineFor(side, i)}
         onRemovePlaced={() => removePlaced(side, rows[i].inning)}
-        onOppPitcher={side === 'bat' ? (next) => setBat((b) => applyOppPitcher(b.map(fromBatDraft), i, next).map(toBatDraft)) : undefined}
+        onOppPitcher={side === 'bat' ? (next, mode) => setBat((b) => applyOppPitcher(b.map(fromBatDraft), i, next, mode).map(toBatDraft)) : undefined}
+        oppStint={side === 'bat' ? oppStintOf(batRows, i) : undefined}
         onRebuild={() => {
           const rows = side === 'bat' ? batRows : pitRows
           const idx = inningsOf(rows).get(rows[i].inning) ?? []

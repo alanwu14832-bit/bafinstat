@@ -62,7 +62,12 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
   }
   // 對方投手 / 對方打序 (when a play went in at the same time, e.g. a change then the next plate appearance, it is said too)
   const pa = a.oppPitcher, pb = b.oppPitcher
-  if ((pa?.name ?? '') !== (pb?.name ?? '') || (pa?.hand ?? '') !== (pb?.hand ?? '')) parts.push(`對方投手：${pb ? [pb.hand ? OPP_HAND_LABEL[pb.hand] : '', pb.name ?? ''].filter(Boolean).join(' ') : '未填'}`)
+  if ((pa?.name ?? '') !== (pb?.name ?? '') || (pa?.hand ?? '') !== (pb?.hand ?? '')) {
+    const who = pb ? [pb.hand ? OPP_HAND_LABEL[pb.hand] : '', pb.name ?? ''].filter(Boolean).join(' ') : '未填'
+    // 更正這位投手 keeps where his stint starts (a 換投 moves it): the same man, written down right this time
+    const sameStint = !!pa && !!pb && a.oppPitcherFrom?.row === b.oppPitcherFrom?.row && a.oppPitcherFrom?.pitches === b.oppPitcherFrom?.pitches
+    parts.push(sameStint ? `已更正對方投手：${who}` : `對方投手：${who}`)
+  }
   if (b.oppHandOff && !a.oppHandOff) parts.push('這場不記對方投手（之後可以按「對方投手」補記）')
   if ((a.oppLineup ?? []).join('\u0000') !== (b.oppLineup ?? []).join('\u0000') && a.oppLineup && !oppPinch) parts.push('對方打序已更新')
   const sa = score(a), sb = score(b)

@@ -6,7 +6,7 @@ import {
 } from './broadcast'
 import { PA_RESULTS, PLAY_EVENT_LABELS, isPA, type BattingPA, type Game, type PitchingPA } from './types'
 import {
-  addPitch, changePitcher, commitPA, defaultPlan, newGame, oppPitchCount, pinchHitOpp, pinchRunOpp, runnerEvent, score, setOppPitcher, substitute,
+  addPitch, changePitcher, commitPA, defaultPlan, newGame, oppPitchCount, pinchHitOpp, pinchRunOpp, runnerEvent, score, setOppPitcher, substitute, correctOppPitcher,
   type PAPlan, type RecordState,
 } from '../record/model'
 import { placeTiebreak } from '../record/tiebreak'
@@ -160,7 +160,7 @@ describe('3.3 runner plays and 3.5 substitutions', () => {
     const want: Record<string, Partial<Record<'2' | 'home' | 'out', string>>> = {
       sb: { 2: '盜壘上二壘', home: '盜壘回本壘得分' }, cs: { out: '盜壘刺出局' }, wp: { 2: '投手暴投上二壘', home: '投手暴投回本壘得分' },
       pb: { 2: '捕手捕逸上二壘', home: '捕手捕逸回本壘得分' }, bk: { 2: '投手犯規上二壘', home: '投手犯規回本壘得分' }, err: { 2: '因失誤上二壘', home: '因失誤回本壘得分' },
-      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' },
+      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' }, outPlay: { out: '出局' },
     }
     for (const kind of Object.keys(PLAY_EVENT_LABELS).filter((k) => k !== 'pkSafe')) {
       expect(want[kind], kind).toBeTruthy()
@@ -513,6 +513,22 @@ describe('the board facts', () => {
     expect(oppPitcherToday(rows)).toBe('被安 0・四死 0・三振 1')
     expect(rows.reduce((a, b) => a + b.pitches.length, s.pitches.length)).toBe(oppPitchCount(s))
     expect(oppPitcherToday(s.batting)).toBe('被安 1・四死 1・三振 1')
+  })
+  it('batch 15: 更正這位投手 (左投 → 右投) keeps one stint: his line, his count and the feed say no 換投', () => {
+    let s = start()
+    s = setOppPitcher(s, { hand: 'L' })
+    s = pa(s, ['B', 'IP'], '一安')
+    s = pa(s, ['S', 'S', 'S'], '三振')
+    s = pitch(s, ['B'])
+    const count = oppPitchCount(s)
+    s = correctOppPitcher(s, { hand: 'R' })
+    expect(oppPitchCount(s)).toBe(count)
+    const rows = oppStintRows(s.batting, s.oppPitcher, s.oppPitcherFrom)
+    expect(rows).toHaveLength(2)
+    expect(oppPitcherToday(rows)).toBe('被安 1・四死 0・三振 1')
+    const h = feed(s, true)
+    expect(h[0].pitcher).toBe('對方投手 右投')
+    expect(texts(h).some((t) => t.startsWith('對方更換投手'))).toBe(false)
   })
 })
 

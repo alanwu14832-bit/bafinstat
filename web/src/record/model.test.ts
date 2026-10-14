@@ -3,7 +3,10 @@ import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
   setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
   finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  correctOppPitcher, oppPitchCount, oppStintStart,
 } from './model'
+import { describeChange } from './summary'
+import { oppPitcherMarks, oppPitcherToday, oppStintRows } from '../data/broadcast'
 import { normalizeGameEdit } from '../data/edit'
 import { SEED_DATASET } from '../data/seed'
 import { summarizeGame, battingLines, pitchingLines } from '../data/stats'
@@ -387,6 +390,68 @@ describe('對方投手 on our plate appearances', () => {
     const s = newGame(game, lineup, '壬')
     expect(setOppPitcher(setOppPitcher(s, { hand: 'R' }), { name: '  ' }).oppPitcher).toBeUndefined()
     expect(skipOppHand(s).oppHandOff).toBe(true)
+  })
+})
+
+describe('更正這位投手 vs 對方換投 (batch 15: correcting his hand must not reset his pitch count)', () => {
+  // away: we bat first. 左投 set by mistake after the first batter, two more plate appearances, then pitches in progress
+  const start = () => {
+    let s = newGame({ ...game, homeAway: '客' }, lineup, '壬')
+    s = commitPA(addPitch(addPitch(s, 'B'), 'IP'), { ...defaultPlan(s, '一安'), loc: 7, traj: 'L' })
+    s = setOppPitcher(s, { hand: 'L' })
+    s = commitPA(addPitch(addPitch(addPitch(s, 'B'), 'B'), 'CS'), { ...defaultPlan(s, '三振') })
+    s = commitPA(addPitch(addPitch(s, 'F'), 'IP'), { ...defaultPlan(s, '內滾'), loc: 6, traj: 'G' })
+    return addPitch(addPitch(s, 'B'), 'CS')
+  }
+  it('correcting 左投 → 右投 mid-stint: one stint, the count goes on, every row of his becomes R, one undo step', () => {
+    const before = start()
+    expect(oppPitchCount(before)).toBe(2 + 3 + 2 + 2)
+    const s = correctOppPitcher(before, { hand: 'R' })
+    expect(s.oppPitcher).toEqual({ hand: 'R' })
+    expect(oppPitchCount(s)).toBe(9)
+    expect(s.batting.map((b) => b.oppHand)).toEqual(['R', 'R', 'R'])
+    expect(s.oppPitcherFrom).toBeUndefined()
+    expect(s.pitches).toEqual(before.pitches)
+    // the state before is untouched (undo goes straight back to it)
+    expect(before.batting.map((b) => b.oppHand)).toEqual(['L', 'L', 'L'])
+    expect(before.oppPitcher).toEqual({ hand: 'L' })
+    expect(describeChange(before, s)).toBe('已更正對方投手：右投')
+    // the next plate appearance is his too, and the count keeps going
+    const t = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '外飛'), loc: 8, traj: 'F' })
+    expect(t.batting[3].oppHand).toBe('R')
+    expect(oppStintStart(t.batting, t.oppPitcher, t.oppPitcherFrom)).toBe(0)
+    // the play-by-play: one stint, no 對方換投
+    expect([...oppPitcherMarks(t.batting).values()]).toEqual(['對方先發・右投'])
+    expect(oppStintRows(t.batting, t.oppPitcher, t.oppPitcherFrom)).toHaveLength(4)
+    expect(oppPitcherToday(oppStintRows(t.batting, t.oppPitcher, t.oppPitcherFrom))).toBe('被安 1・四死 0・三振 1')
+  })
+  it('對方換投 is still a new pitcher from the next plate appearance, his count from 0', () => {
+    const before = start()
+    const s = setOppPitcher(before, { hand: 'R' })
+    expect(oppPitchCount(s)).toBe(0)
+    expect(s.batting.map((b) => b.oppHand)).toEqual(['L', 'L', 'L'])
+    expect(describeChange(before, s)).toBe('對方投手：右投')
+    const t = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '外飛'), loc: 8, traj: 'F' })
+    expect(oppPitchCount(t)).toBe(1)
+    expect([...oppPitcherMarks(t.batting).values()]).toEqual(['對方先發・左投', '對方換投・右投'])
+  })
+  it('correcting the reliever leaves the starter\'s rows alone and keeps the count from where he came in', () => {
+    let s = start()
+    s = setOppPitcher(s, { name: '林', hand: 'R' })            // 換投 during a plate appearance (2 pitches in)
+    s = addPitch(s, 'B')
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 8, traj: 'L' })
+    expect(oppPitchCount(s)).toBe(2)                            // the 2 pitches of his first batter after he came in
+    const t = correctOppPitcher(s, { name: '陳', hand: 'L' })
+    expect(oppPitchCount(t)).toBe(2)
+    expect(t.batting.map((b) => `${b.oppHand}${b.oppPitcher ?? ''}`)).toEqual(['L', 'L', 'L', 'L陳'])
+    expect(t.oppPitcherFrom).toEqual(s.oppPitcherFrom)
+    expect([...oppPitcherMarks(t.batting).values()]).toEqual(['對方先發・左投', '對方換投・左投 陳'])
+  })
+  it('with nobody on the mound yet it is the first entry; a blank correction changes nothing', () => {
+    const s = newGame({ ...game, homeAway: '客' }, lineup, '壬')
+    expect(correctOppPitcher(s, { hand: 'R' }).oppPitcher).toEqual({ hand: 'R' })
+    const t = start()
+    expect(correctOppPitcher(t, { name: ' ' })).toBe(t)
   })
 })
 

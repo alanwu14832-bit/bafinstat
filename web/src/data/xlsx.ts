@@ -390,7 +390,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Playe
     if (orphan.size) warnings.push(`有 ${orphan.size} 個比賽ID 在紀錄中出現但不在『比賽清單』：${[...orphan].slice(0, 5).join('、')}`)
     const unknownBatters = new Set(batting.map((p) => p.batter).filter((n) => !roster.some((r) => r.name === n)))
     if (unknownBatters.size) warnings.push(`有 ${unknownBatters.size} 位打者不在『球員名單』：${[...unknownBatters].slice(0, 5).join('、')}`)
-    const norm = normalizeDataset({ roster, games, batting, pitching, fielding })
+    const norm = normalizeDataset({ roster, games, batting, pitching, fielding }, 'excel')
     warnings.push(...norm.warnings.map((w) => `${w.gameId}：${w.message}`))
     const missingBall = missingBallCount(norm.dataset, warnings)
     return { dataset: norm.dataset, registrations, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, registrations: registrations.length, missingBall, warnings } }
@@ -413,7 +413,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Playe
     const logged = pitching.reduce((n, p) => { const e = errorsOf(p); return n + e.positions.length + e.unknown }, 0)
     const recorded = fielding.reduce((n, f) => n + f.e, 0)
     if (recorded > logged) warnings.push(`『單場-摘要』的守備紀錄共 ${recorded} 次失誤，『單場-投球』卻只記到 ${logged} 次（對方靠失誤上壘、捕手妨礙、守備失誤欄）：模板的範例列刪掉了嗎？請核對守備紀錄`)
-    const norm = normalizeDataset({ roster: known, games: [game], batting, pitching, fielding })
+    const norm = normalizeDataset({ roster: known, games: [game], batting, pitching, fielding }, 'excel')
     warnings.push(...norm.warnings.map((w) => w.message))
     const had = new Set(known.map((p) => p.name.trim()))
     const dataset = { ...norm.dataset, roster: norm.dataset.roster.filter((p) => !had.has(p.name)) }
@@ -422,7 +422,7 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Playe
   }
   if (names.includes(LEGACY_SUMMARY)) {
     const raw = parseLegacyGame(wb, filename)
-    const norm = normalizeDataset(rawGameToDataset({ ...raw, date: raw.date || '1900-01-01' }))
+    const norm = normalizeDataset(rawGameToDataset({ ...raw, date: raw.date || '1900-01-01' }), 'excel')
     const warnings = [...(raw.warnings ?? []), ...norm.warnings.map((w) => w.message)]
     const missingBall = missingBallCount(norm.dataset, warnings)
     return { dataset: norm.dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, missingBall, warnings, legacy: raw } }

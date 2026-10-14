@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { applyOppPitcher, rowName, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
+import { applyOppPitcher, oppStintOf, rowName, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
 import type { BattingPA, PitchingPA } from '../data/types'
+import { oppPitcherMarks } from '../data/broadcast'
 
 const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G', inning: 1, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
 const pit = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'G', inning: 1, pitcher: '壬', pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
@@ -103,6 +104,23 @@ describe('對方投手 and 對方打者 in 修改資料', () => {
     const rows = [bat(R王), bat(R王), bat(R王), bat(L林), bat(L林)]
     expect(opp(applyOppPitcher(rows, 1, { oppHand: 'L', oppPitcher: '陳' }))).toEqual(['R王', 'L陳', 'L陳', 'L林', 'L林'])
     expect(opp(rows)).toEqual(['R王', 'R王', 'R王', 'L林', 'L林'])
+  })
+  it('batch 15: a hand-only fix on a stint\'s first row fixes the whole stint (the wrong 左投 rows join the 右投 after them)', () => {
+    const L = { oppHand: 'L' as const }, R = { oppHand: 'R' as const }
+    const rows = [bat(L), bat(L), bat(L), bat(R), bat(R)]
+    const out = applyOppPitcher(rows, 0, { oppHand: 'R' })
+    expect(opp(out)).toEqual(['R-', 'R-', 'R-', 'R-', 'R-'])
+    expect([...oppPitcherMarks(out).values()]).toEqual(['對方先發・右投'])
+    expect([...oppPitcherMarks(rows).values()]).toEqual(['對方先發・左投', '對方換投・右投'])
+  })
+  it('batch 15: on a later row of a stint, 整段都改 changes the whole stint, 從這個打席起換投 only from there', () => {
+    const rows = [bat(R王), bat(L林), bat(L林), bat(L林), bat(R王)]
+    expect(oppStintOf(rows, 2)).toEqual([1, 3])
+    expect(oppStintOf(rows, 0)).toEqual([0, 0])
+    expect(opp(applyOppPitcher(rows, 2, { oppHand: 'R', oppPitcher: '林' }, 'stint'))).toEqual(['R王', 'R林', 'R林', 'R林', 'R王'])
+    expect(opp(applyOppPitcher(rows, 2, { oppHand: 'R', oppPitcher: '陳' }, 'from'))).toEqual(['R王', 'L林', 'R陳', 'R陳', 'R王'])
+    // a stint never runs into the next game
+    expect(oppStintOf([bat(R王), bat({ ...R王, gameId: 'H' })], 0)).toEqual([0, 0])
   })
   it('rows without one: every row of that game, not the next game\'s', () => {
     const rows = [bat({}), bat({}), bat({ gameId: 'H' })]

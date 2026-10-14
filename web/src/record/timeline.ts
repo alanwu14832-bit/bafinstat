@@ -19,7 +19,7 @@
  * 突破僵局: a runner the tie-break rule put on base is a row (result 突破僵局) before the inning's first plate
  * appearance, lead runner first; his step puts him on his base (`placedBases`) and moves nobody.
  */
-import { HIT_BASE_COUNT, isDouble, isPlaced, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isDouble, isPlaced, TIEBREAK, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
@@ -492,6 +492,17 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
         if (!b.outOnBase && !b.cs) b.outOnBase = 1
         if (mistake) b.baserunningOuts = 1
         else if (mistake === false) delete b.baserunningOuts
+      } else if (side === 'bat' && !isPlaced(r)) {
+        // our batter out on his own play: after reaching it was on the bases (壘上出局, with the mark that says it was on
+        // the play; a 壘死 on his row stays). A count already there without the mark is a 牽制／壘死 after the half's
+        // last plate appearance: kept as it is. No longer reaching (the result became an out): what the mark set goes.
+        const b = r as BattingPA
+        if (reachedOn(b.result)) {
+          if (!b.outOnBase && !b.cs) {
+            b.outOnBase = 1
+            if (!(b.events ?? []).some(isBatterOutMark)) b.events = [...(b.events ?? []), batterOutMark(b.result, b.pitches.length)]
+          }
+        } else if ((rows[i].events ?? []).some(isBatterOutMark)) { b.outOnBase = 0; delete b.baserunningOuts }
       }
     } else {
       r.code = how === 'home' ? (side === 'bat' ? 'R' : wasRun) : 'L'
@@ -508,7 +519,7 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     // 趁傳進壘 on the play stays while that person still ends where it says
     // (a 壘死 mark is his while the runner who stood on its base is still out)
     // (a 投手犯規 after the last plate appearance stays: it happened, and BK is counted from it)
-    const onPlay = (r.events ?? []).filter((e) => e.play && (e.kind === 'bk' || (e.batter ? s.batter === e.to : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to))))
+    const onPlay = (r.events ?? []).filter((e) => e.play && (e.kind === 'bk' || (e.batter ? s.batter === e.to && (e.to !== 'out' || reachedOn(r.result)) : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to))))
     // the inning's last one: where the runners left on base ended has to be written down (no next 壘上(前) says it)
     if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter, ...(isPlaced(r) && typeof s.batter === 'number' ? { start: s.batter } : {}) }, onPlay, r.pitches.length))
     const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
@@ -535,6 +546,19 @@ export function inferAll(rows: Row[], side: Side): Map<number, Half | null> {
 }
 
 const OUT_AT_PLATE = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+/** His result put the batter on base (a hit, walk, 觸身, 失誤, 野選, 妨礙): an out of his after it is an out on the bases. */
+export const reachedOn = (result: string): boolean => !!result && result !== TIEBREAK && batterEndFor(result) !== 'out'
+/** The mark on the play that our batter, after reaching, was put out on that same play (a triple, then thrown out at
+ *  home): not a 牽制 after the half's last plate appearance, which his row's 壘上出局 count alone would say. */
+export const isBatterOutMark = (e: PlayEvent) => !!e.play && !!e.batter && e.to === 'out'
+/** Rows carry runner plays (a game recorded pitch by pitch, or runner plays added in 修改資料): any event but the batter
+ *  out mark, which 修改資料's 「設成壘上出局」 or 壘上跑者 also adds to an old game typed as counts only. Steals kept
+ *  only as counts in such a game are no double count. */
+export const hasRunnerPlays = (rows: ReadonlyArray<{ events?: PlayEvent[] }>): boolean => rows.some((r) => (r.events ?? []).some((e) => !isBatterOutMark(e)))
+export function batterOutMark(result: string, at: number): PlayEvent {
+  const b = hitBase(result)
+  return { at, kind: 'outPlay', from: (typeof b === 'number' ? b : 3) as Base, to: 'out', play: true, batter: true }
+}
 /** Where a batter stands right after his result (nobody records where he goes later on his own row). */
 export function batterEndFor(result: string): End {
   if (OUT_AT_PLATE.has(result)) return 'out'
@@ -672,6 +696,23 @@ export function applyPlayCounts<T extends Row>(rows: T[], before: Half | null | 
       if (k === 'baserunningOuts' && !v) delete r[k]; else r[k] = v
     }
     if (r) out[row] = r as unknown as T
+  }
+  // (we bat) our batter's out moved from later in the half to his own play (修改資料: he hit a triple and is now set to
+  // 出局 on it): an out after his plate appearance kept only as a count on his row (a 盜壘刺 or 牽制 for the third out,
+  // with no runner play in the timeline) can no longer have happened, so that count goes; deriveHalf then counts the
+  // out as 壘上出局 on the play. His 壘死 stays (the editor's toggle says whether it was his mistake).
+  if (side === 'bat' && before) {
+    const outAt = (h: Half, row: number) => h.steps.find((st) => st.outs.includes(row))?.index
+    for (const st of after.steps) {
+      const row = st.index
+      if (!st.outs.includes(row) || !out[row] || !reachedOn(out[row].result)) continue
+      const was = outAt(before, row)
+      if (was === undefined || was === row) continue
+      const b = { ...(out[row] as unknown as BattingPA) }
+      b.cs = 0
+      b.outOnBase = 0
+      out[row] = b as unknown as T
+    }
   }
   return out
 }
