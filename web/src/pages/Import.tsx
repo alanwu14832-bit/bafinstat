@@ -151,7 +151,7 @@ export function ImportPage() {
                 </div>
               )}
               <dl className="px-4 py-4 grid grid-cols-3 sm:grid-cols-5 gap-3">
-                {[['比賽', pending.report.games], ['打席', pending.report.batting], ['投球打席', pending.report.pitching], ['守備列', pending.report.fielding], ['球員', pending.report.roster], ...(pending.report.registrations ? [['報名名單', pending.report.registrations]] : [])].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
+                {[['比賽', pending.report.games], ['打席', pending.report.batting], ['投球打席', pending.report.pitching], ['守備列', pending.report.fielding], ['球員', pending.report.roster], ...(pending.report.registrations ? [['報名名單', pending.report.registrations]] : []), ...(pending.report.missingBall ? [['缺落點／軌跡', pending.report.missingBall]] : [])].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
               </dl>
               {pending.report.warnings.length > 0 && (
                 <ul className="px-4 py-3 text-xs text-ink-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">{pending.report.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />{w}</li>)}</ul>

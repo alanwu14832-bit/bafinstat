@@ -52,6 +52,7 @@ const setDest = async (prefix, d) => {
   await row.getByRole('button', { name: label, exact: true }).first().click(); await p.waitForTimeout(60)
 }
 let paNo = 0
+const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
 async function pa(side, spec) {
   paNo++
   const d0 = await draft()
@@ -68,6 +69,8 @@ async function pa(side, spec) {
   const shown = (await main.locator('.text-\\[15px\\].font-semibold').first().textContent().catch(() => ''))?.trim() ?? ''
   if (!shown.startsWith(spec.result)) notes.push(`#${paNo} ${who}: 結果顯示「${shown}」，預期 ${spec.result}`)
   if (spec.loc) { await main.getByRole('button', { name: new RegExp(`^${spec.loc} `) }).first().click(); await p.waitForTimeout(60) }
+  // 軌跡 is required for a batted ball (batch 14); outs come with the one their result tells (內滾 G, 外飛 F …)
+  if (spec.traj) { const t = main.getByRole('button', { name: TRAJ[spec.traj], exact: true }); if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click(); await p.waitForTimeout(60) }
   for (const [base, d] of Object.entries(spec.runners ?? {})) await setDest(`${base}B `, d)
   if (spec.batter !== undefined) await setDest('打者 ', spec.batter)
   for (const [who, kind] of Object.entries(spec.adv ?? {})) {
@@ -139,7 +142,7 @@ const check = async (label, want) => {
 
 // ================================================================ game 2 (the "video"): we are the home team
 // --- 1 上（先發 S9）
-await opp({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 7, batter: 2, adv: { batter: '失誤進壘' }, errBy: ['LF'] })   // 一安＋左外野失誤上二
+await opp({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 7, traj: 'L', batter: 2, adv: { batter: '失誤進壘' }, errBy: ['LF'] })   // 一安＋左外野失誤上二
 await opp({ steps: [{ run: 2, ev: '盜壘失敗' }, 'B', 'IP'], result: '界外飛', loc: 3, batter: 'out' })       // 盜三失敗；界外飛
 await opp({ steps: ['SS', 'SS', 'SS'], result: '三振' })
 await check('1上結束', '1下 0出局 0:0')
@@ -154,45 +157,45 @@ await check('1上結束', '1下 0出局 0:0')
 await us({ steps: ['B', 'B', 'B', 'CS', 'B'], result: '保送' })                                                // S1 保送
 // (batch 11) the video: S1 took third on the right fielder's wild throw to second — an error on the throw (趁傳失誤),
 // so it is 對方失誤進壘 (RF), not 趁傳; their E counts it now
-await us({ steps: ['IP'], result: '一安', loc: 9, runners: { 1: 3 }, batter: 1, adv: { 1: '對方失誤進壘' }, errBy: ['RF'] })      // S2 一安，S1 趁對方暴傳上三
+await us({ steps: ['IP'], result: '一安', loc: 9, traj: 'L', runners: { 1: 3 }, batter: 1, adv: { 1: '對方失誤進壘' }, errBy: ['RF'] })      // S2 一安，S1 趁對方暴傳上三
 await us({ steps: ['CS', 'SS', 'SS'], result: '三振', runners: { 3: 3, 1: 2 }, batter: 1 })                   // S3 三振但暴投上一壘（滿壘）
-await us({ steps: ['IP'], result: '場地二安', loc: 8, runners: { 3: 'home', 2: 'home', 1: 3 }, batter: 2, rbi: 2 })  // S4 場地二安 2 分
+await us({ steps: ['IP'], result: '場地二安', loc: 8, traj: 'F', runners: { 3: 'home', 2: 'home', 1: 3 }, batter: 2, rbi: 2 })  // S4 場地二安 2 分
 await us({ steps: ['B'], result: '妨礙', batter: 1 })                                                         // S5 捕手妨礙
 await us({ steps: ['IP'], result: '內滾', loc: 6, runners: { 3: 'home', 2: 3, 1: 2 }, batter: 'out', rbi: 1 })  // S6 內滾 打點 1
 // (batch 11) the video: before S7's fly out their catcher dropped a foul pop (no pitch counted, nobody moved): 對方失誤 C
 await us({ steps: [{ opperr: 'C' }, 'IP'], result: '外飛', loc: 8, batter: 'out' })                            // S7
-await us({ steps: ['IP'], result: '一安', loc: 7, runners: { 3: 'home', 2: 'home' }, batter: 1, rbi: 2 })     // S8 一安 2 分
+await us({ steps: ['IP'], result: '一安', loc: 7, traj: 'L', runners: { 3: 'home', 2: 'home' }, batter: 1, rbi: 2 })     // S8 一安 2 分
 await runnerEv(1, '牽制出局')                                                                                 // S8 被牽制，S9 下局再打
 await check('1下結束', '2上 0出局 5:0')
 // --- 2 上：代守 B3 換 S6（左外野）
 await ph(6, B3)
-await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 7, batter: 2 })
+await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 7, traj: 'L', batter: 2 })
 await opp({ steps: ['B', { pb: true }, 'IP'], result: '犧飛', loc: 8, runners: { 3: 'home' }, batter: 'out' })  // 捕逸上三，犧飛回來
 await opp({ steps: ['SS', 'SS', 'F', 'SS'], result: '三振' })
 await opp({ steps: ['IP'], result: '內滾', loc: 4, batter: 'out' })
 await check('2上結束', '2下 0出局 5:1')
 // --- 2 下：S9 繼續打
-await us({ steps: ['B', 'IP'], result: '一安', loc: 8, batter: 1 })                                           // S9
-await us({ steps: [{ run: 1, ev: '盜壘' }, 'IP'], result: '一安', loc: 7, runners: { 2: 3 }, batter: 1 })   // S9 盜二；S1 一安
+await us({ steps: ['B', 'IP'], result: '一安', loc: 8, traj: 'L', batter: 1 })                                           // S9
+await us({ steps: [{ run: 1, ev: '盜壘' }, 'IP'], result: '一安', loc: 7, traj: 'L', runners: { 2: 3 }, batter: 1 })   // S9 盜二；S1 一安
 await us({ steps: ['IP'], result: '外飛', loc: 9, batter: 'out' })                                            // S2
 await us({ steps: ['IP'], result: '野選', loc: 5, runners: { 3: 'out', 1: 2 }, batter: 1 })                    // S3 野選，S9 本壘出局
 await us({ steps: ['IP'], result: '內飛', loc: 6, batter: 'out' })                                            // S4
 await check('2下結束', '3上 0出局 5:1')
 // --- 3 上
 await opp({ steps: ['B', 'B', 'B', 'B'], result: '保送' })
-await opp({ steps: [{ run: 1, ev: '盜壘失敗' }, 'IP'], result: '一安', loc: 9, batter: 1 })                    // 盜二失敗；一安
+await opp({ steps: [{ run: 1, ev: '盜壘失敗' }, 'IP'], result: '一安', loc: 9, traj: 'L', batter: 1 })                    // 盜二失敗；一安
 await opp({ steps: ['IP'], result: '雙殺', loc: 6, runners: { 1: 'out' }, batter: 'out' })
 await check('3上結束', '3下 0出局 5:1')
 // --- 3 下
 await us({ steps: ['SS', 'SS', 'SS'], result: '三振' })                                                      // S5
-await us({ steps: ['IP'], result: '三安', loc: 9, batter: 3 })                                               // B3 三安
+await us({ steps: ['IP'], result: '三安', loc: 9, traj: 'F', batter: 3 })                                               // B3 三安
 await us({ steps: ['IP'], result: '內滾', loc: 6, runners: { 3: 3 }, batter: 'out' })                         // S7
 await us({ steps: ['B', 'B', { wp: true }, 'B', 'B'], result: '保送' })                                       // 暴投 B3 回來；S8 保送
 await us({ steps: ['IP'], result: '外飛', loc: 7, batter: 'out' })                                           // S9
 await check('3下結束', '4上 0出局 6:1')
 // --- 4 上：對手大局，換投 B4
-await opp({ steps: ['B', 'IP'], result: '全壘打', loc: 8, batter: 'home' })
-await opp({ steps: ['IP'], result: '一安', loc: 7, batter: 1 })
+await opp({ steps: ['B', 'IP'], result: '全壘打', loc: 8, traj: 'F', batter: 'home' })
+await opp({ steps: ['IP'], result: '一安', loc: 7, traj: 'L', batter: 1 })
 // 對方代跑 12號 for the runner on first; he scores on the 一安 below (S9's runner: the answer key is the same as before)
 await oppPr(1, '12號')
 {
@@ -203,19 +206,19 @@ await oppPr(1, '12號')
   if (!(await main.getByText('代跑 12號').count())) notes.push('紀錄頁的逐打席沒有標「代跑 12號」')
 }
 await newPitcher(B4)
-await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 9, runners: { 1: 3 }, batter: 2 })
-await opp({ steps: ['IP'], result: '一安', loc: 8, runners: { 3: 'home', 2: 'home' }, batter: 2, adv: { batter: '趁傳（不算失誤）' } })
-await opp({ steps: ['IP'], result: '全壘打', loc: 7, runners: { 2: 'home' }, batter: 'home' })
+await opp({ steps: ['B', 'B', 'IP'], result: '二安', loc: 9, traj: 'L', runners: { 1: 3 }, batter: 2 })
+await opp({ steps: ['IP'], result: '一安', loc: 8, traj: 'L', runners: { 3: 'home', 2: 'home' }, batter: 2, adv: { batter: '趁傳（不算失誤）' } })
+await opp({ steps: ['IP'], result: '全壘打', loc: 7, traj: 'F', runners: { 2: 'home' }, batter: 'home' })
 await opp({ steps: ['SS', 'SS', 'SS'], result: '三振' })
-await opp({ steps: ['IP'], result: '三安', loc: 9, batter: 3 })
+await opp({ steps: ['IP'], result: '三安', loc: 9, traj: 'F', batter: 3 })
 await opp({ steps: ['IP'], result: '犧飛', loc: 8, runners: { 3: 'home' }, batter: 'out' })
 await opp({ steps: ['IP'], result: '內飛', loc: 4, batter: 'out' })
 await check('4上結束', '4下 0出局 6:7')
 // --- 4 下：再見
-await us({ steps: ['IP'], result: '二安', loc: 7, batter: 2 })                                               // S1 二安
+await us({ steps: ['IP'], result: '二安', loc: 7, traj: 'L', batter: 2 })                                               // S1 二安
 await us({ steps: ['IP'], result: '犧觸', loc: 1, runners: { 2: 3 }, batter: 'out' })                         // S2 犧觸
 await us({ steps: ['B', 'B', 'B', 'B'], result: '保送' })                                                    // S3 保送
-await us({ steps: ['IP'], result: '二安', loc: 7, runners: { 3: 'home', 1: 'home' }, batter: 2, rbi: 2 })     // S4 再見二安
+await us({ steps: ['IP'], result: '二安', loc: 7, traj: 'L', runners: { 3: 'home', 1: 'home' }, batter: 2, rbi: 2 })     // S4 再見二安
 await check('再見後', '4下 1出局 8:7')
 await p.screenshot({ path: `${S}/game2-live.png`, fullPage: true })
 

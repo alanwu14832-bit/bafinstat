@@ -2,7 +2,7 @@
  * How to record, in words shared by the 使用指南 and the printable 紀錄員小抄 (/guide/cheatsheet): change a definition
  * here and both follow.
  */
-import { isPA, type Dataset } from './types'
+import { isPA, NO_BATTED_BALL, type Dataset } from './types'
 
 /** 打擊結果: what each result button means (the guide's 「打擊結果怎麼填」 card and the cheat sheet). */
 export const RESULT_HELP: Array<[string, string]> = [
@@ -21,6 +21,9 @@ export const CONTACT_HELP: Array<[string, string]> = [
 /** The rule of thumb under the three. */
 export const CONTACT_RULE = '只看球離開球棒時有多強，不看結果：被接殺的強勁平飛仍是強，德州安打是弱。不確定時選中，但真的很強、很軟的球要記出來——全記中的話 Hard%、優質打席就沒有意義。'
 
+/** 落點 and 軌跡 are required for every batted ball (紀錄比賽 will not send it without them); 強度 stays optional. */
+export const BALL_RULE = '打進場內的球（三振、保送、故四、觸身、妨礙以外）一定要選落點和軌跡，才按得下「送出」；滾地、飛球類的出局會自動帶入軌跡，安打和失誤要自己點。強度選填。'
+
 /** 落點: the fielder who handled the ball, or the gap a ball nobody touched went through. */
 export const LOC_HELP = {
   rule: '記處理球的人（接到、撿到或第一個碰到球的守備員）；沒人碰到的安打記縫隙。',
@@ -36,8 +39,8 @@ export const CODE_HELP: Array<[string, string]> = [
   ['I／II／III', '這個打席造成這半局第 1／2／3 個出局'], ['L', '殘壘'], ['R', '得分；投球表是非自責失分'], ['ER', '投球表：自責分'],
 ]
 
-/** Results with no batted ball (no 落點／軌跡／強度). */
-const NO_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙'])
+/** Results with no batted ball (no 落點／軌跡／強度): one list with the stats and the screens. */
+const NO_BALL = NO_BATTED_BALL
 
 /** How the team has been calling 強／中／弱 so far: shares of the balls in play that have one (both sides). */
 export function contactShare(ds: Pick<Dataset, 'batting' | 'pitching'>): { 強: number; 中: number; 弱: number; n: number } {

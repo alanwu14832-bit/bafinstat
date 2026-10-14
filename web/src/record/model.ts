@@ -110,6 +110,9 @@ export const REACH_RESULTS = new Set(['一安', '內安', '二安', '場地二�
 const HIT_BASES: Record<string, Dest> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 'home' }
 /** 軌跡 implied by the result (filled in for the recorder, who can still change it). */
 export { TRAJ_OF } from '../data/types'
+
+/** 落點 and 軌跡 are required for every batted ball (data/types.missingBattedBall). */
+export { missingBattedBall, missingBattedBallText } from '../data/types'
 const ROMAN = ['I', 'II', 'III'] as const
 const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 

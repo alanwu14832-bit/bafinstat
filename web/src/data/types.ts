@@ -40,6 +40,34 @@ export const isSingle = (r: string) => r === '一安' || r === '內安'
 
 /** 軌跡 a result implies when none was recorded (G 滾地 · P 內野飛球 · F 飛球). */
 export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
+/** Results without a batted ball: no 落點／軌跡／強度 (every other result put the ball in play, 全壘打 included). */
+export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙'])
+/** A batted ball (BIP): a real plate appearance whose result put the ball in play, whether or not its 落點／軌跡／強度 were recorded. */
+export const isBattedBall = (r: { result: string }) => isPA(r) && !NO_BATTED_BALL.has(r.result)
+/** The details a batted ball still needs: 落點 and 軌跡 are required for every batted ball (not 三振／保送／故四／觸身／
+ *  妨礙, not a 突破僵局 runner) — the 紀錄比賽 screen will not send the plate appearance without them; 修改資料 marks the
+ *  old ones that lack them. 強度 stays optional. */
+export function missingBattedBall(pa: { result: string; loc?: number; traj?: string }): Array<'落點' | '軌跡'> {
+  if (!isBattedBall(pa)) return []
+  const out: Array<'落點' | '軌跡'> = []
+  if (!pa.loc) out.push('落點')
+  if (!pa.traj || !['G', 'F', 'L', 'P'].includes(pa.traj)) out.push('軌跡')
+  return out
+}
+/** 「還沒選落點、軌跡」 for the line under the 送出 button ('' when nothing is missing). */
+export const missingBattedBallText = (missing: string[]) => (missing.length ? `還沒選${missing.join('、')}` : '')
+/** The tag 修改資料 puts on such a plate appearance: 「缺落點」「缺軌跡」 or 「缺落點／軌跡」. */
+export const missingBattedBallTag = (missing: string[]) => `缺${missing.join('／')}`
+/** How many batted balls lack 落點 or 軌跡 on each side, in words that name the tab and the tag to look for:
+ *  「缺落點或軌跡的擊球：我隊打擊 9 個、我隊投球 9 個」 ('' when none). */
+export function missingBattedBallCounts(bat: number, pit: number): string {
+  const parts = [bat ? `我隊打擊 ${bat} 個` : '', pit ? `我隊投球 ${pit} 個` : ''].filter(Boolean)
+  return parts.length ? `缺落點或軌跡的擊球：${parts.join('、')}` : ''
+}
+/** What the tags read, for a note that tells the recorder what to look for. */
+export const MISSING_BALL_TAGS = '「缺落點」或「缺軌跡」'
+/** 強度 values a batted ball can have (Hard% is over the batted balls that have one). */
+export const QUALITIES = ['強', '中', '弱'] as const
 /** Balls in play on which the batter is out (GO/AO count these; 三振, 犧觸, hits, 野選, 失誤 are neither). */
 export const BATTER_OUT_BIP = new Set(['內滾', '內飛', '外飛', '界外飛', '犧飛', '雙殺'])
 

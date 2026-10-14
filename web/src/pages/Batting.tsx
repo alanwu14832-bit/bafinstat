@@ -51,7 +51,7 @@ function columnsFor(view: View): Column<BattingLine>[] {
   if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, wpa, re24, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
   // 兩好球纏鬥: the count, with the plate appearances that reached two strikes in small grey type (CSV: the count only)
   const battles: Column<BattingLine> = { key: 'twoStrikeBattles', header: '兩好球纏鬥', align: 'right', sortable: true, format: (v, r) => <span className="inline-flex items-baseline gap-1 justify-end">{String(v)}<span className="text-[11px] text-muted font-normal">/{r.twoStrikePA}</span></span>, text: (v) => String(v) }
-  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bip], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bip], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
+  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bipQuality], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
 }
 
 
@@ -77,7 +77,9 @@ export function BattingPage() {
 
   const opsRank = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA && b.ops !== null).sort((a, b) => (b.ops ?? 0) - (a.ops ?? 0)).slice(0, 12).map((b) => ({ name: b.name, ops: Number((b.ops ?? 0).toFixed(3)) })), [s.batters, minPA])
   const bbType = useMemo(() => [{ key: 'gb', label: '滾地球', value: s.team.gb }, { key: 'fb', label: '飛球', value: s.team.fb }, { key: 'ld', label: '平飛球', value: s.team.ld }], [s.team])
-  const quality = useMemo(() => [...s.batters].filter((b) => b.bip >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0)).slice(0, 10).map((b) => ({ name: b.name, 強: b.hard, 中弱: b.bip - b.hard })), [s.batters])
+  // the donut counts only the batted balls that have a 軌跡 (BIP counts every one), and says so when some lack it
+  const trajNote = `全隊有記軌跡的擊球：滾地／飛球／平飛比例${s.team.bip > s.team.bipTraj ? `（BIP ${s.team.bip}，${s.team.bip - s.team.bipTraj} 個沒記軌跡）` : ''}`
+  const quality = useMemo(() => [...s.batters].filter((b) => b.bipQuality >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0)).slice(0, 10).map((b) => ({ name: b.name, 強: b.hard, 中弱: b.bipQuality - b.hard })), [s.batters])
   const discipline = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA).sort((a, b) => (a.kPct ?? 0) - (b.kPct ?? 0)).slice(0, 12).map((b) => ({ name: b.name, 'K%': Number(((b.kPct ?? 0) * 100).toFixed(1)), 'BB%': Number(((b.bbPct ?? 0) * 100).toFixed(1)) })), [s.batters, minPA])
 
   const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
@@ -151,8 +153,8 @@ export function BattingPage() {
       <SplitsCard id="splits" side="bat" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
-        <DonutCard title="擊球型態" subtitle="全隊場內球的滾地／飛球／平飛比例" segments={bbType} centerCaption="場內球" />
-        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，場內球 ≥ 3 的打者" data={quality} onBarClick={openPlayer} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
+        <DonutCard title="擊球型態" subtitle={trajNote} segments={bbType} centerCaption="有記軌跡" />
+        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，有記強度的擊球 ≥ 3 的打者" data={quality} onBarClick={openPlayer} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
         <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
     </>

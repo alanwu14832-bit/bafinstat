@@ -60,6 +60,7 @@ const setDest = async (prefix, d) => {
   await row.getByRole('button', { name: label, exact: true }).first().click(); await p.waitForTimeout(60)
 }
 let paNo = 0
+const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
 async function pa(side, spec) {
   paNo++
   const d0 = await draft()
@@ -72,6 +73,8 @@ async function pa(side, spec) {
   const shown = (await main.locator('.text-\\[15px\\].font-semibold').first().textContent().catch(() => ''))?.trim() ?? ''
   if (!shown.startsWith(spec.result)) notes.push(`#${paNo} ${who}: 結果顯示「${shown}」，預期 ${spec.result}`)
   if (spec.loc) { await main.getByRole('button', { name: new RegExp(`^${spec.loc} `) }).first().click(); await p.waitForTimeout(60) }
+  // 軌跡 is required for a batted ball (batch 14); outs come with the one their result tells (內滾 G, 外飛 F …)
+  if (spec.traj) { const t = main.getByRole('button', { name: TRAJ[spec.traj], exact: true }); if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click(); await p.waitForTimeout(60) }
   for (const [base, d] of Object.entries(spec.runners ?? {})) await setDest(`${base}B `, d)
   if (spec.batter !== undefined) await setDest('打者 ', spec.batter)
   if (side === 'us') {
@@ -148,7 +151,7 @@ await place(['二壘', `第 5 棒 ${S5}`, '一壘', `第 6 棒 ${S6}`, '打者',
   const placed = d.batting.filter((x) => x.result === '突破僵局')
   if (placed.map((x) => x.batter).join() !== [S5, S6].join()) notes.push(`3 上放上的是 ${placed.map((x) => x.batter).join('、')}，應為 ${S5}、${S6}`)
 }
-await us({ steps: [{ balk: true }, 'B', 'IP'], result: '二安', loc: 8, runners: { 3: 'home', 2: 'home' }, batter: 2, rbi: 2 })   // S7
+await us({ steps: [{ balk: true }, 'B', 'IP'], result: '二安', loc: 8, traj: 'L', runners: { 3: 'home', 2: 'home' }, batter: 2, rbi: 2 })   // S7
 await us({ steps: ['SS', 'SS', 'SS'], result: '三振' })                       // S8
 await us({ steps: ['IP'], result: '內滾', loc: 6, batter: 'out' })            // S9
 await us({ steps: ['IP'], result: '外飛', loc: 8, batter: 'out' })            // S1

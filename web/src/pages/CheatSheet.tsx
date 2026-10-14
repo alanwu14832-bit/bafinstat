@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react'
 import { PenLine, Printer } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
-import { CODE_HELP, CONTACT_HELP, CONTACT_RULE, contactShare, LOC_HELP, RESULT_HELP, TRAJ_HELP } from '../data/recordingHelp'
+import { BALL_RULE, CODE_HELP, CONTACT_HELP, CONTACT_RULE, contactShare, LOC_HELP, RESULT_HELP, TRAJ_HELP } from '../data/recordingHelp'
 import { PITCH_BUTTONS, RESULT_GROUPS } from '../record/widgets'
 import { RUNNER_EVENTS } from '../record/LiveParts'
 import { useDataStore } from '../store/data'
@@ -43,7 +43,7 @@ export function CheatSheetPage() {
           <ol className="list-decimal pl-5 flex flex-col gap-0.5">
             <li>點每一球（壞球、好球、界外…）</li>
             <li>打席結束時選打擊結果（三振、四壞會自動跳出）</li>
-            <li>擊進場內的球點落點、軌跡、強度</li>
+            <li>擊進場內的球點落點、軌跡（兩個必填）、強度（選填）</li>
             <li>確認跑者去向後按「送出這個打席」</li>
           </ol>
           <p>記錯了：按計分條右邊的復原鍵（↶，一次退一步），或剛送出時跳出的提示上的「復原」。</p>
@@ -58,18 +58,19 @@ export function CheatSheetPage() {
             {RESULT_HELP.map(([k, v]) => <div key={k}><dt className="inline font-medium text-ink">{k}：</dt><dd className="inline">{v}</dd></div>)}
           </dl>
         </Block>
-        <Block n={4} title="落點">
+        <Block n={4} title="落點（必填）">
+          <p>{BALL_RULE}</p>
           <p>{LOC_HELP.rule}</p>
           <p className="tnum">{LOC_HELP.fielders.map(([n, l]) => `${n} ${l}`).join('・')}</p>
           <p className="tnum">縫隙：{LOC_HELP.holes.map(([n, l]) => `${n} ${l}`).join('・')}</p>
         </Block>
-        <Block n={5} title="軌跡">
+        <Block n={5} title="軌跡（必填）">
           {TRAJ_HELP.map(([k, v]) => <Term key={k} k={k}>{v}</Term>)}
         </Block>
-        <Block n={6} title="強度：強／中／弱">
+        <Block n={6} title="強度：強／中／弱（選填）">
           {CONTACT_HELP.map(([k, v]) => <Term key={k} k={k}>{v}</Term>)}
           <p>{CONTACT_RULE}</p>
-          {share.n > 0 && <p className="text-ink">本隊目前記錄：強 {pct(share.強)}・中 {pct(share.中)}・弱 {pct(share.弱)}（{share.n} 個場內球）{share.中 > 0.8 ? '：大多記成中了' : ''}</p>}
+          {share.n > 0 && <p className="text-ink">本隊目前記錄：強 {pct(share.強)}・中 {pct(share.中)}・弱 {pct(share.弱)}（{share.n} 個有記強度的擊球）{share.中 > 0.8 ? '：大多記成中了' : ''}</p>}
         </Block>
         <Block n={7} title="跑者面板（點計分條上的壘包）">
           <p>{RUNNER_EVENTS.map((e) => e.label).join('・')}</p>

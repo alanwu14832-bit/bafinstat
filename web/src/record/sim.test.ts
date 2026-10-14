@@ -8,7 +8,7 @@ import { offense, score, toGameEdit, type RecordState } from './model'
 import { auditGame } from '../data/audit'
 import { normalizeGameEdit } from '../data/edit'
 import { battingLines, pitchingLines, summarizeGame } from '../data/stats'
-import { DEFAULT_PARAMS, EMPTY_DATASET, isPA, isPlaced, type Dataset } from '../data/types'
+import { DEFAULT_PARAMS, EMPTY_DATASET, isBattedBall, isPA, isPlaced, missingBattedBall, type Dataset } from '../data/types'
 import { deriveHalf, inferHalf, inningsOf, midOf } from './timeline'
 import { earnedAll, earnedRepairs } from './earned'
 import { playGame, playGameWith, roster } from '../test/simGame'
@@ -34,6 +34,10 @@ describe('random games through the recording model', () => {
     // every opponent run was called by the rules as it was recorded: reading the saved game again agrees (but for
     // a half that ended on the bases, whose last runner plays may have no row to sit on)
     expect(earnedRepairs(s.pitching)).toEqual([])
+    // every batted ball carries its 落點 and 軌跡 (required while recording, batch 14), and BIP counts them all
+    expect([...s.batting, ...s.pitching].filter((p) => missingBattedBall(p).length)).toEqual([])
+    expect(battingLines(fragment, s.batting).reduce((a, l) => a + l.bip, 0)).toBe(s.batting.filter((p) => p.batter && isBattedBall(p)).length)
+    expect(pitchingLines(s.pitching, fragment.games).reduce((a, l) => a + l.bip, 0)).toBe(s.pitching.filter((p) => p.pitcher && isBattedBall(p)).length)
     // 突破僵局 runners are no plate appearances
     expect([...s.batting, ...s.pitching].filter(isPlaced).every((p) => p.pitches.length === 0)).toBe(true)
     expect(battingLines(fragment, s.batting).reduce((a, l) => a + l.pa, 0)).toBe(s.batting.filter((p) => p.batter && isPA(p)).length)

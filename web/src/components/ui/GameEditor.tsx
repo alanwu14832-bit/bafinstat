@@ -7,7 +7,7 @@ import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
 import { reconcileFielding, type GameEdit } from '../../data/edit'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -23,7 +23,7 @@ import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
 import { applyEarned, earnedAll, type EarnedCall } from '../../record/earned'
 import { addPlacedRows, extraInnings, removePlacedRows } from '../../record/tiebreak'
-import type { Base } from '../../record/model'
+import { missingBattedBall, type Base } from '../../record/model'
 
 /** 結果 options of the tables: the plate-appearance results, and 突破僵局 for a runner the tie-break rule put on */
 const RESULT_OPTIONS = [...PA_RESULTS, TIEBREAK]
@@ -193,6 +193,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     for (const i of auditGame(batRows, pitRows)) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
     return out
   }, [batRows, pitRows])
+  // batted balls without their 落點／軌跡 (required while recording; old games are not blocked, only counted)
+  // (per tab: the count names 我隊打擊／我隊投球, so it adds up with the tags the recorder sees on each list)
+  const missingBall = useMemo(() => missingBattedBallCounts(batRows.filter((r) => missingBattedBall(r).length).length, pitRows.filter((r) => missingBattedBall(r).length).length), [batRows, pitRows])
   // 自責／非自責 that followed the rules before an edit of the opponent's plate appearances follow them after it;
   // a call made by hand stays (record/earned.ts)
   const earnedNow = useMemo(() => earnedAll(pitRows), [pitRows])
@@ -617,7 +620,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
 
       <div className="flex items-center gap-2 flex-wrap pt-1">
         <Button variant="ghost" icon={<Trash2 />} className="text-critical hover:text-critical" disabled={busy} onClick={() => { if (window.confirm(`確定刪除 ${game.id}（${game.date} vs ${game.opponent}）？這會移除這場所有打席與守備紀錄。`)) void onDelete() }}>刪除這場比賽</Button>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+          {missingBall && <span role="status" className="text-[12px] text-warning basis-full sm:basis-auto text-right">{missingBall}<span className="inline-block">（清單上標{MISSING_BALL_TAGS}，</span><span className="inline-block">可以先儲存）</span></span>}
           <Button variant="outline" onClick={onCancel} disabled={busy}>取消</Button>
           <Button variant="primary" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存修改'}</Button>
         </div>

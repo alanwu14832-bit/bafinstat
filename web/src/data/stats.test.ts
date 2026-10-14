@@ -127,6 +127,46 @@ describe('內野飛球 (P)', () => {
   })
 })
 
+describe('BIP = every batted ball (batch 14)', () => {
+  const bat = (result: string, p: Partial<BattingPA> = {}): BattingPA => ({ gameId: game.id, inning: 1, batter: '甲', pitches: result === '三振' ? ['SS', 'SS', 'SS'] : ['IP'], result, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
+  const pit = (result: string, p: Partial<PitchingPA> = {}): PitchingPA => ({ gameId: game.id, inning: 1, pitcher: '丙', pitches: ['IP'], result, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
+  const roster = { ...ds, roster: [] }
+  it('a hit without 軌跡 counts in BIP but not in the GB% denominator', () => {
+    const [l] = battingLines(roster, [bat('一安'), bat('內滾', { traj: 'G', loc: 6, quality: '弱' }), bat('外飛', { traj: 'F', loc: 8 })])
+    expect(l.bip).toBe(3); expect(l.bipTraj).toBe(2); expect(l.gb).toBe(1)
+    expect(l.gbPct).toBeCloseTo(1 / 2, 9); expect(l.fbPct).toBeCloseTo(1 / 2, 9)
+    // Hard% over the batted balls with a 強度 only, Pull/Center/Oppo% over those with a 落點
+    expect(l.bipQuality).toBe(1); expect(l.hardPct).toBe(0)
+    expect(l.bipLoc).toBe(2); expect(l.pullPct).toBeCloseTo(1 / 2, 9); expect(l.centerPct).toBeCloseTo(1 / 2, 9)
+  })
+  it('8 hits, one without a 軌跡: BIP 8 (the 王鼎鈞 case)', () => {
+    const rows = [...Array.from({ length: 7 }, () => bat('一安', { traj: 'L', loc: 8 })), bat('一安')]
+    const [l] = battingLines(roster, rows)
+    expect(l.h).toBe(8); expect(l.bip).toBe(8); expect(l.bipTraj).toBe(7); expect(l.ldPct).toBe(1)
+  })
+  it('a 全壘打 is a batted ball; 三振 保送 故四 觸身 妨礙 and a 突破僵局 runner are not', () => {
+    const rows = [bat('全壘打'), bat('三振'), bat('保送', { pitches: ['B', 'B', 'B', 'B'] }), bat('故四', { pitches: [] }), bat('觸身', { pitches: ['B'] }), bat('妨礙', { pitches: ['B'] }), bat('突破僵局', { pitches: [], inning: 8 })]
+    const [l] = battingLines(roster, rows)
+    expect(l.pa).toBe(6); expect(l.bip).toBe(1); expect(l.bipTraj).toBe(0); expect(l.gbPct).toBeNull()
+    const t = teamBatting(roster, rows)
+    expect(t.bip).toBe(1)
+  })
+  it('every other result is a batted ball, 軌跡 recorded or not', () => {
+    const others = ['一安', '內安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤']
+    const [l] = battingLines(roster, others.map((r) => bat(r)))
+    expect(l.bip).toBe(others.length); expect(l.bipTraj).toBe(0)
+  })
+  it('a hard-hit ball without 軌跡 is still a 強勁擊球 (Hard%, QAB)', () => {
+    const [l] = battingLines(roster, [bat('失誤', { quality: '強' }), bat('內滾', { quality: '中', traj: 'G' })])
+    expect(l.bip).toBe(2); expect(l.bipQuality).toBe(2); expect(l.hard).toBe(1); expect(l.hardPct).toBeCloseTo(1 / 2, 9); expect(l.qab).toBe(1)
+  })
+  it('pitchers: BIP allowed counts every batted ball, GB% / Hard% only over the ones with that detail', () => {
+    const rows = [pit('一安', { code: 'L' }), pit('全壘打', { code: 'R' }), pit('內滾', { traj: 'G', quality: '強', code: 'I' }), pit('三振', { pitches: ['SS', 'SS', 'SS'], code: 'II' }), pit('保送', { pitches: ['B', 'B', 'B', 'B'], code: 'L' })]
+    const [p] = pitchingLines(rows, [game])
+    expect(p.bf).toBe(5); expect(p.bip).toBe(3); expect(p.bipTraj).toBe(1); expect(p.gbPct).toBe(1); expect(p.bipQuality).toBe(1); expect(p.hardPct).toBe(1)
+  })
+})
+
 describe('突破僵局 runners and 投手犯規', () => {
   const bat = (p: Partial<BattingPA>): BattingPA => ({ gameId: 'G1', inning: 8, batter: '甲', pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
   const pit = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: 'G1', inning: 8, pitcher: '壬', pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })

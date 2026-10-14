@@ -579,7 +579,7 @@ export function PlayersPage() {
               <StatTile label="wRC+" to={rank('/batting?view=advanced&sort=wrcPlus')} toLabel="全隊排行" value={bat.wrcPlus ?? 0} display={bat.wrcPlus === null ? '—' : String(bat.wrcPlus)} note="隊平均 = 100" />
               <StatTile label="K% / BB%" to={rank('/batting?view=advanced&sort=kPct&dir=asc')} toLabel="全隊排行" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
               <StatTile label="得點圈 AVG" to={rank('/batting?view=advanced&sort=rispAvg')} toLabel="全隊排行" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
-              <StatTile label="Whiff% / Hard%" to={rank('/batting?view=process&sort=whiffPct&dir=asc')} toLabel="全隊排行" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note={`揮空 ${bat.whiffs}/${bat.swings} 揮・強勁 ${bat.hard}/${bat.bip} 球（判讀）`} />
+              <StatTile label="Whiff% / Hard%" to={rank('/batting?view=process&sort=whiffPct&dir=asc')} toLabel="全隊排行" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note={`揮空 ${bat.whiffs}/${bat.swings} 揮・強勁 ${bat.hard}/${bat.bipQuality} 球（判讀）`} />
               <StatTile label="sSeager" to={rank('/batting?view=process&sort=sSeager')} toLabel="全隊排行" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note="好球敢打、壞球忍得住" />
             </StatGroup>
           {compare && cmpPlayer && (

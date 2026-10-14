@@ -34,7 +34,7 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   finishTimes, oppBatterOf, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
@@ -384,7 +384,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const problems = plan ? planProblems(state, plan) : []
-  // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點
+  // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點 and 軌跡
   const inPlay = state.pitches[state.pitches.length - 1] === 'IP'
   // 擊進場內 → straight to the results (just below the scoreboard bar)
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -395,7 +395,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     jump.current = false
     resultsRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }, [inPlay])
-  const needLoc = !!plan && !NO_BATTED_BALL.has(plan.result) && !plan.loc
+  // a batted ball is not sent without its 落點 and 軌跡 (強度 stays optional)
+  const missingBall = plan ? missingBattedBall(plan) : []
+  const needBall = missingBall.length > 0
   // 失誤進壘 while we field needs whose error it was
   const needErrBy = !!plan && side === 'opp' && !!plan.errAdv?.length && !plan.errBy?.length
   // past where the result alone takes him: on the throw (趁傳進壘) or on a fielding error (失誤進壘, no RBI for that run;
@@ -411,7 +413,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     }
     return <AdvChoice name={name} kind={kind} onPick={pick} erring={side === 'opp' ? 'us' : 'them'} />
   }
-  const confirm = () => { if (!plan || problems.length || needLoc || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null) }
+  const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null) }
   // the opponent's runs on this play, called by the rules (record/earned.ts) on the inning as it would stand; tap one to call it by hand
   const runCalls = (() => {
     if (!plan || side !== 'opp') return []
@@ -647,7 +649,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <div className="text-[15px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">{plan.result === '界外飛' ? '接殺的界外球記為 IP，落點填接球的守備員' : '確認細節後送出'}</span></div>
                   <button type="button" onClick={() => setPlan(null)} className="h-9 text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
                 </div>
-                {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} requireLoc />}
+                {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} required />}
                 <div>
                   <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
                   <div className="flex flex-col gap-1.5">
@@ -703,9 +705,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     </div>
                   )}
                   <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1">
-                    {needLoc && <span className="text-[12px] text-critical">還沒點落點</span>}
-                    {needErrBy && <span className="text-[12px] text-critical">還沒點誰失誤</span>}
-                    <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needLoc || needErrBy} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                    <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needBall || needErrBy} aria-describedby={needBall || needErrBy ? 'pa-missing' : undefined} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
+                    {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] text-critical">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
                   </div>
                 </div>
               </div>

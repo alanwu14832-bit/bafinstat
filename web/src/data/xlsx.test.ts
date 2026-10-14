@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx'
 import { datasetToWorkbook, dayRosterCells, dayRosterFromCells, legacyToDataset, parseAnyDate, parseLegacyGame, parseWorkbook } from './xlsx'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
-import type { GameDayRoster } from './types'
+import type { Dataset, GameDayRoster } from './types'
 
 const load = (f: string) => { const b = readFileSync(resolve(process.cwd(), '..', 'data', 'legacy', f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer }
 
@@ -269,5 +269,22 @@ describe('突破僵局 rows and 投手犯規 in Excel', () => {
     expect(back.batting[1].events).toEqual(bat[1].events)
     expect(pick(back.pitching[0])).toEqual(pick(pit[0]))
     expect(back.pitching[1].events).toEqual(pit[1].events)
+  })
+})
+
+describe('import report: batted balls without 落點／軌跡 (batch 14)', () => {
+  it('counts them (both sides) and says so, without blocking the import', () => {
+    const ds: Dataset = { ...SEED_DATASET, batting: SEED_DATASET.batting.map((p) => ({ ...p, loc: 8, traj: 'F' })), pitching: SEED_DATASET.pitching.map((p) => ({ ...p, loc: 6, traj: 'G' })) }
+    const hit = ds.batting.findIndex((p) => p.result === '一安')
+    const ball = ds.pitching.findIndex((p) => p.result === '內滾')
+    const walk = ds.batting.findIndex((p) => p.result === '保送')
+    ds.batting[hit] = { ...ds.batting[hit], traj: undefined }
+    ds.pitching[ball] = { ...ds.pitching[ball], loc: undefined }
+    ds.batting[walk] = { ...ds.batting[walk], loc: undefined, traj: undefined }
+    const { dataset, report } = parseWorkbook(XLSX.write(datasetToWorkbook(ds), { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(report.missingBall).toBe(2)
+    // the note names the tab and the tags the recorder will see there
+    expect(report.warnings.some((w) => w.startsWith('缺落點或軌跡的擊球：我隊打擊 1 個、我隊投球 1 個，共 2 個') && w.includes('「缺落點」或「缺軌跡」'))).toBe(true)
+    expect(dataset.batting.length).toBe(ds.batting.length)
   })
 })
