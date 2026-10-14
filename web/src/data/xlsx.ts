@@ -7,7 +7,7 @@
 import * as XLSX from 'xlsx'
 import { cleanErrors, cleanOppErrors, errorsOf, errorsText, oppErrorList } from './errors'
 import { parsePlays, playsText } from './plays'
-import type { BattingPA, Dataset, DayRosterSub, FieldingLine, Game, GameDayRoster, HomeAway, PitchingPA, Player, Registration } from './types'
+import { MISSING_BALL_TAGS, missingBattedBall, missingBattedBallCounts, type BattingPA, type Dataset, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type HomeAway, type PitchingPA, type Player, type Registration } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
 import { cleanHand, cleanLoc, normalizeDataset } from './normalize'
 import { parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
@@ -23,6 +23,8 @@ export interface ImportReport {
   fielding: number
   roster: number
   warnings: string[]
+  /** batted balls (both sides) without a 落點 or a 軌跡: required while recording, an import is only told (修改資料 marks them) */
+  missingBall: number
   /** 報名名單 lists found in the workbook (master mode), one per year + tournament */
   registrations?: number
   /** legacy mode: the parsed game so the user can set 比賽ID / 杯賽 before confirming */
@@ -364,6 +366,14 @@ export function legacyToDataset(raw: RawGame, overrides: { id: string; tournamen
 }
 
 /** `known`: the site's 球員名單, so a single-game file (which has none) only adds, and warns about, players new to it. */
+/** How many batted balls lack a 落點 or a 軌跡 (both sides); a note for the report when any do. The import goes ahead. */
+export function missingBallCount(ds: Pick<Dataset, 'batting' | 'pitching'>, warnings: string[]): number {
+  const bat = ds.batting.filter((p) => missingBattedBall(p).length).length
+  const pit = ds.pitching.filter((p) => missingBattedBall(p).length).length
+  if (bat + pit) warnings.push(`${missingBattedBallCounts(bat, pit)}，共 ${bat + pit} 個（紀錄比賽時落點、軌跡都必填；匯入照常，之後可以在「修改資料」的我隊打擊／我隊投球清單找標著${MISSING_BALL_TAGS}的打席補上）`)
+  return bat + pit
+}
+
 export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Player[] = []): { dataset: Dataset; report: ImportReport; registrations?: Registration[] } {
   const wb = XLSX.read(new Uint8Array(data), { type: 'array', cellDates: false })
   const names = wb.SheetNames
@@ -382,7 +392,8 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Playe
     if (unknownBatters.size) warnings.push(`有 ${unknownBatters.size} 位打者不在『球員名單』：${[...unknownBatters].slice(0, 5).join('、')}`)
     const norm = normalizeDataset({ roster, games, batting, pitching, fielding })
     warnings.push(...norm.warnings.map((w) => `${w.gameId}：${w.message}`))
-    return { dataset: norm.dataset, registrations, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, registrations: registrations.length, warnings } }
+    const missingBall = missingBallCount(norm.dataset, warnings)
+    return { dataset: norm.dataset, registrations, report: { mode: 'master', games: games.length, batting: batting.length, pitching: pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, registrations: registrations.length, missingBall, warnings } }
   }
   if (names.includes('單場-打擊') || names.includes('單場-摘要')) {
     const game = parseSingleMeta(wb)
@@ -406,12 +417,15 @@ export function parseWorkbook(data: ArrayBuffer, filename?: string, known: Playe
     warnings.push(...norm.warnings.map((w) => w.message))
     const had = new Set(known.map((p) => p.name.trim()))
     const dataset = { ...norm.dataset, roster: norm.dataset.roster.filter((p) => !had.has(p.name)) }
-    return { dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: dataset.fielding.length, roster: dataset.roster.length, warnings } }
+    const missingBall = missingBallCount(dataset, warnings)
+    return { dataset, report: { mode: 'single', games: 1, batting: batting.length, pitching: pitching.length, fielding: dataset.fielding.length, roster: dataset.roster.length, missingBall, warnings } }
   }
   if (names.includes(LEGACY_SUMMARY)) {
     const raw = parseLegacyGame(wb, filename)
     const norm = normalizeDataset(rawGameToDataset({ ...raw, date: raw.date || '1900-01-01' }))
-    return { dataset: norm.dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, warnings: [...(raw.warnings ?? []), ...norm.warnings.map((w) => w.message)], legacy: raw } }
+    const warnings = [...(raw.warnings ?? []), ...norm.warnings.map((w) => w.message)]
+    const missingBall = missingBallCount(norm.dataset, warnings)
+    return { dataset: norm.dataset, report: { mode: 'legacy', games: 1, batting: raw.batting.length, pitching: raw.pitching.length, fielding: norm.dataset.fielding.length, roster: norm.dataset.roster.length, missingBall, warnings, legacy: raw } }
   }
   throw new Error(`找不到可辨識的工作表（需要『打席紀錄』、『單場-打擊』或舊格式的『當日比賽統計』）。目前工作表：${names.join('、')}`)
 }

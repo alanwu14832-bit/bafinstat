@@ -48,7 +48,7 @@ export const BAT_PCT: PctMetric<BattingLine>[] = [
   bat('whiffPct', 'Whiff%', '揮空率', '選球與揮棒', (l) => l.whiffPct, pct, (l) => l.swings, 15, '次揮棒', true),
   bat('sSeager', 'sSeager', '選擇性積極', '選球與揮棒', (l) => l.sSeager, signedPct, (l) => l.called + l.ballsTaken, 15, '顆沒揮的球'),
   bat('qabPct', 'QAB%', '好打席率', '選球與揮棒', (l) => l.qabPct, pct, paOf, 10, '打席'),
-  bat('hardPct', 'Hard%', '強勁擊球率', '擊球品質', (l) => l.hardPct, pct, (l) => l.bip, 10, '個場內球'),
+  bat('hardPct', 'Hard%', '強勁擊球率', '擊球品質', (l) => l.hardPct, pct, (l) => l.bipQuality, 10, '個有記強度的擊球'),
   bat('iffbPct', 'IFFB%', '內野飛球率', '擊球品質', (l) => l.iffbPct, pct, (l) => l.fb, 5, '個飛球', true),
   bat('rispAvg', 'RISP AVG', '得點圈打擊率', '擊球品質', (l) => l.rispAvg, f3, (l) => l.rispAB, 5, '得點圈打數'),
 ]
@@ -67,8 +67,8 @@ export const PIT_PCT: PctMetric<PitchingLine>[] = [
   pit('cswPct', 'CSW%', '好球＋揮空', '好球與揮空', (l) => l.cswPct, pct, (l) => l.pc, 50, '球'),
   pit('strikePct', 'Strike%', '好球率', '好球與揮空', (l) => l.strikePct, pct, (l) => l.pc, 50, '球'),
   pit('fStrikePct', 'FStrike%', '首球好球率', '好球與揮空', (l) => l.fStrikePct, pct, bf, 15, '位打者'),
-  pit('hardPct', 'Hard%', '被強勁擊球率', '被擊球', (l) => l.hardPct, pct, (l) => l.bip, 10, '個場內球', true),
-  pit('gbPct', 'GB%', '滾地球率', '被擊球', (l) => l.gbPct, pct, (l) => l.bip, 10, '個場內球'),
+  pit('hardPct', 'Hard%', '被強勁擊球率', '被擊球', (l) => l.hardPct, pct, (l) => l.bipQuality, 10, '個有記強度的擊球', true),
+  pit('gbPct', 'GB%', '滾地球率', '被擊球', (l) => l.gbPct, pct, (l) => l.bipTraj, 10, '個有記軌跡的擊球'),
 ]
 
 /** Who the percentiles are measured against: PA ≥ 10 (batters) / BF ≥ 10 (pitchers) in the filtered games. */

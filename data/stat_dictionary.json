@@ -490,21 +490,31 @@
   "note": ""
  },
  {
+  "key": "BIP",
+  "zh": "擊球進場",
+  "en": "Balls In Play",
+  "group": "打擊過程",
+  "formula": "打擊結果不是三振、保送、故四、觸身、妨礙的打席（突破僵局跑者不算）",
+  "status": "新增",
+  "priority": "P1",
+  "note": "全壘打也算（是打出去的球）；不管有沒有記落點、軌跡、強度都算"
+ },
+ {
   "key": "GB%",
   "zh": "滾地球率",
   "en": "Ground Ball %",
   "group": "打擊過程",
-  "formula": "滾地(G) ÷ 場內球",
+  "formula": "滾地(G) ÷ 有記軌跡的擊球",
   "status": "新增",
   "priority": "P1",
-  "note": "軌跡欄 G/F/L"
+  "note": "軌跡欄 G/F/L/P；沒記軌跡的擊球不算進分母"
  },
  {
   "key": "FB%",
   "zh": "飛球率",
   "en": "Fly Ball %",
   "group": "打擊過程",
-  "formula": "飛球(F) ÷ 場內球",
+  "formula": "飛球(F + P) ÷ 有記軌跡的擊球",
   "status": "新增",
   "priority": "P1",
   "note": ""
@@ -514,7 +524,7 @@
   "zh": "平飛球率",
   "en": "Line Drive %",
   "group": "打擊過程",
-  "formula": "平飛(L) ÷ 場內球",
+  "formula": "平飛(L) ÷ 有記軌跡的擊球",
   "status": "新增",
   "priority": "P1",
   "note": "平飛球是安打率最高的擊球型態"
@@ -524,27 +534,27 @@
   "zh": "強勁擊球率",
   "en": "Hard-Hit % (proxy)",
   "group": "打擊過程",
-  "formula": "強度=強 的場內球 ÷ 場內球",
+  "formula": "強度=強 的擊球 ÷ 有記強度的擊球",
   "status": "新增",
   "priority": "P1",
-  "note": "Statcast Hard-Hit%(≥95 mph) 的人工近似"
+  "note": "Statcast Hard-Hit%(≥95 mph) 的人工近似；沒記強度的擊球不算進分母"
  },
  {
   "key": "Pull%",
   "zh": "拉打率",
   "en": "Pull %",
   "group": "打擊過程",
-  "formula": "依落點與打者慣用手計算（右打 5/6/7 與縫隙 56/78 為拉打；1/2/8/46 為中間）",
+  "formula": "拉打 ÷ 有記落點的擊球；依落點與打者慣用手計算（右打 5/6/7 與縫隙 56/78 為拉打；1/2/8/46 為中間）",
   "status": "新增",
   "priority": "P2",
-  "note": "需要名單中的打擊慣用手"
+  "note": "需要名單中的打擊慣用手；沒記落點的擊球不算進分母"
  },
  {
   "key": "Oppo%",
   "zh": "反方向率",
   "en": "Opposite Field %",
   "group": "打擊過程",
-  "formula": "右打 3/4/9 為反方向",
+  "formula": "反方向 ÷ 有記落點的擊球；右打 3/4/9 與縫隙 34/89 為反方向",
   "status": "新增",
   "priority": "P2",
   "note": ""
@@ -910,14 +920,24 @@
   "note": "和防禦率一樣以每場局數換算；常數預設由本隊所有比賽自動推算（全隊 FIP＝全隊防禦率），可在『設定』改成固定值"
  },
  {
+  "key": "pBIP",
+  "zh": "被擊球進場",
+  "en": "Balls In Play Against",
+  "group": "投球",
+  "formula": "對方打擊結果不是三振、保送、故四、觸身、妨礙的打席（突破僵局跑者不算）",
+  "status": "新增",
+  "priority": "P2",
+  "note": "全壘打也算；不管有沒有記落點、軌跡、強度都算"
+ },
+ {
   "key": "pGB%",
   "zh": "滾地球率",
   "en": "Ground Ball % Against",
   "group": "投球",
-  "formula": "滾地 ÷ 場內球",
+  "formula": "滾地 ÷ 有記軌跡的被擊球",
   "status": "新增",
   "priority": "P1",
-  "note": ""
+  "note": "沒記軌跡的擊球不算進分母"
  },
  {
   "key": "pWhiff%",

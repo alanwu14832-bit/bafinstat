@@ -44,6 +44,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     start(s)
     fireEvent.click(screen.getByRole('button', { name: '一安' }))
     fireEvent.click(screen.getAllByRole('button', { name: /^7 LF/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: '平飛 L' })) // 軌跡 is required for a batted ball (batch 14)
     // the batter takes second: how
     fireEvent.click(screen.getAllByRole('button', { name: '2B' }).at(-1)!)
     expect(screen.getByRole('button', { name: /打者 趁傳（不算失誤）/ })).toBeTruthy()
@@ -77,6 +78,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     // a single scores him: their RBI stepper is there
     fireEvent.click(screen.getByRole('button', { name: '一安' }))
     fireEvent.click(screen.getAllByRole('button', { name: /^8 CF/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: '平飛 L' }))
     expect(screen.getByText('對方打點')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)

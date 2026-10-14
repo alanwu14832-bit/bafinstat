@@ -10,8 +10,8 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { isPlaced, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
-import { count, type Base } from '../../record/model'
+import { isPlaced, missingBattedBallTag, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppHand, type PitchingPA } from '../../data/types'
+import { count, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { errAdvanceErrors, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
@@ -84,6 +84,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                       {pitcher && <span className="text-[11px] text-muted">投手 {pitcher}</span>}
                       {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>}
                       {p.code && <span className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{CODE_LABEL[p.code] ?? p.code}</span>}
+                      {missingBattedBall(p).length > 0 && <span title={`這個擊球還沒記${missingBattedBall(p).join('、')}（可以先儲存，之後再補）`} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] border border-[color-mix(in_srgb,var(--warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-ink">{missingBattedBallTag(missingBattedBall(p))}</span>}
                       {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
                     </span>
                     <span className="flex items-center gap-2 flex-wrap text-[11px] text-muted">
@@ -635,7 +636,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         <ResultChips value={pa.result} onPick={(r) => (timeline ? timeline.onResult(r) : onChange(withResult(pa, r)))} />
       </Section>
       {pa.result && !NO_BATTED_BALL.has(pa.result) && (
-        <BattedBallPicker result={pa.result} value={pa} onChange={(v) => set({ loc: v.loc, traj: v.traj, quality: v.quality })} />
+        <BattedBallPicker result={pa.result} value={pa} onChange={(v) => set({ loc: v.loc, traj: v.traj, quality: v.quality })} required />
       )}
 
       {/* running and scoring: the same moves as tapping a runner while recording */}

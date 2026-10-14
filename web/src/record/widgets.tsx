@@ -19,8 +19,8 @@ export const RESULT_GROUPS: Array<{ label: string; items: string[] }> = [
 const LOC_HOLE_KEYS = [56, 46, 34, 78, 89]
 const LOC_GRID: Array<Array<number | null>> = [[7, 8, 9], [5, 6, 4], [null, 1, 3], [null, 2, null]]
 const LOC_LABEL: Record<number, string> = { 1: 'P', 2: 'C', 3: '1B', 4: '2B', 5: '3B', 6: 'SS', 7: 'LF', 8: 'CF', 9: 'RF' }
-/** Results without a batted ball: no 落點／軌跡／強度 to pick. */
-export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙'])
+/** Results without a batted ball: no 落點／軌跡／強度 to pick (one list for the stats and the screens: data/types). */
+export { NO_BATTED_BALL } from '../data/types'
 
 export const bigBtn = 'h-12 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors motion-reduce:transition-none'
 export const chipBtn = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
@@ -53,13 +53,17 @@ export function ResultChips({ value, onPick, only }: { value?: string; onPick: (
 }
 
 export interface BattedBall { loc?: number; traj?: string; quality?: string }
-/** 落點 (fielder grid + gaps for hits), 軌跡 and 強度; tapping the selected one again clears it. */
-export function BattedBallPicker({ result, value, onChange, requireLoc }: { result: string; value: BattedBall; onChange: (v: BattedBall) => void; requireLoc?: boolean }) {
+/** 落點 (fielder grid + gaps for hits), 軌跡 and 強度; tapping the selected one again clears it. With `required`, a
+ *  missing 落點 or 軌跡 (both required for a batted ball) is highlighted; 強度 stays optional. */
+export function BattedBallPicker({ result, value, onChange, required }: { result: string; value: BattedBall; onChange: (v: BattedBall) => void; required?: boolean }) {
   const set = (patch: BattedBall) => onChange({ ...value, ...patch })
+  const needLoc = !!required && !value.loc
+  const needTraj = !!required && !value.traj
+  const ring = 'rounded-[var(--radius-sm)] outline-2 outline-offset-4 outline-dashed outline-[color-mix(in_srgb,var(--critical)_55%,transparent)]'
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
-      <div>
-        <div className={cx('text-[12px] mb-1', requireLoc && !value.loc ? 'text-critical font-medium' : 'text-ink-2')}>落點{requireLoc && !value.loc ? '（必填，點接球或落地的位置）' : ''}</div>
+      <div role="group" aria-label="落點" data-missing={needLoc || undefined} className={cx('w-fit', needLoc && ring)}>
+        <div className={cx('text-[12px] mb-1', needLoc ? 'text-critical font-medium' : 'text-ink-2')}>落點{needLoc ? '（必填，點接球或落地的位置）' : ''}</div>
         <div className="grid grid-cols-3 gap-1 w-[150px]">
           {LOC_GRID.flat().map((n, i) => n === null ? <span key={i} /> : (
             <button key={i} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
@@ -75,8 +79,8 @@ export function BattedBallPicker({ result, value, onChange, requireLoc }: { resu
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <div><div className="text-[12px] text-ink-2 mb-1">軌跡</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : '內野飛球 P'}</button>)}</div></div>
-        <div><div className="text-[12px] text-ink-2 mb-1">強度</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
+        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : '內野飛球 P'}</button>)}</div></div>
+        <div><div className="text-[12px] text-ink-2 mb-1">強度{required ? <span className="text-muted">（選填）</span> : null}</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
       </div>
     </div>
   )
