@@ -41,27 +41,55 @@ export function OppPitcherStrip({ onHand, onName, onSkip }: { onHand: (h: OppHan
   )
 }
 
-/** 對方換投: name (optional), one-tap chips of pitchers already met, 左投／右投. */
-export function OppPitcherSheet({ open, onClose, current, options, earlierRows, onConfirm }: {
+/**
+ * 對方投手 sheet. With a pitcher already on the mound it offers two different things: 更正這位投手 (the default — the
+ * same man, his name or hand was written down wrong: his stint so far is rewritten and his pitch count goes on) and
+ * 對方換投 (a new pitcher from the next plate appearance, his count from 0). The first time it just sets him.
+ * Name optional, one-tap chips of pitchers already met, 左投／右投.
+ */
+export function OppPitcherSheet({ open, onClose, current, options, earlierRows, onConfirm, onCorrect, stintRows = 0 }: {
   open: boolean
   onClose: () => void
   current?: OppPitcher
   options: Array<{ name: string; hand?: OppHand }>
   /** first entry only: this half's plate appearances so far, which get it too */
   earlierRows: number
+  /** 對方換投 (or the first entry) */
   onConfirm: (p: OppPitcher) => void
+  /** 更正這位投手 (shown with a pitcher on the mound) */
+  onCorrect?: (p: OppPitcher) => void
+  /** our plate appearances against the pitcher on the mound so far (what 更正 rewrites) */
+  stintRows?: number
 }) {
   const [name, setName] = useState('')
   const [hand, setHand] = useState<OppHand | undefined>(undefined)
-  useEffect(() => { if (open) { setName(current?.name ?? ''); setHand(current?.hand) } }, [open, current?.name, current?.hand])
-  const can = !!name.trim() || !!hand
+  const [mode, setMode] = useState<'correct' | 'change'>('correct')
+  const fill = (p?: OppPitcher) => { setName(p?.name ?? ''); setHand(p?.hand) }
+  useEffect(() => { if (open) { fill(current); setMode('correct') } }, [open, current?.name, current?.hand]) // eslint-disable-line react-hooks/exhaustive-deps
+  const choosing = !!current && !!onCorrect
+  const correcting = choosing && mode === 'correct'
+  const can = (!!name.trim() || !!hand) && !(correcting && name.trim() === (current?.name ?? '') && hand === current?.hand)
+  const pick = (m: 'correct' | 'change') => { if (m === mode) return; setMode(m); fill(m === 'correct' ? current : undefined) }
+  const modes: Array<{ v: 'correct' | 'change'; l: string }> = [{ v: 'correct', l: '更正這位投手' }, { v: 'change', l: '對方換投' }]
   return (
     <Sheet open={open} onClose={onClose} ariaLabel="對方投手" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom max-h-[86vh] overflow-y-auto">
       <div className="p-5 flex flex-col gap-4">
         <div>
           <div className="text-[16px] font-semibold text-ink">對方投手</div>
-          <p className="text-[12px] text-muted mt-1">對方換投時改這裡，從下一個打席起都記這位投手</p>
+          {!choosing && <p className="text-[12px] text-muted mt-1">對方換投時改這裡，從下一個打席起都記這位投手</p>}
         </div>
+        {choosing && (
+          <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="更正或換投">
+              {modes.map((m) => <button key={m.v} type="button" aria-pressed={mode === m.v} onClick={() => pick(m.v)} className={cx(chipBtn(mode === m.v), 'h-11 text-[14px]')}>{m.l}</button>)}
+            </div>
+            <p className="text-[12px] text-ink-2">
+              {correcting
+                ? `同一位投手，只是姓名或左右投記錯了：他今天投過的${stintRows ? ` ${stintRows} 個` : ''}打席一起改，球數照算`
+                : '換了一位新投手：從下一個打席起記他，球數從 0 算'}
+            </p>
+          </div>
+        )}
         {options.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <span className="text-[12px] font-medium text-ink-2">遇過的投手</span>
@@ -85,7 +113,7 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
         {!current && earlierRows > 0 && <p className="text-[12px] text-ink-2">這半局前面 {earlierRows} 個打席也會記成這位投手</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button variant="primary" disabled={!can} onClick={() => { onConfirm({ name: name.trim() || undefined, hand }); onClose() }}>確定</Button>
+          <Button variant="primary" disabled={!can} onClick={() => { const p = { name: name.trim() || undefined, hand }; if (correcting) onCorrect!(p); else onConfirm(p); onClose() }}>{correcting ? '更正' : choosing ? '換投' : '確定'}</Button>
         </div>
       </div>
     </Sheet>

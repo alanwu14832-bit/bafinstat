@@ -16,8 +16,8 @@ import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
 import { errorsOf, oppErrorList, oppErrorsOf } from './errors'
 import { ipDisplay, pitchingLines } from './stats'
-import { count, lastOppName, offense, oppBatterOf, type Half, type OppPitcher, type RecordState, type Runner } from '../record/model'
-import { homesIn, inferHalf, midOf, outsIn, placedBases, stepAfter, type Half as Timeline, type Step } from '../record/timeline'
+import { count, lastOppName, offense, oppBatterOf, oppStintStart, type Half, type OppPitcher, type RecordState, type Runner } from '../record/model'
+import { homesIn, inferHalf, isBatterOutMark, midOf, outsIn, placedBases, stepAfter, type Half as Timeline, type Step } from '../record/timeline'
 
 type Row = BattingPA | PitchingPA
 export type FeedSide = 'us' | 'opp'
@@ -173,7 +173,7 @@ const PLAY_PHRASE: Record<string, { base?: string; home?: string; out?: string }
   score: { base: '上', home: '回本壘得分' },
   out: { out: '跑壘出局' },
 }
-const CAUSE: Record<string, string> = { sb: '盜壘', cs: '盜壘失敗', wp: '投手暴投', pb: '捕手捕逸', bk: '投手犯規', err: '失誤', throw: '趁傳', pk: '牽制', advance: '進壘', score: '得分', out: '跑壘' }
+const CAUSE: Record<string, string> = { sb: '盜壘', cs: '盜壘失敗', wp: '投手暴投', pb: '捕手捕逸', bk: '投手犯規', err: '失誤', throw: '趁傳', pk: '牽制', advance: '進壘', score: '得分', out: '跑壘', outPlay: '' }
 const destPlain = (to: PlayEvent['to']) => (to === 'home' ? '回本壘得分' : to === 'out' ? '出局' : `上${BASE_ZH[to]}`)
 /** One runner's play: 「盜壘上二壘」「投手暴投回本壘得分」「遭牽制出局」. */
 export function playPhrase(kind: string, to: PlayEvent['to']): string {
@@ -403,7 +403,8 @@ function laterReason(rows: Row[], runner: number, st: Step, at: number, side: Fe
   if (side === 'us') {
     const b = rows[runner] as BattingPA
     if (b.cs > moves('cs', runner)) return '盜壘刺出局'
-    if (runner === at && b.outOnBase > 0) return (b.baserunningOuts ?? 0) > 0 ? '跑壘出局' : '遭牽制出局'
+    // (a batter put out on his own play after reaching carries a mark saying so: that out was not later)
+    if (runner === at && b.outOnBase > 0 && !(b.events ?? []).some(isBatterOutMark)) return (b.baserunningOuts ?? 0) > 0 ? '跑壘出局' : '遭牽制出局'
     return ''
   }
   const p = rows[at] as PitchingPA
@@ -650,12 +651,7 @@ export function pitcherToday(pitching: PitchingPA[], name: string, livePitches =
 
 /** Our plate appearances against the opponent pitcher on the mound now (record/model oppPitchCount's rule). */
 export function oppStintRows(batting: BattingPA[], oppPitcher?: OppPitcher, from?: { row: number; pitches: number }): BattingPA[] {
-  if (from && from.row <= batting.length) return batting.slice(from.row)
-  const key = (p?: OppPitcher) => `${p?.name ?? ''}\u0000${p?.hand ?? ''}`
-  const now = key(oppPitcher)
-  let i = batting.length
-  while (i > 0 && key({ name: batting[i - 1].oppPitcher, hand: batting[i - 1].oppHand }) === now) i--
-  return batting.slice(i)
+  return batting.slice(oppStintStart(batting, oppPitcher, from))
 }
 /** Their pitcher's line against us: 「被安 5・四死 2・三振 3」. */
 export function oppPitcherToday(rows: BattingPA[]): string {

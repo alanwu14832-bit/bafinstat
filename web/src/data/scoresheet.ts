@@ -5,7 +5,7 @@
  * scoresheet. The path comes from the runner timeline (record/timeline) when the inning can be followed; otherwise
  * from the row alone (scored → home, a reach result → its base), and the inning is listed in `unfollowed`.
  */
-import { inferAll, inningsOf, placedBases, scored as scoredRow, batterEndFor, type End, type Side } from '../record/timeline'
+import { hasRunnerPlays, inferAll, inningsOf, placedBases, scored as scoredRow, batterEndFor, type End, type Side } from '../record/timeline'
 import { REACH_RESULTS } from '../record/model'
 import { errorsOf, oppErrorsOf } from './errors'
 import { countBefore, gridCell, type GridTone } from './gameText'
@@ -138,7 +138,7 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
     for (const k of idx) {
       const r = rows[k]
       for (const e of r.events ?? []) if (!e.play && PLAY_ABBR[e.kind]) notes[k].push(PLAY_ABBR[e.kind])
-      if (side === 'bat' && !(r.events ?? []).length) {
+      if (side === 'bat' && !hasRunnerPlays([r])) {
         const b = r as BattingPA
         for (let n = 0; n < b.sb; n++) notes[k].push('SB')
         for (let n = 0; n < b.cs; n++) notes[k].push('CS')

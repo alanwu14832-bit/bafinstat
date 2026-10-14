@@ -15,7 +15,7 @@
  * opponent bats → our pitcher of that plate appearance (his RE24 = − the offense's).
  */
 import { basesMask, buildRunModel, buildWinModel, END, resultClass, stateOf, type AdvKey, type HalfName, type PaSample, type WinModel, type WinRules } from './winModel'
-import { batterEndFor, homesIn, inferHalf, inningsOf, midOf, OUT_PLAYS, rebuildHalf, stepAfter, type Base, type End, type Half, type Move, type Side, type Step } from '../record/timeline'
+import { batterEndFor, homesIn, inferHalf, isBatterOutMark, inningsOf, midOf, OUT_PLAYS, rebuildHalf, stepAfter, type Base, type End, type Half, type Move, type Side, type Step } from '../record/timeline'
 import { playText } from './plays'
 import { countBeforeText } from './gameText'
 import { liveKey } from './liveGames'
@@ -117,7 +117,9 @@ export function splitTail(rows: Row[], steps: Step[], side: Side): { step: Step;
   const end = (row: number): End => (row === k ? st.batter : st.dest[row])
   // lead runner first, the batter last
   const order = [...midOf(st).map((o) => ({ row: o.row, base: o.base as number })), { row: k, base: 0 }]
-  const canBeTail = (row: number) => row !== k || (typeof rb === 'number' && (st.batter === 'out' || st.batter === 'home'))
+  // (our batter put out on his own play after reaching carries a mark saying so: his 壘上出局 count is that out, no later play)
+  const outOnPlay = side === 'bat' && st.batter === 'out' && (r.events ?? []).some(isBatterOutMark)
+  const canBeTail = (row: number) => row !== k || (typeof rb === 'number' && (st.batter === 'out' || st.batter === 'home') && !outOnPlay)
   const tailOut: Array<{ row: number; kind: string }> = []
   // the last outs, as long as each has a count of its own
   for (const row of [...st.outs].reverse()) {

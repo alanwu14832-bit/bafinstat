@@ -15,9 +15,10 @@ import { count, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { errAdvanceErrors, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
-import { batterEndFor, inningsOf, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
+import { batterEndFor, batterOutMark, inningsOf, isBatterOutMark, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
 import { balksIn, playLabel } from '../../data/plays'
 import { parseTiebreakBases } from '../../record/tiebreak'
+import { needsOutOnBase } from '../../data/audit'
 
 export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
@@ -208,6 +209,9 @@ export interface TimelineProps {
   onThrowUp: (who: number | 'batter') => void
   /** (we bat) 壘死 rather than 出局: a runner put out by his own baserunning mistake on the play */
   runningOut?: { of: (row: number) => boolean; set: (row: number, on: boolean) => void }
+  /** (we bat) the batter reached and was put out on the same play (記成壘上出局): `can` when his result put him on base;
+   *  `on` 跑壘失誤（壘死）, his own baserunning mistake */
+  batterMistake?: { can: boolean; on: boolean; set: (on: boolean) => void }
   /** opponent runs: earned (ER) or not (R), on the row of whoever scored; `rule` is what the rules say (record/earned.ts) */
   earned?: { of: (row: number) => boolean; rule?: (row: number) => { earned: boolean; why?: string } | undefined; toggle: (row: number) => void }
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
@@ -403,6 +407,14 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
             )}
           </div>
           {step.batter === 'home' && <EarnedNote tl={tl} row={step.index} />}
+          {step.batter === 'out' && tl.batterMistake?.can && (
+            // he reached, then was put out on this same play (a triple, then tagged out at home): an out on the bases
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" aria-pressed={tl.batterMistake.on} onClick={() => tl.batterMistake!.set(!tl.batterMistake!.on)} title="自己跑壘失誤出局（衝過頭、離壘被觸殺），算他的壘死"
+                className={cx(chipBtn(tl.batterMistake.on), 'h-9 pointer-fine:h-8 px-2.5 text-[12px]')}>跑壘失誤（壘死）</button>
+              <span className="text-[11px] text-muted">上壘後在壘上被觸殺：記成壘上出局，安打照算</span>
+            </div>
+          )}
           {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">他打完停在哪一壘；之後的盜壘、暴投等在下一個打席記</span>}
         </li>
       </ul>
@@ -432,18 +444,25 @@ export interface PaPanelProps {
   timeline?: TimelineProps
   /** the inning's saved bases do not add up: lay its runners out again from the results */
   onRebuild?: () => void
-  /** (our plate appearances) change the opponent pitcher from this one to the end of that pitcher's stint */
-  onOppPitcher?: (next: { oppPitcher?: string; oppHand?: OppHand }) => void
+  /** (our plate appearances) change the opponent pitcher: the whole stint of this one, or from this one to its end */
+  onOppPitcher?: (next: { oppPitcher?: string; oppHand?: OppHand }, mode: 'stint' | 'from') => void
+  /** (our plate appearances) the first and last row of this one's opponent-pitcher stint (record/paEdit oppStintOf) */
+  oppStint?: [number, number]
   /** (a 突破僵局 runner) take this inning's placed runners off */
   onRemovePlaced?: () => void
 }
 
-/** 對方投手 of one of our plate appearances: one line, 修改 opens name + 左投／右投／不知道, applied once. */
-function OppPitcherEdit({ pa, onApply }: { pa: BattingPA; onApply: (next: { oppPitcher?: string; oppHand?: OppHand }) => void }) {
+/**
+ * 對方投手 of one of our plate appearances: one line, 修改 opens name + 左投／右投／不知道, applied once. On a plate appearance
+ * that is not the first of that pitcher's stint it asks which: 整段都改 (the same man, written down wrong — the whole
+ * stint, the default) or 從這個打席起換投 (a new pitcher from here to the end of that stint).
+ */
+function OppPitcherEdit({ pa, index, stint, onApply }: { pa: BattingPA; index: number; stint?: [number, number]; onApply: (next: { oppPitcher?: string; oppHand?: OppHand }, mode: 'stint' | 'from') => void }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [hand, setHand] = useState<OppHand | undefined>(undefined)
-  const start = () => { setName(pa.oppPitcher ?? ''); setHand(pa.oppHand); setOpen(true) }
+  const [mode, setMode] = useState<'stint' | 'from'>('stint')
+  const start = () => { setName(pa.oppPitcher ?? ''); setHand(pa.oppHand); setMode('stint'); setOpen(true) }
   const now = [pa.oppHand ? OPP_HAND_LABEL[pa.oppHand] : '', pa.oppPitcher ?? ''].filter(Boolean).join(' ')
   if (!open) {
     return (
@@ -453,18 +472,31 @@ function OppPitcherEdit({ pa, onApply }: { pa: BattingPA; onApply: (next: { oppP
       </div>
     )
   }
+  const [first, last] = stint ?? [index, index]
+  const mid = first < index
   const choice: Array<{ v: OppHand | undefined; l: string }> = [{ v: 'L', l: '左投' }, { v: 'R', l: '右投' }, { v: undefined, l: '不知道' }]
+  const modes: Array<{ v: 'stint' | 'from'; l: string }> = [{ v: 'stint', l: '整段都改' }, { v: 'from', l: '從這個打席起換投' }]
+  const n = mode === 'stint' ? last - first + 1 : last - index + 1
   return (
     <Section title="對方投手">
+      {mid && (
+        <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="整段都改或換投">
+          {modes.map((m) => <button key={m.v} type="button" aria-pressed={mode === m.v} onClick={() => setMode(m.v)} className={chipBtn(mode === m.v)}>{m.l}</button>)}
+        </div>
+      )}
       <div className="flex items-end gap-2 flex-wrap">
         <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[160px]">姓名（可不填）<Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="例如 12號" /></label>
         <div className="flex items-center gap-1.5" role="group" aria-label="左投或右投">
           {choice.map((c) => <button key={c.l} type="button" aria-pressed={hand === c.v} onClick={() => setHand(c.v)} className={chipBtn(hand === c.v)}>{c.l}</button>)}
         </div>
       </div>
-      <p className="text-[12px] text-muted">會一起改到後面同一位投手的打席（到下一次換投為止）</p>
+      <p className="text-[12px] text-muted">
+        {!mid ? '會一起改到後面同一位投手的打席（到下一次換投為止）'
+          : mode === 'stint' ? `同一位投手記錯了：他這一段的 ${n} 個打席一起改`
+          : `對方在這個打席換投：從這裡到下一次換投前的 ${n} 個打席改成新投手，前面的不變`}
+      </p>
       <div className="flex gap-2">
-        <Button size="sm" variant="primary" onClick={() => { onApply({ oppPitcher: name.trim() || undefined, oppHand: hand }); setOpen(false) }}>套用</Button>
+        <Button size="sm" variant="primary" onClick={() => { onApply({ oppPitcher: name.trim() || undefined, oppHand: hand }, mid ? mode : 'from'); setOpen(false) }}>套用</Button>
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>取消</Button>
       </div>
     </Section>
@@ -530,7 +562,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
   )
 }
 
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher }: PaPanelProps) {
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint }: PaPanelProps) {
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
   const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
@@ -615,7 +647,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         </Section>
       )}
 
-      {bat && onOppPitcher && <OppPitcherEdit key={index} pa={bat} onApply={onOppPitcher} />}
+      {bat && onOppPitcher && <OppPitcherEdit key={index} pa={bat} index={index} stint={oppStint} onApply={onOppPitcher} />}
 
       {/* pitches */}
       <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球或一個跑壘事件可刪除</span>}>
@@ -714,6 +746,13 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
           {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+          {/* 上壘卻記出局碼 (saved before 壘上跑者 counted it): one click */}
+          {bat && needsOutOnBase(bat) && (
+            <Button size="sm" variant="outline" className="self-start" onClick={() => {
+              const events = (bat.events ?? []).some(isBatterOutMark) ? bat.events : [...(bat.events ?? []), batterOutMark(bat.result, bat.pitches.length)]
+              onChange({ ...bat, outOnBase: 1, events })
+            }}>設成壘上出局</Button>
+          )}
         </div>
       )}
 

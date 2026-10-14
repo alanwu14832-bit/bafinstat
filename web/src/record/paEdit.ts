@@ -94,18 +94,32 @@ export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string):
   return { gameId, inning: near?.inning ?? 1, oppOrder, pitcher: near?.pitcher ?? '', ...(oppBatter ? { oppBatter } : {}), pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
 }
 
-/**
- * 修改資料: the opponent pitcher of row `index` and of the rows after it that had the same one (until the next change),
- * so fixing the first plate appearance of a pitcher's stint fixes the whole stint. Blank keys are dropped.
- */
-export function applyOppPitcher(rows: BattingPA[], index: number, next: { oppPitcher?: string; oppHand?: OppHand }): BattingPA[] {
+const oppKeyOf = (p: BattingPA) => `${p.oppPitcher ?? ''}\u0000${p.oppHand ?? ''}`
+/** The opponent pitcher's stint row `index` is in: the rows of that game around it with the same pitcher (name and
+ *  hand), [first, last]. A row of a stint that is not its first can be fixed for the whole stint or start a new one. */
+export function oppStintOf(rows: BattingPA[], index: number): [number, number] {
   const at = rows[index]
-  if (!at) return rows
-  const key = (p: BattingPA) => `${p.oppPitcher ?? ''}\u0000${p.oppHand ?? ''}`
-  const was = key(at)
+  if (!at) return [index, index]
+  const was = oppKeyOf(at)
+  const same = (j: number) => rows[j] && rows[j].gameId === at.gameId && oppKeyOf(rows[j]) === was
+  let a = index, z = index
+  while (same(a - 1)) a--
+  while (same(z + 1)) z++
+  return [a, z]
+}
+
+/**
+ * 修改資料: the opponent pitcher of our plate appearances. `stint` (整段都改: same man, his name or hand was written down
+ * wrong) changes every row of the stint row `index` is in; `from` (從這個打席起換投) changes row `index` and the rows
+ * after it that had the same pitcher, until the next change — so fixing the first plate appearance of a stint fixes the
+ * whole stint either way, a hand-only fix too. Blank keys are dropped.
+ */
+export function applyOppPitcher(rows: BattingPA[], index: number, next: { oppPitcher?: string; oppHand?: OppHand }, mode: 'stint' | 'from' = 'from'): BattingPA[] {
+  if (!rows[index]) return rows
+  const [first, last] = oppStintOf(rows, index)
   const name = next.oppPitcher?.trim()
   const out = rows.slice()
-  for (let j = index; j < rows.length && rows[j].gameId === at.gameId && key(rows[j]) === was; j++) {
+  for (let j = mode === 'stint' ? first : index; j <= last; j++) {
     const { oppPitcher: _n, oppHand: _h, ...rest } = rows[j]
     void _n; void _h
     out[j] = { ...rest, ...(name ? { oppPitcher: name } : {}), ...(next.oppHand ? { oppHand: next.oppHand } : {}) }

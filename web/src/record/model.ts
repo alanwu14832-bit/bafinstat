@@ -24,7 +24,7 @@
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
 import type { GameEdit } from '../data/edit'
-import { inferHalf, leftMarks } from './timeline'
+import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
 import { hhmm, localDate } from '../lib/dates'
 
@@ -227,24 +227,49 @@ export function setOppPitcher(s: RecordState, p: OppPitcher): RecordState {
   }
   return out
 }
+const oppKey = (p?: OppPitcher) => `${p?.name ?? ''}\u0000${p?.hand ?? ''}`
 /**
- * 對方投手 用球: the pitches the opponent pitcher on the mound now has thrown to us — our plate appearances since he came in
- * (from where the last 換投 put him in — oppPitcherFrom —, else the rows that carry him back to the last change; all of
- * them while nobody was named), plus the one in progress.
+ * Where the stint of the opponent pitcher on the mound now starts in our rows: where the last 換投 put him in
+ * (oppPitcherFrom), else back to the first of the rows that carry him without a break (all of them while nobody was
+ * named). The 對方投手 count, his line on /live and 更正這位投手 all use it.
+ */
+export function oppStintStart(batting: BattingPA[], oppPitcher?: OppPitcher, from?: { row: number; pitches: number }): number {
+  if (from && from.row <= batting.length) return from.row
+  const now = oppKey(oppPitcher)
+  let i = batting.length
+  while (i > 0 && oppKey({ name: batting[i - 1].oppPitcher, hand: batting[i - 1].oppHand }) === now) i--
+  return i
+}
+/**
+ * 對方投手 用球: the pitches the opponent pitcher on the mound now has thrown to us — our plate appearances of his stint
+ * (oppStintStart), less the pitches of the plate appearance he came into, plus the one in progress.
  */
 export function oppPitchCount(s: RecordState): number {
   const live = offense(s) === 'us' ? s.pitches.length : 0
-  const from = s.oppPitcherFrom
-  if (from && from.row <= s.batting.length) return Math.max(0, s.batting.slice(from.row).reduce((n, b) => n + b.pitches.length, live) - from.pitches)
-  const key = (p?: OppPitcher) => `${p?.name ?? ''}\u0000${p?.hand ?? ''}`
-  const now = key(s.oppPitcher)
-  let n = offense(s) === 'us' ? s.pitches.length : 0
-  for (let i = s.batting.length - 1; i >= 0; i--) {
-    const b = s.batting[i]
-    if (key({ name: b.oppPitcher, hand: b.oppHand }) !== now) break
-    n += b.pitches.length
-  }
-  return n
+  const from = s.oppPitcherFrom && s.oppPitcherFrom.row <= s.batting.length ? s.oppPitcherFrom : undefined
+  const start = oppStintStart(s.batting, s.oppPitcher, from)
+  return Math.max(0, s.batting.slice(start).reduce((n, b) => n + b.pitches.length, live) - (from?.pitches ?? 0))
+}
+/**
+ * 更正這位投手: the pitcher on the mound is the same man, only his name or hand was written down wrong (左投 instead of
+ * 右投). Every one of our rows of his stint so far gets the corrected name / hand and so does the live state; where his
+ * stint starts stays, so his pitch count, his line and the play-by-play stay one stint. With nobody on the mound yet
+ * it is the first entry (setOppPitcher).
+ */
+export function correctOppPitcher(s: RecordState, p: OppPitcher): RecordState {
+  if (!s.oppPitcher) return setOppPitcher(s, p)
+  const name = p.name?.trim() || undefined
+  const next: OppPitcher | undefined = name || p.hand ? { ...(name ? { name } : {}), ...(p.hand ? { hand: p.hand } : {}) } : undefined
+  if (!next) return s
+  const start = oppStintStart(s.batting, s.oppPitcher, s.oppPitcherFrom)
+  const was = oppKey(s.oppPitcher)
+  const batting = s.batting.map((b, i) => {
+    if (i < start || oppKey({ name: b.oppPitcher, hand: b.oppHand }) !== was) return b
+    const { oppPitcher: _n, oppHand: _h, ...rest } = b
+    void _n; void _h
+    return { ...rest, ...oppFields(next) }
+  })
+  return { ...s, oppPitcher: next, batting }
 }
 export const skipOppHand = (s: RecordState): RecordState => ({ ...s, oppHandOff: true })
 
@@ -430,6 +455,8 @@ export interface PAPlan {
   errBy?: string[]
   /** 壘死: runner rows put out by their own baserunning mistake on the play (the rest of the runners out are just 出局) */
   runningOuts?: number[]
+  /** (we bat) the batter reached, then was put out on the same play by his own baserunning mistake: 壘死, not just 出局 */
+  batterRunningOut?: boolean
   /** 備註 typed in the confirm panel (kept on the row's note, after 「牽制 N 次」) */
   note?: string
 }
@@ -559,8 +586,12 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     const r = s.runners.find((x) => x.row === row)
     return r && plan.runners[row] === 'out' ? [{ at: base.pitches.length, kind: 'out', from: r.base, to: 'out' as const, play: true as const }] : []
   })
+  // our batter who reached and was put out on the same play (a triple, then thrown out at home): an out on the bases,
+  // marked as made on the play (record/timeline batterOutMark)
+  const batterOnBases = side === 'us' && plan.batter === 'out' && reachedOn(plan.result)
   const thrown: PlayEvent[] = [
     ...runningOut,
+    ...(batterOnBases ? [batterOutMark(plan.result, base.pitches.length)] : []),
     ...(plan.throws ?? []).filter((w) => !errAdv.has(w)).flatMap((w) => onPlay(w, 'throw')),
     ...[...errAdv].flatMap((w) => onPlay(w, 'err')),
   ]
@@ -573,8 +604,8 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const markOut = (row: number, rside: Side, isBatter: boolean) => {
     outs = Math.min(3, outs + 1)
     const r = rside === 'us' ? batting[row] : pitching[row]
-    if (!isBatter && rside === 'us') (r as BattingPA).outOnBase += 1
-    if (!isBatter && rside === 'us' && plan.runningOuts?.includes(row)) { const b = r as BattingPA; b.baserunningOuts = (b.baserunningOuts ?? 0) + 1 }
+    if ((!isBatter || batterOnBases) && rside === 'us') (r as BattingPA).outOnBase += 1
+    if (rside === 'us' && (isBatter ? batterOnBases && plan.batterRunningOut : plan.runningOuts?.includes(row))) { const b = r as BattingPA; b.baserunningOuts = (b.baserunningOuts ?? 0) + 1 }
     r.code = ROMAN[outs - 1]
   }
   const markRun = (row: number, rside: Side) => {

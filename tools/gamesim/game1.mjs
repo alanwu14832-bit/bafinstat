@@ -124,15 +124,35 @@ const check = async (label, want) => {
 // ================================================================ the game (the "video")
 // --- 1 上
 await us({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 8, traj: 'L', batter: 1 })                                  // S1 一安
-// 對方投手: the strip asks while we bat; answered after the first batter, so his plate appearance gets it too
+// 對方投手: the strip asks while we bat; answered after the first batter, so his plate appearance gets it too.
+// batch 15: the recorder taps 左投 by mistake, and corrects it to 右投 two plate appearances later (更正這位投手):
+// 「對方投手 N 球」 must not start again, and every saved row of ours must end up 右投 with no 對方換投 on the game page.
+const oppCount = async () => (await main.getByTitle(/對方現在這位投手投給我們的球數/).first().textContent().catch(() => ''))?.trim() ?? ''
 {
   const strip = main.getByRole('group', { name: '對方投手' })
   if (!(await strip.count())) notes.push('我隊打擊時沒有出現「對方投手是？」')
-  else { await strip.getByRole('button', { name: '右投', exact: true }).click(); await p.waitForTimeout(200) }
-  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「右投」後「對方投手是？」還在')
-  if (!(await main.getByRole('button', { name: '對方 右投', exact: true }).count())) notes.push('點了「右投」後沒有「對方 右投」按鈕')
+  else { await strip.getByRole('button', { name: '左投', exact: true }).click(); await p.waitForTimeout(200) }
+  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「左投」後「對方投手是？」還在')
+  if (!(await main.getByRole('button', { name: '對方 左投', exact: true }).count())) notes.push('點了「左投」後沒有「對方 左投」按鈕')
 }
 await us({ steps: ['B', 'B', { run: 1, ev: '盜壘' }, 'CS', 'IP'], result: '犧觸', loc: 1, runners: { 2: 3 }, batter: 'out' })  // S1 盜二；S2 犧觸 送上三
+{
+  const before = await oppCount()
+  if (before !== '對方投手 7 球') notes.push(`更正前「${before}」，應為「對方投手 7 球」`)
+  await main.getByRole('button', { name: '對方 左投', exact: true }).click(); await p.waitForTimeout(250)
+  const sheet = p.getByRole('dialog', { name: '對方投手' })
+  if ((await sheet.getByRole('button', { name: '更正這位投手' }).getAttribute('aria-pressed')) !== 'true') notes.push('對方投手視窗打開時不是預設「更正這位投手」')
+  await sheet.getByRole('group', { name: '左投或右投' }).getByRole('button', { name: '右投', exact: true }).click()
+  await sheet.getByRole('button', { name: '更正', exact: true }).click(); await p.waitForTimeout(250)
+  const after = await oppCount()
+  if (after !== before) notes.push(`更正成右投後「${after}」，球數不該重算（更正前「${before}」）`)
+  if (!(await main.getByRole('button', { name: '對方 右投', exact: true }).count())) notes.push('更正後沒有「對方 右投」按鈕')
+  const d = await draft()
+  const wrong = d.batting.filter((x) => x.oppHand !== 'R')
+  if (wrong.length) notes.push(`更正後還有 ${wrong.length} 個打席是對方左投`)
+  if (d.oppPitcherFrom) notes.push('更正這位投手被當成換投（oppPitcherFrom）')
+  log('更正對方投手', before, '→', after)
+}
 await us({ steps: ['IP'], result: '犧飛', loc: 9, runners: { 3: 'home' }, batter: 'out', rbi: 1 })            // S3 犧飛 1 分
 await us({ steps: ['B', 'B', 'B', 'B'], result: '保送' })                                                   // S4 保送
 await us({ steps: ['SS', 'SS', 'F', 'SS'], result: '三振' })                                                // S5 三振
@@ -245,6 +265,8 @@ else {
 }
 await dlg.getByRole('tab', { name: /逐球・打擊/ }).click(); await p.waitForTimeout(300)
 if (!(await dlg.getByText('對方先發・右投', { exact: true }).count())) fails.push('逐球・打擊沒有「對方先發・右投」')
+if (await dlg.getByText(/^對方換投・/).count()) fails.push('更正對方投手（左投→右投）後，逐球・打擊出現「對方換投」')
+if (await dlg.getByText(/左投/).count()) fails.push('更正對方投手後，逐球・打擊還有「左投」')
 log('對方投手／中繼:', fails.length ? JSON.stringify(fails) : 'ok')
 if (fails.length) process.exitCode = 1
 log('dialogs:', JSON.stringify(dialogs))

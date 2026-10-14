@@ -163,6 +163,8 @@ export interface PlayEvent {
 }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
   sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規',
+  // (on the play only, our batter: he reached, then was put out on that same play — record/timeline batterOutMark)
+  outPlay: '出局',
 }
 
 /** The opponent pitcher's throwing hand: L 左投 · R 右投 */
