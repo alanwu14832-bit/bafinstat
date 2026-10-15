@@ -87,6 +87,9 @@ export interface RecordState {
   /** where the opponent pitcher now came in (set on a 換投): our plate appearance (batting index) and how many of its
    *  pitches had been thrown before him, so his 用球 starts there even when the name and hand stay the same */
   oppPitcherFrom?: { row: number; pitches: number }
+  /** every 換投 of this game in order, the last one being oppPitcherFrom, with the pitcher who left: the Box Score
+   *  keeps each opponent pitcher's own row and 用球 even when two in a row have the same name and hand (右投, 右投) */
+  oppPitcherChanges?: Array<{ row: number; pitches: number; out: OppPitcher }>
   /** 記對方打者姓名 (opt-in per game) */
   oppNames?: boolean
   /** their batting order, 9 names ('' = not typed); a change in the middle of the game is a pinch hitter */
@@ -221,7 +224,10 @@ export function setOppPitcher(s: RecordState, p: OppPitcher): RecordState {
   const next: OppPitcher | undefined = name || p.hand ? { ...(name ? { name } : {}), ...(p.hand ? { hand: p.hand } : {}) } : undefined
   const out: RecordState = { ...s, oppPitcher: next }
   // a pitcher already on the mound: this is a 換投 (the sheet says so), even to one with the same hand or no name
-  if (s.oppPitcher && next) out.oppPitcherFrom = { row: s.batting.length, pitches: offense(s) === 'us' ? s.pitches.length : 0 }
+  if (s.oppPitcher && next) {
+    out.oppPitcherFrom = { row: s.batting.length, pitches: offense(s) === 'us' ? s.pitches.length : 0 }
+    out.oppPitcherChanges = [...(s.oppPitcherChanges ?? []), { ...out.oppPitcherFrom, out: s.oppPitcher }]
+  }
   if (!s.oppPitcher && next && offense(s) === 'us') {
     out.batting = s.batting.map((b) => (b.inning === s.inning && !b.oppHand && !b.oppPitcher ? { ...b, ...oppFields(next) } : b))
   }

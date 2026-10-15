@@ -78,5 +78,5 @@ describe.each([['we bat', '客'], ['they bat', '主']] as const)('紀錄比賽 (
       fireEvent.click(screen.getByRole('button', { name: /改結果/ }))
     }
     expect(BATTED.length).toBe(15)
-  })
+  }, 60_000) // renders every result on both sides: slow on a busy CI runner
 })

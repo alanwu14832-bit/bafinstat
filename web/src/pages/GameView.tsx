@@ -21,7 +21,7 @@ import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearanc
 import { gameRecap } from '../data/recap'
 import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
-import { battingLines, pitchingLines, resultText, shownLine, withLiveResult, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
+import { resultText, shownLine, withLiveResult, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
 import { PendingBadge, resultBadge } from '../components/ui/ResultBadge'
 import { mayBeLive } from '../data/liveGames'
 import { useLiveGames } from '../hooks/useLiveGames'
@@ -37,7 +37,8 @@ import { downloadGameImage } from '../lib/shareImage'
 import { siteUrl } from '../lib/siteUrl'
 import { gameMedia } from '../data/albums'
 import { gameShareText } from '../data/gameText'
-import { boxOrderOf, gameNotes, pitcherOrder } from '../data/gameNotes'
+import { gameNotes } from '../data/gameNotes'
+import { ourBattingBox, ourPitchingBox } from '../data/boxScore'
 import { hasOppName, oppBattingLines, oppTotals, type OppBattingLine } from '../data/opponent'
 import { buildScoresheet } from '../data/scoresheet'
 import { PBP_FILTER_LABEL, PBP_FILTERS, pbpFilterSets, type PbpFilter } from '../data/pbpFilter'
@@ -204,12 +205,9 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const pickBoxView = (v: BoxView) => { setBoxView(v); writeBoxView(v) }
   const [filter, setFilter] = useState<PbpFilter>('all')
   const editable = !current.game.isDemo ? extractGame(base, id) : null
-  const boxB = useMemo(() => {
-    const pas = s.dataset.batting.filter((p) => p.gameId === id)
-    // batting-order slot (a 代跑 who never batted sits in the slot he ran for), then first appearance
-    const at = boxOrderOf(pas)
-    return battingLines(s.dataset, pas).sort((a, b) => at(a.name) - at(b.name))
-  }, [id, s.dataset])
+  // batting-order slot (a 代跑 who never batted sits in the slot he ran for), then first appearance (data/boxScore.ts:
+  // the lines 即時比分's Box Score shows too)
+  const boxB = useMemo(() => ourBattingBox(s.dataset, s.dataset.batting.filter((p) => p.gameId === id)), [id, s.dataset])
   const pbpBat = useMemo(() => s.dataset.batting.filter((p) => p.gameId === id), [id, s.dataset])
   const pbpPit = useMemo(() => s.dataset.pitching.filter((p) => p.gameId === id), [id, s.dataset])
   // 獲勝機率: this game's events, its key plays, and WPA on the box score and the 逐球 rows
@@ -221,7 +219,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const [modelNote, setModelNote] = useState(false)
   const boxBatRows = useMemo(() => withWinBatting(boxB, pbpBat, win), [boxB, pbpBat, win])
   // pitchers in the order they pitched (not by innings)
-  const boxP = useMemo(() => { const order = pitcherOrder(pbpPit); return withWinPitching(pitchingLines(pbpPit, [current.game]), pbpPit, win).sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name)) }, [pbpPit, current.game, win])
+  const boxP = useMemo(() => withWinPitching(ourPitchingBox(pbpPit, [current.game]), pbpPit, win), [pbpPit, current.game, win])
   const oppLines = useMemo(() => oppBattingLines(pbpPit), [pbpPit])
   const oppTot = useMemo(() => oppTotals(pbpPit), [pbpPit])
   const oppNamed = useMemo(() => pbpPit.some(hasOppName), [pbpPit])
