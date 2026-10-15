@@ -7,10 +7,10 @@
 import * as XLSX from 'xlsx'
 import { cleanErrors, cleanOppErrors, errorsOf, errorsText, oppErrorList } from './errors'
 import { parsePlays, playsText } from './plays'
-import { MISSING_BALL_TAGS, missingBattedBall, missingBattedBallCounts, type BattingPA, type Dataset, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type HomeAway, type PitchingPA, type Player, type Registration } from './types'
+import { MISSING_BALL_TAGS, missingBattedBall, missingBattedBallCounts, type BattingPA, type Dataset, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type HomeAway, type PitchingPA, type Player, type Registration, type SubCharges } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
 import { cleanHand, cleanLoc, normalizeDataset } from './normalize'
-import { parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
+import { CHARGE_COUNTS, chargesOrNone, parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
 import { sortRegistrations } from './registrations'
 
 type Row = Record<string, unknown>
@@ -179,9 +179,26 @@ const splitList = (v: unknown) => str(v).split(LIST_SEP).map((x) => x.trim()).fi
 
 /** `1.甲(CF)` · `P.壬(P)` (a starter without batting order: the pitcher who does not bat under a DH) · `甲` */
 const STARTER_RE = /^(?:([0-9０-９]+)\s*[.．]?|([Pp])\s*[.．])?\s*(.+?)\s*(?:[（(]\s*([^（）()]*?)\s*[)）])?$/
-/** `5上 第1棒 代打 戊 替 甲(PH)` · `6下 換投 己 替 壬(P)`; 局, 第N棒 (1-based slot) and ` 替 X` are optional */
+/** `5上 第1棒 代打 戊 替 甲(PH)` · `6下 換投 己 替 壬(P)` · `3上 第6棒 守備 寅 替 丁(SS) 第2打席後` (a change in the middle
+ *  of our fielding half, DayRosterSub.row) · `… 第2打席後 〔換人前 失誤SS 阻殺1〕` / `〔換人後 失誤SS〕` (a change in the
+ *  middle of a plate appearance, DayRosterSub before / after); 局, 第N棒 (1-based slot), ` 替 X`, 第N打席後 and the
+ *  〔…〕 parts are optional */
 const D = '[0-9０-９]+'
-const subRe = (sep: string) => new RegExp(`^(${D})\\s*局?\\s*([上下])\\s*(?:第\\s*(${D})\\s*棒\\s*)?(代打|代跑|守備|換投)\\s*(?:第\\s*(${D})\\s*棒\\s*)?(.+?)(?:${sep}替${sep}(.*?))?\\s*(?:[（(]\\s*([^（）()]*?)\\s*[)）])?$`)
+const subRe = (sep: string) => new RegExp(`^(${D})\\s*局?\\s*([上下])\\s*(?:第\\s*(${D})\\s*棒\\s*)?(代打|代跑|守備|換投)\\s*(?:第\\s*(${D})\\s*棒\\s*)?(.+?)(?:${sep}替${sep}(.*?))?\\s*(?:[（(]\\s*([^（）()]*?)\\s*[)）])?(?:\\s*第\\s*(${D})\\s*打席後)?(?:\\s*〔換人前\\s*([^〕]*?)\\s*〕)?(?:\\s*〔換人後\\s*([^〕]*?)\\s*〕)?$`)
+/** DayRosterSub before / after in a 替補紀錄 cell: `失誤SS 被盜1 阻殺1 捕逸1 牽制出局1`, space-separated (the cell's list
+ *  separators 、；, stay between substitutions) */
+const CHARGE_LABEL = { sba: '被盜', cs: '阻殺', pb: '捕逸', pk: '牽制出局' } as const
+const chargesText = (c: SubCharges) => [...(c.errors ?? []).map((p) => `失誤${p}`), ...CHARGE_COUNTS.flatMap((k) => (c[k] ? [`${CHARGE_LABEL[k]}${c[k]}`] : []))].join(' ')
+function chargesFromText(t: string | undefined): SubCharges | undefined {
+  if (!t) return undefined
+  const c: SubCharges = { errors: [] }
+  for (const w of t.split(/\s+/)) {
+    const e = /^失誤(.+)$/.exec(w)
+    if (e) { c.errors!.push(e[1].toUpperCase()); continue }
+    for (const k of CHARGE_COUNTS) { const m = new RegExp(`^${CHARGE_LABEL[k]}(${D})$`).exec(w); if (m) c[k] = (c[k] ?? 0) + digits(m[1]) }
+  }
+  return chargesOrNone(c)
+}
 // The export always writes ` 替 ` with spaces, so match that first: a name containing 替 (代替者、張替) stays whole.
 // Only when that finds no replaced player but 替 is there (hand-typed `己替壬`) fall back to splitting without spaces.
 const SUB_STRICT = subRe('\\s+')
@@ -194,7 +211,7 @@ export function dayRosterCells(r?: GameDayRoster): { 先發名單: string; 板�
   return {
     先發名單: r.starters.map((s) => `${s.order ?? 'P'}.${s.name}(${s.pos})`).join('、'),
     板凳: r.bench.join('、'),
-    替補紀錄: (r.subs ?? []).map((s) => `${s.inning}${HALF_LABEL[s.half]}${s.slot === undefined ? '' : ` 第${s.slot + 1}棒`} ${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}(${s.pos})`).join('；'),
+    替補紀錄: (r.subs ?? []).map((s) => `${s.inning}${HALF_LABEL[s.half]}${s.slot === undefined ? '' : ` 第${s.slot + 1}棒`} ${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}(${s.pos})${s.row ? ` 第${s.row}打席後` : ''}${s.before ? ` 〔換人前 ${chargesText(s.before)}〕` : ''}${s.after ? ` 〔換人後 ${chargesText(s.after)}〕` : ''}`).join('；'),
     允許再上場: r.reentry ? '是' : '',
   }
 }
@@ -210,7 +227,7 @@ export function dayRosterFromCells(row: Row): GameDayRoster | undefined {
     const m = matchSub(t)
     if (!m) return []
     const slot = m[3] ?? m[5]
-    return [{ kind: KIND_BY_LABEL[m[4]], in: m[6], out: m[7] ?? '', pos: m[8] ?? '', inning: digits(m[1]), half: m[2] === '下' ? 'bottom' : 'top', ...(slot ? { slot: digits(slot) - 1 } : {}) }]
+    return [{ kind: KIND_BY_LABEL[m[4]], in: m[6], out: m[7] ?? '', pos: m[8] ?? '', inning: digits(m[1]), half: m[2] === '下' ? 'bottom' : 'top', ...(slot ? { slot: digits(slot) - 1 } : {}), ...(m[9] ? { row: digits(m[9]) } : {}), before: chargesFromText(m[10]), after: chargesFromText(m[11]) }]
   })
   return parseDayRoster({ starters, bench: splitList(row['板凳']), subs, reentry: /^(是|y|yes|true|1|v|✓|○|o)$/i.test(str(row['允許再上場'])) })
 }

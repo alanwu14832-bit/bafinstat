@@ -47,7 +47,7 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
     for (const k of ['wp', 'pb'] as const) if (b.extras[k] > a.extras[k] && !plays.length) parts.push(k === 'wp' ? '暴投' : '捕逸')
   }
   for (const x of (b.subs ?? []).slice((a.subs ?? []).length)) {
-    parts.push(x.kind === 'P' ? `換投：${x.in} 接替 ${x.out}` : `${x.in} ${x.kind === 'PH' ? '代打' : x.kind === 'PR' ? '代跑' : '換上'}（換下 ${x.out}${x.kind === 'DEF' && x.pos ? `，守 ${x.pos}` : ''}）`)
+    parts.push(x.kind === 'DEF' && x.in === x.out ? `${x.in} 改守 ${x.pos}` : x.kind === 'P' ? `換投：${x.in} 接替 ${x.out}` : `${x.in} ${x.kind === 'PH' ? '代打' : x.kind === 'PR' ? '代跑' : '換上'}（換下 ${x.out}${x.kind === 'DEF' && x.pos ? `，守 ${x.pos}` : ''}）`)
   }
   // 對方代跑: a runner's name changed on the row where he reached (「對方代跑：12號 替 第 3 棒 王」)
   let oppPinch = false

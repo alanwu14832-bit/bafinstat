@@ -3,7 +3,7 @@
  * (game.dayRoster, cloud column games.day_roster), so every save path carries it. Games without one (recorded
  * before this existed, imported, demo) fall back to what their plate-appearance rows imply.
  */
-import type { Dataset, DayRosterSub, Game, GameDayRoster } from './types'
+import type { Dataset, DayRosterSub, Game, GameDayRoster, SubCharges } from './types'
 
 /** The migration a Supabase project needs for day rosters and registration lists. */
 export const ROSTERS_MIGRATION = 'supabase/migrations/2026-09-26_rosters.sql'
@@ -26,6 +26,36 @@ const posOf = (v: unknown): string => (typeof v === 'string' ? v.trim().toUpperC
 const intOf = (v: unknown, min: number): number | undefined => {
   const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN
   return Number.isFinite(n) && n >= min ? Math.round(n) : undefined
+}
+
+/** The counts of SubCharges (besides its errors). */
+export const CHARGE_COUNTS = ['sba', 'cs', 'pb', 'pk'] as const
+/** A SubCharges with only what it has (undefined when it has nothing). */
+export function chargesOrNone(c: SubCharges): SubCharges | undefined {
+  const out: SubCharges = {}
+  if (c.errors?.length) out.errors = [...c.errors]
+  for (const k of CHARGE_COUNTS) if (c[k] && c[k]! > 0) out[k] = c[k]
+  return Object.keys(out).length ? out : undefined
+}
+/** `a` without `b` (the errors one position at a time). */
+export function chargesMinus(a: SubCharges, b?: SubCharges): SubCharges {
+  const errors = [...(a.errors ?? [])]
+  for (const e of b?.errors ?? []) { const k = errors.indexOf(e); if (k >= 0) errors.splice(k, 1) }
+  const out: SubCharges = { errors }
+  for (const k of CHARGE_COUNTS) out[k] = Math.max(0, (a[k] ?? 0) - (b?.[k] ?? 0))
+  return out
+}
+/** All of them together. */
+export function chargesSum(list: Array<SubCharges | undefined>): SubCharges {
+  const out: SubCharges = { errors: list.flatMap((c) => c?.errors ?? []) }
+  for (const k of CHARGE_COUNTS) out[k] = list.reduce((a, c) => a + (c?.[k] ?? 0), 0)
+  return out
+}
+const chargesFrom = (v: unknown): SubCharges | undefined => {
+  if (!isObj(v)) return undefined
+  const c: SubCharges = { errors: (Array.isArray(v.errors) ? v.errors : []).map(posOf).filter(Boolean) }
+  for (const k of CHARGE_COUNTS) c[k] = intOf(v[k], 1)
+  return chargesOrNone(c)
 }
 
 /**
@@ -54,8 +84,11 @@ export function parseDayRoster(v: unknown): GameDayRoster | undefined {
     const name = nameOf(x.in)
     if (!name) continue
     const k = typeof x.kind === 'string' ? x.kind.trim().toUpperCase() : ''
-    const slot = intOf(x.slot, 0)
-    subs.push({ kind: (SUB_KINDS.has(k) ? k : 'DEF') as DayRosterSub['kind'], in: name, out: nameOf(x.out), pos: posOf(x.pos), inning: intOf(x.inning, 0) ?? 0, half: x.half === 'bottom' ? 'bottom' : 'top', ...(slot === undefined ? {} : { slot }) })
+    const slot = intOf(x.slot, 0), row = intOf(x.row, 1)
+    subs.push({ kind: (SUB_KINDS.has(k) ? k : 'DEF') as DayRosterSub['kind'], in: name, out: nameOf(x.out), pos: posOf(x.pos), inning: intOf(x.inning, 0) ?? 0, half: x.half === 'bottom' ? 'bottom' : 'top', ...(slot === undefined ? {} : { slot }), ...(row === undefined ? {} : { row }) })
+    const before = chargesFrom(x.before), after = chargesFrom(x.after)
+    if (before) subs[subs.length - 1].before = before
+    if (after) subs[subs.length - 1].after = after
   }
   if (!starters.length && !bench.length && !subs.length) return undefined
   // subs is left out when empty so a roster without substitutions looks the same before and after a save
@@ -84,8 +117,78 @@ export function renameInDayRoster<T extends GameDayRoster | undefined>(r: T, ren
   return (parseDayRoster(next) ?? next) as T
 }
 
+/** A position-only change (守備調動, 「只改守位」 on 紀錄比賽): the same player in and out, `pos` his new position. */
+export const isMove = (s: Pick<DayRosterSub, 'in' | 'out'>): boolean => !!s.in && s.in === s.out
+
+const FIELD = new Set(['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'])
+const halfOrd = (inning: number, half: 'top' | 'bottom') => inning * 2 + (half === 'bottom' ? 1 : 0)
+
+/** Who stood where in one half-inning: position → player and player → position (field positions only; P included);
+ *  who was in the game (the batting order and the pitcher, positioned or not) and each one's batting slot (0 = leadoff). */
+export interface Defense { byPos: Map<string, string>; byName: Map<string, string>; inGame: Set<string>; slot: Map<string, number> }
+
+/**
+ * 守備陣容 over the game, from the 當日登錄名單: the starters' positions, then every substitution in the order it was
+ * logged, up to and including the half-inning asked for (a change logged while we bat counts from our next fielding
+ * half). A newcomer with a position takes it; a 代打／代跑 (PH / PR) who stays in takes the position of the man he
+ * replaced until a later change puts someone else there or moves him; a 守備調動 (isMove) moves the player; a double
+ * switch or a swap is just several of these. When two players end up at one position, the later change wins.
+ * A change logged in the middle of our fielding half (`row`) counts from that row on: `row` asks for the alignment at
+ * that half's row (0 = its first opponent row); left out, every change of the half counts (its last alignment).
+ * `stop` (the alignment just before or just after one change, DayRosterSub before / after): the changes up to that one
+ * (subs[stop.index]), it included or not.
+ * A 換投 takes the old pitcher off the mound only (he stays at a field position he moved to before).
+ * undefined when the roster has no starter with a field position (old games: callers keep their own rules).
+ */
+export interface DefenseStop { index: number; include: boolean }
+export function defenseTimeline(r?: Pick<GameDayRoster, 'starters' | 'subs'>): ((inning: number, half: 'top' | 'bottom', row?: number, stop?: DefenseStop) => Defense) | undefined {
+  if (!r?.starters.some((s) => FIELD.has(s.pos))) return undefined
+  const subs = (r.subs ?? []).map((s, i) => ({ s, at: halfOrd(s.inning, s.half), i })).sort((a, b) => a.at - b.at || a.i - b.i)
+  return (inning, half, row = Infinity, stop) => {
+    const when = halfOrd(inning, half)
+    const where = new Map<string, { pos: string; seq: number }>()
+    const inGame = new Set<string>()
+    const slot = new Map<string, number>()
+    let seq = 0
+    for (const s of r.starters) {
+      inGame.add(s.name)
+      if (s.order !== undefined) slot.set(s.name, s.order - 1)
+      if (FIELD.has(s.pos)) where.set(s.name, { pos: s.pos, seq: seq++ })
+    }
+    function apply(s: DayRosterSub) {
+      if (isMove(s)) { if (FIELD.has(s.pos)) where.set(s.in, { pos: s.pos, seq: seq++ }); else where.delete(s.in); return }
+      const prev = s.out ? where.get(s.out) : undefined
+      // (a 換投 whose old pitcher already moved to a field position leaves him there, in the game)
+      const stays = s.kind === 'P' && !!prev && prev.pos !== 'P'
+      if (s.out && !stays) {
+        where.delete(s.out); inGame.delete(s.out)
+        if (!slot.has(s.in) && slot.has(s.out)) slot.set(s.in, slot.get(s.out)!)
+        slot.delete(s.out)
+      }
+      if (!slot.has(s.in) && s.slot !== undefined && s.slot >= 0 && ![...slot.values()].includes(s.slot)) slot.set(s.in, s.slot)
+      inGame.add(s.in)
+      if (FIELD.has(s.pos)) where.set(s.in, { pos: s.pos, seq: seq++ })
+      // (keeps the old claim's order: anyone set at that position later wins over the inherited claim)
+      else if (prev && !stays) where.set(s.in, prev)
+    }
+    for (const { s, at, i } of subs) {
+      if (at > when) break
+      const last = stop?.index === i
+      if (last && !stop.include) break
+      if (!(at === when && s.row !== undefined && row < s.row)) apply(s)
+      if (last) break
+    }
+    const best = new Map<string, { name: string; seq: number }>()
+    for (const [name, w] of where) { const b = best.get(w.pos); if (!b || w.seq > b.seq) best.set(w.pos, { name, seq: w.seq }) }
+    const byPos = new Map([...best].map(([pos, b]) => [pos, b.name]))
+    return { byPos, byName: new Map([...byPos].map(([pos, name]) => [name, pos])), inGame, slot }
+  }
+}
+
 /** One player line of the 當日登錄名單 view. `kind` / `replaced` only come from a recorded substitution log. */
-export interface AppearanceRow { name: string; pos?: string; order?: number; kind?: DayRosterSub['kind']; inning?: number; half?: 'top' | 'bottom'; replaced?: string }
+export interface AppearanceRow { name: string; pos?: string; order?: number; kind?: DayRosterSub['kind']; inning?: number; half?: 'top' | 'bottom'; replaced?: string
+  /** a 守備調動 (isMove): he only changed position, to `pos` */
+  move?: true }
 export interface GameAppearances {
   starters: AppearanceRow[]
   /** substitutions in the order they happened (one row per logged substitution, so a starter who moves to the mound
@@ -135,7 +238,7 @@ export function gameAppearances(ds: Dataset, game: Game): GameAppearances {
     if (sp && !names.has(sp)) starters.push({ name: sp, pos: 'P' })
   }
   const starterNames = new Set(starters.map((s) => s.name))
-  const subs: AppearanceRow[] = (r?.subs ?? []).map((s) => ({ name: s.in, pos: s.pos || undefined, kind: s.kind, inning: s.inning || undefined, half: s.half, replaced: s.out || undefined }))
+  const subs: AppearanceRow[] = (r?.subs ?? []).map((s) => ({ name: s.in, pos: s.pos || undefined, kind: s.kind, inning: s.inning || undefined, half: s.half, ...(isMove(s) ? { move: true as const } : { replaced: s.out || undefined }) }))
   const logged = new Set(subs.map((s) => s.name))
   for (const name of entered) {
     if (starterNames.has(name) || logged.has(name)) continue

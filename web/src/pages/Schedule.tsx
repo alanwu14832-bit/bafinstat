@@ -11,6 +11,7 @@ import { Field, Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { useDataStore } from '../store/data'
 import { useFilterOptions } from '../hooks/useStats'
+import { useRegistrationMoveNote } from '../hooks/useRegistrationMoves'
 import { nextGameId } from '../record/model'
 import { scheduledGames } from '../data/schedule'
 import { TEAM_NAME } from '../data/seed'
@@ -38,10 +39,12 @@ function calendarUrl(g: Game): string {
 function GameForm({ initial, onSave, onCancel, onDelete }: { initial: Game | null; onSave: (g: Game) => Promise<void>; onCancel: () => void; onDelete?: () => Promise<void> }) {
   const base = useDataStore((s) => s.base)
   const opts = useFilterOptions()
-  const [g, setG] = useState<Game>(initial ?? { id: '', date: today(), tournament: opts.tournaments[0] ?? '友誼賽', opponent: '', homeAway: '主', innings: TEAM.innings, status: 'scheduled' })
+  const [g, setG] = useState<Game>(initial ?? { id: '', date: today(), tournament: opts.tournamentNames[0] ?? '友誼賽', opponent: '', homeAway: '主', innings: TEAM.innings, status: 'scheduled' })
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const set = <K extends keyof Game>(k: K, v: Game[K]) => setG((x) => ({ ...x, [k]: v }))
+  // renaming the 杯賽 of a scheduled game: its 報名名單 follows on save (one line says so)
+  const regMove = useRegistrationMoveNote(initial ? g : null)
   const submit = async () => {
     setError(null)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(g.date)) { setError('請選日期'); return }
@@ -52,12 +55,12 @@ function GameForm({ initial, onSave, onCancel, onDelete }: { initial: Game | nul
   }
   return (
     <Card still title={initial ? '編輯賽程' : '新增賽程'} subtitle="比賽當天在「紀錄比賽」選這場就能直接開始記，不用重填">
-      <datalist id="sch-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
+      <datalist id="sch-tournaments">{opts.tournamentNames.map((t) => <option key={t} value={t} />)}</datalist>
       <datalist id="sch-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Field label="日期"><Input type="date" value={g.date} onChange={(e) => set('date', e.target.value)} className="tnum" /></Field>
         <Field label="時間"><Input type="time" value={g.time ?? ''} onChange={(e) => set('time', e.target.value || undefined)} className="tnum" /></Field>
-        <Field label="杯賽"><Input list="sch-tournaments" value={g.tournament} onChange={(e) => set('tournament', e.target.value)} /></Field>
+        <Field label="杯賽" hint={regMove || undefined}><Input list="sch-tournaments" value={g.tournament} onChange={(e) => set('tournament', e.target.value)} /></Field>
         <Field label="對手"><Input list="sch-opponents" value={g.opponent} onChange={(e) => set('opponent', e.target.value)} placeholder="必填" /></Field>
         <Field label="主客"><Select value={g.homeAway} onChange={(e) => set('homeAway', e.target.value as Game['homeAway'])} className="w-full" options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} /></Field>
         <Field label="場地"><Input value={g.venue ?? ''} onChange={(e) => set('venue', e.target.value)} placeholder="例如 台大棒球場" /></Field>

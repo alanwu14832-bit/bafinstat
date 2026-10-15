@@ -217,7 +217,9 @@ export function subText(sub: Pick<DayRosterSub, 'kind' | 'in' | 'out' | 'pos'>):
     case 'P': return `更換投手：${sub.out} → ${sub.in}`
     case 'PH': return `更換代打：${sub.out} → ${sub.in}`
     case 'PR': return `更換代跑：${sub.out} → ${sub.in}`
-    default: return `更換守備：${sub.out} → ${sub.in}${FIELDER[sub.pos] ? `（${FIELDER[sub.pos]}）` : ''}`
+    // (a position-only change: the same player in and out)
+    default: if (sub.in && sub.in === sub.out) return `守備異動：${sub.in} 改守${FIELDER[sub.pos] ?? (sub.pos || '其他位置')}`
+      return `更換守備：${sub.out} → ${sub.in}${FIELDER[sub.pos] ? `（${FIELDER[sub.pos]}）` : ''}`
   }
 }
 /** 「右投 王」, 「左投」, 「王」, '' */

@@ -14,11 +14,11 @@
  *  - fills game.innings when blank, and returns human-readable warnings per game
  *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM'
  */
-import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player } from './types'
+import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player, type SubCharges } from './types'
 import { auditGame, type AuditPlace } from './audit'
 import { outsCredited } from './stats'
 import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
-import { parseDayRoster } from './gameRoster'
+import { CHARGE_COUNTS, defenseTimeline, parseDayRoster, type DefenseStop } from './gameRoster'
 import { cleanTime } from './gameTime'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
@@ -84,30 +84,141 @@ function fillInnings<T extends Seq>(rows: T[]): { rows: T[]; filled: number } {
   return { rows, filled }
 }
 
-/** Fielding lines for a game that has none: everyone who took a fielding position in the batting log (subs included,
- *  pitchers come from the pitching log), errors attributed by the opponent's 失誤 batted-ball location. */
+/** The half-inning we field: the top at home, the bottom away. */
+export const fieldingHalf = (game: Pick<Game, 'homeAway'>): 'top' | 'bottom' => (game.homeAway === '客' ? 'bottom' : 'top')
+
+/**
+ * Who stood at each position when we fielded an inning (data/gameRoster defenseTimeline over the 當日登錄名單), cached;
+ * `row` = which of that inning's opponent rows (0 = the first, rowsInInning), for a change made in the middle of the
+ * half; left out, the half's last alignment. undefined for a game without a roster (or without starters' positions),
+ * which keeps the older rules.
+ */
+export function fieldersOf(game: Pick<Game, 'dayRoster' | 'homeAway'>): ((inning: number, row?: number, stop?: DefenseStop) => Map<string, string>) | undefined {
+  const timeline = defenseTimeline(game.dayRoster)
+  if (!timeline) return undefined
+  const half = fieldingHalf(game)
+  const cache = new Map<string, Map<string, string>>()
+  return (inning, row, stop) => {
+    const k = `${inning}|${row ?? ''}|${stop ? `${stop.index}${stop.include ? '+' : '-'}` : ''}`
+    let m = cache.get(k)
+    if (!m) { m = timeline(inning, half, row, stop).byPos; cache.set(k, m) }
+    return m
+  }
+}
+
+/** One opponent row's errors and catcher plays (盜壘 allowed, 阻殺, 捕逸, 牽制出局), each with who stood where when it
+ *  happened (`at`, position → name; undefined for a game without the 當日登錄名單's positions). */
+export interface RowCharges {
+  /** errorsOf(row).positions, in that order */
+  errors: Array<{ pos: string; at?: Map<string, string> }>
+  unknown: number
+  catching: Array<{ sba: number; cs: number; pb: number; pk: number; at?: Map<string, string> }>
+}
+/**
+ * Each opponent row's errors and catcher plays with the alignment they were made under: the row's own (fieldersOf at
+ * its place in the inning), except for what a change made in the middle of that plate appearance says came before it
+ * (DayRosterSub.before: the alignment just before that change; the row's first errors at those positions) or, when the
+ * half ended before the next plate appearance was sent, after it (DayRosterSub.after, on the half's last row: the
+ * alignment just after that change; the row's last errors at those positions). A marker the row no longer has (edited
+ * since) only takes what is there.
+ */
+export function rowCharges(game: Pick<Game, 'dayRoster' | 'homeAway'>, pitching: PitchingPA[]): RowCharges[] {
+  const fielders = fieldersOf(game)
+  const rows = rowsInInning(pitching)
+  const half = fieldingHalf(game)
+  const subs = game.dayRoster?.subs ?? []
+  const lastRow = new Map<number, number>()
+  rows.forEach((r, i) => lastRow.set(pitching[i].inning, Math.max(r, lastRow.get(pitching[i].inning) ?? 0)))
+  return pitching.map((p, i) => {
+    const e = errorsOf(p)
+    const own = fielders?.(p.inning, rows[i])
+    const errors: RowCharges['errors'] = e.positions.map((pos) => ({ pos, at: own }))
+    const rest = { sba: p.sba || 0, cs: p.cs || 0, pb: p.pb || 0, pk: p.pk || 0 }
+    const catching: RowCharges['catching'] = []
+    if (fielders) {
+      const taken = new Set<number>()
+      const take = (c: SubCharges, at: Map<string, string>, fromEnd: boolean) => {
+        for (const pos of c.errors ?? []) {
+          const free = errors.flatMap((x, k) => (x.pos === pos && !taken.has(k) ? [k] : []))
+          const k = fromEnd ? free.at(-1) : free[0]
+          if (k !== undefined) { errors[k] = { pos, at }; taken.add(k) }
+        }
+        const part = { sba: 0, cs: 0, pb: 0, pk: 0, at }
+        for (const key of CHARGE_COUNTS) { part[key] = Math.min(rest[key], c[key] ?? 0); rest[key] -= part[key] }
+        if (CHARGE_COUNTS.some((key) => part[key])) catching.push(part)
+      }
+      subs.forEach((x, index) => {
+        if (x.inning !== p.inning || x.half !== half) return
+        if (x.before && (x.row ?? 0) === rows[i]) take(x.before, fielders(p.inning, rows[i], { index, include: false }), false)
+      })
+      // (the last row of the half only: later changes' `after` first, each taking the last errors left)
+      if (lastRow.get(p.inning) === rows[i]) {
+        for (let index = subs.length - 1; index >= 0; index--) {
+          const x = subs[index]
+          if (x.inning === p.inning && x.half === half && x.after && x.row !== undefined && x.row - 1 === rows[i]) take(x.after, fielders(p.inning, x.row, { index, include: true }), true)
+        }
+      }
+    }
+    catching.unshift({ ...rest, at: own })
+    return { errors, unknown: e.unknown, catching }
+  })
+}
+
+/** Each opponent row's place in its inning (0 = the inning's first row), in the order given: what fieldersOf's `row` asks. */
+export function rowsInInning(pitching: Pick<PitchingPA, 'inning'>[]): number[] {
+  const n = new Map<number, number>()
+  return pitching.map((p) => { const k = n.get(p.inning) ?? 0; n.set(p.inning, k + 1); return k })
+}
+
+/**
+ * Fielding lines for a game that has none, errors charged to the player who erred.
+ * With the 當日登錄名單 (fieldersOf): one line per player and position he stood at (a 代打 who stayed in at SS, a 守備調動
+ * SS→2B is two lines), 局數 = the innings he stood there (the whole game's 局數 when he never moved), and each error
+ * at a position goes to whoever stood there in that half-inning. Without one: everyone who took a fielding position in
+ * the batting log, errors by the older rule below. Pitchers come from the pitching log either way.
+ */
 export function deriveFielding(game: Game, batting: BattingPA[], pitching: PitchingPA[]): { lines: FieldingLine[]; unknownErrors: number } {
   // when: inning × 2 (+1 for the bottom half). We field the top half at home, the bottom half away.
   const at = (inning: number, half: 'top' | 'bottom') => inning * 2 + (half === 'bottom' ? 1 : 0)
-  const fieldHalf = game.homeAway === '客' ? 'bottom' : 'top'
+  const fieldHalf = fieldingHalf(game)
   const batHalf = fieldHalf === 'top' ? 'bottom' : 'top'
-  const fieldErrors: Array<{ pos: string; when: number }> = []
+  const fieldErrors: Array<{ pos: string; when: number; there?: string }> = []
   // a pitcher's error goes to whoever was pitching then
   const errByPitcher = new Map<string, number>()
   let unknownErrors = 0
   let pitcherUnknown = 0   // a P error on a row without the pitcher's name: the starter's
-  for (const p of pitching) {
-    const e = errorsOf(p)
+  const charges = rowCharges(game, pitching)
+  for (const [i, p] of pitching.entries()) {
+    const e = charges[i]
     unknownErrors += e.unknown
-    for (const pos of e.positions) {
+    for (const { pos, at: who } of e.errors) {
       if (pos === 'P') { if (p.pitcher) errByPitcher.set(p.pitcher, (errByPitcher.get(p.pitcher) ?? 0) + 1); else pitcherUnknown++ }
-      else fieldErrors.push({ pos, when: at(p.inning, fieldHalf) })
+      else fieldErrors.push({ pos, when: at(p.inning, fieldHalf), there: who?.get(pos) })
     }
   }
   const innings = game.innings ?? Math.max(1, ...batting.map((p) => p.inning), ...pitching.map((p) => p.inning))
   const blank = { po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 }
   const lines: FieldingLine[] = []
-  const seen = new Set<string>()
+  const fielders = fieldersOf(game)
+  const lineOf = (player: string, pos: string) => lines.find((l) => l.player === player && l.pos === pos)
+  if (fielders) {
+    // starters first (batting order), then everyone else in the order they came in
+    const rank = new Map<string, number>()
+    for (const n of [...(game.dayRoster?.starters ?? []).map((x) => x.name), ...(game.dayRoster?.subs ?? []).map((x) => x.in)]) if (!rank.has(n)) rank.set(n, rank.size)
+    const halves = new Map<string, { player: string; pos: string; n: number }>()
+    // the innings we fielded (with any opponent row; all of them when the game has no pitching rows)
+    const fielded = Array.from({ length: innings }, (_, i) => i + 1).filter((n) => !pitching.length || pitching.some((p) => p.inning === n))
+    for (const inning of fielded) {
+      for (const [pos, player] of [...fielders(inning)].sort((a, b) => (rank.get(a[1]) ?? 1e9) - (rank.get(b[1]) ?? 1e9))) {
+        if (pos === 'P') continue
+        const k = `${player}\u0000${pos}`
+        const h = halves.get(k)
+        if (h) h.n++; else halves.set(k, { player, pos, n: 1 })
+      }
+    }
+    for (const h of halves.values()) lines.push({ gameId: game.id, player: h.player, pos: h.pos, innings: h.n === fielded.length ? innings : h.n, ...blank, note: '由登錄名單推定' })
+  }
+  const seen = new Set<string>(lines.map((l) => l.player))
   for (const p of batting) {
     if (!p.batter || seen.has(p.batter) || !p.pos || NON_FIELD.has(p.pos) || p.pos === 'P') continue
     seen.add(p.batter)
@@ -120,7 +231,7 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
   const starters = new Set(game.dayRoster?.starters.map((x) => x.name) ?? [])
   const firstPA = (name: string) => Math.min(...batting.filter((b) => b.batter === name).map((b) => at(b.inning, batHalf)))
   const entry = (name: string) => { if (starters.has(name)) return 0; const s = subs.find((x) => x.in === name); return s ? at(s.inning, s.half) : firstPA(name) }
-  const exit = (name: string) => { const s = subs.find((x) => x.out === name); return s ? at(s.inning, s.half) : Infinity }
+  const exit = (name: string) => { const s = subs.find((x) => x.out === name && x.in !== name); return s ? at(s.inning, s.half) : Infinity }
   // nobody at that position in the batting log (a defensive sub who never batted): the 當日登錄名單 names him
   const rosterAt = (pos: string, when: number): string | undefined => {
     const who = [...(game.dayRoster?.starters ?? []).filter((x) => x.pos === pos).map((x) => ({ name: x.name, from: 0 })),
@@ -128,6 +239,14 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
     return (who.filter((x) => x.from <= when).sort((a, b) => b.from - a.from)[0] ?? who[0])?.name
   }
   for (const err of fieldErrors) {
+    // whoever stood there in that half-inning (the 當日登錄名單 with every change logged)
+    const there = err.there
+    if (there) {
+      let l = lineOf(there, err.pos)
+      if (!l) { l = { gameId: game.id, player: there, pos: err.pos, innings: 0, ...blank, note: '由登錄名單推定' }; lines.push(l) }
+      l.e++; l.note = '失誤依守位推定'
+      continue
+    }
     let cands = lines.filter((l) => l.pos === err.pos)
     if (!cands.length) {
       const name = rosterAt(err.pos, err.when)
@@ -158,11 +277,19 @@ const FLY = new Set(['內飛', '外飛', '界外飛', '犧飛'])
  * Credit PO / A / DP to fielding lines from the opponent's plate appearances. Fielders are looked up by the
  * position they played (first line at that position); pitchers by name. Returns how many outs could not be placed.
  */
-export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { credited: number; unplaced: number } {
-  const byPos = new Map<string, FieldingLine>()
-  for (const l of lines) if (l.pos && l.pos !== 'P' && !byPos.has(l.pos)) byPos.set(l.pos, l)
+export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?: Game): { credited: number; unplaced: number } {
+  const first = new Map<string, FieldingLine>()
+  for (const l of lines) if (l.pos && l.pos !== 'P' && !first.has(l.pos)) first.set(l.pos, l)
   const byPitcher = new Map<string, FieldingLine>()
   for (const l of lines) if (l.pos === 'P' && !byPitcher.has(l.player)) byPitcher.set(l.player, l)
+  // with the 當日登錄名單: the line of whoever stood at that position in this row's inning (fieldersOf)
+  const charges = game ? rowCharges(game, pitching) : undefined
+  let here: Map<string, string> | undefined
+  const lineAt = (m: Map<string, string> | undefined, pos: string): FieldingLine | undefined => {
+    const who = m?.get(pos)
+    return (who ? lines.find((l) => l.player === who && l.pos === pos) : undefined) ?? first.get(pos)
+  }
+  const byPos = { get: (pos: string) => lineAt(here, pos) }
   let credited = 0, unplaced = 0
   const at = (n: number | undefined, pitcher: string): FieldingLine | undefined => {
     if (!n) return undefined
@@ -172,7 +299,8 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { cr
   const po = (l?: FieldingLine) => { if (l) { l.po++; credited++ } else unplaced++ }
   const a = (l?: FieldingLine) => { if (l) l.a++ }
   const dp = (...ls: Array<FieldingLine | undefined>) => { for (const l of ls) if (l) l.dp++ }
-  for (const p of pitching) {
+  for (const [i, p] of pitching.entries()) {
+    here = charges?.[i].catching[0].at
     const r = p.result
     const first = byPos.get('1B')
     // 三振：捕手刺殺，但不死三振而打者上壘（代碼不是 I/II/III）時沒有出局，不記刺殺
@@ -197,8 +325,11 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[]): { cr
       const f = at(p.loc, p.pitcher)
       if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++
     }
-    if (p.cs) { a(byPos.get('C')); for (let i = 0; i < p.cs; i++) po(byPos.get('SS')) }
-    if (p.pk) { a(byPitcher.get(p.pitcher)); for (let i = 0; i < p.pk; i++) po(first) }
+    // (a 盜壘阻殺 / 牽制出局 by whoever stood there then: a change in the middle of the plate appearance, rowCharges)
+    for (const c of charges?.[i].catching ?? [{ cs: p.cs, pk: p.pk, at: undefined }]) {
+      if (c.cs) { a(lineAt(c.at, 'C')); for (let k = 0; k < c.cs; k++) po(lineAt(c.at, 'SS')) }
+      if (c.pk) { a(byPitcher.get(p.pitcher)); for (let k = 0; k < c.pk; k++) po(lineAt(c.at, '1B')) }
+    }
   }
   return { credited, unplaced }
 }
@@ -218,19 +349,27 @@ export function catchingByPlayer(game: Game, pitching: PitchingPA[], lines: Fiel
   const toC = (roster?.subs ?? []).filter((x) => x.pos === 'C')
   const halfIdx = (inning: number, half: 'top' | 'bottom') => (inning - 1) * 2 + (half === 'bottom' ? 1 : 0)
   const field: 'top' | 'bottom' = game.homeAway === '客' ? 'bottom' : 'top'
-  const catcherAt = (inning: number) => {
+  const catcherAt = (inning: number, fielders?: Map<string, string>) => {
+    // whoever stood at C then (the 當日登錄名單 with every change); else the starting C and every substitution to C
+    const there = fielders?.get('C')
+    if (there) return there
     const at = halfIdx(inning, field)
     let c = starter
     for (const x of toC) if (halfIdx(x.inning, x.half) <= at) c = x.in
     return c ?? fallback
   }
-  for (const p of pitching) {
+  const charges = rowCharges(game, pitching)
+  for (const [i, p] of pitching.entries()) {
     if (!p.sba && !p.cs && !p.pb) continue
-    const name = catcherAt(p.inning)
-    if (!name) continue
-    const t = out.get(name) ?? { sb: 0, cs: 0, pb: 0 }
-    t.sb += p.sba || 0; t.cs += p.cs || 0; t.pb += p.pb || 0
-    out.set(name, t)
+    // (each part with the catcher then: a change in the middle of the plate appearance, rowCharges)
+    for (const c of charges[i].catching) {
+      if (!c.sba && !c.cs && !c.pb) continue
+      const name = catcherAt(p.inning, c.at)
+      if (!name) continue
+      const t = out.get(name) ?? { sb: 0, cs: 0, pb: 0 }
+      t.sb += c.sba; t.cs += c.cs; t.pb += c.pb
+      out.set(name, t)
+    }
   }
   return out
 }
@@ -325,7 +464,7 @@ export function normalizeDataset(input: Dataset, place: AuditPlace = 'page'): { 
     }
     // putouts / assists: when nobody recorded any, credit them from the opponent's plate appearances
     if (gameLines.length && pit.length && gameLines.every((f) => !f.po && !f.a)) {
-      const c = creditPlays(gameLines, pit)
+      const c = creditPlays(gameLines, pit, g)
       if (c.credited) warn(`刺殺／助殺由投球紀錄推定（三振→捕手、滾地→守位助殺＋一壘刺殺、飛球→守位刺殺、雙殺→樞紐）${c.unplaced ? `；${c.unplaced} 個出局沒有落點，未歸屬` : ''}`)
     }
     // 被盜壘 / 阻殺 / 捕逸: when no line has any, credit them to whoever was catching from the opponent's plate appearances

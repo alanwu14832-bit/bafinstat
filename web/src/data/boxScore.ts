@@ -67,11 +67,14 @@ class Slots {
   }
   rows(line: (name: string) => BattingLine | undefined, atBat?: string): BoxBatter[] {
     const bySlot = new Map<number | null, Array<{ name: string; pos: string }>>()
-    const seen = new Set<string>()
+    // every position he played, in order (代打-SS: a pinch hitter who stayed in at short; SS-2B: moved to second)
+    const seen = new Map<string, { name: string; pos: string; all: string[] }>()
     for (const e of [...this.list].sort((a, b) => a.at - b.at || a.seq - b.seq)) {
-      if (seen.has(e.name)) continue
-      seen.add(e.name)
-      bySlot.set(e.slot, [...(bySlot.get(e.slot) ?? []), { name: e.name, pos: e.pos }])
+      const had = seen.get(e.name)
+      if (had) { if (e.pos && !had.all.includes(e.pos)) { had.all.push(e.pos); had.pos = had.all.join('-') } continue }
+      const p = { name: e.name, pos: e.pos, all: e.pos ? [e.pos] : [] }
+      seen.set(e.name, p)
+      bySlot.set(e.slot, [...(bySlot.get(e.slot) ?? []), p])
     }
     const slots = [...bySlot.keys()].sort((a, b) => (a ?? 1e9) - (b ?? 1e9))
     return slots.flatMap((slot) => bySlot.get(slot)!.map((p, i) => ({ key: `${slot ?? '-'}:${p.name}`, slot, first: i === 0, name: p.name, pos: p.pos, atBat: p.name === atBat, ...counts(line(p.name)) })))

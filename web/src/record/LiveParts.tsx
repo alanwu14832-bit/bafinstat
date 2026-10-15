@@ -145,6 +145,8 @@ export interface RunnerSheetProps {
   onPick: (row: number) => void
   /** `errBy` (失誤進壘): whose error — their fielder ('?' = 不知道) for our runner, ours for theirs */
   onEvent: (r: Runner, ev: RunnerEvent, errBy?: string) => void
+  /** our fielders now, position → name (record/model fieldersNow): shown next to the positions when ours erred */
+  fielders?: Map<string, string>
   /** 暴投 / 捕逸 / 投手犯規 with everyone moving up */
   onAll: (kind: 'wp' | 'pb' | 'bk') => void
   /** 代跑 for our runner: the names that can come in, and whether that runner has a batting slot to take over */
@@ -174,7 +176,7 @@ function OppPinchForm({ runner, names, onPinch }: { runner: Runner; names: strin
 }
 
 /** Tap a base → this sheet: who (the diamond), then one tap for what happened. Everyone moving up on a wild pitch is a single tap. */
-export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEvent, onAll, pinch, oppPinch, context }: RunnerSheetProps) {
+export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEvent, onAll, pinch, oppPinch, context, fielders }: RunnerSheetProps) {
   const ours = runners.filter((r) => r.side === side).sort((a, b) => b.base - a.base)
   const r = ours.find((x) => x.row === picked) ?? (ours.length === 1 ? ours[0] : null)
   // 失誤進壘 asks whose error first (one tap): ours for their runner, theirs (or 不知道) for ours
@@ -207,7 +209,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
                 <span className="text-[12px] text-ink-2">{r.side === 'opp' ? '誰失誤（我隊守備失誤）' : '誰失誤（對方守備）'}，點一下就記</span>
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                   {[...FIELD_POSITIONS, ...(r.side === 'us' ? [UNKNOWN_FIELDER] : [])].map((pos) => (
-                    <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)}</button>
+                    <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)}{r.side === 'opp' && fielders?.get(pos) && <>{' '}<span className="font-normal opacity-70">{fielders.get(pos)}</span></>}</button>
                   ))}
                 </div>
               </div>

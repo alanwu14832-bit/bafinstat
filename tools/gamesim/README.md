@@ -15,6 +15,11 @@ Box Score、局分表拿去和手算的正確答案逐項比對——就像賽�
   二安帶回兩分；3 下先換投（放上去的跑者跟著算新投手的）→ 放上跑者 → 我隊投手犯規 → 犧飛回來 1 分（非自責）→ 兩個三振，2：1。
   `check3.mjs` 核對：突破僵局跑者不算打席、那位投手 BF 3／R 1／ER 0、「投球」頁進階 BK 1、逐球有「突破僵局」「投手犯規」。
   先跑 game3 再跑 excel 的話，X7 也會拿這場的總表和網站比對。
+- `game4.mjs`（batch 17）：2 局制、我隊主場。1 上游擊 S1 失誤；1 下 S1 全壘打、代打 B1 換一壘 S3；2 上用「換人」只改守位：
+  B1 留下來守游擊、S1 改守一壘（打線要標「代打・沒守位」，改完寫「守 6 SS」），再各一次失誤（「我隊失誤」按鈕要寫
+  「6 SS B1」「3 1B S1」）。`check4.mjs` 核對：失誤算給 S1（游擊）、B1（游擊）、S1（一壘），S3 沒有；守備局數各 1 局；
+  替補紀錄有兩筆守備調動；比賽附註「失誤：S1 2、B1」、逐局表「代打-SS」「SS-1B」、登錄名單「換守位」、文字轉播「守備異動」。
+  先跑 game4 再跑 excel 的話，X7 也會拿這場的總表和網站比對，並把這場匯出再匯入、資料要完全一樣。
 - `practice.mjs`：練習紀錄（`/record?practice=1`）記 3 個打席再「結束練習」：這台裝置的正式進度、資料集都不能變，比賽頁不能出現 PRACTICE- 的比賽。
 - `live.mjs`：即時比分（batch 12）。同一個瀏覽器開兩個分頁：一個在紀錄比賽記一場 2 局的客場比賽（一安中外野平飛、盜壘、
   二安 2 分打點、揮空三振、看好球三振、牽制出局、暴投得分、代打、代跑、一出局犧飛、換投），另一個每一步重新開 /live 檢查：
@@ -36,6 +41,7 @@ cd web && SKIP_ARCHIVE=1 npm run build && npx vite preview --port 4173 &   # 本
 node tools/gamesim/game1.mjs /tmp/out && node tools/gamesim/check1.mjs /tmp/out/game1-shown.json
 node tools/gamesim/game2.mjs /tmp/out && node tools/gamesim/check2.mjs /tmp/out/game2-shown.json
 node tools/gamesim/game3.mjs /tmp/out && node tools/gamesim/check3.mjs /tmp/out/game3-shown.json
+node tools/gamesim/game4.mjs /tmp/out && node tools/gamesim/check4.mjs /tmp/out/game4-shown.json
 node tools/gamesim/edit1.mjs /tmp/out && LANG=C.UTF-8 node tools/gamesim/excel.mjs /tmp/out   # excel 的 X3、X7、X8 要有 soffice（X8：失誤守位用 6、游擊、「/」「；」填，總表和網站算的一樣）
 node tools/gamesim/practice.mjs
 node tools/gamesim/live.mjs /tmp/out

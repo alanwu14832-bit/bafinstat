@@ -10,7 +10,8 @@
 //   node tools/gamesim/excel.mjs /tmp/out     (reads game1-shown.json + edit1-dataset.json or game1-dataset.json)
 //   X8 守備失誤／對方失誤 typed as numbers or Chinese names (6、游擊、左外野, / and ； between): the 總表 still counts
 //      them like the site
-//   X7 also runs on game3-dataset.json (延長賽突破僵局、投手犯規) when game3.mjs has run before it
+//   X7 also runs on game3-dataset.json (延長賽突破僵局、投手犯規) when game3.mjs has run before it, and on
+//      game4-dataset.json (代打之後改守位: per-position 守備 lines, 守備調動 in 替補紀錄; exported and imported again)
 // X3 and X7 need LibreOffice (soffice); they are skipped without it.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -240,6 +241,21 @@ if (lo) {
     totalsVsSite('X7 突破僵局', ds3, recalc(`${S}/export3.xlsx`, `${S}/lo3`))
     if (T.errs.length) problem(`網頁錯誤：${T.errs.join(' / ')}`)
   } else log('－ X7 突破僵局略過（還沒跑 game3.mjs）')
+  // batch 17: 代打之後改守位 — the 守備 sheet carries each player's line per position (S1 SS and 1B, B1 SS) and the
+  // 替補紀錄 the 守備調動; exported and imported again the data is the same, and the 總表 matches the site
+  if (existsSync(`${S}/game4-dataset.json`)) {
+    const F = await fresh(JSON.parse(readFileSync(`${S}/game4-dataset.json`, 'utf8')))
+    const ds4 = await dataset(F)
+    log('X7 改守位那場匯出：', await exportFile(F, `${S}/export4.xlsx`))
+    totalsVsSite('X7 改守位', ds4, recalc(`${S}/export4.xlsx`, `${S}/lo4`))
+    const F2 = await fresh(null)
+    await importFile(F2, `${S}/export4.xlsx`, 'replace')
+    const back = await dataset(F2)
+    const g4 = ds4.games.find((g) => g.opponent === '模擬隊四')
+    const pick = (d) => ({ roster: [], games: d.games.filter((g) => g.id === g4.id), batting: d.batting.filter((x) => x.gameId === g4.id), pitching: d.pitching.filter((x) => x.gameId === g4.id), fielding: d.fielding.filter((x) => x.gameId === g4.id) })
+    sameData('X7 改守位那場 匯出→匯入', pick(ds4), pick(back ?? { games: [], batting: [], pitching: [], fielding: [] }))
+    if (F.errs.length || F2.errs.length) problem(`網頁錯誤：${[...F.errs, ...F2.errs].join(' / ')}`)
+  } else log('－ X7 改守位略過（還沒跑 game4.mjs）')
   // X8 errors typed the way people type them (numbers, Chinese names, / and ； between): the 總表 counts them like the
   // site does — the fielder at a 失誤 row's 落點 named again (as 游擊 for 6) is that same error on our side; their list
   // is always on top of the result's own

@@ -138,7 +138,20 @@ export interface Game {
 export type GameStatus = 'scheduled' | 'cancelled'
 
 /** One substitution during a game (recorded live on 紀錄比賽). */
-export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out: string; pos: string; inning: number; half: 'top' | 'bottom'; slot?: number }
+export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out: string; pos: string; inning: number; half: 'top' | 'bottom'; slot?: number
+  /** logged while we fielded, after this many of that half-inning's opponent rows (紀錄比賽): the rows before it keep the
+   *  old alignment (an error made just before the fielder was pulled stays his). Absent = from the start of the half. */
+  row?: number
+  /** logged in the middle of a plate appearance: what our fielders had done earlier in it (an error between pitches, a
+   *  盜壘阻殺…). That plate appearance's row is `row` (0 when absent), which takes the new alignment; these are charged
+   *  by the alignment just before this change. Left out when there was nothing. */
+  before?: SubCharges
+  /** the half ended (an out on the bases, 結束半局) before the plate appearance in progress was sent: what our fielders
+   *  did in it after this change was put on the half's last row (`row` - 1, which keeps the old alignment); these are
+   *  charged by the alignment just after this change. Left out when there was nothing. */
+  after?: SubCharges }
+/** Part of one opponent row's errors (positions) and catcher plays, charged by another alignment (DayRosterSub before / after). */
+export interface SubCharges { errors?: string[]; sba?: number; cs?: number; pb?: number; pk?: number }
 /** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
 export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean }
 

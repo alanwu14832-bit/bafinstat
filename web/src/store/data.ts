@@ -17,14 +17,14 @@ import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, END_TIME_CO
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
-  deleteCloudRegistration, loadCloudRegistrations, parseRegistration, readLocalRegistrations, removeFromRegistrations, renameInRegistrations, saveCloudRegistration,
+  applyRegistrationMoves, deleteCloudRegistration, loadCloudRegistrations, parseRegistration, readLocalRegistrations, registrationMoves, removeFromRegistrations, renameInRegistrations, saveCloudRegistration,
   withoutRegistration, withRegistration, writeLocalRegistrations, REGISTRATIONS_UNSUPPORTED,
 } from '../data/registrations'
 import { DAY_ROSTER_UNSUPPORTED, ERRORS_UNSUPPORTED, EVENTS_UNSUPPORTED, RUNNER_UNSUPPORTED } from '../data/gameRoster'
 import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../data/edit'
 import { ALL_RECORD_FIELDS, recordFieldWarnings, type RecordFields } from '../data/recordFields'
 import type { GameWarning } from '../data/normalize'
-import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, isPracticeId, type Dataset, type Filters, type Registration, type StatParams } from '../data/types'
+import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, isPracticeId, type Dataset, type Filters, type Game, type Registration, type StatParams } from '../data/types'
 
 const DATA_KEY = 'bafin.dataset.v1'
 const DEMO_KEY = 'bafin.demo'
@@ -123,6 +123,26 @@ const droppedWarnings = (dropped: string[], saved: Parameters<typeof recordField
 /** The same warning once (a dropped column and the columns check can both report it). */
 const dedupe = (ws: GameWarning[]): GameWarning[] => { const seen = new Set<string>(); return ws.filter((w) => !seen.has(w.message) && !!seen.add(w.message)) }
 let registrationsLive = false
+/** Renaming a tournament renames its 報名名單 (data/registrations registrationMoves): `before` / `after` are the games
+ *  around a save. Never fails the save that triggered it: what could not be moved comes back as a warning. */
+async function followTournamentRenames(before: Game[], after: Game[]): Promise<GameWarning[]> {
+  const { cloud, registrations, registrationsSupported } = useDataStore.getState()
+  const moves = registrationMoves(registrations, before, after)
+  if (!moves.length) return []
+  try {
+    if (cloud.configured) {
+      if (!registrationsSupported) return []
+      for (const m of moves) {
+        await saveCloudRegistration(m.to)
+        await deleteCloudRegistration(m.from.season, m.from.tournament)
+      }
+    } else writeLocalRegistrations(applyRegistrationMoves(registrations, moves))
+    useDataStore.setState({ registrations: applyRegistrationMoves(useDataStore.getState().registrations, moves) })
+    return []
+  } catch (e) {
+    return [{ gameId: '', message: `報名名單沒有跟著改名（${moves.map((m) => `${m.from.season} ${m.from.tournament}`).join('、')}）：請到「球員」頁的「報名名單」改杯賽名稱。${e instanceof Error ? e.message : ''}` }]
+  }
+}
 
 export const useDataStore = create<DataState>((set, get) => ({
   base: initialBase,
@@ -141,19 +161,23 @@ export const useDataStore = create<DataState>((set, get) => ({
     if (cloud.configured && cloud.user) {
       set({ cloud: { ...cloud, pushing: true, error: null } })
       try {
+        const before = get().base.games
         const r = await pushCloudDataset(ds, 'replace')
         if (r.dropped.includes('day_roster')) set({ dayRosterSupported: false })
+        const moved = await followTournamentRenames(before, ds.games)
         await get().loadCloud()
         // (the columns check runs on what was just loaded back)
-        result = { ...r, warnings: dedupe([...droppedWarnings(r.dropped, ds), ...recordFieldWarnings(get().recordFields, ds)]) }
+        result = { ...r, warnings: dedupe([...droppedWarnings(r.dropped, ds), ...recordFieldWarnings(get().recordFields, ds), ...moved]) }
       }
       catch (e) { set({ cloud: { ...get().cloud, pushing: false, error: e instanceof Error ? e.message : String(e) } }); throw e }
       set({ cloud: { ...get().cloud, pushing: false } })
       return result
     }
     const importedAt = new Date().toISOString()
+    const before = get().base.games
     keepLocal({ base: ds, importedAt })
     set({ base: ds, source: 'imported', importedAt, filters: DEFAULT_FILTERS })
+    await followTournamentRenames(before, ds.games)
     return result
   },
   appendDataset: async (ds) => {
@@ -189,6 +213,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       try {
         const { dropped } = await pushCloudDataset(fragment, 'upsert')
         warnings.push(...droppedWarnings(dropped, fragment, game.id))
+        warnings.push(...await followTournamentRenames(base.games, [...base.games.filter((g) => g.id !== game.id), game]))
         if (dropped.includes('day_roster')) set({ dayRosterSupported: false })
         else if (game.dayRoster) set({ dayRosterSupported: true })
         // the upsert leaves day_roster out when the game has none, so a roster removed in the editor is cleared explicitly
@@ -205,6 +230,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     const importedAt = new Date().toISOString()
     keepLocal({ base: next, importedAt })
     set({ base: next, source: 'imported', importedAt })
+    warnings.push(...await followTournamentRenames(base.games, next.games))
     return warnings
   },
   saveRoster: async (change) => {

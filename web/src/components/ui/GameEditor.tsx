@@ -5,10 +5,13 @@ import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
-import { reconcileFielding, type GameEdit } from '../../data/edit'
+import { applyErrorFixes, fieldingErrorFixes, reconcileFielding, type GameEdit } from '../../data/edit'
+import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
+import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
+import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
 import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
-import { dayRosterNames, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
+import { dayRosterNames, isMove, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
@@ -154,7 +157,10 @@ const pitCols: Col<PitDraft>[] = [
 type StarterDraft = GameDayRoster['starters'][number]
 const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
 const chip = (active: boolean) => cx('h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
-const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === 'bottom' ? '下' : '上'} ` : ''}${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}${s.pos ? `（${s.pos}）` : ''}`
+const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === 'bottom' ? '下' : '上'} ` : ''}${isMove(s) ? `換守位 ${s.in} 改守 ${s.pos}` : `${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}${s.pos ? `（${s.pos}）` : ''}`}`
+
+/** The 守備 table's rows with a player, numbers as numbers (cells hold what was typed). */
+const numericLines = (fld: FieldingLine[]): FieldingLine[] => fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 }))
 
 const fldCols: Col<FieldingLine>[] = [
   { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'innings', label: '局數', kind: 'int', w: 48 },
@@ -188,6 +194,32 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(null)
   const batRows = useMemo(() => bat.map(fromBatDraft), [bat])
   const pitRows = useMemo(() => pit.map(fromPitDraft), [pit])
+  // who stood where in each inning we fielded (the 登錄名單 as edited): names next to 我隊守備失誤, 失誤 SS（王鼎鈞）
+  const rosterNow = useMemo(() => parseDayRoster({ starters: starters.filter((x) => x.name.trim()), bench: [], subs, reentry: false }), [starters, subs])
+  const fielderAt = useMemo(() => {
+    const g = { homeAway: game.homeAway, dayRoster: rosterNow }
+    const t = fieldersOf(g)
+    if (!t) return undefined
+    const rows = rowsInInning(pitRows)
+    const charges = rowCharges(g, pitRows)
+    // (`index`: the opponent row, for a change made in the middle of the half; `nth`: which of that row's errors at
+    // `pos`, for a change made in the middle of that plate appearance)
+    return (inning: number, pos: string, index?: number, nth?: number) => {
+      if (index === undefined) return t(inning).get(pos)
+      const own = nth === undefined ? undefined : charges[index]?.errors.filter((e) => e.pos === pos)[nth]
+      return (own?.at ?? t(inning, rows[index])).get(pos)
+    }
+  }, [rosterNow, game.homeAway, pitRows])
+  // what the save reconciles the 守備 lines from: the game as it was opened, or as it was when 依登錄名單重算失誤 was
+  // pressed (the lines already follow the 登錄名單 from then on: the save must not move those errors a second time)
+  const [basis, setBasis] = useState(() => ({ game: initial.game, batting: initial.batting, pitching: initial.pitching }))
+  const gameNow = useMemo<Game>(() => ({ ...game, dayRoster: rosterNow }), [game, rosterNow])
+  const playsNow = useMemo(() => ({ batting: batRows.filter((p) => p.batter.trim()), pitching: pitRows.filter((p) => p.pitcher.trim()) }), [batRows, pitRows])
+  // the 守備 lines as the save would write them, and their 失誤 against who stood there (a game saved before every
+  // position change was logged)
+  const linesNow = useMemo(() => reconcileFielding(numericLines(fld), basis.game, basis, playsNow, gameNow), [fld, basis, playsNow, gameNow])
+  const errorFixes = useMemo(() => fieldingErrorFixes(linesNow, gameNow, playsNow.batting, playsNow.pitching), [linesNow, gameNow, playsNow])
+  const applyFixes = () => { setFld(applyErrorFixes(linesNow, gameNow, errorFixes)); setBasis({ game: gameNow, ...playsNow }) }
   const flags = useMemo(() => {
     const out = { bat: new Map<number, string[]>(), pit: new Map<number, string[]>() }
     for (const i of auditGame(batRows, pitRows, 'editor')) out[i.side].set(i.index, [...(out[i.side].get(i.index) ?? []), i.message])
@@ -485,11 +517,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           if (window.confirm(`依打擊結果重建第 ${rows[i].inning} 局的跑者：安打依壘數推進、保送擠壘、犧飛回本壘、雙殺與野選讓被封殺的跑者出局。\n這局原本記 ${before} 分，重建後是 ${after} 分；之後可以在壘包圖上逐一修正。按「儲存修改」才會生效。`)) { const why = commitHalf(side, rows, rb); if (why) window.alert(`沒辦法重建：${why}`) }
         }}
         others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && stillOn(o.pa)) : []}
-        onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} />
+        onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} fielderAt={fielderAt} />
     )
   }
   const [error, setError] = useState<string | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
+  // renaming the 杯賽: its 報名名單 follows on save (one line says so)
+  const regMove = useRegistrationMoveNote(game)
   // names already in this game's roster stay selectable even when they left the team roster
   const names = useMemo(() => [...new Set([...roster, ...bat.map((p) => p.batter), ...pit.map((p) => p.pitcher), ...dayRosterNames(initial.game.dayRoster)])].filter(Boolean), [roster, bat, pit, initial.game.dayRoster])
   // 對方代跑 suggestions: the opponent names already in this game
@@ -533,9 +567,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     try {
       const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
       const pitching = pit.map(fromPitDraft).filter((p) => p.pitcher.trim())
-      const lines = fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 }))
+      const lines = numericLines(fld)
       // errors / putouts changed in plate appearances move onto the fielders; numbers typed in the 守備 table stay
-      const fielding = reconcileFielding(lines, game, { batting: initial.batting, pitching: initial.pitching }, { batting, pitching })
+      // (and a change in the 登錄名單 — a 守備調動 added, a substitute's position fixed — moves them to whoever stood there)
+      const fielding = reconcileFielding(lines, basis.game, basis, { batting, pitching }, { ...game, ...(dayRoster ? { dayRoster } : { dayRoster: undefined }) })
       await onSave({ game: { ...game, tournament: game.tournament?.trim() || '未分類', opponent: game.opponent.trim(), dayRoster }, batting, pitching, fielding })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
@@ -558,7 +593,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="開賽時間"><Input type="time" value={game.time ?? ''} onChange={text('time')} className="tnum" /></Field>
           <Field label="結束時間" hint={duration ? (isLongGame(duration) ? <span className="text-warning">{LONG_GAME_NOTE}</span> : `比賽時間 ${formatDuration(duration)}`) : undefined}><Input type="time" value={game.endTime ?? ''} onChange={text('endTime')} className="tnum" /></Field>
-          <Field label="杯賽"><Input value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
+          <Field label="杯賽" hint={regMove || undefined}><Input value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
           <Field label="對手"><Input value={game.opponent} onChange={(e) => g('opponent', e.target.value)} /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場' }, { value: '客', label: '客場' }]} className="w-full" /></Field>
           <Field label="場地"><Input value={game.venue ?? ''} onChange={text('venue')} /></Field>
@@ -593,8 +628,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
           : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
         {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />
-          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
-        {tab === 'fld' && <EditableTable rows={fld} cols={fldCols} onChange={setFld} blank={blankFld} listId="game-editor-names" names={names} />}
+          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
+        {tab === 'fld' && (
+          <div className="flex flex-col gap-3">
+            <ErrorFixNotice fixes={errorFixes} onApply={applyFixes} />
+            <EditableTable rows={fld} cols={fldCols} onChange={setFld} blank={blankFld} listId="game-editor-names" names={names} />
+          </div>
+        )}
         {tab === 'roster' && (
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
@@ -622,9 +662,19 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
               </div>
               {subs.length > 0 ? (
                 <ol className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[13px] text-ink-2">
-                  {subs.map((x, i) => <li key={i} className="px-3 py-2 tnum">{subText(x)}</li>)}
+                  {subs.map((x, i) => (
+                    <li key={i} className="pl-3 pr-1 py-1 tnum flex items-center gap-2 min-h-10">
+                      <span className="flex-1 min-w-0">{subText(x)}</span>
+                      <button type="button" aria-label={`刪除這筆替補紀錄：${subText(x)}`} onClick={() => setSubs((l) => l.filter((_, k) => k !== i))} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>
+                    </li>
+                  ))}
                 </ol>
               ) : <p className="text-[12px] text-muted">沒有替補紀錄</p>}
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="text-[12px] font-medium text-ink-2">每局守備 <span className="text-muted font-normal">依先發與替補紀錄；失誤、刺殺、助殺算給當時守那個位置的人</span></div>
+              <DefenseByInning roster={rosterNow} innings={Math.max(game.innings ?? 0, ...pitRows.map((p) => p.inning), ...batRows.map((p) => p.inning), 1)} homeAway={game.homeAway} names={names}
+                onAdd={(x) => setSubs((l) => [...l, x])} />
             </div>
           </div>
         )}
