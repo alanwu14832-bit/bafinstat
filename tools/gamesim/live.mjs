@@ -9,6 +9,7 @@
 import { createRequire } from 'node:module'
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
+import { answerAsks } from './answer.mjs'
 const S = process.argv[2] ?? '.'
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {})
@@ -37,7 +38,8 @@ await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTi
 
 // ---------------------------------------------------------------- driving the screen (game1's helpers)
 const PITCH = { B: '壞球', CS: '好球・未揮', SS: '揮空', F: '界外', IP: '擊進場內' }
-const pitch = async (c) => { await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
+// (batch 18: the questions the pitch pad waits for are answered first, 不知道 unless the script says otherwise)
+const pitch = async (c) => { await answerAsks(p, main); await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
 const planOpen = async () => (await main.getByRole('button', { name: /^送出/ }).count()) > 0
 const runnerSheet = async (base) => {
   await main.getByRole('button', { name: /^壘上跑者/ }).first().click(); await p.waitForTimeout(200)
@@ -56,6 +58,7 @@ const setDest = async (prefix, d) => {
 }
 const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
 async function pa(side, spec) {
+  await answerAsks(p, main)
   for (const st of spec.steps ?? []) {
     if (typeof st === 'string') await pitch(st)
     else if (st.run) await runnerEv(st.run, st.ev)

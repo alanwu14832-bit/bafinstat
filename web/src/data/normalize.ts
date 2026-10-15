@@ -12,9 +12,9 @@
  *    (三振→捕手 PO；滾地→守位 A＋一壘 PO；飛球→守位 PO；雙殺→守位 A、樞紐 PO+A、一壘 PO；野選→守位 A；阻殺→捕手 A；牽制→投手 A＋一壘 PO)
  *  - credits 被盜壘 / 阻殺 / 捕逸 to whoever was catching (當日登錄名單) when a game has none recorded
  *  - fills game.innings when blank, and returns human-readable warnings per game
- *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM'
+ *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM' · 對方打者左右打 L / R (anything else dropped)
  */
-import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppHand, type PitchingPA, type Player, type SubCharges } from './types'
+import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppBats, type OppHand, type PitchingPA, type Player, type SubCharges } from './types'
 import { auditGame, type AuditPlace } from './audit'
 import { outsCredited } from './stats'
 import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
@@ -50,6 +50,13 @@ const HANDS: Record<string, OppHand> = { l: 'L', 左: 'L', 左投: 'L', 左手: 
 export function cleanHand(v: unknown): OppHand | undefined {
   if (typeof v !== 'string') return undefined
   return HANDS[v.trim().toLowerCase()]
+}
+
+const BATS: Record<string, OppBats> = { l: 'L', 左: 'L', 左打: 'L', lhb: 'L', left: 'L', r: 'R', 右: 'R', 右打: 'R', rhb: 'R', right: 'R' }
+/** 對方打者左右打: L / 左 / 左打 / LHB / left → 'L', the same for R; anything else (不知道, blank) is unknown (undefined). */
+export function cleanBats(v: unknown): OppBats | undefined {
+  if (typeof v !== 'string') return undefined
+  return BATS[v.trim().toLowerCase()]
 }
 
 interface Seq { inning?: number; outsBefore?: number; code?: string; result: string; outOnBase?: number }
@@ -421,8 +428,8 @@ export function normalizeDataset(input: Dataset, place: AuditPlace = 'page'): { 
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, ...p }) => ({
-    ...p, ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, oppBats, ...p }) => ({
+    ...p, ...(cleanBats(oppBats) ? { oppBats: cleanBats(oppBats) } : {}), ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,

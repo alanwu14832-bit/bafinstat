@@ -288,3 +288,29 @@ describe('import report: batted balls without 落點／軌跡 (batch 14)', () =>
     expect(dataset.batting.length).toBe(ds.batting.length)
   })
 })
+
+describe('對方打者左右 in Excel (batch 18)', () => {
+  const pit = SEED_DATASET.pitching.map((p, i) => (i === 0 ? { ...p, oppBats: 'L' as const } : i === 1 ? { ...p, oppBats: 'R' as const } : p))
+  const ds = { ...SEED_DATASET, pitching: pit }
+  it('survives a backup round trip, the new column right after 打點; rows without one get no key', () => {
+    const wb = datasetToWorkbook(ds)
+    const ph = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets['投球紀錄'], { header: 1 })[0] as string[]
+    expect(ph.indexOf('對方打者左右')).toBe(ph.indexOf('打點') + 1)
+    const back = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer).dataset
+    expect(back.pitching.slice(0, 2).map((p) => p.oppBats)).toEqual(['L', 'R'])
+    expect(back.pitching.slice(2).some((p) => 'oppBats' in p)).toBe(false)
+  })
+  it('the single-game template reads its 對方打者左右 column (左打 written out too)', () => {
+    const wb = XLSX.read(new Uint8Array(readFileSync(resolve(process.cwd(), '..', 'data', 'BAFIN_棒球數據總表.xlsx'))), { type: 'array' })
+    const ws = wb.Sheets['單場-投球']
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
+    const hr = grid.findIndex((r) => r.some((c) => String(c).trim() === '投手'))
+    const col = (grid[hr] as unknown[]).findIndex((c) => String(c).trim() === '對方打者左右')
+    expect(col).toBeGreaterThan(0)
+    XLSX.utils.sheet_add_aoa(ws, [['左打'], ['R']], { origin: XLSX.utils.encode_cell({ r: hr + 1, c: col }) })
+    for (const n of wb.SheetNames.filter((n) => !n.startsWith('單場-'))) { delete wb.Sheets[n] }
+    wb.SheetNames = wb.SheetNames.filter((n) => n.startsWith('單場-'))
+    const { dataset } = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
+    expect(dataset.pitching.slice(0, 2).map((p) => p.oppBats)).toEqual(['L', 'R'])
+  })
+})

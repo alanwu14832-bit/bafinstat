@@ -9,7 +9,7 @@ import { cleanErrors, cleanOppErrors, errorsOf, errorsText, oppErrorList } from 
 import { parsePlays, playsText } from './plays'
 import { MISSING_BALL_TAGS, missingBattedBall, missingBattedBallCounts, type BattingPA, type Dataset, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type HomeAway, type PitchingPA, type Player, type Registration, type SubCharges } from './types'
 import { rawGameToDataset, TEAM_NAME, type RawGame, type RawPA } from './seed'
-import { cleanHand, cleanLoc, normalizeDataset } from './normalize'
+import { cleanBats, cleanHand, cleanLoc, normalizeDataset } from './normalize'
 import { CHARGE_COUNTS, chargesOrNone, parseDayRoster, SUB_KIND_LABEL } from './gameRoster'
 import { sortRegistrations } from './registrations'
 
@@ -124,6 +124,8 @@ function parsePitching(rows: Row[], gameId?: string): PitchingPA[] {
     ...(str(r['代跑']) ? { runner: str(r['代跑']) } : {}),
     // their 打點 (optional too)
     ...(num(r['打點']) ? { rbi: num(r['打點']) } : {}),
+    // 對方打者左右 (L / R; optional, blank = 不知道; older files have no such column)
+    ...(cleanBats(str(r['對方打者左右'])) ? { oppBats: cleanBats(str(r['對方打者左右'])) } : {}),
   }))
 }
 function parseFielding(rows: Row[], gameId?: string): FieldingLine[] {
@@ -460,7 +462,7 @@ function baseOuts(r: Row): { outOnBase: number; baserunningOuts?: number } {
 export function backupTables(ds: Dataset, registrations: Registration[] = []): BackupTable[] {
   const games = ds.games.map((g) => ({ 比賽ID: g.id, 日期: g.date, 時間: g.time ?? '', 杯賽: g.tournament, 對手: g.opponent, 主客: g.homeAway, 場地: g.venue ?? '', 天氣: g.weather ?? '', 紀錄者: g.recorder ?? '', 局數: g.innings ?? '', 勝投: g.winningPitcher ?? '', 敗投: g.losingPitcher ?? '', 救援: g.savePitcher ?? '', 狀態: g.status === 'scheduled' ? '預定' : g.status === 'cancelled' ? '取消' : '', 中繼: (g.holds ?? []).join(','), 備註: g.note ?? '', ...dayRosterCells(g.dayRoster), 結束時間: g.endTime ?? '' }))
   const bat = ds.batting.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 棒次: p.order ?? '', 守位: p.pos ?? '', 打者: p.batter, ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 代跑: p.runner ?? '', 盜壘: p.sb || '', 盜壘失敗: p.cs || '', 失誤進壘: p.advOnError || '', 壘上出局: p.outOnBase || '', 壘死: p.baserunningOuts || '', 得分: p.run || '', 打點: p.rbi || '', 結果代碼: p.code ?? '', 備註: p.note ?? '', 跑壘事件: playsText(p.events), 對方投手: p.oppPitcher ?? '', 對方投手慣用: p.oppHand ?? '', 對方失誤: errorsText(oppErrorList(p)) }))
-  const pit = ds.pitching.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 對方棒次: p.oppOrder ?? '', 投手: p.pitcher, 對方打者: p.oppBatter ?? '', ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 被盜壘: p.sba || '', 阻殺: p.cs || '', 暴投: p.wp || '', 捕逸: p.pb || '', 牽制出局: p.pk || '', 守備失誤: errorsText(p.errors), 結果代碼: p.code ?? '', 備註: p.note ?? '', 跑壘事件: playsText(p.events), 代跑: p.runner ?? '', 打點: p.rbi || '' }))
+  const pit = ds.pitching.map((p) => ({ 比賽ID: p.gameId, 局: p.inning, '出局(前)': p.outsBefore ?? '', '壘上(前)': p.basesBefore ?? '', 對方棒次: p.oppOrder ?? '', 投手: p.pitcher, 對方打者: p.oppBatter ?? '', ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`球${i + 1}`, p.pitches[i] ?? ''])), 打擊結果: p.result, 落點: p.loc ?? '', 軌跡: p.traj ?? '', 強度: p.quality ?? '', 被盜壘: p.sba || '', 阻殺: p.cs || '', 暴投: p.wp || '', 捕逸: p.pb || '', 牽制出局: p.pk || '', 守備失誤: errorsText(p.errors), 結果代碼: p.code ?? '', 備註: p.note ?? '', 跑壘事件: playsText(p.events), 代跑: p.runner ?? '', 打點: p.rbi || '', 對方打者左右: p.oppBats ?? '' }))
   const fld = ds.fielding.map((f) => ({ 比賽ID: f.gameId, 球員: f.player, 守位: f.pos, 局數: f.innings ?? '', 刺殺PO: f.po, 助殺A: f.a, 失誤E: f.e, 雙殺DP: f.dp, 捕逸PB: f.pb, 被盜壘SB: f.sb, 阻殺CS: f.cs, 備註: f.note ?? '' }))
   const roster = ds.roster.map((p) => ({ 背號: p.number ?? '', 姓名: p.name, 主守位: p.primaryPos ?? '', 副守位: p.secondaryPos ?? '', 打擊慣用: p.bats ?? '', 投球慣用: p.throws ?? '', 狀態: p.status ?? '', 備註: p.note ?? '' }))
   // 報名名單: one player per row, same layout as the master workbook's sheet

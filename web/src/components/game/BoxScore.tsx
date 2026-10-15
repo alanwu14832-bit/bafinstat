@@ -14,6 +14,7 @@ const batterCell = (r: BoxBatter): ReactNode => (
     <span className={cx('inline-flex items-baseline gap-1.5', !r.first && 'pl-3')}>
       <span className="min-w-7 text-[11px] text-muted">{r.pos}</span>
       <span className="font-medium text-ink">{r.name}</span>
+      {r.bats && <span className="text-[11px] text-muted">{r.bats}</span>}
       {r.atBat && <span className="sr-only">（打擊中）</span>}
     </span>
   </span>

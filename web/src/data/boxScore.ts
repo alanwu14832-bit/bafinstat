@@ -10,12 +10,12 @@
  * pitches count in 用球數, nothing else of it does until it is sent.
  */
 import { battingLines, pitchingLines, teamBatting, type BattingLine, type PitchingLine } from './stats'
-import { oppBattingLines, oppKey, oppRunnerKey, oppTotals, type OppBattingLine } from './opponent'
+import { oppBatsLabel, oppBattingLines, oppKey, oppRunnerKey, oppTotals, type OppBattingLine } from './opponent'
 import { boxOrderOf, pitcherOrder } from './gameNotes'
 import { oppPitcherName } from './broadcast'
 import {
   DEFAULT_PARAMS, EMPTY_DATASET, HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced,
-  type BattingPA, type Dataset, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type Player, type StatParams,
+  OPP_BATS_LABEL, type BattingPA, type Dataset, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type PitchingPA, type Player, type StatParams,
 } from './types'
 import { dayRosterOf, offense, oppBatterOf, oppPitchCount, oppStintStart, type OppPitcher, type RecordState } from '../record/model'
 
@@ -45,6 +45,8 @@ export interface BoxBatter extends BoxCounts {
   pos: string
   /** the batter at the plate now (/live) */
   atBat: boolean
+  /** (their batters) 左打 / 右打 as recorded this game (左右打 when a named batter batted from both sides); left out when unknown, or when an unnamed slot was recorded both ways */
+  bats?: string
 }
 export interface BoxNote { label: '二安' | '三安' | '全壘打' | '盜壘'; text: string }
 export interface BoxBatting { rows: BoxBatter[]; total: BoxCounts; notes: BoxNote[] }
@@ -150,7 +152,7 @@ export interface BoxSource {
     /** our lineup now (a pinch hitter at the plate has no row yet) */
     lineup: Array<{ name: string; pos: string }>
     /** who is at bat: ours by name, theirs by key (oppKey) */
-    atBat?: { side: 'us'; name: string } | { side: 'opp'; key: string; slot: number; pinchHit: boolean }
+    atBat?: { side: 'us'; name: string } | { side: 'opp'; key: string; slot: number; pinchHit: boolean; /** 左打／右打 picked for him */ bats?: OppBats }
     /** our pitcher on the mound and the pitches of the plate appearance in progress he threw */
     pitcher: string; pitcherNow: boolean; livePitches: number
     /**
@@ -194,7 +196,25 @@ export function boxScore(src: BoxSource): BoxScore {
   const at = live?.atBat?.side === 'opp' ? live.atBat : undefined
   if (at) opp.add(at.slot, at.key, at.pinchHit ? '代打' : '')
   const oppLine = (n: string) => oppLines.get(n)
-  const oppRows = opp.rows(oppLine, at?.key)
+  // 左打／右打: the sides each of their batters was recorded with this game (and the one at the plate now)
+  const sides = new Map<string, Set<OppBats>>()
+  const addSide = (k: string, b?: OppBats) => { if (b) sides.set(k, (sides.get(k) ?? new Set<OppBats>()).add(b)) }
+  for (const p of src.pitching) if (isPA(p)) addSide(oppKey(p), p.oppBats)
+  if (at) addSide(at.key, at.bats)
+  // a 「第 N 棒」 row is one man in one game unless someone else came into that slot: a 對方代打 (named or not: without
+  // 記對方打者姓名 his later plate appearances are keyed by the slot again) or a 對方代跑 (who bats later in it). Then
+  // the row can merge two people, and sides that disagree are left out rather than shown as 左右打; the man at the plate
+  // shows the side picked now
+  const shared = new Set<string>()
+  for (const p of src.pitching) {
+    const r = oppRunnerKey(p)
+    if (p.oppOrder && (isOppPinchHit(p.oppBatter) || (r && r !== oppKey(p)))) shared.add(oppKey({ oppBatter: '', oppOrder: p.oppOrder }))
+  }
+  if (at?.pinchHit) shared.add(oppKey({ oppBatter: '', oppOrder: at.slot }))
+  const oppRows = opp.rows(oppLine, at?.key).map((r) => {
+    const b = oppBatsLabel(r.name, sides.get(r.name), !shared.has(r.name)) ?? (r.atBat && at?.bats ? OPP_BATS_LABEL[at.bats] : undefined)
+    return b ? { ...r, bats: b } : r
+  })
   const oppTotal = counts(oppTotals(src.pitching))
 
   // ---- 我隊投球
@@ -243,6 +263,7 @@ export function gameBoxScore(ds: Pick<Dataset, 'roster' | 'batting' | 'pitching'
  * The box of the game being recorded. `inPlay`: the half on the board is being played (false once the game is over
  * and the draft waits for 結束比賽: nobody is marked at bat or 投球中 then; pitches typed anyway still count).
  */
+const batsNow = (s: RecordState): { bats?: OppBats } => { const b = s.oppBatsBySlot?.[s.oppOrder]; return b === 'L' || b === 'R' ? { bats: b } : {} }
 export function liveBoxScore(s: RecordState, opts: { inPlay: boolean; roster?: Player[]; params?: StatParams }): BoxScore {
   const side = offense(s)
   const inPlay = opts.inPlay
@@ -261,7 +282,7 @@ export function liveBoxScore(s: RecordState, opts: { inPlay: boolean; roster?: P
     dayRoster: { starters: dayRosterOf(s).starters, subs },
     live: {
       lineup: s.lineup,
-      ...(inPlay ? { atBat: side === 'us' ? { side: 'us' as const, name: s.lineup[s.slot]?.name ?? '' } : { side: 'opp' as const, key: oppKey({ oppBatter: curBatter, oppOrder: s.oppOrder }), slot: s.oppOrder, pinchHit: isOppPinchHit(s.oppBatter) } } : {}),
+      ...(inPlay ? { atBat: side === 'us' ? { side: 'us' as const, name: s.lineup[s.slot]?.name ?? '' } : { side: 'opp' as const, key: oppKey({ oppBatter: curBatter, oppOrder: s.oppOrder }), slot: s.oppOrder, pinchHit: isOppPinchHit(s.oppBatter), ...batsNow(s) } } : {}),
       pitcher: s.pitcher, pitcherNow: inPlay && side === 'opp', livePitches: side === 'opp' ? s.pitches.length : 0,
       opp: {
         start, ...(s.oppPitcher?.name ? { name: s.oppPitcher.name } : {}), ...(s.oppPitcher?.hand ? { hand: s.oppPitcher.hand } : {}),

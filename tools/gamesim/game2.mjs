@@ -6,6 +6,7 @@ import { createRequire } from 'node:module'
 // playwright from next to this script, or from the folder it is run in (npm i --no-save playwright there)
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
+import { answerAsks } from './answer.mjs'
 const S = process.argv[2] ?? '.'
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {})
@@ -32,7 +33,8 @@ await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTi
 
 // ---------------------------------------------------------------- driving the screen
 const PITCH = { B: '壞球', CS: '好球・未揮', SS: '揮空', F: '界外', IP: '擊進場內' }
-const pitch = async (c) => { await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
+// (batch 18: the questions the pitch pad waits for are answered first, 不知道 unless the script says otherwise)
+const pitch = async (c) => { await answerAsks(p, main); await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
 const planOpen = async () => (await main.getByRole('button', { name: /^送出/ }).count()) > 0
 const runnerSheet = async (base, label) => {
   await main.getByRole('button', { name: /^壘上跑者/ }).first().click(); await p.waitForTimeout(200)
@@ -57,6 +59,7 @@ let paNo = 0
 const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
 async function pa(side, spec) {
   paNo++
+  await answerAsks(p, main, { ...(spec.hand ? { hand: spec.hand } : {}), ...(spec.bats ? { bats: spec.bats } : {}) })
   const d0 = await draft()
   const who = side === 'us' ? d0.lineup[d0.slot]?.name : `對方第 ${d0.oppOrder} 棒`
   for (const st of spec.steps ?? []) {
@@ -149,12 +152,12 @@ await opp({ steps: [{ run: 2, ev: '盜壘失敗' }, 'B', 'IP'], result: '界外�
 await opp({ steps: ['SS', 'SS', 'SS'], result: '三振' })
 await check('1上結束', '1下 0出局 0:0')
 // --- 1 下
-// 對方投手: this recorder does not keep it (不記), the question goes away for the game
+// 對方投手: this recorder cannot tell (batch 18: 「不記」 is gone, the hand is required; 「不知道」 answers it and stores nothing)
 {
-  const strip = main.getByRole('group', { name: '對方投手' })
+  const strip = main.getByRole('group', { name: '對方投手左右投' })
   if (!(await strip.count())) notes.push('我隊打擊時沒有出現「對方投手是？」')
-  else { await strip.getByRole('button', { name: '不記', exact: true }).click(); await p.waitForTimeout(200) }
-  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「不記」後「對方投手是？」還在')
+  else { await strip.getByRole('button', { name: '不知道', exact: true }).click(); await p.waitForTimeout(200) }
+  if (await main.getByRole('group', { name: '對方投手左右投' }).count()) notes.push('點了「不知道」後「對方投手是？」還在')
 }
 await us({ steps: ['B', 'B', 'B', 'CS', 'B'], result: '保送' })                                                // S1 保送
 // (batch 11) the video: S1 took third on the right fielder's wild throw to second — an error on the throw (趁傳失誤),
@@ -217,6 +220,21 @@ await opp({ steps: ['IP'], result: '犧飛', loc: 8, runners: { 3: 'home' }, bat
 await opp({ steps: ['IP'], result: '內飛', loc: 4, batter: 'out' })
 await check('4上結束', '4下 0出局 6:7')
 // --- 4 下：再見
+// batch 18: 對方換投 before the half (the video: their 9號 comes in). The sheet will not 換投 until 左投／右投／不知道 is
+// picked; after it no question is left and 「對方投手 N 球」 starts from 0. Rows from here on carry 右投 9號.
+{
+  await main.getByRole('button', { name: '對方投手', exact: true }).click(); await p.waitForTimeout(250)
+  const sheet = p.getByRole('dialog', { name: '對方投手' })
+  await sheet.getByRole('button', { name: '對方換投', exact: true }).click()
+  await sheet.getByPlaceholder('例如 12號').fill('9號')
+  if (!(await sheet.getByRole('button', { name: '換投', exact: true }).isDisabled())) notes.push('對方換投還沒選左投／右投／不知道，就能按「換投」')
+  await sheet.getByRole('group', { name: '左投或右投' }).getByRole('button', { name: '右投', exact: true }).click()
+  await sheet.getByRole('button', { name: '換投', exact: true }).click(); await p.waitForTimeout(250)
+  if (await main.getByRole('group', { name: '對方投手左右投' }).count()) notes.push('對方換投（右投）之後又問「對方投手是？」')
+  if (await main.getByRole('button', { name: /^壞球/ }).first().isDisabled()) notes.push('對方換投之後投球按鈕不能按')
+  const c = (await main.getByTitle(/對方現在這位投手投給我們的球數/).first().textContent().catch(() => ''))?.trim()
+  if (c !== '對方投手 0 球') notes.push(`對方換投後「${c}」，應為「對方投手 0 球」`)
+}
 await us({ steps: ['IP'], result: '二安', loc: 7, traj: 'L', batter: 2 })                                               // S1 二安
 await us({ steps: ['IP'], result: '犧觸', loc: 1, runners: { 2: 3 }, batter: 'out' })                         // S2 犧觸
 await us({ steps: ['B', 'B', 'B', 'B'], result: '保送' })                                                    // S3 保送
@@ -243,13 +261,16 @@ const lineText = (await dlg.locator('section, div').filter({ hasText: /^.*R.*H.*
 writeFileSync(`${S}/game2-shown.json`, JSON.stringify({ N, bat, pit, lineText, dialogs, notes, errs }, null, 1))
 const ds = await p.evaluate(() => JSON.parse(localStorage.getItem('bafin.dataset.v1') || 'null'))
 writeFileSync(`${S}/game2-dataset.json`, JSON.stringify(ds))
-// 不記: no plate appearance of ours has an opponent pitcher
+// 不知道 (1–3 下): no opponent pitcher on those plate appearances; after the 對方換投 in 4 下: 右投 9號 on every one
 {
   const saved = ds?.base?.games?.find((g) => g.opponent === '模擬隊二')
   const rows = saved ? ds.base.batting.filter((x) => x.gameId === saved.id) : []
-  const withHand = rows.filter((x) => 'oppHand' in x || 'oppPitcher' in x)
-  if (!rows.length || withHand.length) { log(`✗ 不記對方投手，卻有 ${withHand.length} / ${rows.length} 個打席記了`); process.exitCode = 1 }
-  else log('不記對方投手: ok')
+  const early = rows.filter((x) => x.inning < 4), late = rows.filter((x) => x.inning === 4)
+  const withHand = early.filter((x) => 'oppHand' in x || 'oppPitcher' in x)
+  const notNew = late.filter((x) => x.oppHand !== 'R' || x.oppPitcher !== '9號')
+  if (!early.length || withHand.length) { log(`✗ 對方投手不知道，卻有 ${withHand.length} / ${early.length} 個打席記了`); process.exitCode = 1 }
+  else if (!late.length || notNew.length) { log(`✗ 對方換投（右投 9號）後有 ${notNew.length} / ${late.length} 個打席沒記成右投 9號`); process.exitCode = 1 }
+  else log('對方投手（不知道、換投右投 9號）: ok')
 }
 // 對方代跑: saved on the row where that runner reached, who scored (R/ER of S9, unchanged), and shown in the play-by-play
 {

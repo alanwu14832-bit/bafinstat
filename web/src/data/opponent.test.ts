@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasOppName, oppBattingLines, oppKey, oppTotals, scoutLines, scoutSummary } from './opponent'
+import { hasOppName, oppBatsLabel, oppBattingLines, oppKey, oppTotals, scoutLines, scoutSummary } from './opponent'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
 import { EMPTY_DATASET, OPP_PH_UNNAMED, oppPinchHitter, type Dataset, type Game, type PitchingPA } from './types'
@@ -83,5 +83,40 @@ describe('scoutLines', () => {
   it('lists a 對方代跑 with the day he ran', () => {
     const withPr = { ...ds, pitching: ds.pitching.map((p, i) => (i === 0 ? { ...p, runner: '8號' } : p)) }
     expect(scoutLines(withPr, '台大').find((l) => l.label === '8號')).toMatchObject({ pa: 0, r: 1, lastDate: '2026-03-01', field: { left: 0, center: 0, right: 0 } })
+  })
+})
+
+describe('對手情蒐: each batter\'s side (batch 18)', () => {
+  it('shows 左打 / 右打 as recorded against us, 左右打 when both, nothing when never recorded', () => {
+    const games: Game[] = ['G1', 'G2'].map((id, i) => ({ id, date: `2026-10-0${i + 1}`, tournament: '聯賽', opponent: '政大', homeAway: '主' }))
+    const ds: Dataset = { ...EMPTY_DATASET, games, pitching: [
+      prow({ oppBatter: '王', oppBats: 'L' }), prow({ oppOrder: 2, oppBatter: '李', oppBats: 'R' }), prow({ oppOrder: 3, oppBatter: '陳' }),
+      prow({ gameId: 'G2', oppBatter: '王', oppBats: 'L' }), prow({ gameId: 'G2', oppOrder: 2, oppBatter: '李', oppBats: 'L' }),
+    ] }
+    const by = Object.fromEntries(scoutLines(ds, '政大').map((l) => [l.label, l.bats]))
+    expect(by).toEqual({ 王: '左打', 李: '左右打', 陳: undefined })
+  })
+  it('an unnamed slot (「第 N 棒」) can be different people: one side when they all agree, nothing (not 左右打) when not', () => {
+    const games: Game[] = ['G1', 'G2'].map((id, i) => ({ id, date: `2026-10-0${i + 1}`, tournament: '聯賽', opponent: '甲隊', homeAway: '主' }))
+    const ds: Dataset = { ...EMPTY_DATASET, games, pitching: [
+      prow({ oppOrder: 3, oppBatter: undefined, oppBats: 'R' }), prow({ gameId: 'G2', oppOrder: 3, oppBatter: undefined, oppBats: 'L' }),
+      prow({ oppOrder: 4, oppBatter: undefined, oppBats: 'R' }), prow({ gameId: 'G2', oppOrder: 4, oppBatter: undefined, oppBats: 'R' }),
+    ] }
+    const by = Object.fromEntries(scoutLines(ds, '甲隊').map((l) => [l.label, l.bats]))
+    expect(by).toEqual({ '第 3 棒': undefined, '第 4 棒': '右打' })
+    expect(scoutLines(ds, '甲隊').find((l) => l.label === '第 3 棒')).not.toHaveProperty('bats')
+  })
+})
+
+describe('oppBatsLabel', () => {
+  it('one side, both sides for one man, nothing for a slot that merged people', () => {
+    expect(oppBatsLabel('王', new Set(['L']))).toBe('左打')
+    expect(oppBatsLabel('王', new Set(['L', 'R']))).toBe('左右打')
+    expect(oppBatsLabel('第 3 棒', new Set(['L', 'R']))).toBeUndefined()
+    expect(oppBatsLabel('第 3 棒', new Set(['L', 'R']), true)).toBe('左右打')
+    expect(oppBatsLabel('第 3 棒', new Set(['R']))).toBe('右打')
+    expect(oppBatsLabel('棒次未記', new Set(['L', 'R']))).toBeUndefined()
+    expect(oppBatsLabel('王', new Set())).toBeUndefined()
+    expect(oppBatsLabel('王', undefined)).toBeUndefined()
   })
 })

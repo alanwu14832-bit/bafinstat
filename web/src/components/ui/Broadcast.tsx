@@ -134,7 +134,7 @@ function Item({ it, weTop, mark, open, onToggle }: { it: FeedItem; weTop: boolea
     return (
       <div className={cx(ROW, 'px-4 py-2.5 bg-[color-mix(in_srgb,var(--accent)_6%,transparent)]')}>
         <span aria-hidden className="relative inline-flex size-2 mt-1.5 mx-auto"><span className="absolute inset-0 rounded-full bg-[var(--critical)] opacity-60 animate-ping motion-reduce:animate-none" /><span className="relative size-2 rounded-full bg-[var(--critical)]" /></span>
-        <span className="min-w-0 text-[14px] text-ink"><span className="text-muted text-[12px] mr-1.5">打擊中</span><b className="font-semibold">{it.who}</b></span>
+        <span className="min-w-0 text-[14px] text-ink"><span className="text-muted text-[12px] mr-1.5">打擊中</span><b className="font-semibold">{it.who}</b>{it.bats && <span className="text-muted text-[12px] ml-1">{it.bats}</span>}</span>
         <span className="flex flex-col items-end gap-1"><span className="text-[14px] font-semibold tnum text-ink" aria-label={`球數 ${it.count}`}>{it.count}</span>{it.score && <ScoreChip score={it.score} weTop={weTop} mark={mark} />}{it.outs ? <Outs n={it.outs} /> : null}</span>
         <span className="col-start-2 col-span-2 text-[12px] text-muted mt-0.5 flex flex-col gap-0.5">
           <span className="tracking-[0.08em]">{it.tokens || '—'}</span>
@@ -147,7 +147,7 @@ function Item({ it, weTop, mark, open, onToggle }: { it: FeedItem; weTop: boolea
   const head = (
     <>
       <span aria-hidden className="inline-flex items-center justify-center size-5 mt-px rounded-[5px] bg-surface-3 text-ink-2 text-[11px] font-semibold tnum">{it.order ?? ''}</span>
-      <span className={cx('min-w-0 text-[14px] leading-snug text-ink', it.hr && 'font-semibold')}><b className="font-semibold">{chipWho(it.who, it.order)}</b> {it.text}</span>
+      <span className={cx('min-w-0 text-[14px] leading-snug text-ink', it.hr && 'font-semibold')}><b className="font-semibold">{chipWho(it.who, it.order)}</b>{it.bats && <span className="text-muted text-[12px] ml-1">{it.bats}</span>} {it.text}</span>
       <Side score={it.score} outs={it.outs} weTop={weTop} mark={mark} />
       {(it.plays.length > 0 || it.meta) && (
         <span className="col-start-2 col-span-2 mt-0.5 text-[12px] text-muted flex flex-col gap-0.5">

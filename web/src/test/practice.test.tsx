@@ -20,6 +20,7 @@ import { useDataStore } from '../store/data'
 import { listCloudDrafts, saveCloudDraft } from '../data/supabase'
 import { PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
 import { newGame } from '../record/model'
+import { answered } from './answered'
 
 const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
@@ -30,7 +31,7 @@ describe('練習紀錄', () => {
   it('records on this device only, beside the real progress', async () => {
     const real = { ...newGame({ id: 'G20261009-01', date: '2026-10-09', tournament: '聯賽', opponent: '資管', homeAway: '主' }, lineup, '甲'), updatedAt: '2026-10-09T02:00:00.000Z' }
     writeDraft(real)
-    const practice = { ...newGame({ id: 'PRACTICE-20261009', date: '2026-10-09', tournament: '練習', opponent: '練習對手', homeAway: '主' }, lineup, '甲'), practice: true }
+    const practice = { ...answered(newGame({ id: 'PRACTICE-20261009', date: '2026-10-09', tournament: '練習', opponent: '練習對手', homeAway: '主' }, lineup, '甲')), practice: true }
     writeDraft(practice, PRACTICE_KEY)
     const saveGame = vi.fn(async () => [])
     useDataStore.setState({ saveGame, cloud: { ...cloudBefore, configured: true, status: 'ready', user: { id: 'u1', email: 'a@b.c' } as User, isEditor: true } })

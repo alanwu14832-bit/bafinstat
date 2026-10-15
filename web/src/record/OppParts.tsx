@@ -1,42 +1,65 @@
 /**
  * 紀錄比賽: the opponent's side of the sheet — who is pitching for them (左投／右投, a name if wanted) and, when the
- * recorder opts in, the names in their batting order. Everything here is optional and never blocks a plate appearance.
+ * recorder opts in, the names in their batting order, and which side their batter stands on (左打／右打). The pitcher's
+ * hand and the batter's side are required (「不知道」 is an answer): the pitch pad waits for them (model needsOppHand /
+ * needsOppBats). Names stay optional.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Sheet } from '../components/ui/Sheet'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { cx } from '../lib/format'
-import { OPP_HAND_LABEL, type OppHand } from '../data/types'
+import { OPP_BATS_LABEL, OPP_HAND_LABEL, type OppBats, type OppHand } from '../data/types'
 import type { OppPitcher } from './model'
 import { chipBtn } from './widgets'
 
 const HANDS: OppHand[] = ['L', 'R']
 
-/** 「對方 右投」 / 「對方 王・右」 / 「對方投手」 (nothing yet). */
+/** 「對方 右投」 / 「對方 王・右」 / 「對方投手」 (nothing yet, or 不知道 without a name). */
 export function oppPitcherLabel(p?: OppPitcher): string {
   if (!p) return '對方投手'
   if (p.name) return `對方 ${p.name}${p.hand ? `・${p.hand === 'L' ? '左' : '右'}` : ''}`
-  return `對方 ${p.hand ? OPP_HAND_LABEL[p.hand] : '投手'}`
+  return p.hand ? `對方 ${OPP_HAND_LABEL[p.hand]}` : '對方投手'
 }
+const BATS: OppBats[] = ['L', 'R']
 /** 「右投 王」, 「左投」, 「王」 */
 export function oppPitcherText(p?: { name?: string; hand?: OppHand }): string {
   return [p?.hand ? OPP_HAND_LABEL[p.hand] : '', p?.name ?? ''].filter(Boolean).join(' ')
 }
 
-/** The one-time question while we bat: one tap on 左投／右投, or 不記 for this game. */
-export function OppPitcherStrip({ onHand, onName, onSkip }: { onHand: (h: OppHand) => void; onName: () => void; onSkip: () => void }) {
+/**
+ * The question while we bat, before the first pitch of our first half and after every 對方換投 without a hand: one tap
+ * on 左投／右投, or 不知道 (null). Required: the pitch pad waits for it. `name`: the pitcher's name, when he has one.
+ */
+export function OppPitcherStrip({ onHand, onName, name }: { onHand: (h: OppHand | null) => void; onName: () => void; name?: string }) {
   return (
-    <div role="group" aria-label="對方投手" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-[var(--radius-sm)] border border-border bg-surface-2/60 px-3 py-2">
-      <span className="text-[13px] font-medium text-ink">對方投手是？</span>
+    <div role="group" aria-label="對方投手左右投" className="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft px-3 py-2">
+      <span className="text-[13px] font-medium text-ink">對方投手{name ? ` ${name}` : ''}是？</span>
       <div className="flex items-center gap-1.5">
         {HANDS.map((h) => <button key={h} type="button" onClick={() => onHand(h)} className={cx(chipBtn(false), 'h-10 min-w-14')}>{OPP_HAND_LABEL[h]}</button>)}
+        <button type="button" onClick={() => onHand(null)} className="h-10 px-2 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">不知道</button>
       </div>
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={onName}>填姓名</Button>
-        <Button variant="ghost" size="sm" onClick={onSkip}>不記</Button>
+      {!name && <Button variant="ghost" size="sm" onClick={onName}>填姓名</Button>}
+      <span className="basis-full text-[11px] text-ink-2">選好才能記投球；用來看對左投、對右投的成績</span>
+    </div>
+  )
+}
+
+/**
+ * 左打｜右打 (and a small 不知道) for their batter up now, next to 「對方第 N 棒」. `value`: what his slot has this game
+ * ('?' = 不知道), undefined = not picked yet (the pitch pad waits: 先選對方打者左打或右打).
+ */
+export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick: (b: OppBats | null) => void }) {
+  return (
+    <div role="group" aria-label="對方打者左打或右打" className="flex items-center gap-1.5">
+      <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border">
+        {BATS.map((b) => (
+          <button key={b} type="button" aria-pressed={value === b} onClick={() => onPick(b)}
+            className={cx('h-9 min-w-12 px-2.5 rounded-[6px] text-[13px] font-medium cursor-pointer', value === b ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2')}>{OPP_BATS_LABEL[b]}</button>
+        ))}
       </div>
-      <span className="basis-full text-[11px] text-muted">選填；之後可以看對左投、對右投的成績</span>
+      <button type="button" aria-pressed={value === '?'} onClick={() => onPick(null)}
+        className={cx('h-9 px-2 rounded-[6px] text-[12px] cursor-pointer', value === '?' ? 'bg-surface-3 text-ink font-medium' : 'text-muted hover:text-ink underline underline-offset-2')}>不知道</button>
     </div>
   )
 }
@@ -62,13 +85,17 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
   stintRows?: number
 }) {
   const [name, setName] = useState('')
-  const [hand, setHand] = useState<OppHand | undefined>(undefined)
+  // 'unknown' = 不知道 (OppPitcher.handUnknown)
+  const [hand, setHand] = useState<OppHand | 'unknown' | undefined>(undefined)
   const [mode, setMode] = useState<'correct' | 'change'>('correct')
-  const fill = (p?: OppPitcher) => { setName(p?.name ?? ''); setHand(p?.hand) }
-  useEffect(() => { if (open) { fill(current); setMode('correct') } }, [open, current?.name, current?.hand]) // eslint-disable-line react-hooks/exhaustive-deps
+  const fill = (p?: OppPitcher) => { setName(p?.name ?? ''); setHand(p?.hand ?? (p?.handUnknown ? 'unknown' : undefined)) }
+  useEffect(() => { if (open) { fill(current); setMode('correct') } }, [open, current?.name, current?.hand, current?.handUnknown]) // eslint-disable-line react-hooks/exhaustive-deps
   const choosing = !!current && !!onCorrect
   const correcting = choosing && mode === 'correct'
-  const can = (!!name.trim() || !!hand) && !(correcting && name.trim() === (current?.name ?? '') && hand === current?.hand)
+  // 左投／右投 or 不知道 is required (the pitch pad waits for it); a name stays optional
+  const was = current?.hand ?? (current?.handUnknown ? 'unknown' : undefined)
+  const can = !!hand && !(correcting && name.trim() === (current?.name ?? '') && hand === was)
+  const picked = (): OppPitcher => ({ name: name.trim() || undefined, ...(hand === 'unknown' ? { handUnknown: true as const } : hand ? { hand } : {}) })
   const pick = (m: 'correct' | 'change') => { if (m === mode) return; setMode(m); fill(m === 'correct' ? current : undefined) }
   const modes: Array<{ v: 'correct' | 'change'; l: string }> = [{ v: 'correct', l: '更正這位投手' }, { v: 'change', l: '對方換投' }]
   return (
@@ -95,7 +122,7 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
             <span className="text-[12px] font-medium text-ink-2">遇過的投手</span>
             <div className="flex flex-wrap gap-1.5">
               {options.map((o) => (
-                <button key={o.name} type="button" aria-pressed={name.trim() === o.name && hand === o.hand} onClick={() => { setName(o.name); setHand(o.hand) }} className={chipBtn(name.trim() === o.name && hand === o.hand)}>
+                <button key={o.name} type="button" aria-pressed={name.trim() === o.name && hand === o.hand} onClick={() => { setName(o.name); setHand(o.hand ?? hand) }} className={chipBtn(name.trim() === o.name && hand === o.hand)}>
                   {o.name}{o.hand ? `・${OPP_HAND_LABEL[o.hand]}` : ''}
                 </button>
               ))}
@@ -107,13 +134,17 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
           <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} list="opp-pitcher-names" placeholder="例如 12號" />
           <datalist id="opp-pitcher-names">{options.map((o) => <option key={o.name} value={o.name} />)}</datalist>
         </label>
-        <div className="grid grid-cols-2 gap-2" role="group" aria-label="左投或右投">
-          {HANDS.map((h) => <button key={h} type="button" aria-pressed={hand === h} onClick={() => setHand(hand === h ? undefined : h)} className={cx(chipBtn(hand === h), 'h-12 text-[15px]')}>{OPP_HAND_LABEL[h]}</button>)}
+        <div className="flex flex-col gap-1.5">
+          <div className="grid grid-cols-[1fr_1fr_auto] gap-2" role="group" aria-label="左投或右投">
+            {HANDS.map((h) => <button key={h} type="button" aria-pressed={hand === h} onClick={() => setHand(h)} className={cx(chipBtn(hand === h), 'h-12 text-[15px]')}>{OPP_HAND_LABEL[h]}</button>)}
+            <button type="button" aria-pressed={hand === 'unknown'} onClick={() => setHand('unknown')} className={cx(chipBtn(hand === 'unknown'), 'h-12 px-3 text-[13px]')}>不知道</button>
+          </div>
+          {!hand && <span className="text-[11px] text-muted">一定要選一個（看不出來就選「不知道」）</span>}
         </div>
         {!current && earlierRows > 0 && <p className="text-[12px] text-ink-2">這半局前面 {earlierRows} 個打席也會記成這位投手</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button variant="primary" disabled={!can} onClick={() => { const p = { name: name.trim() || undefined, hand }; if (correcting) onCorrect!(p); else onConfirm(p); onClose() }}>{correcting ? '更正' : choosing ? '換投' : '確定'}</Button>
+          <Button variant="primary" disabled={!can} onClick={() => { const p = picked(); if (correcting) onCorrect!(p); else onConfirm(p); onClose() }}>{correcting ? '更正' : choosing ? '換投' : '確定'}</Button>
         </div>
       </div>
     </Sheet>
@@ -155,7 +186,7 @@ export function OppLineupFields({ value, onChange, names, current, focusSlot, id
           <span className="text-[13px] text-ink-2 tnum w-9 shrink-0">{i + 1} 棒</span>
           <Input ref={(el) => { refs.current[i] = el }} value={value[i] ?? ''} onChange={(e) => onChange(Array.from({ length: 9 }, (_, k) => (k === i ? e.target.value : value[k] ?? '')))}
             list={list} placeholder="姓名或背號" maxLength={40} aria-label={`對方第 ${i + 1} 棒`} className="flex-1" />
-          {current === i + 1 && <span className="text-[11px] text-accent-ink font-medium shrink-0">現在打擊</span>}
+          {current === i + 1 && <span className="text-[11px] text-ink font-medium shrink-0">現在打擊</span>}
         </label>
       ))}
     </div>

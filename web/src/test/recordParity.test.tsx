@@ -9,13 +9,14 @@ import { MemoryRouter } from 'react-router-dom'
 import { RecordPage } from '../pages/Record'
 import { PitchingPlayByPlay } from '../components/ui/PlayByPlay'
 import { PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
+import { answered } from './answered'
 import { addPitch, commitPA, defaultPlan, newGame, type RecordState } from '../record/model'
 import { OPP_PH_UNNAMED } from '../data/types'
 
 const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
 const game = (homeAway: '主' | '客') => ({ id: 'PRACTICE-20261013', date: '2026-10-13', tournament: '練習', opponent: '練習對手', homeAway })
-const start = (s: RecordState) => { writeDraft({ ...s, practice: true }, PRACTICE_KEY); render(<MemoryRouter initialEntries={['/record?practice=1']}><RecordPage /></MemoryRouter>) }
+const start = (s: RecordState) => { writeDraft({ ...answered(s), practice: true }, PRACTICE_KEY); render(<MemoryRouter initialEntries={['/record?practice=1']}><RecordPage /></MemoryRouter>) }
 const draft = () => readDraft(PRACTICE_KEY)!
 Element.prototype.scrollIntoView ??= () => {}
 afterEach(() => { cleanup(); writeDraft(null, PRACTICE_KEY) })
@@ -76,6 +77,9 @@ describe('紀錄比賽: their side as complete as ours', () => {
     fireEvent.click(within(who).getByRole('button', { name: '2 C 乙' }))
     await wait(50)
     expect(draft().extras.errors).toEqual(['C'])
+    // a pinch hitter is someone new: his side is asked again (batch 18) before the results work
+    expect(screen.getByText(/先選對方打者左打或右打/)).toBeTruthy()
+    fireEvent.click(within(screen.getByRole('group', { name: '對方打者左打或右打' })).getByRole('button', { name: '左打' }))
     // a single scores him: their RBI stepper is there
     fireEvent.click(screen.getByRole('button', { name: '一安' }))
     fireEvent.click(screen.getAllByRole('button', { name: /^8 CF/ })[0])
@@ -86,6 +90,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     expect(draft().pitching[1].rbi).toBe(1)
     expect(draft().pitching[1].errors).toEqual(['C'])
     expect(draft().pitching[1].oppBatter).toBe(OPP_PH_UNNAMED)
+    expect(draft().pitching[1].oppBats).toBe('L')
   })
 
   it('逐打席 on the pitching side has their 打點 −／＋', () => {

@@ -1,7 +1,8 @@
 /**
  * 情境拆分: a batter's (or the batters our pitchers faced) numbers split by situation — the count, outs and runners,
- * inning, batting order, his n-th plate appearance of the game / the pitcher's time through the order, and the
- * opponent pitcher's hand. Everything comes from what is recorded already (逐球, 出局(前), 壘上(前), 棒次, 局); nothing
+ * inning, batting order, his n-th plate appearance of the game / the pitcher's time through the order, the opponent
+ * pitcher's hand (our batters), the opponent batter's side, 對左打／對右打 (our pitchers), and our batters by their own
+ * side (左打者／右打者 from the 球員名單, and 左右打 × 對左右投). Everything comes from what is recorded already (逐球, 出局(前), 壘上(前), 棒次, 局); nothing
  * is stored.
  *
  * Each plate appearance's situation (`paContexts`) is worked out once over the whole, unfiltered dataset in stored
@@ -10,10 +11,10 @@
  */
 import { countParts, countTrail, type CountTrail } from './counts'
 import { lineFor, type BattingLine } from './stats'
-import { isPA, type BattingPA, type Dataset, type OppHand, type PitchingPA, type Player } from './types'
+import { isPA, type BattingPA, type Dataset, type Hand, type OppBats, type OppHand, type PitchingPA, type Player } from './types'
 
 export type SplitSide = 'bat' | 'pit'
-export type SplitGroup = 'count' | 'situation' | 'inning' | 'order' | 'nth' | 'hand'
+export type SplitGroup = 'count' | 'situation' | 'inning' | 'order' | 'nth' | 'hand' | 'bats'
 /** Rows with fewer plate appearances are greyed out (樣本少). */
 export const SPLIT_MIN_PA = 10
 
@@ -30,6 +31,10 @@ export interface PaContext {
   /** batter: his n-th plate appearance of the game; pitcher: the n-th time through the order */
   nth: number
   oppHand?: OppHand
+  /** (pitching rows) the side their batter stood on: 左打 L / 右打 R (recorded since batch 18) */
+  oppBats?: OppBats
+  /** (our batting rows) the batter's own 打擊慣用 from the 球員名單 (L / R / S 左右開弓), '?' = 未填 */
+  ownBats?: Hand | '?'
 }
 
 /** 壘上(前) as a sorted set of bases: '無' / '0' -> '', '31' -> '13'; undefined / '' -> undefined (not recorded). */
@@ -54,9 +59,11 @@ const SWING = new Set(['SS', 'F', 'IP'])
 const TAKE = new Set(['B', 'CS', 'S'])
 
 /** The situation of every plate appearance of one side, over the whole dataset (rows keyed by object). */
-export function paContexts(ds: Pick<Dataset, 'batting' | 'pitching'>, side: SplitSide): WeakMap<object, PaContext> {
+export function paContexts(ds: Pick<Dataset, 'batting' | 'pitching'> & Partial<Pick<Dataset, 'roster'>>, side: SplitSide): WeakMap<object, PaContext> {
   const out = new WeakMap<object, PaContext>()
   const seen = new Map<string, number>()
+  const bats = new Map((ds.roster ?? []).map((p) => [p.name, p.bats]))
+  const ownBats = (name: string): Hand | '?' => { const b = bats.get(name); return b === 'L' || b === 'R' || b === 'S' ? b : '?' }
   for (const p of side === 'bat' ? ds.batting : ds.pitching) {
     if (!isPA(p)) continue
     const trail = countTrail(p.pitches)
@@ -80,13 +87,15 @@ export function paContexts(ds: Pick<Dataset, 'batting' | 'pitching'>, side: Spli
     out.set(p, {
       trail, firstPitch: first === undefined ? null : SWING.has(first) ? 'swing' : 'take',
       outs: typeof p.outsBefore === 'number' ? p.outsBefore : undefined, bases: normBases(p.basesBefore), inning: p.inning,
-      slot: slot || undefined, nth, oppHand: oppPitcherHandOf(p),
+      slot: slot || undefined, nth, oppHand: oppPitcherHandOf(p), ...(side === 'pit' && (p as PitchingPA).oppBats ? { oppBats: (p as PitchingPA).oppBats } : {}),
+      ...(side === 'bat' ? { ownBats: ownBats((p as BattingPA).batter) } : {}),
     })
   }
   return out
 }
 
-export interface SplitDef { key: string; label: string; /** what the label means, in a line under it */ desc?: string; test: (c: PaContext) => boolean }
+export interface SplitDef { key: string; label: string; /** what the label means, in a line under it */ desc?: string; test: (c: PaContext) => boolean
+  /** left out when nobody is in it */ optional?: boolean }
 
 const AHEAD = new Set(['1-0', '2-0', '3-0', '2-1', '3-1'])   // more balls: the batter is ahead
 const EVEN = new Set(['0-0', '1-1', '2-2'])
@@ -102,7 +111,10 @@ const HAS: Record<SplitGroup, (c: PaContext) => boolean> = {
   order: (c) => !!c.slot,
   nth: () => true,
   hand: (c) => !!c.oppHand,
+  bats: (c) => !!c.oppBats || !!c.ownBats,
 }
+/** The side our batter stood on against that pitcher: his own, a switch hitter the opposite of the pitcher's hand. */
+const standsAs = (c: PaContext): 'L' | 'R' | undefined => (c.ownBats === 'L' || c.ownBats === 'R' ? c.ownBats : c.ownBats === 'S' && c.oppHand ? (c.oppHand === 'L' ? 'R' : 'L') : undefined)
 
 /** The splits of one tab, in the order baseball people read them. */
 export function splitDefs(side: SplitSide, group: SplitGroup, innings: number): SplitDef[] {
@@ -158,12 +170,28 @@ export function splitDefs(side: SplitSide, group: SplitGroup, innings: number): 
       { key: 'vs-L', label: '對左投', test: (c) => c.oppHand === 'L' },
       { key: 'vs-R', label: '對右投', test: (c) => c.oppHand === 'R' },
     ]
+    case 'bats': return bat
+      ? [
+        // our batters by their own side (球員名單), then 左右打 × 對左右投
+        { key: 'bats-L', label: '左打者', test: (c) => c.ownBats === 'L' },
+        { key: 'bats-R', label: '右打者', test: (c) => c.ownBats === 'R' },
+        { key: 'bats-S', label: '左右開弓', test: (c) => c.ownBats === 'S', optional: true },
+        { key: 'bats-none', label: '未填', desc: '球員名單沒填左右打', test: (c) => c.ownBats === '?', optional: true },
+        { key: 'L-vs-L', label: '左打者・對左投', test: (c) => standsAs(c) === 'L' && c.oppHand === 'L' },
+        { key: 'L-vs-R', label: '左打者・對右投', test: (c) => standsAs(c) === 'L' && c.oppHand === 'R' },
+        { key: 'R-vs-L', label: '右打者・對左投', test: (c) => standsAs(c) === 'R' && c.oppHand === 'L' },
+        { key: 'R-vs-R', label: '右打者・對右投', test: (c) => standsAs(c) === 'R' && c.oppHand === 'R' },
+      ]
+      : [
+        { key: 'vs-LHB', label: '對左打', test: (c) => c.oppBats === 'L' },
+        { key: 'vs-RHB', label: '對右打', test: (c) => c.oppBats === 'R' },
+      ]
   }
 }
 
 export const SPLIT_GROUP_LABEL: Record<SplitGroup, (side: SplitSide) => string> = {
   count: () => '球數', situation: () => '出局・壘上', inning: () => '局數', order: () => '棒次',
-  nth: (side) => (side === 'bat' ? '本場第幾打席' : '第幾輪'), hand: () => '對左右投',
+  nth: (side) => (side === 'bat' ? '本場第幾打席' : '第幾輪'), hand: () => '對左右投', bats: (side) => (side === 'bat' ? '左右打' : '對左右打'),
 }
 
 export interface SplitRow { key: string; label: string; desc?: string; line: BattingLine; /** fewer than SPLIT_MIN_PA plate appearances */ small: boolean; /** the 「全部」 row */ all?: boolean }
@@ -174,6 +202,8 @@ export interface SplitTable {
   /** 出局・壘上: of those, without 出局(前) / without 壘上(前) */
   missingOuts?: number
   missingBases?: number
+  /** 左右打 (our batters): who has no 打擊慣用 in the 球員名單 (their plate appearances are 「未填」) */
+  noBats?: string[]
 }
 
 type Row = BattingPA | PitchingPA
@@ -197,11 +227,12 @@ export function splitTable(rows: Row[], ctx: WeakMap<object, PaContext>, side: S
   const out: SplitRow[] = [all]
   for (const d of splitDefs(side, group, opts.innings)) {
     const these = known.filter(([, c]) => d.test(c)).map(([r]) => r)
-    if (!these.length && (group === 'inning' || group === 'order')) continue
+    if (!these.length && (group === 'inning' || group === 'order' || d.optional)) continue
     const line = lineOf(d.label, side, these, opts.roster)
     out.push({ key: d.key, label: d.label, ...(d.desc ? { desc: d.desc } : {}), line, small: line.pa < SPLIT_MIN_PA })
   }
-  return { rows: out, missing, ...(group === 'situation' ? { missingOuts, missingBases } : {}) }
+  const noBats = group === 'bats' && side === 'bat' ? [...new Set(known.filter(([, c]) => c.ownBats === '?').map(([r]) => (r as BattingPA).batter))] : []
+  return { rows: out, missing, ...(group === 'situation' ? { missingOuts, missingBases } : {}), ...(noBats.length ? { noBats } : {}) }
 }
 
 export interface CountCell { key: string; balls: number; strikes: number; line: BattingLine; small: boolean }
@@ -218,10 +249,14 @@ export function countGrid(rows: Row[], ctx: WeakMap<object, PaContext>, side: Sp
   return out
 }
 
-/** The tabs to show: 對左右投 only for batters, and only once some plate appearance has the opponent pitcher's hand. */
+/** The tabs to show: 對左右投 only for batters, once some plate appearance has the opponent pitcher's hand; 對左右打
+ *  only for pitchers, once some plate appearance has the opponent batter's side. */
 export function availableGroups(side: SplitSide, ds: Pick<Dataset, 'batting' | 'pitching'>, ctx: WeakMap<object, PaContext>): SplitGroup[] {
   const groups: SplitGroup[] = ['count', 'situation', 'inning', 'order', 'nth']
   if (side === 'bat' && ds.batting.some((p) => ctx.get(p)?.oppHand)) groups.push('hand')
+  if (side === 'pit' && ds.pitching.some((p) => ctx.get(p)?.oppBats)) groups.push('bats')
+  // (our batters by their own side: always, so 「未填」 tells who still needs it in the 球員名單)
+  if (side === 'bat' && ds.batting.some((p) => ctx.get(p)?.ownBats)) groups.push('bats')
   return groups
 }
 

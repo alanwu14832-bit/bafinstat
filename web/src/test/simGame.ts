@@ -16,13 +16,17 @@
  * Batch 11 (their side as complete as ours), from the second stream too: 對方失誤 pressed while we bat (a position or
  * 不知道), their runners moving up on our error between pitches (失誤進壘 with our fielder), now and then a 備註; their RBI
  * is the plan's, as for ours. `expect.oppErrors` counts every error of theirs the game should show in E.
+ *
+ * Batch 18, from a third stream: 對方打者左打／右打／不知道 picked when their batter comes up without one (the model's
+ * needsOppBats must agree with the slots this script remembers), now and then a switch hitter changing sides; a
+ * 對方代跑 or a new name in their order clears that slot. `expect.bats` is each pitching row's side ('L' / 'R' / none).
  */
 import {
   addError, addExtra, addOppError, addPitch, balk, changePitcher, commitPA, count, defaultPlan, endHalf, impliedResult, newGame, offense, planProblems, runnerEvent, setOppLineup, setOppNames,
-  pinchRunOpp, setOppPitcher, stampTimes, substitute,
+  pinchRunOpp, setOppPitcher, stampTimes, substitute, needsOppBats, setOppBats,
   type Dest, type OppPitcher, type RecordState,
 } from '../record/model'
-import type { BattingPA, Game, OppHand, Player } from '../data/types'
+import type { BattingPA, Game, OppBats, OppHand, Player } from '../data/types'
 import type { OnBase } from '../record/timeline'
 import { placeTiebreak, tiebreakDue } from '../record/tiebreak'
 
@@ -63,7 +67,11 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
   let oppNow: OppPitcher | undefined
   /** the latest name each of their slots had today (the rows' order): what a 突破僵局 runner is called without a lineup name */
   const slotSeen = new Map<number, string>()
-  const want = { bat: [] as Array<Pick<BattingPA, 'oppHand' | 'oppPitcher'>>, pit: [] as Array<string | undefined>, runner: new Map<number, string>(), oppErrors: 0, notes: 0 }
+  const want = { bat: [] as Array<Pick<BattingPA, 'oppHand' | 'oppPitcher'>>, pit: [] as Array<string | undefined>, runner: new Map<number, string>(), oppErrors: 0, notes: 0, bats: [] as Array<OppBats | undefined> }
+  // 對方打者左右打: its own stream, and the side each of their slots has this game ('?' = 不知道)
+  const y = rng(seed * 104729 + 7)
+  const sides = new Map<number, OppBats | '?'>()
+  const pickSide = (): OppBats | null => { const v = y(); return v < 0.45 ? 'L' : v < 0.85 ? 'R' : null }
   const FIELD = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF']
   let clock = Date.UTC(2026, 0, 1, 5, 0)
   let stamped = s
@@ -80,8 +88,11 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
       s = setOppPitcher(s, { name: raw, hand })
     }
     if (names && offense(s) === 'opp' && x() < 0.05) {
+      const before = lineupNow
       lineupNow = lineupNow.map((n, i) => (i === Math.floor(x() * 9) ? `代打${guard}` : n))
       s = setOppLineup(s, lineupNow)
+      // (someone new in a slot that had a name: his side is asked again)
+      before.forEach((n, i) => { if (n && n !== lineupNow[i]) sides.delete(i + 1) })
     }
     // 對方代跑 for one of their runners (the draws are made either way, so the rest of the extras stay the same)
     const theirs = s.runners.filter((r) => r.side === 'opp')
@@ -95,6 +106,7 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
         if (s.pitching[who.row].oppOrder) slotSeen.set(s.pitching[who.row].oppOrder!, '')
         const slot = s.pitching[who.row].oppOrder
         if (names && slot) lineupNow = lineupNow.map((n, i) => (i === slot - 1 ? name : n))
+        if (slot) sides.delete(slot)
       }
     }
     // 對方失誤 while we bat (a dropped foul fly, a bobble that moved nobody)
@@ -187,6 +199,13 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
     else { want.pit[s.pitching.length] = names ? lineupNow[s.oppOrder - 1] || undefined : undefined; if (want.pit[s.pitching.length]) slotSeen.set(s.oppOrder, want.pit[s.pitching.length]!) }
     if (sideKey === 'bat' && result === '失誤') want.oppErrors++
     if (x() < 0.05) { plan.note = `備註${guard}`; want.notes++ }
+    if (sideKey === 'pit') {
+      if (needsOppBats(s, true) !== !sides.has(s.oppOrder)) throw new Error(`needsOppBats disagrees for slot ${s.oppOrder}`)
+      // asked once per batter; now and then a switch hitter takes the other side
+      if (!sides.has(s.oppOrder) || y() < 0.05) { const b = pickSide(); s = setOppBats(s, b); sides.set(s.oppOrder, b ?? '?') }
+      const b = sides.get(s.oppOrder)
+      want.bats[s.pitching.length] = b === '?' ? undefined : b
+    }
     onPA?.(s)
     s = commitPA(s, plan)
     upNow = snap(s)

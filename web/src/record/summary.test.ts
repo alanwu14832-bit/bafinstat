@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addPitch, changePitcher, commitPA, defaultPlan, newGame, runnerEvent, setOppLineup, setOppNames, setOppPitcher, skipOppHand, wildPitch } from './model'
+import { addPitch, changePitcher, commitPA, defaultPlan, newGame, runnerEvent, setOppLineup, setOppNames, setOppPitcher, wildPitch } from './model'
 import { describeChange } from './summary'
 import type { Game } from '../data/types'
 
@@ -171,7 +171,7 @@ describe('軌跡 the result already tells', () => {
     const s = start()
     expect(describeChange(s, setOppPitcher(s, { name: '王', hand: 'L' }))).toBe('對方投手：左投 王')
     expect(describeChange(s, setOppPitcher(s, { hand: 'R' }))).toBe('對方投手：右投')
-    expect(describeChange(s, skipOppHand(s))).toContain('這場不記對方投手')
+    expect(describeChange(s, setOppPitcher(s, { handUnknown: true }))).toBe('對方投手：左右投不知道')
     const on = setOppNames(s, true)
     expect(describeChange(on, setOppLineup(on, ['A1']))).toBe('對方打序已更新')
   })

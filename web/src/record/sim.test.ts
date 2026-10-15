@@ -17,6 +17,7 @@ import { onDeckOf } from './upNext'
 import { halfCards, liveContext } from '../data/liveFacts'
 import { ourErrorCount } from '../data/errors'
 import { oppTotals } from '../data/opponent'
+import { paContexts, splitTable } from '../data/splits'
 
 describe('random games through the recording model', () => {
   const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
@@ -118,7 +119,8 @@ describe('what the recorder adds on the side', () => {
     expect(new Map(g.pitching.flatMap((p, i) => (p.runner ? [[i, p.runner] as const] : [])))).toEqual(g.expect.runner)
     const plain = playGameWith(seed, undefined, { oppPR: false })
     expect(plain.pitching.some((p) => p.runner)).toBe(false)
-    const strip = (rows: typeof g.pitching) => rows.map(({ runner: _r, oppBatter: _b, ...p }) => p)
+    // (a 對方代跑 clears his slot's 左右打, so the sides picked after it may differ)
+    const strip = (rows: typeof g.pitching) => rows.map(({ runner: _r, oppBatter: _b, oppBats: _s, ...p }) => p)
     expect(strip(g.pitching)).toEqual(strip(plain.pitching))
     expect(g.batting).toEqual(plain.batting)
     const lines = (x: typeof g) => pitchingLines(x.pitching, []).map((l) => [l.name, l.outs, l.r, l.er, l.h, l.bb])
@@ -189,5 +191,33 @@ describe('the live board over random games', () => {
   it('the cards do have something to say', () => {
     const s = playGame(7)
     expect(halfCards(s, liveContext(base, s.game, DEFAULT_PARAMS)).filter(Boolean).length).toBeGreaterThan(2)
+  })
+})
+
+describe('對方打者左右打 (batch 18)', () => {
+  const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
+  it.each(seeds)('game %i: each of their plate appearances carries the side picked for his slot (不知道: none); it survives saving; the split adds up', (seed) => {
+    const g = playGame(seed)
+    expect(g.pitching.map((p, i) => (isPA(p) ? g.expect.bats[i] : undefined))).toEqual(g.pitching.map((p) => p.oppBats))
+    // a 突破僵局 runner never has one
+    expect(g.pitching.filter(isPlaced).every((p) => !p.oppBats)).toBe(true)
+    const { fragment } = normalizeGameEdit(roster, toGameEdit(g))
+    expect(fragment.pitching.map((p) => p.oppBats)).toEqual(g.pitching.map((p) => p.oppBats))
+    const ds: Dataset = { ...EMPTY_DATASET, roster, games: fragment.games, pitching: fragment.pitching }
+    const t = splitTable(fragment.pitching, paContexts(ds, 'pit'), 'pit', 'bats', { roster, innings: 7 })
+    const n = (side: 'L' | 'R') => fragment.pitching.filter((p) => isPA(p) && p.oppBats === side).length
+    expect(t.rows.find((r) => r.key === 'vs-LHB')?.line.pa).toBe(n('L'))
+    expect(t.rows.find((r) => r.key === 'vs-RHB')?.line.pa).toBe(n('R'))
+    expect(t.missing).toBe(fragment.pitching.filter((p) => isPA(p) && !p.oppBats).length)
+  })
+  it('the games have 左打, 右打 and 不知道, and switch hitters', () => {
+    const games = seeds.slice(0, 40).map(playGame)
+    const all = games.flatMap((g) => g.pitching.filter(isPA))
+    expect(all.some((p) => p.oppBats === 'L')).toBe(true)
+    expect(all.some((p) => p.oppBats === 'R')).toBe(true)
+    expect(all.some((p) => !p.oppBats)).toBe(true)
+    // the same slot and batter on both sides in one game
+    const both = games.some((g) => [1, 2, 3, 4, 5, 6, 7, 8, 9].some((o) => new Set(g.pitching.filter((p) => isPA(p) && p.oppOrder === o && p.oppBats).map((p) => p.oppBats)).size > 1))
+    expect(both).toBe(true)
   })
 })

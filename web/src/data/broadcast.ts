@@ -10,7 +10,7 @@
  * The board's numbers live here too, one format each: the inning 「5局上」 (feed headers in Chinese numerals 「三局上」),
  * the count 「1-2」 (balls first), 「45 球」, a pitcher's line today 「2.1 局 5 安 2 失分 1 四死 3 三振」.
  */
-import { HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PlayEvent } from './types'
 import { WHERE, countBefore } from './gameText'
 import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
@@ -251,7 +251,8 @@ export function oppPitcherMarks(pas: BattingPA[]): Map<number, string> {
 
 export interface LiveSource {
   inning: number; half: Half; outs: number; pitches: string[]; plays: PlayEvent[]; runners: Runner[]
-  batter: { order: number; label: string }
+  /** bats: their batter's 左打／右打 when picked (record/model oppBatsBySlot) */
+  batter: { order: number; label: string; bats?: string }
   /** our pitcher on the mound (their half), the opponent pitcher now (ours), their batter's raw name (a 代打 mark) */
   pitcher?: string; oppPitcher?: OppPitcher; oppBatter?: string
   /** 準備上場: the batting team's first three, shown on the half's header before anything happened in it */
@@ -269,13 +270,13 @@ export interface FeedSource {
 }
 export interface Score2 { away: number; home: number }
 export type FeedItem =
-  | { kind: 'pa'; key: string; side: FeedSide; order?: number; who: string; text: string; meta: string
+  | { kind: 'pa'; key: string; side: FeedSide; order?: number; who: string; /** (their batter) 左打 / 右打 when recorded */ bats?: string; text: string; meta: string
       pitches: Array<{ n: number; word: string; count: string }>; plays: string[]; /** the same plays without 「第 n 球」, by when they happened (the expanded pitch list) */ moves: Array<{ at: number; text: string }>; pitcher: string
       runs: number; score?: Score2; outs?: number; hr: boolean }
   | { kind: 'event'; key: string; side: FeedSide; text: string; at: number; runs: number; score?: Score2; outs?: number; /** a play of the plate appearance in progress (shown in its block) */ during?: boolean }
   | { kind: 'sub'; key: string; side: FeedSide; text: string }
   | { kind: 'placed'; key: string; side: FeedSide; text: string }
-  | { kind: 'live'; key: string; side: FeedSide; who: string; order?: number; count: string; tokens: string; plays: string[]; runs: number; score?: Score2; outs?: number }
+  | { kind: 'live'; key: string; side: FeedSide; who: string; order?: number; bats?: string; count: string; tokens: string; plays: string[]; runs: number; score?: Score2; outs?: number }
 export interface FeedHalf {
   key: string; inning: number; half: Half; side: FeedSide; title: string
   /** 「投手 梁睿至」 / 「對方投手 右投 王」 / '' : who started the half */
@@ -291,7 +292,8 @@ export interface FeedHalf {
 /** What /live adds to the feed from the draft: the plate appearance in progress. */
 export function liveSourceOf(s: RecordState, dueUp?: string): LiveSource {
   const us = offense(s) === 'us'
-  const batter = us ? { order: s.slot + 1, label: s.lineup[s.slot]?.name || '打者' } : { order: s.oppOrder, label: oppBatterName(oppBatterOf(s)) || `對方第 ${s.oppOrder} 棒` }
+  const side = us ? undefined : s.oppBatsBySlot?.[s.oppOrder]
+  const batter = us ? { order: s.slot + 1, label: s.lineup[s.slot]?.name || '打者' } : { order: s.oppOrder, label: oppBatterName(oppBatterOf(s)) || `對方第 ${s.oppOrder} 棒`, ...(side === 'L' || side === 'R' ? { bats: OPP_BATS_LABEL[side] } : {}) }
   return {
     inning: s.inning, half: s.half, outs: s.outs, pitches: s.pitches, plays: s.plays ?? [], runners: s.runners, batter,
     pitcher: s.pitcher, ...(s.oppPitcher ? { oppPitcher: s.oppPitcher } : {}), ...(s.oppBatter ? { oppBatter: s.oppBatter } : {}), ...(dueUp ? { dueUp } : {}),
@@ -566,6 +568,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
       else if (madeOuts) outs = outCode
       items.push({
         kind: 'pa', key: `${side}:${i}`, side, order: side === 'us' ? (r as BattingPA).order : (r as PitchingPA).oppOrder, who: batterLabel(r, side),
+        ...(side === 'opp' && (r as PitchingPA).oppBats ? { bats: OPP_BATS_LABEL[(r as PitchingPA).oppBats!] } : {}),
         text: `${resultText(r, side, { reached, hrNo })}${clauses.length ? `；${clauses.join('，')}` : ''}。`, meta,
         pitches: pitchList(r.pitches), plays: moves.map((m) => m.text), moves: moves.map((m) => ({ at: m.at, text: m.body })), pitcher: pitcherOf(r),
         runs: st ? runs : producedRuns(r), ...(st && runs > 0 ? { score: scoreNow() } : {}), ...(madeOuts > 0 ? { outs } : {}), hr: r.result === '全壘打',
@@ -601,7 +604,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
         if (g.outs) { outs += g.outs; liveOuts += g.outs }
         items.push({ kind: 'event', key: `live:${key}:${n}`, side, text: `${g.body}。`, at: g.at, runs: g.runs, ...(g.runs ? { score: scoreNow() } : {}), ...(g.outs ? { outs } : {}), during: true })
       })
-      if (!(fresh && lv.dueUp)) items.push({ kind: 'live', key: 'live', side, who: lv.batter.label, order: lv.batter.order, count: countText(count(lv.pitches)), tokens: pitchTokens(lv.pitches), plays: groups.map((g) => g.text), runs: liveRuns, ...(liveRuns ? { score: scoreNow() } : {}), ...(liveOuts ? { outs } : {}) })
+      if (!(fresh && lv.dueUp)) items.push({ kind: 'live', key: 'live', side, who: lv.batter.label, order: lv.batter.order, ...(lv.batter.bats ? { bats: lv.batter.bats } : {}), count: countText(count(lv.pitches)), tokens: pitchTokens(lv.pitches), plays: groups.map((g) => g.text), runs: liveRuns, ...(liveRuns ? { score: scoreNow() } : {}), ...(liveOuts ? { outs } : {}) })
     }
     items.push(...(anchors.end.get(key) ?? []))
 

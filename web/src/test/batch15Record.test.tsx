@@ -68,7 +68,7 @@ describe('紀錄比賽: 更正這位投手 vs 對方換投', () => {
 describe('紀錄比賽: 三安, then out on the bases on the same play', () => {
   it('the batter row offers 出局 and 壘死; either way his row counts 壘上出局 and no warning comes up', async () => {
     start(newGame(game, lineup, '甲'))
-    fireEvent.click(screen.getByRole('button', { name: '不記' }))
+    fireEvent.click(screen.getByRole('button', { name: '不知道' }))
     fireEvent.click(screen.getByRole('button', { name: '三安' }))
     fireEvent.click(screen.getAllByRole('button', { name: /^8 CF/ })[0])
     fireEvent.click(screen.getByRole('button', { name: '平飛 L' }))
@@ -86,7 +86,7 @@ describe('紀錄比賽: 三安, then out on the bases on the same play', () => {
   })
   it('not a reach (內滾): no 壘死 on the batter row', async () => {
     start(newGame(game, lineup, '甲'))
-    fireEvent.click(screen.getByRole('button', { name: '不記' }))
+    fireEvent.click(screen.getByRole('button', { name: '不知道' }))
     fireEvent.click(screen.getByRole('button', { name: '內滾' }))
     const row = screen.getByText('打者 甲').parentElement as HTMLElement
     expect(within(row).queryByRole('button', { name: '壘死' })).toBeNull()

@@ -6,7 +6,7 @@ import {
 } from './broadcast'
 import { PA_RESULTS, PLAY_EVENT_LABELS, isPA, type BattingPA, type Game, type PitchingPA } from './types'
 import {
-  addPitch, changePitcher, commitPA, defaultPlan, newGame, oppPitchCount, pinchHitOpp, pinchRunOpp, runnerEvent, score, setOppPitcher, substitute, correctOppPitcher,
+  addPitch, changePitcher, commitPA, defaultPlan, newGame, oppPitchCount, pinchHitOpp, pinchRunOpp, runnerEvent, score, setOppBats, setOppPitcher, substitute, correctOppPitcher,
   type PAPlan, type RecordState,
 } from '../record/model'
 import { placeTiebreak } from '../record/tiebreak'
@@ -594,5 +594,19 @@ describe('150 random games', () => {
     expect(h.map((x) => [x.followed, x.runs])).toEqual([[false, 2], [false, 3]])
     expect(h[1].summary).toBe('3 分・3 安打・1 失誤・1 殘壘')
     expect(pas(h).every((p) => !p.score)).toBe(true)
+  })
+})
+
+describe('對方打者左打／右打 (batch 18)', () => {
+  it('a play of theirs carries 左打 / 右打 next to the batter when recorded (the sentence is unchanged); the live one too', () => {
+    const h = buildFeed({ homeAway: '主', opponent: '模擬隊', batting: [], pitching: [P({ oppBats: 'L' }), P({ oppOrder: 4 })] })
+    const items = pas(h)
+    expect(items.map((i) => i.bats)).toEqual(['左打', undefined])
+    expect(itemText(items[0])).toBe(itemText(items[1]).replace('對方第 4 棒', '對方第 3 棒'))
+    let s = start({ homeAway: '主' })
+    s = setOppBats(s, 'R')
+    const lv = all(feed(s, true)).find((i) => i.kind === 'live') as Extract<FeedItem, { kind: 'live' }>
+    expect(lv.bats).toBe('右打')
+    expect(liveSourceOf(setOppBats(start({ homeAway: '主' }), null)).batter.bats).toBeUndefined()
   })
 })

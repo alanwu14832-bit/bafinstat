@@ -41,6 +41,7 @@ export function CheatSheetPage() {
       <div className="columns-1 md:columns-2 print:columns-2 gap-5 print:gap-6 text-[13px] print:text-[10.5px] leading-relaxed print:leading-snug text-ink-2">
         <Block n={1} title="紀錄流程">
           <ol className="list-decimal pl-5 flex flex-col gap-0.5">
+            <li>先回答上方的問題：我隊打擊時「對方投手是？」左投／右投，對方打擊時每位打者「左打｜右打」（看不出來按「不知道」；沒選投球按鈕按不下去）</li>
             <li>點每一球（壞球、好球、界外…）</li>
             <li>打席結束時選打擊結果（三振、四壞會自動跳出）</li>
             <li>擊進場內的球點落點、軌跡（兩個必填）、強度（選填）</li>
@@ -85,7 +86,8 @@ export function CheatSheetPage() {
           <Term k="界外飛球被接殺">記「界外飛」，最後一球是 IP，落點填接球的人。</Term>
           <Term k="安打＋失誤">結果選安打，跑者去向設到實際到的壘，旁邊點「失誤進壘」（我隊守備時再點誰失誤）。</Term>
           <Term k="不死三振">結果選三振，打者去向改成 1B。</Term>
-          <Term k="對方換投">我隊打擊時點「代打」旁邊的「對方投手」按鈕（記過之後會寫「對方 右投」這樣），選左投／右投或填姓名。</Term>
+          <Term k="對方換投">我隊打擊時點「代打」旁邊的「對方投手」按鈕（記過之後會寫「對方 右投」這樣），選「對方換投」，一定要選左投／右投／不知道（姓名選填）。</Term>
+          <Term k="對方打者左右打">同一棒這場只問一次，之後自動帶入；左右開弓的打者選他這次站的那邊。對方代打、代跑後會再問。</Term>
           <Term k="換投、代打">我隊守備時按「換投」；代打、代跑、守備調動按「代打」或「換人」。</Term>
           <Term k="半局提早結束">盜壘或牽制出局造成第三個出局，網站會自動換局；手動結束按「結束半局」。</Term>
         </Block>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanHand, normalizeDataset } from './normalize'
+import { cleanBats, cleanHand, normalizeDataset } from './normalize'
 import type { BattingPA, Dataset, PitchingPA } from './types'
 
 const bat = (extra: Partial<BattingPA> = {}): BattingPA => ({ gameId: 'G1', inning: 1, outsBefore: 0, batter: '甲', pitches: ['IP'], result: '一安', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...extra })
@@ -61,5 +61,21 @@ describe('normalize: 對方投手, 結束時間, 對方打者, 中繼', () => {
     expect(w(['壬'], [pit()]).some((m) => m.includes('中繼'))).toBe(false)
     // a game without its pitching rows (an old import) is not checked
     expect(w(['子'], []).some((m) => m.includes('中繼'))).toBe(false)
+  })
+})
+
+describe('normalize: 對方打者左右打 (batch 18)', () => {
+  it('reads L / R written any common way, drops anything else (不知道 = no key)', () => {
+    expect(cleanBats('左')).toBe('L')
+    expect(cleanBats('左打')).toBe('L')
+    expect(cleanBats('lhb')).toBe('L')
+    expect(cleanBats('R')).toBe('R')
+    expect(cleanBats('右打')).toBe('R')
+    expect(cleanBats('不知道')).toBeUndefined()
+    expect(cleanBats(undefined)).toBeUndefined()
+    const out = normalizeDataset(ds({ pitching: [pit({ oppBats: '左' as never }), pit({ oppBats: 'X' as never }), pit()] })).dataset.pitching
+    expect(out[0].oppBats).toBe('L')
+    expect('oppBats' in out[1]).toBe(false)
+    expect('oppBats' in out[2]).toBe(false)
   })
 })

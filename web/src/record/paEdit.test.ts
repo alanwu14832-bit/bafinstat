@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyOppPitcher, oppStintOf, rowName, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
+import { applyOppBats, applyOppPitcher, oppSlotRowsOf, oppStintOf, rowName, applyRunEvent, basePath, runEnding, blankBattingAt, blankPitchingAt, codeFor, lastPitchFor, startBase, stillOn, toggleBase, undoRunStep, withResult, withRun } from './paEdit'
 import type { BattingPA, PitchingPA } from '../data/types'
 import { oppPitcherMarks } from '../data/broadcast'
 
@@ -152,5 +152,22 @@ describe('rowName (修改資料 runner timeline)', () => {
     expect(rowName('bat', b, true)).toBe('甲')
     expect(rowName('bat', bat({ batter: '' }))).toBe('（未填）')
     expect(rowName('pit', undefined)).toBe('')
+  })
+})
+
+describe('修改資料: 對方打者左右打 (batch 18)', () => {
+  // slot 3 bats three times: 甲 twice, then 對方代打 99號; slot 4 once
+  const rows = [pit({ oppOrder: 3, oppBats: 'L', result: '三振' }), pit({ oppOrder: 4, result: '三振' }), pit({ oppOrder: 3, inning: 3, result: '三振' }), pit({ oppOrder: 3, inning: 5, oppBatter: '代打 99號', oppBats: 'L', result: '三振' })]
+  it('his plate appearances this game: the same slot, the same man (a 對方代打 is someone else)', () => {
+    expect(oppSlotRowsOf(rows, 0)).toEqual([0, 2])
+    expect(oppSlotRowsOf(rows, 3)).toEqual([3])
+    expect(oppSlotRowsOf([...rows, pit({ gameId: 'H', oppOrder: 3 })], 0)).toEqual([0, 2])
+  })
+  it('整段（同一棒這場）都改 changes all of them, 只改這個打席 one; 不知道 leaves the key out', () => {
+    expect(applyOppBats(rows, 2, 'R', 'slot').map((p) => p.oppBats)).toEqual(['R', undefined, 'R', 'L'])
+    expect(applyOppBats(rows, 2, 'R', 'one').map((p) => p.oppBats)).toEqual(['L', undefined, 'R', 'L'])
+    const out = applyOppBats(rows, 0, undefined, 'slot')
+    expect('oppBats' in out[0] || 'oppBats' in out[2]).toBe(false)
+    expect(out[3].oppBats).toBe('L')
   })
 })
