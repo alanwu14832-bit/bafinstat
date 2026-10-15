@@ -8,7 +8,7 @@ import { Select } from './Select'
 import { rosterNames } from './PlayerSelect'
 import { RosterSortToggle, useRosterSort } from './RosterSortToggle'
 import { cx } from '../../lib/format'
-import { registrationKey, seasonOf, REGISTRATIONS_UNSUPPORTED } from '../../data/registrations'
+import { orphanRegistration, registrationKey, seasonOf, REGISTRATIONS_UNSUPPORTED } from '../../data/registrations'
 import type { Game, Player, Registration } from '../../data/types'
 
 const chip = (active: boolean) => cx('h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
@@ -81,6 +81,20 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setSaving(false) }
   }
+  // a list whose 杯賽 no game uses that year (the tournament was renamed): one tap moves it to the suggested name
+  const orphan = selected ? orphanRegistration(selected, registrations, games) : { orphan: false }
+  const renameTo = async (r: Registration, tournament: string) => {
+    const target = registrations.find((x) => registrationKey(x.season, x.tournament) === registrationKey(r.season, tournament))
+    const players = ordered([...new Set([...(target?.players ?? []), ...r.players])])
+    if (!window.confirm(`把 ${r.season} 年「${r.tournament}」的報名名單改成「${tournament}」？\n之後「${tournament}」的比賽排先發、紀錄比賽時只列名單上的 ${players.length} 人，「${r.tournament}」這份名單會刪掉。`)) return
+    setError(null); setSaving(true)
+    try {
+      await onSave({ season: r.season, tournament, players })
+      await onDelete(r.season, r.tournament)
+      setPicked(registrationKey(r.season, tournament))
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
+    finally { setSaving(false) }
+  }
   const remove = async () => {
     const o = draft?.original
     if (!o || !window.confirm(`確定刪除「${label(o)}」報名名單？刪除後這個杯賽會列出全隊。`)) return
@@ -111,6 +125,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
                   <button type="button" aria-current={on || undefined} onClick={() => { setPicked(key); setDraft(null); setError(null) }}
                     className={cx(chip(on), 'max-w-full md:w-full text-left inline-flex items-center truncate')}>
                     <span className="truncate">{label(r)}</span><span className={cx('tnum font-normal shrink-0', on ? 'opacity-70' : 'text-muted')}>・{r.players.length} 人</span>
+                    {orphanRegistration(r, registrations, games).orphan && <AlertTriangle aria-label="還沒有比賽用這個杯賽名稱" className={cx('size-3.5 shrink-0 ml-1', on ? 'opacity-80' : 'text-warning')} />}
                   </button>
                 </li>
               )
@@ -170,6 +185,13 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
               </div>
               <div className="flex items-center gap-2 flex-wrap"><RosterSortToggle />{canEdit && <Button size="sm" variant="outline" icon={<Pencil />} onClick={() => edit(selected)}>編輯</Button>}</div>
             </div>
+            {orphan.orphan && (
+              <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[12px] text-ink">
+                <span className="flex items-start gap-2"><AlertTriangle className="size-4 shrink-0 mt-px text-warning" />{selected.season} 年還沒有比賽用這個杯賽名稱。先報名、比賽還沒排進賽程的話不用管；杯賽改過名的話，名單也要跟著改{canEdit ? '（按「編輯」改杯賽）' : ''}。</span>
+                {canEdit && orphan.suggestion && <Button size="sm" variant="outline" className="self-start" disabled={saving} onClick={() => void renameTo(selected, orphan.suggestion!)}>改成「{orphan.suggestion}」</Button>}
+                {error && <span role="alert" className="text-critical">{error}</span>}
+              </div>
+            )}
             {selected.players.length ? (
               <ul className="flex flex-wrap gap-1.5" aria-label={`${label(selected)} 報名球員`}>
                 {ordered(selected.players).map((n) => (

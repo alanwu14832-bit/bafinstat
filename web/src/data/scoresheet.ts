@@ -212,6 +212,8 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
   if (side === 'bat') for (const s of opts.subs ?? []) {
     // DayRosterSub.slot is the lineup index (0 = leadoff), as record/model substitute() stores it; lines use the order
     if (s.kind !== 'DEF' || s.slot === undefined || s.slot < 0 || !s.in) continue
+    // a position-only change (守備調動) adds the new position to his: 代打-SS, SS-2B
+    if (s.in === s.out) { const p = lineFor(s.slot + 1).players.find((x) => x.name === s.in); if (p && s.pos && !(p.pos ?? '').split('-').includes(s.pos)) p.pos = p.pos ? `${p.pos}-${s.pos}` : s.pos; continue }
     addPlayer(lineFor(s.slot + 1), { name: s.in, pos: s.pos || undefined, sub: true })
   }
 

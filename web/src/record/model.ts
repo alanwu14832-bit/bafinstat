@@ -22,7 +22,8 @@
  *     (PitchingPA.runner, a name or 對方代跑): either way the runner keeps the row he reached on, only the name changes.
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
-import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent } from '../data/types'
+import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
+import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -330,7 +331,7 @@ export function changePitcher(s: RecordState, name: string): RecordState {
     const fielder = s.lineup.findIndex((l) => l.name === name)
     lineup = s.lineup.map((l, i) => (fielder >= 0 ? (i === fielder ? { ...l, pos: 'P' } : l) : i === old ? { name, pos: 'P' } : l))
   }
-  const sub: DayRosterSub = { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}) }
+  const sub = withBefore(s, { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}), ...rowNow(s) })
   // a new pitcher before the first pitch of a tie-break half takes over its placed runners (the pitcher who starts
   // the half is charged with them)
   let pitching = s.pitching
@@ -341,22 +342,79 @@ export function changePitcher(s: RecordState, name: string): RecordState {
   }
   return { ...s, pitcher: name, lineup, pitching, subs: [...(s.subs ?? []), sub] }
 }
+/** A change made while we field, after some of this half's opponent rows: DayRosterSub.row (those rows keep the old
+ *  alignment, data/gameRoster defenseTimeline). Nothing at the start of the half or while we bat. */
+function rowNow(s: RecordState): { row?: number } {
+  if (offense(s) !== 'opp') return {}
+  const n = s.pitching.filter((p) => p.inning === s.inning).length
+  return n ? { row: n } : {}
+}
+/** The changes logged during the plate appearance in progress while we field (indices in `subs`): this half's, at its
+ *  current row (rowNow). */
+function paSubs(s: RecordState): number[] {
+  if (offense(s) !== 'opp') return []
+  const n = s.pitching.filter((p) => p.inning === s.inning).length
+  return (s.subs ?? []).flatMap((x, i) => (x.inning === s.inning && x.half === s.half && (x.row ?? 0) === n ? [i] : []))
+}
+/** What our fielders did so far in the plate appearance in progress (it goes on its row once sent). */
+const pendingCharges = (s: RecordState): SubCharges => ({ errors: s.extras.errors ?? [], sba: s.extras.sba, cs: s.extras.cs, pb: s.extras.pb, pk: s.extras.pk })
+/** A change logged in the middle of a plate appearance while we field keeps what our fielders had done in it since the
+ *  previous change (DayRosterSub.before): that row takes the new alignment, these stay with the old one. */
+function withBefore(s: RecordState, sub: DayRosterSub): DayRosterSub {
+  if (offense(s) !== 'opp') return sub
+  const subs = s.subs ?? []
+  const before = chargesOrNone(chargesMinus(pendingCharges(s), chargesSum(paSubs(s).map((i) => subs[i].before))))
+  return before ? { ...sub, before } : sub
+}
+/**
+ * The plate appearance in progress ends without a row (settlePending): its changes' `before` would point at a row that
+ * never comes. When what it had goes on the half's last row (`folded`, a row from before these changes), each change
+ * says what came after it instead (DayRosterSub.after): up to the next change (its `before`), the last one the rest.
+ */
+function settlePaSubs(s: RecordState, folded: boolean): DayRosterSub[] | undefined {
+  const idx = paSubs(s)
+  if (!idx.length) return s.subs
+  const subs = [...s.subs!]
+  const befores = idx.map((i) => subs[i].before)
+  idx.forEach((i, k) => {
+    const { before: _b, after: _a, ...rest } = subs[i]
+    void _b; void _a
+    const after = folded ? chargesOrNone(k < idx.length - 1 ? befores[k + 1] ?? {} : chargesMinus(pendingCharges(s), chargesSum(befores))) : undefined
+    subs[i] = after ? { ...rest, after } : rest
+  })
+  return subs
+}
 export const setSlot = (s: RecordState, slot: number): RecordState => ({ ...s, slot: ((slot % s.lineup.length) + s.lineup.length) % s.lineup.length })
 export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + 9) % 9) + 1 })
-/** Substitute (pinch hitter / defensive change) in a lineup slot. A new name is logged; a position-only change (no name) is not. */
+/**
+ * Substitute (pinch hitter / defensive change) in a lineup slot, logged in `subs`. A position-only change (no name, or
+ * the same one: 只改守位) is logged too, as a 守備調動 (the same player in and out, data/gameRoster isMove): errors,
+ * putouts and 守備局數 are charged to whoever stood at a position in that half-inning (defenseTimeline). Changing the
+ * same player's position again in the same half replaces that entry (a correction, not a second move).
+ */
 export function substitute(s: RecordState, slot: number, name: string, pos: string): RecordState {
   // someone new taking the current pitcher's slot at P is a pitching change: route it so `pitcher` follows
   const cur = s.lineup[slot]
   if (cur && name && name !== cur.name && cur.name === s.pitcher && (pos || cur.pos) === 'P') return changePitcher(s, name)
   const lineup = s.lineup.map((l, i) => (i === slot ? { name: name || l.name, pos: pos || l.pos } : l))
   const old = s.lineup[slot]
-  if (!old || !name || name === old.name) return { ...s, lineup }
+  if (!old || !name || name === old.name) {
+    if (!old?.name || !pos || pos === old.pos) return { ...s, lineup }
+    const subs = s.subs ?? []
+    const last = subs[subs.length - 1]
+    const again = !!last && last.kind === 'DEF' && last.in === old.name && last.out === old.name && last.inning === s.inning && last.half === s.half
+    // (a correction keeps the row it was first made at, and what came before it)
+    const move: DayRosterSub = again
+      ? { ...last, pos, slot }
+      : withBefore(s, { kind: 'DEF', in: old.name, out: old.name, pos, inning: s.inning, half: s.half, slot, ...rowNow(s) })
+    return { ...s, lineup, subs: again ? [...subs.slice(0, -1), move] : [...subs, move] }
+  }
   // replacing someone who is on base is 代跑 whatever the position box says: he takes over the runner (and its run / SB / CS)
   const onBase = s.runners.find((r) => r.side === 'us' && r.name === old.name && s.batting[r.row])
   const kind: DayRosterSub['kind'] = onBase || pos === 'PR' ? 'PR' : pos === 'PH' ? 'PH' : 'DEF'
   // (the box starts at PH while we bat: on a runner that means PR)
   const inPos = onBase && (!pos || pos === 'PH') ? 'PR' : pos || old.pos
-  const sub: DayRosterSub = { kind, in: name, out: old.name, pos: inPos, inning: s.inning, half: s.half, slot }
+  const sub = withBefore(s, { kind, in: name, out: old.name, pos: inPos, inning: s.inning, half: s.half, slot, ...rowNow(s) })
   const next: RecordState = { ...s, lineup: lineup.map((l, i) => (i === slot ? { ...l, pos: inPos } : l)), subs: [...(s.subs ?? []), sub] }
   if (onBase) {
     next.runners = s.runners.map((r) => (r === onBase ? { ...r, name } : r))
@@ -391,6 +449,16 @@ export function pinchRunOpp(s: RecordState, row: number, name: string): RecordSt
 }
 
 /* ------------------------------------------------ who is in the game (all tolerant of drafts without the roster fields) */
+/** Our fielders right now, position → name (the lineup's positions, the pitcher at P): who an error picked now is
+ *  charged to (「6 SS 王鼎鈞」 in the 誰失誤 pickers). Two players at one position: the later slot (posIssues flags it). */
+export function fieldersNow(s: RecordState): Map<string, string> {
+  // the same alignment the saved game charges errors by (a 代打 not yet given a position takes the one he left open)
+  const timeline = defenseTimeline(dayRosterOf(s))
+  const out = timeline ? new Map(timeline(s.inning, s.half).byPos) : new Map<string, string>()
+  if (!timeline) for (const l of s.lineup) if (l.name && l.pos && !['DH', 'PH', 'PR'].includes(l.pos)) out.set(l.pos, l.name)
+  if (s.pitcher) out.set('P', s.pitcher)
+  return out
+}
 /** In the game right now: the batting order plus the pitcher (under a DH he is not in `lineup`). */
 export function onField(s: RecordState): Set<string> {
   return new Set([...s.lineup.map((l) => l.name), s.pitcher].filter(Boolean))
@@ -789,7 +857,7 @@ export function settlePending(s: RecordState): RecordState {
   const bk = (s.plays ?? []).filter((e) => e.kind === 'bk')
   const x = s.extras
   const counts = side === 'opp' ? (x.sba || x.cs || x.wp || x.pb || x.pk || x.errors?.length) : x.oppErrors?.length
-  if (last < 0 || (!bk.length && !counts)) return { ...s, plays: [], extras: { ...EXTRAS0 } }
+  if (last < 0 || (!bk.length && !counts)) return { ...s, subs: settlePaSubs(s, false), plays: [], extras: { ...EXTRAS0 } }
   const r = rows[last]
   const events = bk.length ? [...(r.events ?? []), ...bk.map((e) => ({ ...e, at: r.pitches.length, play: true as const }))] : r.events
   const row = { ...r, ...(events ? { events } : {}) }
@@ -801,7 +869,7 @@ export function settlePending(s: RecordState): RecordState {
   const p = row as PitchingPA
   const errors = withOurErrors(p.errors, x.errors ?? [], p.result, p.loc)
   const settled: PitchingPA = { ...p, sba: p.sba + x.sba, cs: p.cs + x.cs, wp: p.wp + x.wp, pb: p.pb + x.pb, pk: p.pk + x.pk, ...(errors.length ? { errors } : {}) }
-  return { ...s, pitching: s.pitching.map((q, i) => (i === last ? settled : q)), plays: [], extras: { ...EXTRAS0 } }
+  return { ...s, pitching: s.pitching.map((q, i) => (i === last ? settled : q)), subs: settlePaSubs(s, true), plays: [], extras: { ...EXTRAS0 } }
 }
 
 /** End the half-inning: runners left on base get L, sides switch, inning advances after the bottom half. */

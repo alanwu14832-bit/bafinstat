@@ -82,6 +82,77 @@ export function removeFromRegistrations(regs: Registration[], names: string[]): 
   return regs.map((r) => (r.players.some((n) => gone.has(n)) ? { ...r, players: r.players.filter((n) => !gone.has(n)) } : r))
 }
 
+/** A 報名名單 that follows its tournament's new name: `from` is removed, `to` written (players merged into a list the
+ *  new name already had). */
+export interface RegistrationMove { from: Registration; to: Registration }
+
+/** Tournaments that never take a 報名名單 (the default names for friendlies and games without a 杯賽): a list never
+ *  moves to one of them (a tournament's last game changed to 友誼賽 / its 杯賽 cleared keeps its list where it was, and
+ *  the editor flags it) and they are never offered as the new name of a list. */
+export const NO_LIST = new Set(['友誼賽', '未分類', '練習'])
+
+type GameKey = Pick<Game, 'id' | 'date' | 'tournament'>
+/**
+ * Renaming a tournament renames its 報名名單 (batch 17: the 杯賽 filter kept showing 秋季聯賽 after the games became
+ * 2026秋季聯賽). For each game whose (year, 杯賽) changed between `before` and `after`: when no game is left under the old
+ * name that year and a list has it, the list moves to the new name (merged with the new name's list when there is one).
+ * A rename that leaves other games under the old name moves nothing, and nothing moves to 友誼賽 / 未分類 / 練習 (NO_LIST).
+ */
+export function registrationMoves(regs: Registration[], before: GameKey[], after: GameKey[]): RegistrationMove[] {
+  const keyOf = (g: GameKey) => registrationKey(seasonOf(g.date), g.tournament ?? '')
+  const was = new Map(before.map((g) => [g.id, g]))
+  const stillUsed = new Set(after.map(keyOf))
+  const moves = new Map<string, RegistrationMove>()
+  // the lists as the moves so far leave them: two old names renamed into one new name both end up in it
+  let cur = regs
+  for (const g of after) {
+    const old = was.get(g.id)
+    if (!old) continue
+    const from = keyOf(old), to = keyOf(g)
+    if (from === to || stillUsed.has(from) || moves.has(from) || !(g.tournament ?? '').trim() || NO_LIST.has(g.tournament.trim())) continue
+    const list = registrationByKey(regs, from)
+    if (!list) continue
+    const target = registrationByKey(cur, to)
+    const move = { from: list, to: { season: seasonOf(g.date), tournament: g.tournament.trim(), players: [...new Set([...(target?.players ?? []), ...list.players])] } }
+    moves.set(from, move)
+    cur = applyRegistrationMoves(cur, [move])
+  }
+  return [...moves.values()]
+}
+/** The lists after the moves (sorted). */
+export function applyRegistrationMoves(regs: Registration[], moves: RegistrationMove[]): Registration[] {
+  let out = regs
+  for (const m of moves) out = withRegistration(withoutRegistration(out, m.from.season, m.from.tournament), m.to)
+  return out
+}
+/** `regs` (e.g. the 報名名單 sheet of a file imported with 取代) moved along with the games renamed from `before` to `after`. */
+export const followRenames = (regs: Registration[], before: GameKey[], after: GameKey[]): Registration[] => applyRegistrationMoves(regs, registrationMoves(regs, before, after))
+/** 「報名名單也一起改名：2026 年「秋季聯賽」→「2026秋季聯賽」」 (the year apart from the names, so 秋季聯賽 → 2026秋季聯賽 does
+ *  not read as the same name) */
+export const registrationMoveText = (moves: RegistrationMove[]) => moves.length ? `報名名單也一起改名：${moves.map((m) => `${m.from.season} 年「${m.from.tournament}」→「${m.to.tournament}」`).join('、')}` : ''
+
+/** 秋季聯賽 ~ 2026秋季聯賽 ~ 2026 秋季聯賽: one name inside the other once the digits and spaces are left out */
+const looksRenamed = (a: string, b: string) => {
+  const x = a.replace(/[\d\s年度第屆届]/g, ''), y = b.replace(/[\d\s年度第屆届]/g, '')
+  return !!x && !!y && (x.includes(y) || y.includes(x))
+}
+
+/**
+ * 報名名單 editor: a list whose 杯賽 has no game that year (renamed since, typed differently, or registered before its
+ * first game is on the schedule) is flagged; a likely new name is offered as the fix (「改成 2026秋季聯賽」): a
+ * tournament of that year with games and no list whose name contains this one (or the other way round), else the only
+ * such tournament. 友誼賽 / 未分類 / 練習 are never offered.
+ */
+export function orphanRegistration(r: Registration, regs: Registration[], games: Pick<Game, 'date' | 'tournament'>[]): { orphan: boolean; suggestion?: string } {
+  const year = games.filter((g) => seasonOf(g.date) === r.season)
+  if (year.some((g) => (g.tournament ?? '').trim() === r.tournament)) return { orphan: false }
+  const listed = new Set(regs.filter((x) => x.season === r.season).map((x) => x.tournament))
+  const free = [...new Set(year.map((g) => (g.tournament ?? '').trim()).filter((t) => t && !listed.has(t) && !NO_LIST.has(t)))]
+  const alike = free.filter((t) => looksRenamed(t, r.tournament))
+  const pick = alike.length === 1 ? alike[0] : !alike.length && free.length === 1 ? free[0] : undefined
+  return { orphan: true, ...(pick ? { suggestion: pick } : {}) }
+}
+
 // ---------------------------------------------------------------- local mode (this browser)
 export function readLocalRegistrations(): Registration[] {
   try {

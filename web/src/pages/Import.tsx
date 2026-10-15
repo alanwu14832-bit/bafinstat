@@ -12,6 +12,7 @@ import { backupTables, datasetToWorkbook, legacyToDataset, parseWorkbook, type I
 import { useFilterOptions } from '../hooks/useStats'
 import type { Dataset, Registration } from '../data/types'
 import { useDataStore } from '../store/data'
+import { followRenames } from '../data/registrations'
 import { TEAM } from '../config/team'
 import { CloudPanel } from '../components/ui/CloudPanel'
 import { EditorsPanel } from '../components/ui/EditorsPanel'
@@ -51,7 +52,7 @@ export function ImportPage() {
       const buf = await file.arrayBuffer()
       const parsed = parseWorkbook(buf, file.name, base.roster)
       setPending({ ...parsed, file: file.name })
-      if (parsed.report.legacy) { setLegacyId(parsed.report.legacy.game_id); setLegacyDate(parsed.report.legacy.date); setLegacyTournament(opts.tournaments[0] ?? '友誼賽') }
+      if (parsed.report.legacy) { setLegacyId(parsed.report.legacy.game_id); setLegacyDate(parsed.report.legacy.date); setLegacyTournament(opts.tournamentNames[0] ?? '友誼賽') }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -73,9 +74,11 @@ export function ImportPage() {
       // e.g. the cloud has no day_roster column yet: the games are saved, their 當日登錄名單 is not
       const lost = r?.warnings.length ? ` ${[...new Set(r.warnings.map((w) => w.message))].join('；')}` : ''
       // 報名名單 in the file replace the lists of the same year + tournament; the games are already saved even if this fails
+      // (取代 with games renamed in the file: its lists under the old 杯賽 name follow the games, as the site's own lists did)
+      const fileRegs = mode === 'replace' ? followRenames(pending.registrations ?? [], base.games, ds.games) : pending.registrations
       let regs = ''
-      if (pending.registrations?.length) {
-        try { for (const reg of pending.registrations) await saveRegistration(reg); regs = `、${pending.registrations.length} 份報名名單` }
+      if (fileRegs?.length) {
+        try { for (const reg of fileRegs) await saveRegistration(reg); regs = `、${fileRegs.length} 份報名名單` }
         catch (e) { regs = `；報名名單沒有匯入：${e instanceof Error ? e.message : String(e)}` }
       }
       const nBat = added ? ds.batting.filter((p) => added.has(p.gameId)).length : pending.report.batting
@@ -146,7 +149,7 @@ export function ImportPage() {
                 <div className="px-4 py-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Field label="日期"><Input type="date" value={legacyDate} onChange={(e) => { const d = e.target.value; setLegacyDate(d); if (d && (!legacyId.trim() || /^G\d{8}-\d{2}$/.test(legacyId))) setLegacyId(`G${d.replace(/-/g, '')}-01`) }} className={cx('tnum', !legacyDate && 'border-warning')} /></Field>
                   <Field label="比賽ID"><Input value={legacyId} onChange={(e) => setLegacyId(e.target.value)} className="tnum" /></Field>
-                  <Field label="杯賽"><Input list="tournaments" value={legacyTournament} onChange={(e) => setLegacyTournament(e.target.value)} /><datalist id="tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist></Field>
+                  <Field label="杯賽"><Input list="tournaments" value={legacyTournament} onChange={(e) => setLegacyTournament(e.target.value)} /><datalist id="tournaments">{opts.tournamentNames.map((t) => <option key={t} value={t} />)}</datalist></Field>
                   <div className="sm:col-span-3 text-xs text-ink-2">{pending.report.legacy.home_away === '主' ? '主場' : '客場'} vs {pending.report.legacy.opponent}・{pending.report.legacy.innings_played} 局</div>
                 </div>
               )}

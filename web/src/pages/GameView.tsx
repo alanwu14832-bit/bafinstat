@@ -91,8 +91,8 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
             {a.subs.map((r, i) => (
               <li key={`${r.name}-${i}`} className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-h-9 pointer-fine:min-h-8 py-1">
                 <button type="button" className={nameBtn} onClick={() => onPlayer(r)}>{r.name}</button>
-                {r.kind ? <Badge variant={r.kind === 'P' ? 'accent' : 'neutral'}>{SUB_KIND_LABEL[r.kind]}</Badge> : r.pos && <span className={posChip}>{r.pos}</span>}
-                <span className="text-[12px] text-muted tnum">{[halfLabel(r), r.replaced && `替 ${r.replaced}`, r.kind === 'DEF' && r.pos].filter(Boolean).join('・')}</span>
+                {r.move ? <Badge variant="outline">換守位</Badge> : r.kind ? <Badge variant={r.kind === 'P' ? 'accent' : 'neutral'}>{SUB_KIND_LABEL[r.kind]}</Badge> : r.pos && <span className={posChip}>{r.pos}</span>}
+                <span className="text-[12px] text-muted tnum">{[halfLabel(r), r.move ? r.pos && `改守 ${r.pos}` : r.replaced && `替 ${r.replaced}`, !r.move && r.kind === 'DEF' && r.pos].filter(Boolean).join('・')}</span>
               </li>
             ))}
           </ul>

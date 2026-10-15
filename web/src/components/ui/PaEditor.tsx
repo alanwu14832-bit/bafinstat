@@ -14,7 +14,7 @@ import { isPlaced, missingBattedBallTag, OPP_HAND_LABEL, pinchMark, POSITION_BY_
 import { count, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
-import { errAdvanceErrors, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
+import { errAdvanceErrors, errorsOf, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
 import { batterEndFor, batterOutMark, inningsOf, isBatterOutMark, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
 import { balksIn, playLabel } from '../../data/plays'
 import { parseTiebreakBases } from '../../record/tiebreak'
@@ -31,9 +31,20 @@ const whoOf = (side: PaSide, p: AnyPA) => {
   return `對方 ${q.oppBatter || (q.oppOrder ? `第 ${q.oppOrder} 棒` : '打者')}`
 }
 const BASE_ZH: Record<number, string> = { 1: '一壘', 2: '二壘', 3: '三壘' }
-const extrasOf = (side: PaSide, p: AnyPA) => [...(isBat(side, p)
+/** 「SS（王鼎鈞）」: a position with whoever stood there (P: the row's pitcher), when known */
+export const namedPos = (pos: string, who?: string) => (who ? `${pos}（${who}）` : pos)
+/** Our errors on an opponent plate appearance, the result's own (a 失誤 at its 落點) included, each with who erred */
+/** who stood at a position when we fielded an inning (`index`: that opponent row; `nth`: that row's nth error there) */
+type FielderAt = (inning: number, pos: string, index?: number, nth?: number) => string | undefined
+const ourErrorsText = (p: PitchingPA, fielderAt?: FielderAt, index?: number) => {
+  const e = errorsOf(p)
+  // (the nth error at a position: a change in the middle of that plate appearance can put two players there)
+  const all = [...e.positions.map((pos, j) => namedPos(pos, pos === 'P' ? p.pitcher : fielderAt?.(p.inning, pos, index, e.positions.slice(0, j).filter((x) => x === pos).length))), ...Array.from({ length: e.unknown }, () => '不明')]
+  return all.length ? `失誤 ${all.join('、')}` : ''
+}
+const extrasOf = (side: PaSide, p: AnyPA, fielderAt?: FielderAt, index?: number) => [...(isBat(side, p)
   ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `壘死 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`, p.errors?.length && `對方失誤 ${errorsText(p.errors)}`]
-  : [(p as PitchingPA).runner && pinchMark((p as PitchingPA).runner!), (p as PitchingPA).errors?.length && `失誤 ${(p as PitchingPA).errors!.join('、')}`, (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`, (p as PitchingPA).rbi && `打點 ${(p as PitchingPA).rbi}`]
+  : [(p as PitchingPA).runner && pinchMark((p as PitchingPA).runner!), ourErrorsText(p as PitchingPA, fielderAt, index), (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`, (p as PitchingPA).rbi && `打點 ${(p as PitchingPA).rbi}`]
 ), balksIn(p.events) && `投手犯規 ${balksIn(p.events)}`].filter(Boolean).join('・')
 
 /* ------------------------------------------------------------------ list */
@@ -53,7 +64,7 @@ function AddPlaced({ onAdd }: { onAdd: (bases: Base[]) => void }) {
   )
 }
 
-export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAddPlaced }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; onOpen: (i: number) => void; onInsert: (at: number) => void; /** the innings that can be extra innings (record/tiebreak extraInnings) */ extraInnings?: Set<number>; /** 突破僵局 runners in front of an extra inning */ onAddPlaced?: (inning: number, bases: Base[]) => void }) {
+export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAddPlaced, fielderAt }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; onOpen: (i: number) => void; onInsert: (at: number) => void; /** the innings that can be extra innings (record/tiebreak extraInnings) */ extraInnings?: Set<number>; /** 突破僵局 runners in front of an extra inning */ onAddPlaced?: (inning: number, bases: Base[]) => void; /** who stood at a position when we fielded an inning: 「失誤 SS（王鼎鈞）」 */ fielderAt?: FielderAt }) {
   let last = -1
   // the base each 突破僵局 runner was put on
   const placedAt: Record<number, number> = {}
@@ -66,7 +77,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
         {rows.map((p, i) => {
           const header = p.inning !== last
           last = p.inning
-          const extra = extrasOf(side, p)
+          const extra = extrasOf(side, p, fielderAt, i)
           const pitcher = !isBat(side, p) ? (p as PitchingPA).pitcher : ''
           return (
             <Fragment key={i}>
@@ -169,10 +180,10 @@ function RunButtons({ pa, onChange, label }: { pa: BattingPA; onChange: (pa: Bat
   )
 }
 /** Tap to add one, − to take one away (暴投 ×2). */
-function CountButton({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function CountButton({ label, value, onChange, sub }: { label: string; value: number; onChange: (v: number) => void; /** shown after the label, lighter (who stands at that position) */ sub?: string }) {
   return (
     <span className="inline-flex items-center rounded-[6px] border border-border bg-surface overflow-hidden">
-      <button type="button" onClick={() => onChange(value + 1)} className="h-9 pointer-fine:h-8 px-2.5 text-[12px] font-medium hover:bg-surface-2 cursor-pointer">{label}{value > 0 && <span className="ml-1 tnum text-ink">×{value}</span>}</button>
+      <button type="button" onClick={() => onChange(value + 1)} className="h-9 pointer-fine:h-8 px-2.5 text-[12px] font-medium hover:bg-surface-2 cursor-pointer">{label}{sub && <>{' '}<span className="font-normal text-ink-2">{sub}</span></>}{value > 0 && <span className="ml-1 tnum text-ink">×{value}</span>}</button>
       {value > 0 && <button type="button" aria-label={`${label}減一`} onClick={() => onChange(value - 1)} className="h-9 pointer-fine:h-8 px-2 border-l border-border text-muted hover:text-ink hover:bg-surface-2 cursor-pointer">−</button>}
     </span>
   )
@@ -303,7 +314,7 @@ function EarnedNote({ tl, row }: { tl: TimelineProps; row: number }) {
 }
 
 /** 我隊守備失誤 folded into one button; open when the result is an error or errors are already counted. */
-function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => void }) {
+function OurErrors({ pa, onChange, who }: { pa: PitchingPA; onChange: (pa: AnyPA) => void; /** who stood at a position in this inning (the 登錄名單) */ who?: (pos: string) => string | undefined }) {
   const n = pa.errors?.length ?? 0
   // 失誤進壘 (on the play, or between pitches): someone of ours erred
   const errPlay = !!pa.events?.some((e) => e.kind === 'err' && (!e.play || pa.result !== '失誤'))
@@ -317,7 +328,7 @@ function OurErrors({ pa, onChange }: { pa: PitchingPA; onChange: (pa: AnyPA) => 
       <div className="flex flex-wrap gap-1.5">
         {FIELD_POSITIONS.map((pos) => {
           const k = (pa.errors ?? []).filter((x) => x === pos).length
-          return <CountButton key={pos} label={posNum(pos)} value={k} onChange={(v) => { const errors = setOurErrorCount(pa, pos, v); const nx: PitchingPA = { ...pa, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
+          return <CountButton key={pos} label={posNum(pos)} sub={who?.(pos)} value={k} onChange={(v) => { const errors = setOurErrorCount(pa, pos, v); const nx: PitchingPA = { ...pa, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
         })}
       </div>
       {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：沒點守位時，依落點算一次失誤。</p>}
@@ -450,6 +461,9 @@ export interface PaPanelProps {
   oppStint?: [number, number]
   /** (a 突破僵局 runner) take this inning's placed runners off */
   onRemovePlaced?: () => void
+  /** who stood at a position when we fielded an inning (the 登錄名單, data/gameRoster defenseTimeline): shown next to
+   *  the positions in 我隊守備失誤, so an error charged to the wrong player is seen */
+  fielderAt?: FielderAt
 }
 
 /**
@@ -562,7 +576,8 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
   )
 }
 
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint }: PaPanelProps) {
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, fielderAt }: PaPanelProps) {
+  const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
   const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
@@ -689,7 +704,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
           </div>
         </Section>
       ) : null}
-      {timeline ? (pit ? <OurErrors pa={pit} onChange={onChange} /> : bat && <TheirErrors pa={bat} onChange={onChange} />) : bat ? (
+      {timeline ? (pit ? <OurErrors pa={pit} onChange={onChange} who={whoAt} /> : bat && <TheirErrors pa={bat} onChange={onChange} />) : bat ? (
         <>
           <Section title="打點">
             <Stepper label="打點" value={bat.rbi} onChange={(v) => set({ rbi: Math.min(4, v) })} max={4} />
@@ -728,7 +743,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
               <CountButton label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
             </div>
           </Section>
-          <OurErrors pa={pit} onChange={onChange} />
+          <OurErrors pa={pit} onChange={onChange} who={whoAt} />
         </>
       )}
 

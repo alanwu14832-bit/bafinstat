@@ -72,7 +72,8 @@ describe('紀錄比賽: their side as complete as ours', () => {
     fireEvent.click(screen.getByRole('button', { name: '失誤進壘' }))
     const who = screen.getByRole('group', { name: '誰失誤' })
     expect(within(who).queryByRole('button', { name: '不知道' })).toBeNull()
-    fireEvent.click(within(who).getByRole('button', { name: '2 C' }))
+    // (batch 17: each of our positions says who stands there now, so the recorder sees who will be charged)
+    fireEvent.click(within(who).getByRole('button', { name: '2 C 乙' }))
     await wait(50)
     expect(draft().extras.errors).toEqual(['C'])
     // a single scores him: their RBI stepper is there

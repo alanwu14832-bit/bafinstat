@@ -36,7 +36,7 @@ import { cx } from '../lib/format'
 import {
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
-  correctOppPitcher, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
@@ -174,7 +174,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
       <Card className="xl:col-span-2" title="比賽資訊" subtitle={infoOpen ? '比賽ID 會依日期自動編號' : '已從賽程帶入'}>
-        <datalist id="rec-tournaments">{opts.tournaments.map((t) => <option key={t} value={t} />)}</datalist>
+        <datalist id="rec-tournaments">{opts.tournamentNames.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
         {!infoOpen ? (
           <div className="flex items-start gap-3">
@@ -309,6 +309,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [newPitcher, setNewPitcher] = useState('')
   const [sub, setSub] = useState<{ slot: number; name: string; pos: string }>({ slot: 0, name: '', pos: 'PH' })
   const side = offense(state)
+  // who an error at each position is charged to right now (「6 SS 王鼎鈞」)
+  const fielders = fieldersNow(state)
+  const fielderName = (pos: string) => fielders.get(pos) ? <>{' '}<span className="font-normal opacity-70">{fielders.get(pos)}</span></> : null
   const sc = score(state)
   const c = count(state.pitches)
   const [plan, setPlan] = useState<PAPlan | null>(null)
@@ -623,7 +626,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                       const n = (state.extras.errors ?? []).filter((x) => x === pos).length
                       return (
                         <span key={pos} className="inline-flex items-center rounded-[var(--radius-sm)] border border-border overflow-hidden text-[13px]">
-                          <button type="button" onClick={() => act((s) => addError(s, pos))} className="h-10 pointer-fine:h-9 px-3 hover:bg-surface-2 cursor-pointer">{posNum(pos)}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
+                          <button type="button" onClick={() => act((s) => addError(s, pos))} className="h-10 pointer-fine:h-9 px-3 hover:bg-surface-2 cursor-pointer">{posNum(pos)}{fielderName(pos)}{n > 0 && <span className="tnum font-medium ml-1">×{n}</span>}</button>
                           {n > 0 && <button type="button" aria-label={`${pos} 失誤減一`} onClick={() => apply((s) => removeError(s, pos))} className="h-10 pointer-fine:h-9 px-2 border-l border-border text-muted hover:text-ink cursor-pointer">−</button>}
                         </span>
                       )
@@ -678,7 +681,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                       {FIELD_POSITIONS.map((pos) => {
                         const on = !!plan.errBy?.includes(pos)
-                        return <button key={pos} type="button" aria-pressed={on} onClick={() => setPlan({ ...plan, errBy: on ? plan.errBy!.filter((x) => x !== pos) : [...(plan.errBy ?? []), pos] })} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{posNum(pos)}</button>
+                        return <button key={pos} type="button" aria-pressed={on} onClick={() => setPlan({ ...plan, errBy: on ? plan.errBy!.filter((x) => x !== pos) : [...(plan.errBy ?? []), pos] })} className={cx(chipBtn(on), 'min-w-11 h-9 px-2.5 text-[12px]')}>{posNum(pos)}{fielderName(pos)}</button>
                       })}
                     </div>
                   </div>
@@ -726,7 +729,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <button type="button" onClick={() => apply((s) => setSlot(s, i))} className={cx('w-full flex items-center gap-3 px-4 py-2 text-left cursor-pointer', i === state.slot && side === 'us' ? 'bg-surface-2' : 'hover:bg-surface-2/60')}>
                     <PlateBadge size={28} active={i === state.slot}>{i + 1}</PlateBadge>
                     <span className="text-[13px] font-medium text-ink flex-1 truncate">{l.name}</span>
-                    <span className="text-[12px] text-muted">{l.pos}</span>
+                    {/* while we field, the position each one stands at now (an error there is his) */}
+                    <span className={cx('text-[12px] tnum shrink-0', side === 'opp' ? 'h-6 px-2 inline-flex items-center rounded-full border border-border text-ink font-medium' : 'text-muted')}>{side !== 'opp' ? l.pos : l.pos === 'PH' || l.pos === 'PR' || !l.pos ? <span className="text-warning">{l.pos === 'PR' ? '代跑' : l.pos === 'PH' ? '代打' : '—'}・沒守位</span> : `守 ${posNum(l.pos)}`}</span>
                   </button>
                 </li>
               ))}
@@ -750,7 +754,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         </div>
       </div>
 
-      <RunnerSheet open={runnerOpen && offRunners.length > 0} onClose={() => setRunnerOpen(false)} runners={state.runners} side={side} picked={runnerPick} onPick={setRunnerPick}
+      <RunnerSheet open={runnerOpen && offRunners.length > 0} onClose={() => setRunnerOpen(false)} runners={state.runners} side={side} picked={runnerPick} onPick={setRunnerPick} fielders={fielders}
         context={`${state.outs} 出局・${state.pitches.length ? `第 ${state.pitches.length} 球後` : '第一球前'}`}
         onEvent={(r, ev, errBy) => { act((s) => runnerEvent(s, r.row, r.side, ev, undefined, errBy)); setRunnerOpen(false) }}
         onAll={allUp}

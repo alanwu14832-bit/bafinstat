@@ -61,8 +61,10 @@ function compute(base: State['base'], demo: State['demo'], filters: State['filte
   }
 }
 
-/** Option lists for the global filter bar (from the unfiltered dataset). Tournaments also come from the 報名名單, so a
- *  tournament registered before its first game can already be picked (and recorded under the same name). */
+/** Option lists for the global filter bar (from the unfiltered dataset). The 杯賽 filter lists only tournaments that
+ *  have games (played or scheduled): a 報名名單 whose tournament has none (renamed since, or no game yet) is no filter
+ *  option (batch 17). `tournamentNames` (the 杯賽 suggestions when recording / scheduling / importing) also has the
+ *  registered ones, so a tournament registered before its first game is recorded under the same name. */
 export function useFilterOptions() {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
@@ -70,7 +72,8 @@ export function useFilterOptions() {
   return useMemo(() => {
     const ds = effectiveDataset(base, demo)
     return {
-      tournaments: uniqueSorted([...ds.games.map((g) => g.tournament), ...registrations.map((r) => r.tournament)]),
+      tournaments: uniqueSorted(ds.games.map((g) => g.tournament)),
+      tournamentNames: uniqueSorted([...ds.games.map((g) => g.tournament), ...registrations.map((r) => r.tournament)]),
       opponents: uniqueSorted(ds.games.map((g) => g.opponent)),
       positions: uniqueSorted([...ds.batting.map((p) => p.pos), ...ds.fielding.map((f) => f.pos)]),
       minDate: ds.games.reduce<string>((m, g) => (m && m < g.date ? m : g.date), ''),

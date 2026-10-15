@@ -135,16 +135,23 @@ describe('game-day roster: bench, substitutions, re-entry', () => {
     expect(s.bench).toEqual(['癸', '子']); expect(s.reentry).toBe(true)
   })
 
-  it('substitute logs who came in for whom; a position-only change logs nothing', () => {
+  it('substitute logs who came in for whom; a position-only change is logged as a 守備調動 (batch 17)', () => {
     let s = newGame({ ...game, homeAway: '客' }, lineup, '壬', { bench: ['癸', '子'] })
     s = substitute(s, 2, '癸', 'PH')
     expect(s.lineup[2]).toEqual({ name: '癸', pos: 'PH' })
     expect(s.subs).toEqual([{ kind: 'PH', in: '癸', out: '丙', pos: 'PH', inning: 1, half: 'top', slot: 2 }])
     expect(leftGame(s)).toEqual(['丙']); expect(unusedBench(s)).toEqual(['子'])
     s = substitute(s, 2, '', '2B') // the pinch hitter stays in the game at 2B
-    expect(s.lineup[2]).toEqual({ name: '癸', pos: '2B' }); expect(s.subs).toHaveLength(1)
+    expect(s.lineup[2]).toEqual({ name: '癸', pos: '2B' })
+    expect(s.subs![1]).toEqual({ kind: 'DEF', in: '癸', out: '癸', pos: '2B', inning: 1, half: 'top', slot: 2 })
+    // changed again in the same half: a correction replaces it; the same position again changes nothing
+    s = substitute(s, 2, '', 'SS')
+    expect(s.subs).toHaveLength(2); expect(s.subs![1]).toMatchObject({ in: '癸', out: '癸', pos: 'SS' })
+    expect(substitute(s, 2, '', 'SS').subs).toHaveLength(2)
+    expect(substitute(s, 2, '癸', 'SS').subs).toHaveLength(2)
+    expect(leftGame(s)).toEqual(['丙'])
     s = substitute(endHalf(s), 0, '子', 'C')
-    expect(s.subs![1]).toMatchObject({ kind: 'DEF', in: '子', out: '甲', inning: 1, half: 'bottom', slot: 0 })
+    expect(s.subs![2]).toMatchObject({ kind: 'DEF', in: '子', out: '甲', inning: 1, half: 'bottom', slot: 0 })
     expect(startersOf(s)).toEqual(lineup)
   })
 
