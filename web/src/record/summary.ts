@@ -4,7 +4,7 @@
  */
 import { playText } from '../data/plays'
 import { UNKNOWN_FIELDER } from '../data/errors'
-import { isPlaced, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName } from '../data/types'
+import { isPlaced, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName } from '../data/types'
 import { offense, score, type RecordState } from './model'
 
 const halfName = (s: RecordState) => `${s.inning} 局${s.half === 'top' ? '上' : '下'}`
@@ -62,13 +62,17 @@ export function describeChange(a: RecordState, b: RecordState): string | null {
   }
   // 對方投手 / 對方打序 (when a play went in at the same time, e.g. a change then the next plate appearance, it is said too)
   const pa = a.oppPitcher, pb = b.oppPitcher
-  if ((pa?.name ?? '') !== (pb?.name ?? '') || (pa?.hand ?? '') !== (pb?.hand ?? '')) {
-    const who = pb ? [pb.hand ? OPP_HAND_LABEL[pb.hand] : '', pb.name ?? ''].filter(Boolean).join(' ') : '未填'
+  if ((pa?.name ?? '') !== (pb?.name ?? '') || (pa?.hand ?? '') !== (pb?.hand ?? '') || !!pa?.handUnknown !== !!pb?.handUnknown) {
+    const who = pb ? [pb.hand ? OPP_HAND_LABEL[pb.hand] : pb.handUnknown ? '左右投不知道' : '', pb.name ?? ''].filter(Boolean).join(' ') : '未填'
     // 更正這位投手 keeps where his stint starts (a 換投 moves it): the same man, written down right this time
     const sameStint = !!pa && !!pb && a.oppPitcherFrom?.row === b.oppPitcherFrom?.row && a.oppPitcherFrom?.pitches === b.oppPitcherFrom?.pitches
     parts.push(sameStint ? `已更正對方投手：${who}` : `對方投手：${who}`)
   }
-  if (b.oppHandOff && !a.oppHandOff) parts.push('這場不記對方投手（之後可以按「對方投手」補記）')
+  // 對方打者左右打 picked for their batter up now (the same slot, nothing sent yet)
+  const batsNow = b.oppBatsBySlot?.[b.oppOrder]
+  if (batsNow && batsNow !== a.oppBatsBySlot?.[a.oppOrder] && b.oppOrder === a.oppOrder && b.pitching.length === a.pitching.length) {
+    parts.push(`對方第 ${b.oppOrder} 棒：${batsNow === '?' ? '左右打不知道' : OPP_BATS_LABEL[batsNow]}`)
+  }
   if ((a.oppLineup ?? []).join('\u0000') !== (b.oppLineup ?? []).join('\u0000') && a.oppLineup && !oppPinch) parts.push('對方打序已更新')
   const sa = score(a), sb = score(b)
   const runs = sb.us - sa.us + (sb.opp - sa.opp)

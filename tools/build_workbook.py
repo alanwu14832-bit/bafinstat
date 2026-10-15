@@ -114,7 +114,9 @@ PIT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "對方棒次", "�
              # 對方代跑, at the end of the inputs so copy-paste ranges made before still line up (no 總表 formula reads it)
              "代跑",
              # their batter's 打點, after the last input too (no 總表 formula reads it; the website shows it in their box)
-             "打點"]
+             "打點",
+             # 對方打者左右 (L 左打 / R 右打, blank = 不知道), the new last input (no 總表 formula reads it; the website's 對左打／對右打)
+             "對方打者左右"]
 PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數", "安打", "二安", "三安", "全壘打", "保送", "故四", "觸身", "三振", "犧飛",
             "出局數", "失分", "自責", "場內球", "滾地", "飛球", "平飛", "強擊", "揮空", "揮棒", "看好球", "首球好球", "首人次", "先發", "內野飛球", "累計出局(前)", "累計出局碼",
             # our errors on this plate appearance (守備失誤 + a 失誤／妨礙 result), the website's rule
@@ -193,7 +195,7 @@ lines = [
     ("紀錄一場新比賽（三步驟）", True),
     ("1. 在『比賽清單』新增一列，填入比賽ID（格式 G+日期+場次，例如 G20251010-01）、日期、杯賽、對手、主客等。", False),
     ("2. 複製三張『單場-』模板（右鍵工作表 → 移動或複製 → 建立副本），在『單場-摘要』C2 填入同一個比賽ID，照原本習慣逐球紀錄；賽後在同一區塊填勝投／敗投／救援／中繼和結束時間。", False),
-    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『對方失誤』欄，最後一個黃色欄；灰色自動欄不用）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』（A 欄到『打點』欄）貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
+    ("3. 比賽結束後，把『單場-打擊』有資料的列（A 欄到『對方失誤』欄，最後一個黃色欄；灰色自動欄不用）複製，到『打席紀錄』最後一列下方以『貼上值』貼上；『單場-投球』（A 欄到『對方打者左右』欄）貼到『投球紀錄』；『單場-摘要』的守備區塊貼到『守備紀錄』。總表即自動更新。", False),
     ("   也可以把整個檔案上傳到網站版儀表板（資料匯入頁），網站會自動讀取這三張紀錄表。", False),
     ("", False),
     ("逐球代碼", True),
@@ -211,7 +213,7 @@ lines = [
     ("盜壘失敗、暴投、捕逸、牽制出局、阻殺、刺殺、助殺：CPBL 官方紀錄項目，舊表缺少。", False),
     ("守備失誤（投球紀錄）：這個打席我隊誰失誤，填守位（SS、LF…，兩次就填 SS、SS）；例如一安＋左外野漏接填 LF、對方跑者因捕手暴傳多跑一壘填 C。結果是「失誤」的那次另外依落點算一次（已經填了同一個守位就不重複算；同一人在這個打席另外又失誤一次，就填兩次，例如游擊失誤上壘後又漏接填 SS、SS）。只填守位（SS、6、游擊都可以），其他字不要填。守備紀錄的失誤E 請同步填。", False),
     ("對方失誤（打席紀錄，最後一個黃色欄）：我隊打擊時對方誰失誤，填守位（例如捕手漏接界外飛球填 C，跑者因對方暴傳多跑壘填 SS），不知道是誰就填「不明」；兩次就填 C、SS。結果是「失誤」的那次不用填（依落點算；同一人另外的失誤照填），趁傳進壘不算失誤。只填守位或「不明」，其他字不要填。比賽清單的對手失誤＝失誤／妨礙結果＋這一欄。", False),
-    ("打點（投球紀錄，最後一個黃色欄）：對方打者的打點，規則和我隊一樣（失誤、雙殺的那一分不算）；總表不讀這一欄，網站的對方打擊成績會用。", False),
+    ("打點（投球紀錄）：對方打者的打點，規則和我隊一樣（失誤、雙殺的那一分不算）；總表不讀這一欄，網站的對方打擊成績會用。", False),
     ("跑壘事件（可不填，網站逐球紀錄會自動寫）：這個打席投球之間的跑壘，依序用「；」分開，格式「第幾球 事件 起點-終點」，例如「2 暴投 1-2；3 盜壘 2-3」「2 投手犯規 1-2」；H 是回本壘得分、X 是出局，0 是第一球前；安打時趁傳多推進的壘，在最後加「打者」或「跑者」，例如「3 趁傳進壘 1-2 打者」。", False),
     ("突破僵局：延長賽照規則放上壘的跑者各記一列，放在那局最前面（先二壘、再一壘）；打擊結果填「突破僵局」、逐球空白；壘上(前)、出局(前)照放上去的順序填；得分、盜壘、結果代碼照一般跑者記。這列不算打席、打數；對方的突破僵局跑者回來得分記 R（非自責）。投手犯規記在跑壘事件，總表不算次數。", False),
     ("壘上出局：上壘後在壘上被刺殺、封殺、牽制出局的次數（盜壘失敗另外記）。壘死：其中因為自己跑壘失誤出局的次數（衝過頭、飛球被雙殺回不去、離壘被觸殺等），算這位跑者的。", False),
@@ -219,6 +221,7 @@ lines = [
     ("代跑（投球紀錄）：對方打者上壘後換上代跑時填，姓名或背號都可以（例如 12號），不知道就填「對方代跑」；只是換人，這一列的得分、自責分照常算我隊投手的，總表不讀這一欄。", False),
     ("時間＝開賽時間；結束時間在比賽清單後面，比賽時間自動算。", False),
     ("對方投手／對方投手慣用（L 左投、R 右投）：可不填；網站紀錄的比賽會自動填，用來算對左投／對右投。", False),
+    ("對方打者左右（投球紀錄，最後一個黃色欄）：對方打者這個打席站左打 L、右打 R（左右開弓的打者填他這次站的那邊），不知道就空白；網站紀錄的比賽會自動填，用來算我隊投手對左打／對右打。總表不讀這一欄。", False),
     ("", False),
     ("顏色說明", True),
     ("黃底 = 手動輸入格　　灰色標題 = 自動公式欄　　藍字 = 可調整參數　　綠字 = 連結其他工作表", False),
@@ -550,7 +553,7 @@ def fld_formulas(rr):
             # a player with two lines in one game (he moved to another position) played one game
             "首列": f'=IF(AND($B{rr}<>"",COUNTIFS($A$2:$A{rr},$A{rr},$B$2:$B{rr},$B{rr})=1),1,0)'}
 
-log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "守備失誤": 10, "跑壘事件": 18, "對方投手": 10, "對方投手慣用": 7, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
+log_widths = {"比賽ID": 14, "打者": 10, "代跑": 10, "守備失誤": 10, "跑壘事件": 18, "對方投手": 10, "對方投手慣用": 7, "對方打者左右": 7, "投手": 10, "對方打者": 10, "打擊結果": 8, "備註": 16, "日期": 11, "杯賽": 10, "對手": 8, "球員": 10, "壘上(前)": 8, "出局(前)": 7}
 ws_bat = build_log("打席紀錄", BAT_INPUT, BAT_AUTO, bat_formulas, log_widths, f"我隊每個打席一列。A–{L(len(BAT_INPUT))} 欄輸入（可從『單場-打擊』貼上值），{L(len(BAT_INPUT) + 1)} 以後為自動公式。")
 ws_pit = build_log("投球紀錄", PIT_INPUT, PIT_AUTO, pit_formulas, log_widths, f"我隊投手面對的每個打席一列。A–{L(len(PIT_INPUT))} 欄輸入（可從『單場-投球』貼上值），{L(len(PIT_INPUT) + 1)} 以後為自動公式。")
 ws_fld = build_log("守備紀錄", FLD_INPUT, FLD_AUTO, fld_formulas, log_widths, "每場每位球員一列。")
@@ -571,6 +574,7 @@ def add_log_validations(ws, cm, kind):
         d = DataValidation(type="list", formula1='"L,R"', allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['對方投手慣用'])}2:{L(cm['對方投手慣用'])}{last}")
     else:
         d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['投手'])}2:{L(cm['投手'])}{last}")
+        d = DataValidation(type="list", formula1='"L,R"', allow_blank=True, showErrorMessage=False); ws.add_data_validation(d); d.add(f"{L(cm['對方打者左右'])}2:{L(cm['對方打者左右'])}{last}")
 add_log_validations(ws_bat, BAT, "bat"); add_log_validations(ws_pit, PIT, "pit")
 dv(ws_fld, "守位清單", f"C2:C{LAST}")
 d = DataValidation(type="list", formula1=f"={ROSTER_NAME}", allow_blank=True, showErrorMessage=False); ws_fld.add_data_validation(d); d.add(f"B2:B{LAST}")

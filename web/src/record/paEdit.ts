@@ -3,7 +3,8 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { isDouble, OPP_PR_UNNAMED, type BattingPA, type OppHand, type PitchingPA } from '../data/types'
+import { isDouble, isPA, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
+import { oppKey } from '../data/opponent'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
 
@@ -125,6 +126,31 @@ export function applyOppPitcher(rows: BattingPA[], index: number, next: { oppPit
     out[j] = { ...rest, ...(name ? { oppPitcher: name } : {}), ...(next.oppHand ? { oppHand: next.oppHand } : {}) }
   }
   return out
+}
+
+/**
+ * 修改資料: the opponent batter on row `index` and his other plate appearances this game — the same slot of their
+ * order, the same batter (a 對方代打 in that slot is someone else). Indices of plate-appearance rows, in order.
+ */
+export function oppSlotRowsOf(rows: PitchingPA[], index: number): number[] {
+  const at = rows[index]
+  if (!at || !isPA(at)) return at ? [index] : []
+  const key = oppKey(at)
+  return rows.flatMap((p, j) => (p.gameId === at.gameId && isPA(p) && p.oppOrder === at.oppOrder && oppKey(p) === key ? [j] : []))
+}
+/**
+ * 修改資料: 左打 / 右打 / 不知道 (undefined: the key is left out) of the opponent batter on row `index`; `slot` (整段（同一棒
+ * 這場）都改) changes every plate appearance of his this game (oppSlotRowsOf), `one` only this one (a switch hitter).
+ */
+export function applyOppBats(rows: PitchingPA[], index: number, bats: OppBats | undefined, mode: 'one' | 'slot' = 'one'): PitchingPA[] {
+  if (!rows[index]) return rows
+  const which = new Set(mode === 'slot' ? oppSlotRowsOf(rows, index) : [index])
+  return rows.map((p, j) => {
+    if (!which.has(j)) return p
+    const { oppBats: _b, ...rest } = p
+    void _b
+    return bats ? { ...rest, oppBats: bats } : rest
+  })
 }
 
 /* ------------------------------------------------ base running of our batter after he reached */

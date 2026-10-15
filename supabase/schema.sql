@@ -92,6 +92,7 @@ create table if not exists pitching_pa (
   events       jsonb,         -- 逐球跑壘: [{at, kind, from, to}] runner plays between pitches of this PA
   runner       text,          -- 對方代跑（姓名或背號，選填）：記在那位跑者上壘的那一列
   rbi          smallint not null default 0,  -- 對方打者的打點
+  opp_bats     text,          -- 對方打者這個打席站 L 左打 / R 右打（不知道就是 NULL）
   primary key (game_id, seq)
 );
 
@@ -695,6 +696,14 @@ begin
   begin alter table pitching_pa add constraint pitching_pa_runner_size check (char_length(coalesce(runner, '')) <= 40) not valid; exception when duplicate_object then null; end;
   begin alter table batting_pa add constraint batting_pa_errors_shape check (cardinality(coalesce(errors, '{}')) <= 20 and coalesce(array_to_string(errors, ','), '') ~ '^((P|C|1B|2B|3B|SS|LF|CF|RF|[?])(,(P|C|1B|2B|3B|SS|LF|CF|RF|[?]))*)?$') not valid; exception when duplicate_object then null; end;
   begin alter table pitching_pa add constraint pitching_pa_rbi_range check (rbi between 0 and 4) not valid; exception when duplicate_object then null; end;
+end $$;
+
+-- ---------------------------------------------------------------- 2026-10-16 對方打者左打／右打（舊資料庫補欄位）
+-- 新建的已在上面。說明見 migrations/2026-10-16_opp_bats.sql。
+alter table pitching_pa add column if not exists opp_bats text;
+do $$
+begin
+  begin alter table pitching_pa add constraint pitching_pa_opp_bats check (opp_bats in ('L', 'R')) not valid; exception when duplicate_object then null; end;
 end $$;
 
 -- ---------------------------------------------------------------- 2026-10-13 存檔保護

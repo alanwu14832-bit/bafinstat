@@ -12,7 +12,7 @@ const SMALL = 5
 const dim = (r: ScoutLine, v: ReactNode) => <span className={cx(r.pa < SMALL && 'opacity-50')}>{v}</span>
 
 const columns: Column<ScoutLine>[] = [
-  { key: 'label', header: '對方打者', className: 'font-medium', format: (v, r) => dim(r, String(v)) },
+  { key: 'label', header: '對方打者', className: 'font-medium', format: (v, r) => dim(r, <>{String(v)}{r.bats && <span className="ml-1.5 text-[11px] font-normal text-muted">{r.bats}</span>}</>), text: (v, r) => `${String(v)}${r.bats ? ` ${r.bats}` : ''}` },
   { key: 'g', header: '場', align: 'right', format: (v, r) => dim(r, v as number) },
   { key: 'pa', header: 'PA', align: 'right', format: (v, r) => dim(r, v as number) },
   { key: 'avg', header: 'AVG', align: 'right', format: (v, r) => dim(r, f3(v as number | null)) },

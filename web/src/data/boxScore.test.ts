@@ -9,7 +9,7 @@ import { boxScore, gameBoxScore, liveBoxScore, ourBattingBox, ourPitchingBox, ty
 import { battingLines, pitchingLines, summarizeGame } from './stats'
 import { oppBattingLines, oppTotals } from './opponent'
 import { normalizeGameEdit } from './edit'
-import { EMPTY_DATASET, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
+import { EMPTY_DATASET, OPP_PH_UNNAMED, OPP_PR_UNNAMED, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
 import { offense, score, setOppPitcher, toGameEdit, type RecordState } from '../record/model'
 import { halfPlayed } from '../record/upNext'
 import { playGame, playGameWith, roster } from '../test/simGame'
@@ -232,5 +232,50 @@ describe('Box Score: the plate appearance in progress', () => {
     s = setOppPitcher(s, { name: 'D' })
     s = { ...s, batting: [...s.batting, b(1, 4, '丁', '三振', { pitches: ['S', 'S', 'S'], code: 'I', oppPitcher: 'D' })], pitches: [] }
     expect(rows(s)).toEqual([['A', 2, 7], ['B', 1, 1], ['C', 0, 2], ['D', 1, 1]])
+  })
+})
+
+describe('對方打者左打／右打 in the box (batch 18)', () => {
+  const game: Game = { id: 'G1', date: '2026-10-16', tournament: '聯賽', opponent: '政大', homeAway: '主' }
+  const pit = (oppOrder: number, extra: Partial<PitchingPA> = {}): PitchingPA => ({ gameId: 'G1', inning: 1, outsBefore: 0, oppOrder, pitcher: '甲', pitches: ['S'], result: '三振', code: 'I', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...extra })
+  it('tags each of their batters with the side recorded (both sides: 左右打), nothing when unknown', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(1, { oppBats: 'L' }), pit(2), pit(3, { oppBats: 'R' }), pit(1, { oppBats: 'R', inning: 2 })] })
+    expect(box.opp.rows.map((r) => [r.slot, r.bats])).toEqual([[1, '左右打'], [2, undefined], [3, '右打']])
+    expect('bats' in box.opp.rows[1]).toBe(false)
+  })
+  it('an unnamed 對方代打 merged into his slot: sides that disagree are left out, not shown as 左右打', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R' }), pit(3, { oppBatter: OPP_PH_UNNAMED, oppBats: 'L', inning: 4 }), pit(4, { oppBats: 'L' }), pit(4, { oppBatter: OPP_PH_UNNAMED, oppBats: 'L', inning: 4 })] })
+    expect(box.opp.rows.map((r) => [r.slot, r.bats])).toEqual([[3, undefined], [4, '左打']])
+    // a named batter who stood on both sides is a switch hitter
+    const named = boxScore({ game, batting: [], pitching: [pit(3, { oppBatter: '王', oppBats: 'R' }), pit(3, { oppBatter: '王', oppBats: 'L', inning: 4 })] })
+    expect(named.opp.rows.map((r) => r.bats)).toEqual(['左右打'])
+  })
+  it('a named 對方代打 whose later plate appearance is keyed by the slot again (記對方打者姓名 off): no side on the slot row', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R' }), pit(3, { oppBatter: '代打 王', oppBats: 'L', inning: 4 }), pit(3, { oppBats: 'L', inning: 6 })] })
+    expect(box.opp.rows.map((r) => [r.name, r.slot, r.bats])).toEqual([['第 3 棒', 3, undefined], ['王', 3, '左打']])
+    // a named 代打 who stood on both sides under his own name is still a switch hitter
+    const both = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R' }), pit(3, { oppBatter: '代打 王', oppBats: 'L', inning: 4 }), pit(3, { oppBatter: '王', oppBats: 'R', inning: 6 })] })
+    expect(both.opp.rows.map((r) => [r.name, r.bats])).toEqual([['第 3 棒', '右打'], ['王', '左右打']])
+  })
+  it('a 對方代跑 who bats later in the slot from the other side: no side on the slot row (named or not)', () => {
+    for (const runner of [OPP_PR_UNNAMED, '李']) {
+      const box = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R', result: '一安', code: 'H', runner }), pit(3, { oppBats: 'L', inning: 4 })] })
+      expect(box.opp.rows.find((r) => r.name === '第 3 棒')?.bats).toBeUndefined()
+    }
+    // without anyone coming in, the same slot recorded both ways is one switch hitter
+    const one = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R', result: '一安', code: 'H' }), pit(3, { oppBats: 'L', inning: 4 })] })
+    expect(one.opp.rows.map((r) => r.bats)).toEqual(['左右打'])
+  })
+  it('on /live a named 對方代打 at the plate already marks his slot row as two people (as his row will once written)', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R' }), pit(3, { oppBats: 'L', inning: 3 })], live: { lineup: [], atBat: { side: 'opp', key: '王', slot: 3, pinchHit: true, bats: 'L' }, pitcher: '甲', pitcherNow: true, livePitches: 0, opp: { start: 0, pc: 0, carried: 0, now: false, show: false } } })
+    expect(box.opp.rows.map((r) => [r.name, r.bats])).toEqual([['第 3 棒', undefined], ['王', '左打']])
+  })
+  it('on /live the unnamed 對方代打 at the plate shows the side picked for him, even when his slot had the other side', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(3, { oppBats: 'R' })], live: { lineup: [], atBat: { side: 'opp', key: '第 3 棒', slot: 3, pinchHit: true, bats: 'L' }, pitcher: '甲', pitcherNow: true, livePitches: 0, opp: { start: 0, pc: 0, carried: 0, now: false, show: false } } })
+    expect(box.opp.rows.find((r) => r.atBat)?.bats).toBe('左打')
+  })
+  it('on /live the batter at the plate shows the side picked for him', () => {
+    const box = boxScore({ game, batting: [], pitching: [pit(1)], live: { lineup: [], atBat: { side: 'opp', key: '第 2 棒', slot: 2, pinchHit: false, bats: 'L' }, pitcher: '甲', pitcherNow: true, livePitches: 0, opp: { start: 0, pc: 0, carried: 0, now: false, show: false } } })
+    expect(box.opp.rows.find((r) => r.atBat)?.bats).toBe('左打')
   })
 })

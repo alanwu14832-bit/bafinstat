@@ -14,6 +14,9 @@
  *     it happened in as `events`; one that ends the half-inning before that batter's result is not (there is no row)
  *   - the opponent pitcher (hand, name) set by the recorder is stamped on each of our plate appearances; the opponent
  *     batter's name comes from the one-off name or, when 記對方打者姓名 is on, their batting order (oppLineup)
+ *   - both are asked before the pitch pad works (needsOppHand / needsOppBats; 「不知道」 counts as an answer): the
+ *     opponent pitcher's hand when we bat (first, and after every 對方換投), the opponent batter's side (左打／右打) when
+ *     they bat, remembered per batting-order slot for the game (oppBatsBySlot) and stamped on their row as oppBats
  *   - the time of the first pitch and of the last plate appearance are kept (stampTimes) for 比賽時間
  *   - 延長賽突破僵局 (record/tiebreak.ts): the runners the rule puts on base are rows of their own (result 突破僵局, no
  *     pitches) before the half's first plate appearance; they are not plate appearances. A balk (投手犯規, balk())
@@ -23,7 +26,7 @@
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
-import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppHand, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -83,8 +86,9 @@ export interface RecordState {
   lastPlayAt?: string
   /** the opponent pitcher now (stamped on each of our plate appearances) */
   oppPitcher?: OppPitcher
-  /** 「不記」 pressed: do not ask for the opponent pitcher in this game */
-  oppHandOff?: boolean
+  /** 對方打者左右打, per slot of their batting order (1–9) for this game: what their batter in that slot batted from
+   *  ('?' = 不知道 was picked). Set once per batter (setOppBats); a 對方代打 / 對方代跑 / a renamed slot clears it. */
+  oppBatsBySlot?: Record<number, OppBats | '?'>
   /** where the opponent pitcher now came in (set on a 換投): our plate appearance (batting index) and how many of its
    *  pitches had been thrown before him, so his 用球 starts there even when the name and hand stay the same */
   oppPitcherFrom?: { row: number; pitches: number }
@@ -105,7 +109,8 @@ export interface RecordState {
 }
 /** 突破僵局: from which inning on, and the bases the runners are put on. */
 export interface TiebreakRule { from: number; bases: Base[] }
-export interface OppPitcher { name?: string; hand?: OppHand }
+/** handUnknown: 「不知道」 was picked for his hand (he still counts as asked: needsOppHand). Never set with `hand`. */
+export interface OppPitcher { name?: string; hand?: OppHand; handUnknown?: true }
 
 export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
 /** Results where the ball was put in play (the PA's last pitch is IP). */
@@ -211,7 +216,13 @@ export function lastOppName(pitching: PitchingPA[], order: number): string {
 }
 export const setOppNames = (s: RecordState, on: boolean): RecordState => ({ ...s, oppNames: on, oppLineup: s.oppLineup ?? Array(9).fill('') })
 /** Their batting order (9 names). A slot changed in the middle of the game is a pinch hitter: rows already sent keep their names. */
-export const setOppLineup = (s: RecordState, names: string[]): RecordState => ({ ...s, oppLineup: lineupOf(names) })
+export function setOppLineup(s: RecordState, names: string[]): RecordState {
+  const next = lineupOf(names)
+  let out: RecordState = { ...s, oppLineup: next }
+  // (a name typed into a blank slot is the same batter; a different name is a new one: his side is asked again)
+  for (let i = 0; i < 9; i++) { const was = s.oppLineup?.[i] ?? ''; if (was && was !== next[i]) out = clearOppBats(out, i + 1) }
+  return out
+}
 
 /* ------------------------------------------------ 對方投手 */
 /** The opponent pitcher's fields on one of our plate appearances (keys left out when unknown). */
@@ -221,8 +232,7 @@ export const oppFields = (p?: OppPitcher): Pick<BattingPA, 'oppPitcher' | 'oppHa
  * far get it too (the recorder noticed after a batter or two); earlier innings and later changes never rewrite rows.
  */
 export function setOppPitcher(s: RecordState, p: OppPitcher): RecordState {
-  const name = p.name?.trim() || undefined
-  const next: OppPitcher | undefined = name || p.hand ? { ...(name ? { name } : {}), ...(p.hand ? { hand: p.hand } : {}) } : undefined
+  const next = cleanOppPitcher(p)
   const out: RecordState = { ...s, oppPitcher: next }
   // a pitcher already on the mound: this is a 換投 (the sheet says so), even to one with the same hand or no name
   if (s.oppPitcher && next) {
@@ -233,6 +243,12 @@ export function setOppPitcher(s: RecordState, p: OppPitcher): RecordState {
     out.batting = s.batting.map((b) => (b.inning === s.inning && !b.oppHand && !b.oppPitcher ? { ...b, ...oppFields(next) } : b))
   }
   return out
+}
+/** A name (trimmed) and/or a hand, or 不知道 for the hand (handUnknown); undefined when there is nothing. */
+function cleanOppPitcher(p: OppPitcher): OppPitcher | undefined {
+  const name = p.name?.trim() || undefined
+  const unknown = !p.hand && !!p.handUnknown
+  return name || p.hand || unknown ? { ...(name ? { name } : {}), ...(p.hand ? { hand: p.hand } : {}), ...(unknown ? { handUnknown: true as const } : {}) } : undefined
 }
 const oppKey = (p?: OppPitcher) => `${p?.name ?? ''}\u0000${p?.hand ?? ''}`
 /**
@@ -265,8 +281,7 @@ export function oppPitchCount(s: RecordState): number {
  */
 export function correctOppPitcher(s: RecordState, p: OppPitcher): RecordState {
   if (!s.oppPitcher) return setOppPitcher(s, p)
-  const name = p.name?.trim() || undefined
-  const next: OppPitcher | undefined = name || p.hand ? { ...(name ? { name } : {}), ...(p.hand ? { hand: p.hand } : {}) } : undefined
+  const next = cleanOppPitcher(p)
   if (!next) return s
   const start = oppStintStart(s.batting, s.oppPitcher, s.oppPitcherFrom)
   const was = oppKey(s.oppPitcher)
@@ -278,7 +293,38 @@ export function correctOppPitcher(s: RecordState, p: OppPitcher): RecordState {
   })
   return { ...s, oppPitcher: next, batting }
 }
-export const skipOppHand = (s: RecordState): RecordState => ({ ...s, oppHandOff: true })
+/**
+ * 對方投手左右投 is required while we bat (when the cloud can store it: `on`): before the first pitch of our first
+ * half and after every 對方換投, until 左投／右投 or 不知道 is picked. A pitcher with only a name is asked too. (Drafts
+ * from before this rule that pressed the old 「不記」 are asked once.)
+ */
+export const needsOppHand = (s: RecordState, on: boolean): boolean =>
+  on && !s.finished && offense(s) === 'us' && !s.oppPitcher?.hand && !s.oppPitcher?.handUnknown
+/**
+ * The hand picked from the 「對方投手是？」 question: the first entry sets him (setOppPitcher); a pitcher already on the
+ * mound with no hand yet (a name only, or a 換投 without one) gets it on his stint so far (correctOppPitcher), not a 換投.
+ */
+export function answerOppHand(s: RecordState, hand: OppHand | null): RecordState {
+  const p: OppPitcher = hand ? { name: s.oppPitcher?.name, hand } : { name: s.oppPitcher?.name, handUnknown: true }
+  return s.oppPitcher ? correctOppPitcher(s, p) : setOppPitcher(s, p)
+}
+
+/* ------------------------------------------------ 對方打者左右打 */
+/** Their batter up now: the side picked for his slot this game, '?' = 不知道, undefined = not asked yet. */
+export const oppBatsNow = (s: RecordState): OppBats | '?' | undefined => s.oppBatsBySlot?.[s.oppOrder]
+/** While they bat (when the cloud can store it: `on`), the pitch pad and the results wait for 左打／右打／不知道. */
+export const needsOppBats = (s: RecordState, on: boolean): boolean => on && !s.finished && offense(s) === 'opp' && !oppBatsNow(s)
+/** 左打 / 右打 / 不知道 (null) for their batter up now; his later plate appearances this game start from it. */
+export function setOppBats(s: RecordState, bats: OppBats | null): RecordState {
+  return { ...s, oppBatsBySlot: { ...s.oppBatsBySlot, [s.oppOrder]: bats ?? '?' } }
+}
+/** Someone else is in that slot now (對方代打, 對方代跑, a new name in their order): ask again. */
+function clearOppBats(s: RecordState, slot: number): RecordState {
+  if (!s.oppBatsBySlot || !(slot in s.oppBatsBySlot)) return s
+  const { [slot]: _x, ...rest } = s.oppBatsBySlot
+  void _x
+  return { ...s, oppBatsBySlot: rest }
+}
 
 /** Our pitchers who came in after the starter, in the order they pitched (who can get a 中繼). */
 export function reliefPitchers(s: RecordState): string[] {
@@ -314,7 +360,7 @@ export const setOppBatter = (s: RecordState, name: string): RecordState => ({ ..
  */
 export function pinchHitOpp(s: RecordState, name: string): RecordState {
   const typed = name.trim().slice(0, 40)
-  const next: RecordState = { ...s, oppBatter: oppPinchHitter(typed) }
+  const next: RecordState = { ...clearOppBats(s, s.oppOrder), oppBatter: oppPinchHitter(typed) }
   if (s.oppNames && typed) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === s.oppOrder - 1 ? typed : n))
   return next
 }
@@ -439,7 +485,7 @@ export function pinchRunOpp(s: RecordState, row: number, name: string): RecordSt
   const typed = name.trim().slice(0, 40)
   const label = typed || OPP_PR_UNNAMED
   const next: RecordState = {
-    ...s,
+    ...(pa.oppOrder ? clearOppBats(s, pa.oppOrder) : s),
     runners: s.runners.map((r) => (r === runner ? { ...r, name: label } : r)),
     pitching: s.pitching.map((p, i) => (i === row ? { ...p, runner: label } : p)),
   }
@@ -642,7 +688,8 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
       if (pos === own && ownSeen) { ownSeen = false; continue }
       errors.push(pos)
     }
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: oppBatterOf(s) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), note })
+    const bats = oppBatsNow(s)
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: oppBatterOf(s) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), note })
     rowIndex = pitching.length - 1
   }
   // the plays between pitches, then 趁傳進壘／失誤進壘 on the batted ball (from where the hit alone put him)

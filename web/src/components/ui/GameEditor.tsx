@@ -16,7 +16,7 @@ import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { applyOppPitcher, blankBattingAt, oppStintOf, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
+import { applyOppBats, applyOppPitcher, blankBattingAt, oppSlotRowsOf, oppStintOf, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
 import { HoldPicker } from './HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
@@ -123,7 +123,7 @@ const toBatDraft = (p: BattingPA): BatDraft => { const { pitches, errors, ...res
 const toPitDraft = (p: PitchingPA): PitDraft => { const { pitches, errors, ...rest } = p; return { ...rest, pitchesText: pitches.join(' '), errorsText: errorsText(errors) } }
 const parsePitches = (t: string) => t.toUpperCase().split(/[\s,，、/]+/).filter(Boolean)
 const fromBatDraft = (d: BatDraft): BattingPA => { const { pitchesText, errorsText: et, ...rest } = d; const errors = cleanOppErrors(et); return { ...rest, ...(errors.length ? { errors } : {}), pitches: parsePitches(pitchesText), sb: +rest.sb || 0, cs: +rest.cs || 0, advOnError: +rest.advOnError || 0, outOnBase: +rest.outOnBase || 0, ...(+(rest.baserunningOuts ?? 0) ? { baserunningOuts: +(rest.baserunningOuts ?? 0) } : {}), run: +rest.run || 0, rbi: +rest.rbi || 0, inning: +rest.inning || 0 } }
-const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, rbi, ...rest } = d; const errors = cleanErrors(et); const r = Math.max(0, Math.min(4, +(rbi ?? 0) || 0)); return { ...rest, ...(errors.length ? { errors } : {}), ...(r ? { rbi: r } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
+const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsText: et, rbi, oppBats, ...rest } = d; const errors = cleanErrors(et); const r = Math.max(0, Math.min(4, +(rbi ?? 0) || 0)); return { ...rest, ...(errors.length ? { errors } : {}), ...(r ? { rbi: r } : {}), ...(oppBats === 'L' || oppBats === 'R' ? { oppBats } : {}), pitches: parsePitches(pitchesText), sba: +rest.sba || 0, cs: +rest.cs || 0, wp: +rest.wp || 0, pb: +rest.pb || 0, pk: +rest.pk || 0, inning: +rest.inning || 0 } }
 
 const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
@@ -153,6 +153,8 @@ const pitCols: Col<PitDraft>[] = [
   { key: 'errorsText', label: '守備失誤（守位）', kind: 'text', w: 96 },
   { key: 'rbi', label: '打點', kind: 'int', w: 44 },
   { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
+  // 對方打者左右打 (empty = 不知道)
+  { key: 'oppBats', label: '左右打', kind: 'select', options: ['L', 'R'], optionLabel: (v) => (v === 'L' ? '左打' : '右打'), w: 64 },
 ]
 type StarterDraft = GameDayRoster['starters'][number]
 const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
@@ -508,6 +510,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         onRemovePlaced={() => removePlaced(side, rows[i].inning)}
         onOppPitcher={side === 'bat' ? (next, mode) => setBat((b) => applyOppPitcher(b.map(fromBatDraft), i, next, mode).map(toBatDraft)) : undefined}
         oppStint={side === 'bat' ? oppStintOf(batRows, i) : undefined}
+        onOppBats={side === 'pit' ? (bats, mode) => setPit((p) => applyOppBats(p.map(fromPitDraft), i, bats, mode).map(toPitDraft)) : undefined}
+        oppSlotCount={side === 'pit' ? oppSlotRowsOf(pitRows, i).length : undefined}
         onRebuild={() => {
           const rows = side === 'bat' ? batRows : pitRows
           const idx = inningsOf(rows).get(rows[i].inning) ?? []

@@ -23,7 +23,7 @@ import { hhmm } from '../lib/dates'
 import { useLiveGames } from '../hooks/useLiveGames'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
-import { HIT_BASE_COUNT, oppBatterName } from '../data/types'
+import { HIT_BASE_COUNT, OPP_BATS_LABEL, oppBatterName } from '../data/types'
 import { cx } from '../lib/format'
 import { NON_AB_RESULTS } from '../data/stats'
 import { f3 } from '../lib/fmt'
@@ -246,6 +246,9 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const mine = batterRowsToday(s)
   const ab = mine.filter((p) => !NON_AB_RESULTS.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length
   const batterName = side === 'us' ? slot?.name ?? '' : oppBatterName(oppBatterOf(s)) || `對方第 ${s.oppOrder} 棒`
+  // 對方打者左打／右打 (when the recorder picked one for him)
+  const oppSide = side === 'opp' ? s.oppBatsBySlot?.[s.oppOrder] : undefined
+  const batsTag = oppSide === 'L' || oppSide === 'R' ? OPP_BATS_LABEL[oppSide] : ''
   const order = side === 'us' ? s.slot + 1 : s.oppOrder
   const runnersText = basesLine(s.runners.map((r) => ({ base: r.base, name: r.side === 'us' ? r.name : runnerShort(s.pitching[r.row], 'opp', r.name) })))
   const dueText = s.outs === 2 && due.length ? upList(due, { opp: !due[0].us }) : ''
@@ -346,7 +349,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
             </div>
             <div className={cx(CELL, big ? 'py-2' : 'py-1', '@min-[480px]:col-start-1 @min-[480px]:row-start-2 @min-[480px]:row-span-2 @5xl:col-start-2 @5xl:row-start-1 @5xl:row-span-1 @5xl:border-l')} style={DIVIDER}>
               <MRow big={big} label="打者"
-                value={<span className="inline-flex items-center gap-1.5 min-w-0 max-w-full"><span className={cx('figure inline-flex items-center justify-center shrink-0 rounded-[5px] font-bold', big ? 'size-8 text-[16px]' : 'size-5 text-[12px]')} style={{ background: BOARD_ACCENT, color: BOARD.bg }}>{order}</span><span className="truncate">{chipWho(batterName, order)}</span>{side === 'us' && slot?.pos && <span className={cx('shrink-0 font-normal', big ? 'text-[16px]' : 'text-[12px]')} style={{ color: BOARD.muted }}>{slot.pos}</span>}</span>}
+                value={<span className="inline-flex items-center gap-1.5 min-w-0 max-w-full"><span className={cx('figure inline-flex items-center justify-center shrink-0 rounded-[5px] font-bold', big ? 'size-8 text-[16px]' : 'size-5 text-[12px]')} style={{ background: BOARD_ACCENT, color: BOARD.bg }}>{order}</span><span className="truncate">{chipWho(batterName, order)}</span>{side === 'us' && slot?.pos && <span className={cx('shrink-0 font-normal', big ? 'text-[16px]' : 'text-[12px]')} style={{ color: BOARD.muted }}>{slot.pos}</span>}{batsTag && <span className={cx('shrink-0 font-normal', big ? 'text-[16px]' : 'text-[12px]')} style={{ color: BOARD.muted }}>{batsTag}</span>}</span>}
                 num={mine.length ? `今日 ${ab} 打數 ${hits} 安` : '今日首打席'}
                 sub={mine.length ? <span className="inline-flex flex-wrap gap-1">{mine.map((p, i) => { const g = gridCell(p); return <span key={i} title={g.title} className="figure font-semibold" style={{ color: TONE[g.tone] }}>{g.text}</span> })}</span> : undefined}
                 subNum={season && season.ab >= 1 ? `本季 ${f3(season.avg)} OPS ${f3(season.ops)}` : undefined} />

@@ -63,6 +63,13 @@ describe('公版 Excel keeps up with the website', () => {
     const f = ws[`${XLSX.utils.encode_col(head.indexOf('對手失誤數'))}${rowOfHead + 2}`]?.f as string
     expect(f).toContain(`${XLSX.utils.encode_col(head.indexOf('對方失誤'))}${rowOfHead + 2}`)
   }, 30000)
+  it('投球紀錄 and 單場-投球 have 對方打者左右 right after 打點, the last yellow input (batch 18)', () => {
+    for (const name of ['投球紀錄', '單場-投球']) {
+      const head = headerRow(template.Sheets[name], '投手')
+      expect(head.indexOf('對方打者左右'), name).toBe(head.indexOf('打點') + 1)
+      expect(head.slice(0, 7), name).toEqual(['比賽ID', '局', '出局(前)', '壘上(前)', '對方棒次', '投手', '對方打者'])
+    }
+  })
   it('has the 當日登錄名單 cells in the single-game template', () => {
     const labels = XLSX.utils.sheet_to_json<unknown[]>(template.Sheets['單場-摘要'], { header: 1, defval: '' }).slice(0, 8).flat().map((c) => String(c).trim())
     expect(labels).toContain('板凳')

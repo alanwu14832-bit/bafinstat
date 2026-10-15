@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SplitsCard } from '../components/ui/SplitsCard'
 import { useDataStore } from '../store/data'
@@ -35,5 +35,22 @@ describe('情境拆分 card', () => {
       expect(full).toContain('被打擊率')
       expect(full).toContain('被上壘率')
     } finally { window.matchMedia = real }
+  })
+  it('左右打 (batch 18): our batters by their own side, the 未填 ones named with a link to the 球員名單; pitchers get 對左右打 once recorded', () => {
+    const roster = SEED_DATASET.roster.map((p, i) => (i === 0 ? { ...p, bats: 'L' as const } : { ...p, bats: undefined }))
+    const pitching = SEED_DATASET.pitching.map((p, i) => (i % 2 ? { ...p, oppBats: 'L' as const } : { ...p, oppBats: 'R' as const }))
+    useDataStore.setState({ base: { ...SEED_DATASET, roster, pitching }, demo: false, filters: DEFAULT_FILTERS })
+    render(<MemoryRouter><SplitsCard side="bat" rows={SEED_DATASET.batting} who="全隊" /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('tab', { name: '左右打' }))
+    expect(screen.getByText('左打者')).toBeInTheDocument()
+    expect(screen.getByText('右打者・對左投')).toBeInTheDocument()
+    expect(screen.getByText('未填')).toBeInTheDocument()
+    expect(screen.getByText(/^未填左右打：/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '到球員名單填左右打' })).toHaveAttribute('href', '/players')
+    cleanup()
+    render(<MemoryRouter><SplitsCard side="pit" rows={pitching} who="全隊" /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('tab', { name: '對左右打' }))
+    expect(screen.getByText('對左打')).toBeInTheDocument()
+    expect(screen.getByText('對右打')).toBeInTheDocument()
   })
 })

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 // playwright from next to this script, or from the folder it is run in (npm i --no-save playwright there)
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
+import { answerAsks } from './answer.mjs'
 const S = process.argv[2] ?? '.'
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {})
@@ -31,7 +32,8 @@ await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTi
 
 // ---------------------------------------------------------------- driving the screen
 const PITCH = { B: '壞球', CS: '好球・未揮', SS: '揮空', F: '界外', IP: '擊進場內' }
-const pitch = async (c) => { await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
+// (batch 18: the questions the pitch pad waits for are answered first, 不知道 unless the script says otherwise)
+const pitch = async (c) => { await answerAsks(p, main); await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
 const planOpen = async () => (await main.getByRole('button', { name: /^送出/ }).count()) > 0
 const runnerSheet = async (base, label) => {
   await main.getByRole('button', { name: /^壘上跑者/ }).first().click(); await p.waitForTimeout(200)
@@ -54,10 +56,22 @@ const setDest = async (prefix, d) => {
 }
 let paNo = 0
 const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
+// batch 18: their batters' sides as seen on the video, by slot (不知道 for the 5th); asked once per batter per game
+const SIDES = { 1: '左打', 2: '右打', 3: '右打', 4: '左打', 5: '不知道', 6: '右打', 7: '右打', 8: '左打', 9: '右打' }
+const sideSeen = new Set()
 async function pa(side, spec) {
   paNo++
   const d0 = await draft()
   const who = side === 'us' ? d0.lineup[d0.slot]?.name : `對方第 ${d0.oppOrder} 棒`
+  if (side === 'opp') {
+    const ball = main.getByRole('button', { name: /^壞球/ }).first()
+    const first = !sideSeen.has(d0.oppOrder)
+    if (first && !(await ball.isDisabled())) notes.push(`#${paNo} ${who}: 還沒選左打／右打，投球按鈕就能按`)
+    if (first && !(await main.getByText(/先選對方打者左打或右打/).count())) notes.push(`#${paNo} ${who}: 沒有「先選對方打者左打或右打」`)
+    const got = await answerAsks(p, main, { bats: SIDES[d0.oppOrder] })
+    if (got !== (first ? 'asked' : 'prefilled')) notes.push(`#${paNo} ${who}: 左右打${first ? '應該要問' : '應該帶入他上次的'}（${got}）`)
+    sideSeen.add(d0.oppOrder)
+  }
   for (const st of spec.steps ?? []) {
     if (typeof st === 'string') await pitch(st)
     else if (st.run) await runnerEv(st.run, st.ev)
@@ -125,18 +139,23 @@ const check = async (label, want) => {
 
 // ================================================================ the game (the "video")
 // --- 1 上
-await us({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 8, traj: 'L', batter: 1 })                                  // S1 一安
-// 對方投手: the strip asks while we bat; answered after the first batter, so his plate appearance gets it too.
+// 對方投手: required before the first pitch of our first half (batch 18: the pitch pad and the results wait; no 「不記」).
 // batch 15: the recorder taps 左投 by mistake, and corrects it to 右投 two plate appearances later (更正這位投手):
 // 「對方投手 N 球」 must not start again, and every saved row of ours must end up 右投 with no 對方換投 on the game page.
 const oppCount = async () => (await main.getByTitle(/對方現在這位投手投給我們的球數/).first().textContent().catch(() => ''))?.trim() ?? ''
 {
-  const strip = main.getByRole('group', { name: '對方投手' })
-  if (!(await strip.count())) notes.push('我隊打擊時沒有出現「對方投手是？」')
-  else { await strip.getByRole('button', { name: '左投', exact: true }).click(); await p.waitForTimeout(200) }
-  if (await main.getByRole('group', { name: '對方投手' }).count()) notes.push('點了「左投」後「對方投手是？」還在')
+  const strip = main.getByRole('group', { name: '對方投手左右投' })
+  if (!(await strip.count())) notes.push('第一局我隊打擊前沒有出現「對方投手是？」')
+  if (!(await main.getByRole('button', { name: /^壞球/ }).first().isDisabled())) notes.push('還沒選對方投手左右投，投球按鈕就能按')
+  if (!(await main.getByRole('button', { name: '一安', exact: true }).first().isDisabled())) notes.push('還沒選對方投手左右投，打擊結果就能按')
+  if (!(await main.getByText(/先選對方投手左投或右投/).count())) notes.push('沒有「先選對方投手左投或右投」')
+  if (await strip.getByRole('button', { name: '不記' }).count()) notes.push('「對方投手是？」還有「不記」')
+  await strip.getByRole('button', { name: '左投', exact: true }).click(); await p.waitForTimeout(200)
+  if (await main.getByRole('group', { name: '對方投手左右投' }).count()) notes.push('點了「左投」後「對方投手是？」還在')
   if (!(await main.getByRole('button', { name: '對方 左投', exact: true }).count())) notes.push('點了「左投」後沒有「對方 左投」按鈕')
+  if (await main.getByRole('button', { name: /^壞球/ }).first().isDisabled()) notes.push('選了左投之後投球按鈕還是不能按')
 }
+await us({ steps: ['B', 'CS', 'IP'], result: '一安', loc: 8, traj: 'L', batter: 1 })                                  // S1 一安
 await us({ steps: ['B', 'B', { run: 1, ev: '盜壘' }, 'CS', 'IP'], result: '犧觸', loc: 1, runners: { 2: 3 }, batter: 'out' })  // S1 盜二；S2 犧觸 送上三
 {
   const before = await oppCount()
@@ -264,6 +283,12 @@ else {
   const rows = ds.base.batting.filter((x) => x.gameId === saved.id)
   const notR = rows.filter((x) => x.oppHand !== 'R')
   if (!rows.length || notR.length) fails.push(`${notR.length} / ${rows.length} 個我隊打席沒有記成對方右投`)
+  // batch 18: every plate appearance of theirs has the side picked for his slot (不知道: none)
+  const want = { 左打: 'L', 右打: 'R' }
+  const pit = ds.base.pitching.filter((x) => x.gameId === saved.id && x.result !== '突破僵局')
+  const off = pit.filter((x) => (x.oppBats ?? null) !== (want[SIDES[x.oppOrder]] ?? null))
+  if (!pit.length || off.length) fails.push(`${off.length} / ${pit.length} 個對方打席的左右打不對：${JSON.stringify(off.map((x) => [x.inning, x.oppOrder, x.oppBats ?? null]))}`)
+  if (!pit.some((x) => x.oppBats === 'L') || !pit.some((x) => x.oppBats === 'R') || !pit.some((x) => !x.oppBats)) fails.push('對方打席應該有左打、右打和不知道')
 }
 await dlg.getByRole('tab', { name: /逐球・打擊/ }).click(); await p.waitForTimeout(300)
 if (!(await dlg.getByText('對方先發・右投', { exact: true }).count())) fails.push('逐球・打擊沒有「對方先發・右投」')

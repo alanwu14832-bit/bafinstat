@@ -11,7 +11,7 @@
  */
 import { battingLines, summarizeGame, teamBatting, type BattingLine } from './stats'
 import { inferAll, midOf } from '../record/timeline'
-import { EMPTY_DATASET, OPP_PR_UNNAMED, oppBatterName, type BattingPA, type Dataset, type Game, type PitchingPA } from './types'
+import { EMPTY_DATASET, isPA, OPP_BATS_LABEL, OPP_PR_UNNAMED, oppBatterName, type BattingPA, type Dataset, type Game, type OppBats, type PitchingPA } from './types'
 
 const PLACEHOLDER = /^(對方)?\s*(第\s*)?\d+\s*棒次?$/
 const NO_SLOT = '棒次未記'
@@ -23,8 +23,20 @@ export function oppKey(pa: Pick<PitchingPA, 'oppBatter' | 'oppOrder'>): string {
   if (name && !PLACEHOLDER.test(name) && !/^\d+$/.test(name)) return name
   return pa.oppOrder ? `第 ${pa.oppOrder} 棒` : NO_SLOT
 }
+/** Whether a key (from oppKey) stands for a slot (「第 N 棒」 / 棒次未記) rather than a named batter. */
+export const isSlotKey = (k: string) => k === NO_SLOT || /^第 \d+ 棒$/.test(k)
 /** Whether a row carries a real opponent batter name. */
-export const hasOppName = (pa: Pick<PitchingPA, 'oppBatter' | 'oppOrder'>) => { const k = oppKey(pa); return k !== NO_SLOT && !/^第 \d+ 棒$/.test(k) }
+export const hasOppName = (pa: Pick<PitchingPA, 'oppBatter' | 'oppOrder'>) => !isSlotKey(oppKey(pa))
+/**
+ * 左打／右打 for a row keyed `k` (oppKey), from the sides it was recorded with; undefined when none was.
+ * 左右打 only when the row is one man (`oneMan`; by default: a named batter): a slot key (「第 N 棒」) can hold
+ * different unnamed people, so sides that disagree there say nothing about one man and the side is left out.
+ */
+export function oppBatsLabel(k: string, sides: ReadonlySet<OppBats> | undefined, oneMan = !isSlotKey(k)): string | undefined {
+  if (!sides?.size) return undefined
+  if (sides.size === 1) return OPP_BATS_LABEL[[...sides][0]]
+  return oneMan ? '左右打' : undefined
+}
 
 /** Who ran for the opponent batter on this row (a name, else 「對方代跑」), or undefined when nobody did. */
 export function oppRunnerKey(pa: Pick<PitchingPA, 'runner'>): string | undefined {
@@ -116,7 +128,8 @@ const RIGHT = new Set([3, 4, 9, 34, 89])
 /** Which third of the field a 落點 is in (from the catcher's view; the batter's hand is unknown). */
 export const fieldSide = (loc?: number): 'left' | 'center' | 'right' | null => (!loc ? null : LEFT.has(loc) ? 'left' : CENTER.has(loc) ? 'center' : RIGHT.has(loc) ? 'right' : null)
 
-export type ScoutLine = OppBattingLine & { lastDate: string; field: { left: number; center: number; right: number } }
+/** bats: 左打 / 右打 as recorded against us (左右打 when a named batter stood on both sides), left out when never recorded (or when an unnamed slot was recorded both ways) */
+export type ScoutLine = OppBattingLine & { lastDate: string; field: { left: number; center: number; right: number }; bats?: string }
 
 /** Played games against `opponent` (names compared trimmed), oldest first. */
 export const gamesAgainst = (ds: Dataset, opponent: string): Game[] =>
@@ -129,6 +142,7 @@ export function scoutLines(ds: Dataset, opponent: string): ScoutLine[] {
   const pas = ds.pitching.filter((p) => date.has(p.gameId))
   const extra = new Map<string, { lastDate: string; field: { left: number; center: number; right: number } }>()
   const blank = () => ({ lastDate: '', field: { left: 0, center: 0, right: 0 } })
+  const sides = new Map<string, Set<OppBats>>()
   for (const p of pas) {
     const k = oppKey(p)
     const e = extra.get(k) ?? blank()
@@ -137,11 +151,13 @@ export function scoutLines(ds: Dataset, opponent: string): ScoutLine[] {
     const side = p.result === '突破僵局' ? null : fieldSide(p.loc)
     if (side) e.field[side]++
     extra.set(k, e)
+    if (isPA(p) && p.oppBats) sides.set(k, (sides.get(k) ?? new Set<OppBats>()).add(p.oppBats))
     // a 對方代跑 was there that day too
     const r = oppRunnerKey(p)
     if (r && r !== k) { const x = extra.get(r) ?? blank(); if (d > x.lastDate) x.lastDate = d; extra.set(r, x) }
   }
-  return oppBattingLines(pas).map((l) => ({ ...l, ...(extra.get(l.name) ?? blank()) })).sort((a, b) => b.pa - a.pa || (a.slot ?? 99) - (b.slot ?? 99))
+  const batsOf = (k: string) => { const b = oppBatsLabel(k, sides.get(k)); return b ? { bats: b } : {} }
+  return oppBattingLines(pas).map((l) => ({ ...l, ...(extra.get(l.name) ?? blank()), ...batsOf(l.name) })).sort((a, b) => b.pa - a.pa || (a.slot ?? 99) - (b.slot ?? 99))
 }
 
 /** Our record against `opponent` and their team batting in those games. */

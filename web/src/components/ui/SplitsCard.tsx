@@ -5,6 +5,7 @@
  * dataset. Rows under 10 plate appearances are greyed out with a 「樣本少」 tag.
  */
 import { useMemo, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Download } from 'lucide-react'
 import { Card } from './Card'
 import { Button } from './Button'
@@ -89,6 +90,8 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id }: {
     if (group === 'order') return table.missing ? `沒記棒次的 ${table.missing} 個打席不列入` : ''
     if (group === 'nth') return side === 'pit' ? '同一場同一位投手第幾次面對對方同一棒；沒記對方棒次的，每 9 位打者算一輪。' : '這位打者在同一場的第幾個打席（全隊時每位打者各自算）。'
     if (group === 'hand') return '記了對方投手左右手的打席才算'
+    if (group === 'bats' && side === 'pit') return '記了對方打者左打或右打的打席才算（左右開弓的打者算他那次站的那邊；按「不知道」的不列入）'
+    if (group === 'bats') return '左打者／右打者依球員名單的打擊慣用。下面四列（左右打 × 對左右投）只算有記對方投手左右投的打席；左右開弓的打者對左投算右打、對右投算左打。'
     return ''
   })()
   const csv = () => downloadCsv(`情境拆分-${groupLabel}.csv`, full, view, [`對象：${who}`, scopeText(filters, s.games), `樣本少（打席 < ${SPLIT_MIN_PA}）僅供參考`, `來源：${window.location.href}`])
@@ -106,6 +109,12 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id }: {
           {group === 'count' && <div className="px-5 py-4 border-b border-border"><CountGrid rows={rows} ctx={ctx} side={side} roster={roster} /></div>}
           <DataTable columns={columns} rows={view} rowKey={(r) => r.id} dense maxHeight={520} />
           {note && <p className="px-5 py-3 text-[12px] text-muted leading-5 border-t border-border">{note}</p>}
+          {group === 'bats' && !!table.noBats?.length && (
+            <div className="px-5 pb-2 -mt-1 text-[12px] text-ink-2 leading-5">
+              <p>未填左右打：{table.noBats.length > 10 ? `${table.noBats.slice(0, 10).join('、')} 等 ${table.noBats.length} 位` : table.noBats.join('、')}。</p>
+              <Link to="/players" className="flex w-fit items-center min-h-9 pointer-fine:min-h-7 underline underline-offset-2 hover:text-ink">到球員名單填左右打</Link>
+            </div>
+          )}
         </>
       )}
     </Card>

@@ -183,6 +183,10 @@ export const PLAY_EVENT_LABELS: Record<string, string> = {
 /** The opponent pitcher's throwing hand: L 左投 · R 右投 */
 export type OppHand = 'L' | 'R'
 export const OPP_HAND_LABEL: Record<OppHand, string> = { L: '左投', R: '右投' }
+/** The side an opponent batter stood on for one plate appearance: L 左打 · R 右打 (a switch hitter: the side he took
+ *  this time). Recorded while they bat (PitchingPA.oppBats); 「不知道」 leaves it out. */
+export type OppBats = 'L' | 'R'
+export const OPP_BATS_LABEL: Record<OppBats, string> = { L: '左打', R: '右打' }
 
 /** 對方代跑 with no name typed: what PitchingPA.runner holds and what the runner is called everywhere. */
 export const OPP_PR_UNNAMED = '對方代跑'
@@ -266,6 +270,8 @@ export interface PitchingPA {
   errors?: string[]
   /** their batter's 打點 (the same rules as ours). Left out (0) when there is none. */
   rbi?: number
+  /** 對方打者左右打: the side he batted from in this plate appearance. Left out when unknown (不知道, older games). */
+  oppBats?: OppBats
   code?: string
   note?: string
   /** runner moves between this plate appearance's pitches, in order */

@@ -5,7 +5,7 @@
  */
 import { vi } from 'vitest'
 
-const state = { migrated: false, oppRunner: false }
+const state = { migrated: false, oppRunner: false, oppBats: false }
 const game = { id: 'G1', date: '2026-10-09', tournament: '大專盃', opponent: '台大', home_away: '主' }
 const row = { game_id: 'G1', seq: 1, inning: 1, batter: '甲', pitches: ['IP'], result: '一安', sb: 0, cs: 0, adv_on_error: 0, out_on_base: 0, run: 0, rbi: 0 }
 const prow = { game_id: 'G1', seq: 1, inning: 1, pitcher: '乙', pitches: ['IP'], result: '一安', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
@@ -13,7 +13,7 @@ function respond(table: string) {
   if (table === 'games') return { data: [state.migrated ? { ...game, end_time: null } : game], error: null }
   // (the 2026-10-15 one: batting_pa.errors, pitching_pa.runner and .rbi)
   if (table === 'batting_pa') return { data: [{ ...row, ...(state.migrated ? { opp_hand: null, opp_pitcher: null } : {}), ...(state.oppRunner ? { errors: null } : {}) }], error: null }
-  if (table === 'pitching_pa') return { data: [state.oppRunner ? { ...prow, runner: null, rbi: 0 } : prow], error: null }
+  if (table === 'pitching_pa') return { data: [{ ...(state.oppRunner ? { ...prow, runner: null, rbi: 0 } : prow), ...(state.oppBats ? { opp_bats: null } : {}) }], error: null }
   return { data: [], error: null }
 }
 function builder(table: string): unknown {
@@ -39,40 +39,47 @@ describe('結束時間 / 對方投手 / 對方代跑・失誤・打點 before an
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon')
     vi.resetModules()
     const { useDataStore } = await import('../store/data')
-    const { END_TIME_UNSUPPORTED, OPP_PITCHER_UNSUPPORTED, OPP_RUNNER_UNSUPPORTED, OPP_ERRORS_UNSUPPORTED, OPP_RBI_UNSUPPORTED } = await import('../data/recordFields')
+    const { END_TIME_UNSUPPORTED, OPP_PITCHER_UNSUPPORTED, OPP_RUNNER_UNSUPPORTED, OPP_ERRORS_UNSUPPORTED, OPP_RBI_UNSUPPORTED, OPP_BATS_UNSUPPORTED } = await import('../data/recordFields')
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: false, oppPitcher: false, oppRunner: false, oppErrors: false, oppRbi: false })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: false, oppPitcher: false, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false })
     useDataStore.setState({ cloud: { ...useDataStore.getState().cloud, user: { id: 'u', email: 'a@b.c' } as never, isEditor: true } })
     const g = { id: 'G1', date: '2026-10-09', tournament: '大專盃', opponent: '台大', homeAway: '主' as const, time: '13:07', endTime: '15:22' }
     const pa = { gameId: 'G1', inning: 1, outsBefore: 0, batter: '甲', pitches: ['IP'], result: '一安', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, oppHand: 'R' as const, errors: ['C'] }
-    const opp = { gameId: 'G1', inning: 1, outsBefore: 0, oppOrder: 3, pitcher: '乙', pitches: ['IP'], result: '一安', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, code: 'R', runner: '12號', rbi: 1 }
+    const opp = { gameId: 'G1', inning: 1, outsBefore: 0, oppOrder: 3, pitcher: '乙', pitches: ['IP'], result: '一安', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, code: 'R', runner: '12號', rbi: 1, oppBats: 'L' as const }
     const w = (await useDataStore.getState().saveGame({ game: g, batting: [pa], pitching: [opp], fielding: [] })).map((x) => x.message)
     expect(w.filter((m) => m === END_TIME_UNSUPPORTED)).toHaveLength(1)
     expect(w.filter((m) => m === OPP_PITCHER_UNSUPPORTED)).toHaveLength(1)
     expect(w.filter((m) => m === OPP_RUNNER_UNSUPPORTED)).toHaveLength(1)
     expect(w.filter((m) => m === OPP_ERRORS_UNSUPPORTED)).toHaveLength(1)
     expect(w.filter((m) => m === OPP_RBI_UNSUPPORTED)).toHaveLength(1)
+    expect(w.filter((m) => m === OPP_BATS_UNSUPPORTED)).toHaveLength(1)
     // a game without them: nothing to say
-    const plain = (await useDataStore.getState().saveGame({ game: { ...g, endTime: undefined }, batting: [{ ...pa, oppHand: undefined, errors: undefined }], pitching: [{ ...opp, runner: undefined, rbi: undefined }], fielding: [] })).map((x) => x.message)
+    const plain = (await useDataStore.getState().saveGame({ game: { ...g, endTime: undefined }, batting: [{ ...pa, oppHand: undefined, errors: undefined }], pitching: [{ ...opp, runner: undefined, rbi: undefined, oppBats: undefined }], fielding: [] })).map((x) => x.message)
     expect(plain).not.toContain(END_TIME_UNSUPPORTED)
     expect(plain).not.toContain(OPP_PITCHER_UNSUPPORTED)
     expect(plain).not.toContain(OPP_RUNNER_UNSUPPORTED)
     expect(plain).not.toContain(OPP_ERRORS_UNSUPPORTED)
     expect(plain).not.toContain(OPP_RBI_UNSUPPORTED)
+    expect(plain).not.toContain(OPP_BATS_UNSUPPORTED)
 
     // the admin runs the SQL: the next load sees the columns
     state.migrated = true
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: false, oppErrors: false, oppRbi: false })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false })
     // then the 2026-10-15 one (對方代跑, 對方失誤, 對方打點)
     state.oppRunner = true
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: false })
+    // and the 2026-10-16 one (對方打者左右打)
+    state.oppBats = true
+    await useDataStore.getState().loadCloud()
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: true })
     const after = (await useDataStore.getState().saveGame({ game: g, batting: [pa], pitching: [opp], fielding: [] })).map((x) => x.message)
     expect(after).not.toContain(END_TIME_UNSUPPORTED)
     expect(after).not.toContain(OPP_PITCHER_UNSUPPORTED)
     expect(after).not.toContain(OPP_RUNNER_UNSUPPORTED)
     expect(after).not.toContain(OPP_ERRORS_UNSUPPORTED)
     expect(after).not.toContain(OPP_RBI_UNSUPPORTED)
+    expect(after).not.toContain(OPP_BATS_UNSUPPORTED)
   })
 })

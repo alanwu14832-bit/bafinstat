@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 // playwright from next to this script, or from the folder it is run in (npm i --no-save playwright there)
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 import { writeFileSync } from 'node:fs'
+import { answerAsks } from './answer.mjs'
 const S = process.argv[2] ?? '.'
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {})
@@ -40,7 +41,8 @@ await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTi
 
 // ---------------------------------------------------------------- driving the screen (as in game1/game2)
 const PITCH = { B: '壞球', CS: '好球・未揮', SS: '揮空', F: '界外', IP: '擊進場內' }
-const pitch = async (c) => { await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
+// (batch 18: the questions the pitch pad waits for are answered first, 不知道 unless the script says otherwise)
+const pitch = async (c) => { await answerAsks(p, main); await main.getByRole('button', { name: new RegExp('^' + PITCH[c]) }).first().click(); await p.waitForTimeout(60) }
 const planOpen = async () => (await main.getByRole('button', { name: /^送出/ }).count()) > 0
 const runnerSheet = async () => {
   await main.getByRole('button', { name: /^壘上跑者/ }).first().click(); await p.waitForTimeout(200)
@@ -63,6 +65,7 @@ let paNo = 0
 const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
 async function pa(side, spec) {
   paNo++
+  await answerAsks(p, main, { ...(spec.hand ? { hand: spec.hand } : {}), ...(spec.bats ? { bats: spec.bats } : {}) })
   const d0 = await draft()
   const who = side === 'us' ? d0.lineup[d0.slot]?.name : `對方第 ${d0.oppOrder} 棒`
   for (const st of spec.steps ?? []) {
@@ -125,7 +128,8 @@ async function place(want) {
 // --- 1 上
 {
   const strip = main.getByRole('group', { name: '對方投手' })
-  if (await strip.count()) { await strip.getByRole('button', { name: '不記', exact: true }).click(); await p.waitForTimeout(200) }
+  // (batch 18: 不記 is gone; the hand is required, 不知道 counts)
+  if (await strip.count()) { await strip.getByRole('button', { name: '不知道', exact: true }).click(); await p.waitForTimeout(200) }
 }
 if (await card().count()) notes.push('第 1 局就出現突破僵局卡片')
 await us({ steps: ['SS', 'SS', 'SS'], result: '三振' })                       // S1

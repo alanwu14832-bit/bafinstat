@@ -101,6 +101,11 @@ select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]',
 select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', ('[{"game_id":"G4","seq":1,"inning":1,"batter":"甲","result":"三振","errors":' || (select jsonb_agg('C'::text) from generate_series(1, 21))::text || '}]')::jsonb)$q$, '21 對方失誤 on one plate appearance are refused');
 select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]', '[]', '[{"game_id":"G4","seq":1,"inning":1,"pitcher":"甲","result":"全壘打","rbi":5}]')$q$, 'an 對方打點 of 5 is refused');
 select pg_temp.ok(pg_temp.val($q$select array_to_string(errors, ',') from batting_pa where game_id = 'G4'$q$) = 'C,?', 'and the game keeps its rows');
+-- 2026-10-16: 對方打者左右打 (pitching_pa.opp_bats) goes through save_games too; only L / R (or nothing)
+select pg_temp.ok(save_games('[{"id":"G5","date":"2026-10-06"}]', '[]', '[{"game_id":"G5","seq":1,"inning":1,"pitcher":"甲","pitches":["IP"],"result":"一安","opp_bats":"L"},{"game_id":"G5","seq":2,"inning":1,"pitcher":"甲","pitches":["S"],"result":"三振","opp_bats":"R"},{"game_id":"G5","seq":3,"inning":1,"pitcher":"甲","pitches":["S"],"result":"三振"}]') = 1, 'A saves 對方打者左右打');
+select pg_temp.ok(pg_temp.val($q$select string_agg(coalesce(opp_bats, '-'), ',' order by seq) from pitching_pa where game_id = 'G5'$q$) = 'L,R,-', 'pitching_pa.opp_bats reads back, NULL when not known');
+select pg_temp.refused($q$select save_games('[{"id":"G5","date":"2026-10-06"}]', '[]', '[{"game_id":"G5","seq":1,"inning":1,"pitcher":"甲","result":"一安","opp_bats":"X"}]')$q$, 'an opp_bats other than L / R is refused');
+select pg_temp.ok(pg_temp.val($q$select string_agg(coalesce(opp_bats, '-'), ',' order by seq) from pitching_pa where game_id = 'G5'$q$) = 'L,R,-', 'and the game keeps its rows');
 select pg_temp.ok(pg_temp.val('select count(*) from editors')::int >= 3, 'A sees the 紀錄員名單');
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'A sees the 操作紀錄');
 select pg_temp.ok(length(add_editor('e@x.com', '新人')) = 10, 'A adds a recorder and gets a 10-character 邀請碼');

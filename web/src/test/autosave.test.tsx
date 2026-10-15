@@ -21,6 +21,7 @@ import { RecordPage } from '../pages/Record'
 import { useDataStore } from '../store/data'
 import { writeDraft } from '../record/draft'
 import { commitPA, defaultPlan, newGame } from '../record/model'
+import { answered } from './answered'
 
 const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 
@@ -28,7 +29,7 @@ describe('autosave while recording (cloud mode)', () => {
   it('syncs a ball mid plate appearance, rewrites the rows only when they change, and says when it failed', async () => {
     const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
     let s = newGame({ id: 'G20261010-01', date: '2026-10-10', tournament: '聯賽', opponent: '政大', homeAway: '主' }, lineup, '甲')
-    s = { ...commitPA({ ...s, pitches: ['S', 'IP'] }, defaultPlan({ ...s, pitches: ['S', 'IP'] }, '內滾')), updatedAt: '2026-10-10T05:00:00.000Z' }
+    s = { ...answered(commitPA({ ...s, pitches: ['S', 'IP'] }, defaultPlan({ ...s, pitches: ['S', 'IP'] }, '內滾'))), updatedAt: '2026-10-10T05:00:00.000Z' }
     expect(s.pitching).toHaveLength(1)
     writeDraft(s)
     const saveGame = vi.fn(async () => [])

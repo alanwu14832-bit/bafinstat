@@ -25,7 +25,7 @@ import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
 import { DAY_ROSTER_UNSUPPORTED } from '../data/gameRoster'
-import { RECORD_FIELDS_MIGRATION } from '../data/recordFields'
+import { OPP_BATS_MIGRATION, RECORD_FIELDS_MIGRATION } from '../data/recordFields'
 import { lastOppLineup, oppBatterNames, oppPitcherOptions } from '../data/opponents'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../data/gameTime'
 import { addDays, hhmm, localDate } from '../lib/dates'
@@ -36,10 +36,11 @@ import { cx } from '../lib/format'
 import {
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
-  correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
+  answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
   type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
-import { LastOppLineupButton, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
+import { LastOppLineupButton, OppBatsChips, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
 import { describeChange } from '../record/summary'
 import { reachedOn } from '../record/timeline'
 import { earnedAll } from '../record/earned'
@@ -295,7 +296,7 @@ export function staleAgainstCloud(s: RecordState, store: { base: { batting: { ga
 /** tone: ok = in the cloud (or saved on this device), pending = a change not synced yet, failed = not saved */
 interface SaveState { tone: 'ok' | 'pending' | 'failed'; status: string; button: string | null; saving: boolean; onSave: () => void }
 
-function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus, large, onToggleLarge, oppHandOn, practice = false }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void; large: boolean; onToggleLarge: () => void; /** the cloud has the 對方投手 columns (or there is no cloud) */ oppHandOn: boolean; /** 練習紀錄 */ practice?: boolean }) {
+function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, onToggleFocus, large, onToggleLarge, oppHandOn, oppBatsOn = false, practice = false }: { state: RecordState; apply: (fn: (s: RecordState) => RecordState) => void; undo: () => void; canUndo: boolean; onFinish: () => void; onAbandon: () => void; save: SaveState; focus: boolean; onToggleFocus: () => void; large: boolean; onToggleLarge: () => void; /** the cloud has the 對方投手 columns (or there is no cloud) */ oppHandOn: boolean; /** the cloud has pitching_pa.opp_bats (2026-10-16), or there is no cloud */ oppBatsOn?: boolean; /** 練習紀錄 */ practice?: boolean }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
   const reg = useMemo(() => registrationFor(registrations, state.game), [registrations, state.game])
@@ -332,7 +333,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // 對方代跑: names (and earlier pinch runners) seen against this opponent, for the runner sheet's datalist
   const oppPinchNames = useMemo(() => (side === 'opp' ? oppBatterNames(base, state.game.opponent) : []), [base, state.game.opponent, side])
   const oppName = oppBatterOf(state)
-  const askOppHand = side === 'us' && oppHandOn && !state.oppPitcher && !state.oppHandOff
+  // 對方投手左右投 (we bat) and 對方打者左右打 (they bat) are required: the pitch pad and the results wait for them
+  const askOppHand = needsOppHand(state, oppHandOn)
+  const askOppBats = needsOppBats(state, oppBatsOn)
+  const waitFor = askOppHand ? '先選對方投手左投或右投' : askOppBats ? '先選對方打者左打或右打' : null
   // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
   const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && isPA(b) && !b.oppHand && !b.oppPitcher).length : 0
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
@@ -521,8 +525,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       <div className="record-zoom grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
         <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 min-w-0">
           <Card still bodyClassName="p-4 md:p-5 flex flex-col gap-4">
-            {/* 對方投手: asked once while we bat (one tap, or 不記) */}
-            {askOppHand && <OppPitcherStrip onHand={(hand) => act((s) => setOppPitcher(s, { hand }))} onName={() => { setOppPitcherOpen(true); setToast(null) }} onSkip={() => act(skipOppHand)} />}
+            {/* 對方投手: asked while we bat until 左投／右投／不知道 is picked (first, and after every 對方換投) */}
+            {askOppHand && <OppPitcherStrip name={state.oppPitcher?.name} onHand={(hand) => act((s) => answerOppHand(s, hand))} onName={() => { setOppPitcherOpen(true); setToast(null) }} />}
             {/* who is up */}
             <div className="flex items-center justify-between gap-x-3 gap-y-2 flex-wrap">
               {side === 'us' ? (
@@ -534,7 +538,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <div className="flex items-center gap-3 min-w-0">
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
                   <div className="min-w-0"><div className="text-[12px] text-muted truncate">我隊投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
-                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="font-display text-[22px] font-bold text-ink leading-7 truncate">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
+                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
+                      {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => act((s) => setOppBats(s, b))} />}</div>
                     {state.oppNames && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
               )}
@@ -583,7 +588,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
-              <PitchPad onPitch={(code) => { if (inPlay) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due} />
+              {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}（看不出來就按「不知道」）</p>}
+              <PitchPad onPitch={(code) => { if (inPlay || waitFor) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -645,7 +651,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <button type="button" onClick={() => apply(undoPitch)} className="shrink-0 h-9 px-3 rounded-[var(--radius-sm)] text-[12px] text-ink-2 hover:text-ink hover:bg-surface/60 underline underline-offset-2 cursor-pointer">點錯了，刪掉 IP</button>
                   </div>
                 )}
-                {!due && <ResultChips onPick={choose} only={inPlay ? BIP_RESULTS : undefined} />}
+                {!due && <ResultChips onPick={(r) => { if (!waitFor) choose(r) }} only={inPlay ? BIP_RESULTS : undefined} disabled={!!waitFor} />}
               </div>
             ) : (
               <div className="rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
@@ -821,6 +827,8 @@ function RecordScreen({ practice }: { practice: boolean }) {
   const recordFields = useDataStore((s) => s.recordFields)
   // (a practice touches no cloud: it asks for the 對方投手 whatever the database has)
   const oppHandOn = practice || !cloud.configured || recordFields.oppPitcher
+  // 對方打者左右打: only asked once the cloud can store it (the 2026-10-16 migration); before it, not shown at all
+  const oppBatsOn = practice || !cloud.configured || recordFields.oppBats
   const draftKey = practice ? PRACTICE_KEY : DRAFT_KEY
   const [state, setState] = useState<RecordState | null>(() => readDraft(draftKey))
   // practising while a real game is in progress on this device: say it is left alone
@@ -1045,6 +1053,7 @@ function RecordScreen({ practice }: { practice: boolean }) {
       {!practice && cloud.configured && !draftsSupported && state && <div className="text-[12px] text-muted">要在別的裝置接續這場，請管理員在 Supabase 執行一次 supabase/migrations/2026-09-10_record_drafts.sql。</div>}
       {!practice && cloud.configured && !dayRosterSupported && state && <div className="text-[12px] text-muted">{DAY_ROSTER_UNSUPPORTED}（比分與打席照常儲存）</div>}
       {cloud.configured && !oppHandOn && state && <div className="text-[12px] text-muted">對方投手（左投／右投）要等管理員在 Supabase 執行 {RECORD_FIELDS_MIGRATION} 才會記（比分與打席照常儲存）</div>}
+      {cloud.configured && !practice && !oppBatsOn && state && <div className="text-[12px] text-muted">對方打者左打／右打要等管理員在 Supabase 執行 {OPP_BATS_MIGRATION} 才會記（其他紀錄照常儲存）</div>}
       {state && stale && stale.gameId === state.game.id ? (
         <Card title="這份紀錄進度比雲端舊" subtitle={`${state.game.date} vs ${state.game.opponent}`}>
           <div className="flex flex-col gap-3 text-[13px] text-ink-2 leading-relaxed">
@@ -1065,10 +1074,10 @@ function RecordScreen({ practice }: { practice: boolean }) {
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
                 <div className="flex items-center gap-3 text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className={cx('truncate', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
-                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} practice={practice} />
+                <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} oppBatsOn={oppBatsOn} practice={practice} />
               </div>
             </div>, document.body)
-            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus={false} onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} practice={practice} />}
+            : <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus={false} onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} oppBatsOn={oppBatsOn} practice={practice} />}
         </>
       )}
       <Sheet open={!!finish && !!state} onClose={() => setFinish(null)} ariaLabel={practice ? '結束練習' : '結束比賽'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom">

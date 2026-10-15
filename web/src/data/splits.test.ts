@@ -117,3 +117,37 @@ describe('局數, 壘上, 領先／落後, 對左右投, 突破僵局', () => {
     expect(splitTable(rows, ctx, 'bat', 'order', opts).rows.map((r) => r.key)).toEqual(['all', 'slot-4'])
   })
 })
+
+describe('左右打 (batch 18)', () => {
+  it('our pitchers: 對左打／對右打 once some plate appearance has the batter\'s side; 不知道 is left out', () => {
+    const rows = [pit({ oppBats: 'L', result: '一安' }), pit({ oppBats: 'L', result: '三振', pitches: ['S', 'S', 'S'] }), pit({ oppBats: 'R', result: '保送', pitches: ['B', 'B', 'B', 'B'] }), pit({})]
+    const ctx = paContexts(only([], rows), 'pit')
+    expect(availableGroups('pit', only([], rows), ctx)).toContain('bats')
+    expect(availableGroups('pit', only([], [pit({})]), paContexts(only([], [pit({})]), 'pit'))).not.toContain('bats')
+    const t = splitTable(rows, ctx, 'pit', 'bats', opts)
+    expect(t.rows.map((r) => r.label)).toEqual(['全部', '對左打', '對右打'])
+    const L = t.rows[1].line, R = t.rows[2].line
+    expect([L.pa, L.ab, L.h, L.avg, L.so]).toEqual([2, 2, 1, 0.5, 1])
+    expect([R.pa, R.bb, R.obp]).toEqual([1, 1, 1])
+    expect(L.kPct).toBeCloseTo(0.5)
+    expect(t.missing).toBe(1)
+    // the same as the batting line of those rows (AVG/OBP/SLG/OPS against, K%, BB%)
+    expect(L).toMatchObject({ ops: lineFor('x', [asBat(rows[0]), asBat(rows[1])], []).ops })
+  })
+  it('our batters: 左打者／右打者 by the 球員名單, 未填 listed by name, and 左右打 × 對左右投 (a switch hitter stands opposite the pitcher)', () => {
+    const roster = [{ name: '甲', bats: 'L' as const }, { name: '乙', bats: 'R' as const }, { name: '丙', bats: 'S' as const }, { name: '丁' }]
+    const rows = [bat({ batter: '甲', oppHand: 'L', result: '一安' }), bat({ batter: '甲', oppHand: 'R' }), bat({ batter: '乙', oppHand: 'L' }), bat({ batter: '乙' }), bat({ batter: '丙', oppHand: 'L', result: '二安' }), bat({ batter: '丙', oppHand: 'R' }), bat({ batter: '丁', oppHand: 'R' })]
+    const d = { ...only(rows), roster }
+    const ctx = paContexts(d, 'bat')
+    expect(availableGroups('bat', d, ctx)).toContain('bats')
+    const t = splitTable(rows, ctx, 'bat', 'bats', { roster, innings: 7 })
+    const pas = Object.fromEntries(t.rows.map((r) => [r.label, r.line.pa]))
+    expect(pas).toEqual({ 全部: 7, 左打者: 2, 右打者: 2, 左右開弓: 2, 未填: 1, '左打者・對左投': 1, '左打者・對右投': 2, '右打者・對左投': 2, '右打者・對右投': 0 })
+    expect(t.noBats).toEqual(['丁'])
+    // nobody switch-hitting or 未填: those rows are left out
+    const only2 = splitTable(rows.slice(0, 4), ctx, 'bat', 'bats', { roster, innings: 7 })
+    expect(only2.rows.map((r) => r.key)).toEqual(['all', 'bats-L', 'bats-R', 'L-vs-L', 'L-vs-R', 'R-vs-L', 'R-vs-R'])
+    expect(only2.noBats).toBeUndefined()
+  })
+})
+const asBat = (p: PitchingPA): BattingPA => ({ gameId: p.gameId, inning: p.inning, batter: '對手', pitches: p.pitches, result: p.result, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0 })

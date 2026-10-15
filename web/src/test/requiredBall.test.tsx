@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { RecordPage } from '../pages/Record'
 import { PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
 import { missingBattedBall, newGame, type RecordState } from '../record/model'
+import { answered } from './answered'
 import { NO_BATTED_BALL, RESULT_GROUPS } from '../record/widgets'
 import { TRAJ_OF } from '../data/types'
 
@@ -15,7 +16,7 @@ const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms
 const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
 // 客: we bat first (top of the 1st); 主: they bat first
 const game = (homeAway: '主' | '客') => ({ id: 'PRACTICE-20261014', date: '2026-10-14', tournament: '練習', opponent: '練習對手', homeAway })
-const start = (s: RecordState) => { writeDraft({ ...s, practice: true }, PRACTICE_KEY); render(<MemoryRouter initialEntries={['/record?practice=1']}><RecordPage /></MemoryRouter>) }
+const start = (s: RecordState) => { writeDraft({ ...answered(s), practice: true }, PRACTICE_KEY); render(<MemoryRouter initialEntries={['/record?practice=1']}><RecordPage /></MemoryRouter>) }
 Element.prototype.scrollIntoView ??= () => {}
 afterEach(() => { cleanup(); writeDraft(null, PRACTICE_KEY) })
 

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
   setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
-  finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, skipOppHand, stampTimes,
+  finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
+  answerOppHand, needsOppBats, needsOppHand, oppBatsNow, pinchHitOpp, pinchRunOpp, setOppBats, setOppOrder,
   correctOppPitcher, oppPitchCount, oppStintStart,
 } from './model'
 import { describeChange } from './summary'
@@ -393,10 +394,9 @@ describe('對方投手 on our plate appearances', () => {
     expect(s.batting.filter((b) => b.inning < 3).every((b) => !b.oppHand)).toBe(true)
     expect(s.batting.filter((b) => b.inning === 3).map((b) => b.oppHand)).toEqual(['L'])
   })
-  it('a blank entry clears it; 不記 hides the question', () => {
+  it('a blank entry clears it', () => {
     const s = newGame(game, lineup, '壬')
     expect(setOppPitcher(setOppPitcher(s, { hand: 'R' }), { name: '  ' }).oppPitcher).toBeUndefined()
-    expect(skipOppHand(s).oppHandOff).toBe(true)
   })
 })
 
@@ -490,7 +490,7 @@ describe('對方打者姓名', () => {
   })
   it('a draft without the new fields commits exactly as before', () => {
     const fresh = newGame(game, lineup, '壬')
-    const { firstPitchAt: _a, lastPlayAt: _b, oppPitcher: _c, oppHandOff: _d, oppNames: _e, oppLineup: _f, ...old } = fresh
+    const { firstPitchAt: _a, lastPlayAt: _b, oppPitcher: _c, oppBatsBySlot: _d, oppNames: _e, oppLineup: _f, ...old } = fresh
     void _a; void _b; void _c; void _d; void _e; void _f
     const draft = JSON.parse(JSON.stringify(old)) as RecordState
     const a = commitPA(addPitch(draft, 'IP'), { ...defaultPlan(draft, '一安'), loc: 7 })
@@ -707,5 +707,109 @@ describe('對方代跑 (pinchRunOpp)', () => {
     const s = pinchRunOpp(start(), 0, '12號')
     const { fragment } = normalizeGameEdit(SEED_DATASET.roster, toGameEdit(s))
     expect(fragment.pitching[0].runner).toBe('12號')
+  })
+})
+
+describe('對方投手左右投 is required (batch 18)', () => {
+  const away = { ...game, homeAway: '客' as const }
+  it('asks before the first pitch of our first half, only while we bat and only when the cloud can store it', () => {
+    const s = newGame(away, lineup, '壬')
+    expect(needsOppHand(s, true)).toBe(true)
+    expect(needsOppHand(s, false)).toBe(false)
+    expect(needsOppHand(newGame(game, lineup, '壬'), true)).toBe(false)   // home: they bat first
+    expect(needsOppHand(answerOppHand(s, 'L'), true)).toBe(false)
+    // 不知道 is an answer too: nothing goes on the rows
+    const u = answerOppHand(s, null)
+    expect(u.oppPitcher).toEqual({ handUnknown: true })
+    expect(needsOppHand(u, true)).toBe(false)
+    const after = commitPA(u, defaultPlan(u, '三振'))
+    expect('oppHand' in after.batting[0]).toBe(false)
+  })
+  it('asks again after every 對方換投 without a hand; the answer is his, not one more 換投', () => {
+    let s = answerOppHand(newGame(away, lineup, '壬'), 'R')
+    s = commitPA(addPitch(s, 'S'), defaultPlan(s, '三振'))
+    s = setOppPitcher(s, { name: '林' })                    // 換投, a name only
+    expect(needsOppHand(s, true)).toBe(true)
+    s = addPitch(s, 'B')
+    const changes = s.oppPitcherChanges?.length
+    s = answerOppHand(s, 'L')
+    expect(s.oppPitcher).toEqual({ name: '林', hand: 'L' })
+    expect(s.oppPitcherChanges?.length).toBe(changes)
+    expect(oppPitchCount(s)).toBe(1)
+    expect(needsOppHand(s, true)).toBe(false)
+    // a 換投 picked with 不知道
+    s = setOppPitcher(s, { handUnknown: true })
+    expect(s.oppPitcher).toEqual({ handUnknown: true })
+    expect(needsOppHand(s, true)).toBe(false)
+  })
+  it('an old draft that pressed 「不記」 is asked once (the key is ignored)', () => {
+    const old = { ...newGame(away, lineup, '壬'), oppHandOff: true } as RecordState
+    expect(needsOppHand(old, true)).toBe(true)
+    expect(needsOppHand(answerOppHand(old, 'R'), true)).toBe(false)
+  })
+})
+
+describe('對方打者左右打 (batch 18)', () => {
+  const home = game   // they bat first
+  it('is required while they bat, remembered per slot, stamped on their row; 不知道 leaves the key out', () => {
+    let s = newGame(home, lineup, '壬')
+    expect(needsOppBats(s, true)).toBe(true)
+    expect(needsOppBats(s, false)).toBe(false)
+    s = setOppBats(s, 'L')
+    expect(oppBatsNow(s)).toBe('L')
+    expect(needsOppBats(s, true)).toBe(false)
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect(s.pitching[0].oppBats).toBe('L')
+    // slot 2: 不知道
+    expect(needsOppBats(s, true)).toBe(true)
+    s = commitPA(setOppBats(s, null), defaultPlan(s, '三振'))
+    expect('oppBats' in s.pitching[1]).toBe(false)
+    s = commitPA(setOppBats(s, 'R'), defaultPlan(s, '三振'))
+    // our half: nothing asked
+    expect(offense(s)).toBe('us')
+    expect(needsOppBats(s, true)).toBe(false)
+    for (let i = 0; i < 3; i++) s = commitPA(answerOppHand(s, 'R'), defaultPlan(s, '三振'))
+    // their 4th batter is new: asked; then the order comes round to slot 1 again and he is pre-filled
+    expect(s.oppOrder).toBe(4)
+    expect(needsOppBats(s, true)).toBe(true)
+    s = setOppOrder(s, 1)   // (as if the order came round)
+    expect(needsOppBats(s, true)).toBe(false)
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect(s.pitching[s.pitching.length - 1].oppBats).toBe('L')
+    // slot 2 had 不知道: remembered too (asked once per batter), changeable
+    expect(oppBatsNow(s)).toBe('?')
+    expect(oppBatsNow(setOppBats(s, 'R'))).toBe('R')
+  })
+  it('a switch hitter: the side he took this time (a later plate appearance can change it)', () => {
+    let s = commitPA(setOppBats(newGame(home, lineup, '壬'), 'L'), defaultPlan(newGame(home, lineup, '壬'), '三振'))
+    s = setOppOrder(s, 1)
+    s = commitPA(setOppBats(s, 'R'), defaultPlan(s, '三振'))
+    expect(s.pitching.map((p) => p.oppBats)).toEqual(['L', 'R'])
+  })
+  it('對方代打, 對方代跑 and a renamed slot clear it; filling a blank name does not', () => {
+    let s = setOppBats(newGame(home, lineup, '壬'), 'L')
+    expect(needsOppBats(pinchHitOpp(s, '99號'), true)).toBe(true)
+    // 對方代跑: the slot of the runner he replaced
+    s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7, traj: 'L' })
+    s = setOppOrder(s, 1)
+    expect(oppBatsNow(s)).toBe('L')
+    expect(oppBatsNow(pinchRunOpp(s, 0, '12號'))).toBeUndefined()
+    // names
+    let n = setOppNames(newGame(home, lineup, '壬'), true)
+    n = setOppBats(n, 'R')
+    expect(oppBatsNow(setOppLineup(n, ['王']))).toBe('R')          // a blank slot gets his name
+    const named = setOppLineup(n, ['王'])
+    expect(oppBatsNow(setOppLineup(named, ['李']))).toBeUndefined()  // someone else now
+    expect(oppBatsNow(setOppLineup(named, ['王', 'B2']))).toBe('R')  // another slot changed
+  })
+  it('undo is the state before (one step), and old drafts without the field are simply asked', () => {
+    const s = newGame(home, lineup, '壬')
+    const picked = setOppBats(s, 'L')
+    expect(oppBatsNow(s)).toBeUndefined()
+    expect(picked.oppBatsBySlot).toEqual({ 1: 'L' })
+    const draft = JSON.parse(JSON.stringify(picked)) as RecordState
+    expect(oppBatsNow(draft)).toBe('L')
+    expect(describeChange(s, picked)).toBe('對方第 1 棒：左打')
+    expect(describeChange(s, setOppBats(s, null))).toBe('對方第 1 棒：左右打不知道')
   })
 })
