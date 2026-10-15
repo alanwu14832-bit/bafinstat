@@ -201,7 +201,8 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   })), [ctx, upKey, s.batting.length]) // eslint-disable-line react-hooks/exhaustive-deps
   const due = dueUp(s, sc, reg)
   const halfCard = useMemo(() => currentHalfCard(s, ctx), [ctx, halfCardKey(s)]) // eslint-disable-line react-hooks/exhaustive-deps
-  const card: HalfCard | null = inPlay ? halfCard : null
+  // 大螢幕 stays lean: no team win-streak card (連勝中) there
+  const card: HalfCard | null = inPlay && !(big && halfCard?.id === 'wstreak:team') ? halfCard : null
 
   // 文字轉播: the whole game, both sides; between halves the batting team's first three go on the new half's header
   const fresh = s.outs === 0 && !s.pitches.length && !s.plays?.length && !(side === 'us' ? s.batting : s.pitching).some((r) => r.inning === s.inning)
