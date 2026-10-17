@@ -111,11 +111,12 @@ describe('wRC+ and K/7', () => {
 })
 
 describe('內野飛球 (P)', () => {
-  it('is a fly ball, and IFFB% is the share of fly balls that stayed in the infield', () => {
+  it('counts as a fly ball in `fb` and IFFB%, apart from FB% (PU% is its own column, like Savant)', () => {
     const pa = (traj: string): BattingPA => ({ gameId: game.id, inning: 1, batter: '甲', pitches: ['IP'], result: '內飛', traj, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0 })
     const [l] = battingLines(ds, [pa('P'), pa('F'), pa('F'), pa('G')])
     expect(l.bip).toBe(4); expect(l.fb).toBe(3); expect(l.iffb).toBe(1)
-    expect(l.fbPct).toBeCloseTo(3 / 4, 9); expect(l.iffbPct).toBeCloseTo(1 / 3, 9)
+    expect(l.fbPct).toBeCloseTo(2 / 4, 9); expect(l.puPct).toBeCloseTo(1 / 4, 9); expect(l.iffbPct).toBeCloseTo(1 / 3, 9)
+    expect(l.gbPct! + l.ldPct! + l.fbPct! + l.puPct!).toBeCloseTo(1, 9); expect(l.airPct).toBeCloseTo(3 / 4, 9)
   })
 })
 
@@ -129,7 +130,7 @@ describe('BIP = every batted ball (batch 14)', () => {
     expect(l.gbPct).toBeCloseTo(1 / 2, 9); expect(l.fbPct).toBeCloseTo(1 / 2, 9)
     // Hard% over the batted balls with a 強度 only, Pull/Center/Oppo% over those with a 落點
     expect(l.bipQuality).toBe(1); expect(l.hardPct).toBe(0)
-    expect(l.bipLoc).toBe(2); expect(l.pullPct).toBeCloseTo(1 / 2, 9); expect(l.centerPct).toBeCloseTo(1 / 2, 9)
+    expect(l.bipSpray).toBe(2); expect(l.pullPct).toBeCloseTo(1 / 2, 9); expect(l.centerPct).toBeCloseTo(1 / 2, 9)
   })
   it('8 hits, one without a 軌跡: BIP 8 (the 王鼎鈞 case)', () => {
     const rows = [...Array.from({ length: 7 }, () => bat('一安', { traj: 'L', loc: 8 })), bat('一安')]

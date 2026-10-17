@@ -53,7 +53,7 @@ export function sprayDirection(loc: number | undefined, hand: Hand): 'pull' | 'c
 }
 
 // ------------------------------------------------------------------ batting
-export interface BattingLine {
+export interface BattingLine extends BattedBallCounts, BattedBallRates {
   name: string
   g: number; pa: number; ab: number; r: number; h: number; h1: number; h2: number; h3: number; hr: number; tb: number; xbh: number; rbi: number
   bb: number; ibb: number; hbp: number; so: number; sh: number; sf: number; gidp: number; roe: number; fc: number; sb: number; cs: number
@@ -64,33 +64,77 @@ export interface BattingLine {
   xbtOpp: number; xbt: number; xbtOut: number; thrownOut: number
   xbtPct: number | null
   rispAB: number; rispH: number
-  /** BIP = every batted ball (not 三振／保送／故四／觸身／妨礙, not a 突破僵局 runner; 全壘打 included), recorded detail or not.
-   *  The rates use only the batted balls that have the detail: GB%/FB%/LD% over bipTraj (軌跡 recorded), Hard% over
-   *  bipQuality (強度 recorded), Pull/Center/Oppo% over bipLoc (落點 recorded), so a missing detail never drags them down. */
-  bip: number; bipTraj: number; bipQuality: number; bipLoc: number
-  gb: number; fb: number; ld: number; hard: number; iffb: number
   pitches: number; whiffs: number; swings: number; called: number; firstPitchSwing: number; qab: number
   /** plate appearances with their pitches recorded: P/PA and 首球揮棒% are over these (a row from an old import has none) */
   paPitched: number
   /** plate appearances that reached two strikes / of those, 3+ more pitches after it (兩好球纏鬥) / 6+ pitches (6球以上) */
   twoStrikePA: number; twoStrikeBattles: number; longPA: number
-  pull: number; center: number; oppo: number
   avg: number | null; obp: number | null; slg: number | null; ops: number | null; opsPlus: number | null; iso: number | null; babip: number | null; woba: number | null
   /** wRC+ against the same slice of the team (100 = team average) */
   wrcPlus: number | null
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
-  gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
   /** 獲勝機率增加值 / 局面得分增值: filled in by data/winTimeline.withWinBatting (the model), null here */
   wpa: number | null; re24: number | null
+}
+
+/**
+ * 擊球剖面 counters and rates, shared by BattingLine and PitchingLine (the table is the same for both). BIP = every batted
+ * ball; each rate counts only the batted balls that have that detail: 種類 over bipTraj (軌跡), 方向 over bipSpray (落點 plus the
+ * batter's side), 強度 over bipQuality. FB% leaves the pop-ups (PU%) out, like Baseball Savant, so GB% + LD% + FB% + PU% = 100%;
+ * AIR% = LD + FB + PU. IFFB%, GB/FB and HR/FB keep FanGraphs' reading (pop-ups are fly balls: `fb` includes them).
+ */
+export interface BattedBallCounts {
+  bip: number; bipTraj: number; bipQuality: number; bipSpray: number
+  gb: number; fb: number; ld: number; iffb: number
+  soft: number; med: number; hard: number
+  pull: number; center: number; oppo: number
+  /** home runs that were fly balls; hits / balls in play (no home runs, no bunts) on each 軌跡, for BABIP by kind */
+  hrFb: number; gbH: number; gbN: number; ldH: number; ldN: number; fbH: number; fbN: number
+}
+export interface BattedBallRates {
+  gbPct: number | null; ldPct: number | null; fbPct: number | null; puPct: number | null; airPct: number | null; iffbPct: number | null
+  pullPct: number | null; centerPct: number | null; oppoPct: number | null
+  softPct: number | null; medPct: number | null; hardPct: number | null
+  gbFb: number | null; hrFbPct: number | null; babipGb: number | null; babipLd: number | null; babipFb: number | null
+}
+const emptyBattedBall = (): BattedBallCounts => ({
+  bip: 0, bipTraj: 0, bipQuality: 0, bipSpray: 0, gb: 0, fb: 0, ld: 0, iffb: 0, soft: 0, med: 0, hard: 0, pull: 0, center: 0, oppo: 0,
+  hrFb: 0, gbH: 0, gbN: 0, ldH: 0, ldN: 0, fbH: 0, fbN: 0,
+})
+const emptyBattedBallRates = (): BattedBallRates => ({
+  gbPct: null, ldPct: null, fbPct: null, puPct: null, airPct: null, iffbPct: null, pullPct: null, centerPct: null, oppoPct: null,
+  softPct: null, medPct: null, hardPct: null, gbFb: null, hrFbPct: null, babipGb: null, babipLd: null, babipFb: null,
+})
+/** One batted ball into the counters (`dir`: pull / center / oppo, null when the 落點 or the batter's side is not known). */
+function tallyBattedBall(l: BattedBallCounts, pa: { result?: string; quality?: string }, traj: string | undefined, dir: 'pull' | 'center' | 'oppo' | null) {
+  const r = pa.result
+  l.bip++
+  if (traj) { l.bipTraj++; if (traj === 'G') l.gb++; if (traj === 'F' || traj === 'P') l.fb++; if (traj === 'P') l.iffb++; if (traj === 'L') l.ld++ }
+  if (hasQuality(pa.quality)) { l.bipQuality++; if (pa.quality === '強') l.hard++; else if (pa.quality === '中') l.med++; else if (pa.quality === '弱') l.soft++ }
+  if (dir) { l.bipSpray++; if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else l.oppo++ }
+  if (r === '全壘打' && (traj === 'F' || traj === 'P')) l.hrFb++
+  // BABIP by 軌跡: balls in play without home runs and bunts (a hit, or an out / error)
+  if (r !== '全壘打' && r !== '犧觸' && traj) {
+    const h = r && HIT_RESULTS.has(r) ? 1 : 0
+    if (traj === 'G') { l.gbN++; l.gbH += h } else if (traj === 'L') { l.ldN++; l.ldH += h } else { l.fbN++; l.fbH += h }
+  }
+}
+function battedBallRates(l: BattedBallCounts & BattedBallRates) {
+  l.gbPct = div(l.gb, l.bipTraj); l.ldPct = div(l.ld, l.bipTraj); l.fbPct = div(l.fb - l.iffb, l.bipTraj); l.puPct = div(l.iffb, l.bipTraj)
+  l.airPct = div(l.ld + l.fb, l.bipTraj); l.iffbPct = div(l.iffb, l.fb)
+  l.pullPct = div(l.pull, l.bipSpray); l.centerPct = div(l.center, l.bipSpray); l.oppoPct = div(l.oppo, l.bipSpray)
+  l.softPct = div(l.soft, l.bipQuality); l.medPct = div(l.med, l.bipQuality); l.hardPct = div(l.hard, l.bipQuality)
+  l.gbFb = div(l.gb, l.fb); l.hrFbPct = div(l.hrFb, l.fb)
+  l.babipGb = div(l.gbH, l.gbN); l.babipLd = div(l.ldH, l.ldN); l.babipFb = div(l.fbH, l.fbN)
 }
 
 function emptyBatting(name: string): BattingLine {
   return {
     name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0, xbtOpp: 0, xbt: 0, xbtOut: 0, thrownOut: 0, xbtPct: null,
-    rispAB: 0, rispH: 0, bip: 0, bipTraj: 0, bipQuality: 0, bipLoc: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0, pull: 0, center: 0, oppo: 0,
+    rispAB: 0, rispH: 0, ...emptyBattedBall(), ...emptyBattedBallRates(), pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0,
     avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
-    pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
+    pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null,
     wpa: null, re24: null,
   }
 }
@@ -109,8 +153,7 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
   l.rispAvg = div(l.rispH, l.rispAB); l.qabPct = div(l.qab, l.pa); l.xbtPct = div(l.xbt, l.xbtOpp)
   l.pPerPA = div(l.pitches, l.paPitched); l.whiffPct = div(l.whiffs, l.swings); l.contactPct = l.whiffPct === null ? null : 1 - l.whiffPct
   l.swingPct = div(l.swings, l.pitches); l.fpsPct = div(l.firstPitchSwing, l.paPitched)
-  l.gbPct = div(l.gb, l.bipTraj); l.fbPct = div(l.fb, l.bipTraj); l.ldPct = div(l.ld, l.bipTraj); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bipQuality)
-  l.pullPct = div(l.pull, l.bipLoc); l.centerPct = div(l.center, l.bipLoc); l.oppoPct = div(l.oppo, l.bipLoc)
+  battedBallRates(l)
   return l
 }
 
@@ -131,15 +174,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0
   if (isAB && isRISP(pa.basesBefore)) { l.rispAB++; if (hit) l.rispH++ }
   const batted = isBattedBall(pa)
-  if (batted) {
-    l.bip++
-    const traj = trajOf(pa)
-    if (traj) { l.bipTraj++; if (traj === 'G') l.gb++; if (traj === 'F' || traj === 'P') l.fb++; if (traj === 'P') l.iffb++; if (traj === 'L') l.ld++ }
-    if (hasQuality(pa.quality)) { l.bipQuality++; if (pa.quality === '強') l.hard++ }
-    const dir = sprayDirection(pa.loc, hand)
-    if (dir) l.bipLoc++
-    if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else if (dir === 'oppo') l.oppo++
-  }
+  if (batted) tallyBattedBall(l, pa, trajOf(pa), sprayDirection(pa.loc, hand))
   l.pitches += pt.pitches; l.whiffs += pt.whiffs; l.swings += pt.swings; l.called += pt.called
   if (pt.pitches > 0) l.paPitched++
   if (SWING_CODES.has(pa.pitches[0] ?? '')) l.firstPitchSwing++
@@ -223,23 +258,18 @@ export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARA
 }
 
 // ------------------------------------------------------------------ pitching
-export interface PitchingLine {
+export interface PitchingLine extends BattedBallCounts, BattedBallRates {
   name: string
   g: number; gs: number; w: number; l: number; sv: number; hld: number; outs: number; ip: number; ipDisplay: string
   bf: number; ab: number; pc: number; strikes: number; balls: number; k: number; bb: number; ibb: number; hbp: number; h: number; h2: number; h3: number; hr: number; sf: number
   r: number; er: number; wp: number; sba: number; cs: number; pk: number
   /** 投手犯規 (balks), counted from the runner plays (one balk moves every runner, logged once per runner) */
   bk: number
-  /** BIP allowed = every batted ball (as BattingLine.bip); GB%/FB%/LD% over bipTraj, Hard% over bipQuality */
-  bip: number; bipTraj: number; bipQuality: number; gb: number; fb: number; ld: number; iffb: number; hard: number; whiffs: number; swings: number; called: number; firstPitchStrike: number
-  /** 擊球剖面 (the rest of the batted-ball profile): Pull / Center / Oppo over the batted balls with a 落點 and the batter's 左右打
-   *  (bipSpray), 弱／中 over bipQuality (Hard is `hard`), home runs that were fly balls, and hits / balls in play (no home runs,
-   *  no bunts) on each 軌跡 for BABIP by kind */
-  bipSpray: number; pull: number; center: number; oppo: number; soft: number; med: number; hrFb: number; gbH: number; gbN: number; ldH: number; ldN: number; fbH: number; fbN: number
+  /** (擊球剖面: BattedBallCounts) other counters of batted balls allowed */
+  whiffs: number; swings: number; called: number; firstPitchStrike: number
   era: number | null; whip: number | null; k7: number | null; k9: number | null; bb9: number | null; h9: number | null; kbb: number | null; kPct: number | null; bbPct: number | null
   oppAvg: number | null; oppObp: number | null; babip: number | null; fip: number | null; strikePct: number | null
-  gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
-  pullPct: number | null; centerPct: number | null; oppoPct: number | null; softPct: number | null; medPct: number | null; gbFb: number | null; hrFbPct: number | null; babipGb: number | null; babipLd: number | null; babipFb: number | null
+  whiffPct: number | null; cswPct: number | null; fStrikePct: number | null
   pPerIP: number | null; pPerBF: number | null; lobPct: number | null
   /** batters faced with their pitches recorded: P/BF and F-Strike% are over these */
   bfPitched: number
@@ -257,11 +287,9 @@ export interface PitchingLine {
 function emptyPitching(name: string): PitchingLine {
   return {
     name, g: 0, gs: 0, w: 0, l: 0, sv: 0, hld: 0, outs: 0, ip: 0, ipDisplay: '0.0', bf: 0, ab: 0, pc: 0, strikes: 0, balls: 0, k: 0, bb: 0, ibb: 0, hbp: 0, h: 0, h2: 0, h3: 0, hr: 0, sf: 0,
-    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bk: 0, bip: 0, bipTraj: 0, bipQuality: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
-    bipSpray: 0, pull: 0, center: 0, oppo: 0, soft: 0, med: 0, hrFb: 0, gbH: 0, gbN: 0, ldH: 0, ldN: 0, fbH: 0, fbN: 0,
+    r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bk: 0, ...emptyBattedBall(), ...emptyBattedBallRates(), whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
     era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
-    gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
-    pullPct: null, centerPct: null, oppoPct: null, softPct: null, medPct: null, gbFb: null, hrFbPct: null, babipGb: null, babipLd: null, babipFb: null,
+    whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
     go: 0, ao: 0, bbScored: 0, bfPitched: 0, leadoffBf: 0, leadoffOuts: 0, fullInn: 0, pitchInn: 0, inn13: 0, inn123: 0, ir: 0, irs: 0, bs: 0, sitGaps: 0,
     goAo: null, bbScoredPct: null, leadoffOutPct: null, inn13Pct: null, irsPct: null,
     wpa: null, re24: null,
@@ -369,21 +397,8 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: numbe
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
   l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk; l.bk += balksIn(pa.events)
-  if (isBattedBall(pa)) {
-    l.bip++
-    const traj = trajOf(pa)
-    if (traj) { l.bipTraj++; if (traj === 'G') l.gb++; if (traj === 'F' || traj === 'P') l.fb++; if (traj === 'P') l.iffb++; if (traj === 'L') l.ld++ }
-    if (hasQuality(pa.quality)) { l.bipQuality++; if (pa.quality === '強') l.hard++; else if (pa.quality === '中') l.med++; else if (pa.quality === '弱') l.soft++ }
-    // Pull / Center / Oppo from the side the batter stood on (a switch hitter: the one he took this time)
-    const dir = pa.oppBats ? sprayDirection(pa.loc, pa.oppBats) : null
-    if (dir) { l.bipSpray++; if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else l.oppo++ }
-    if (r === '全壘打' && (traj === 'F' || traj === 'P')) l.hrFb++
-    // BABIP by 軌跡: balls in play without home runs and bunts (a hit, or an out / error)
-    if (r !== '全壘打' && r !== '犧觸' && traj) {
-      const h = HIT_RESULTS.has(r) ? 1 : 0
-      if (traj === 'G') { l.gbN++; l.gbH += h } else if (traj === 'L') { l.ldN++; l.ldH += h } else { l.fbN++; l.fbH += h }
-    }
-  }
+  // Pull / Center / Oppo from the side the batter stood on (a switch hitter: the one he took this time)
+  if (isBattedBall(pa)) tallyBattedBall(l, pa, trajOf(pa), pa.oppBats ? sprayDirection(pa.loc, pa.oppBats) : null)
   const kind = battedOutKind(pa)
   if (kind === 'GO') l.go++; else if (kind === 'AO') l.ao++
   if ((r === '保送' || r === '故四') && (pa.code === 'R' || pa.code === 'ER')) l.bbScored++
@@ -427,10 +442,7 @@ export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS
   // FIP on the same scale as our ERA (per inningsPerGame innings, like ERA), plus the constant (see fipConstantFrom)
   l.fip = ip > 0 ? fipCore(l, p.inningsPerGame) + p.fipConstant : null
   l.strikePct = div(l.strikes, l.pc)
-  l.gbPct = div(l.gb, l.bipTraj); l.fbPct = div(l.fb, l.bipTraj); l.ldPct = div(l.ld, l.bipTraj); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bipQuality)
-  l.pullPct = div(l.pull, l.bipSpray); l.centerPct = div(l.center, l.bipSpray); l.oppoPct = div(l.oppo, l.bipSpray)
-  l.softPct = div(l.soft, l.bipQuality); l.medPct = div(l.med, l.bipQuality); l.gbFb = div(l.gb, l.fb); l.hrFbPct = div(l.hrFb, l.fb)
-  l.babipGb = div(l.gbH, l.gbN); l.babipLd = div(l.ldH, l.ldN); l.babipFb = div(l.fbH, l.fbN)
+  battedBallRates(l)
   l.whiffPct = div(l.whiffs, l.swings); l.cswPct = div(l.called + l.whiffs, l.pc); l.fStrikePct = div(l.firstPitchStrike, l.bfPitched)
   l.pPerIP = ip > 0 ? l.pc / ip : null; l.pPerBF = div(l.pc, l.bfPitched)
   const lobDen = l.h + l.bb + l.hbp - 1.4 * l.hr

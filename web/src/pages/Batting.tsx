@@ -15,6 +15,7 @@ import { Checkbox } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { SplitsCard } from '../components/ui/SplitsCard'
 import { PlatoonCard } from '../components/ui/PlatoonCard'
+import { battedColumns } from '../components/ui/BattedBallTable'
 import { useQualRule } from '../hooks/useQualRule'
 import { minPlateAppearances, paGapText } from '../data/qualify'
 import { DemoBanner } from '../components/ui/DemoBanner'
@@ -30,7 +31,7 @@ import { f2, f3, pct, signed1, signed2 } from '../lib/fmt'
 import { useWinData } from '../hooks/useWinData'
 import { teamWinBatting, withWinBatting } from '../data/winTimeline'
 
-type View = 'basic' | 'advanced' | 'process'
+type View = 'basic' | 'advanced' | 'process' | 'batted'
 
 // 排行門檻: under 隊內 (the default) one plate appearance is enough to be ranked (the team asked for it); a small sample
 // still shows its numerator / denominator next to every rate. 大專規程: PA ≥ 2.1 × games (data/qualify.ts).
@@ -48,6 +49,7 @@ function columnsFor(view: View): Column<BattingLine>[] {
   const wpa: Column<BattingLine> = { key: 'wpa', header: 'WPA', align: 'right', sortable: true, format: signed2 }
   const re24: Column<BattingLine> = { key: 're24', header: 'RE24', align: 'right', sortable: true, format: signed1 }
   if (view === 'basic') return [name, n('g', 'G'), n('pa', 'PA'), n('ab', 'AB'), n('r', 'R'), n('h', 'H'), n('h2', '2B'), n('h3', '3B'), n('hr', 'HR'), n('rbi', 'RBI'), n('bb', 'BB'), n('hbp', 'HBP'), n('so', 'SO'), n('sb', 'SB'), n('cs', 'CS'), n('baserunningOuts', '壘死'), frac('avg', 'AVG', (r) => [r.h, r.ab], f3), r3('obp', 'OBP'), r3('slg', 'SLG'), r3('ops', 'OPS'), plus]
+  if (view === 'batted') return [name, n('pa', 'PA'), ...battedColumns<BattingLine>()]
   if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, wpa, re24, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
   // 兩好球纏鬥: the count, with the plate appearances that reached two strikes in small grey type (CSV: the count only)
   const battles: Column<BattingLine> = { key: 'twoStrikeBattles', header: '兩好球纏鬥', align: 'right', sortable: true, format: (v, r) => <span className="inline-flex items-baseline gap-1 justify-end">{String(v)}<span className="text-[11px] text-muted font-normal">/{r.twoStrikePA}</span></span>, text: (v) => String(v) }
@@ -60,7 +62,7 @@ function columnsFor(view: View): Column<BattingLine>[] {
 export function BattingPage() {
   const s = useStats()
   const navigate = useNavigate()
-  const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
+  const linked = useLinkedSort<View>(['basic', 'advanced', 'process', 'batted'], 'basic')
   const { view, setView } = linked
   // a player's tile linked here (球員頁「全隊排行」): mark his row
   const { search } = useLocation()
@@ -113,7 +115,7 @@ export function BattingPage() {
   // phones: 精簡 shows the name and four columns of the tab being read; 完整 is the whole table
   const tableView = useTableView()
   const below = (r: BattingLine) => (r.pa < minPA ? <BelowMinimum gap={college ? paGapText(r.pa, minPA) : undefined} /> : null)
-  const COMPACT: Record<View, string[]> = { basic: ['pa', 'avg', 'obp', 'ops'], advanced: ['pa', 'ops', 'wrcPlus', 'woba'], process: ['pa', 'whiffPct', 'hardPct', 'gbPct'] }
+  const COMPACT: Record<View, string[]> = { basic: ['pa', 'avg', 'obp', 'ops'], advanced: ['pa', 'ops', 'wrcPlus', 'woba'], process: ['pa', 'whiffPct', 'hardPct', 'gbPct'], batted: ['bip', 'gbPct', 'fbPct', 'hardPct'] }
   const full = withJerseyColumn(columnsFor(view))
   const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
@@ -147,10 +149,10 @@ export function BattingPage() {
       <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}${college ? '（大專規程）' : ''}。`} />
       <DemoBanner />
       <LeaderStrip leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
-      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}${view === 'advanced' ? `。${winNote}` : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+      <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}${view === 'advanced' ? `。${winNote}` : view === 'batted' ? '。每個比率只算有記那一項的擊球，小字是 分子/分母；GB＋LD＋FB＋PU＝100%（PU 是內野飛球），Pull／Center／Oppo 用球員名單的打擊慣用加落點；BABIP 不含全壘打與觸擊' : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
-        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
-        <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
+        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }, { value: 'batted', label: '擊球剖面' }]} /></div>
+        <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : view === 'batted' ? 'bip' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
       <PlatoonCard id="platoon" side="bat" rows={s.batting} />
       <SplitsCard id="splits" side="bat" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} perPlayer={!!splitWho} />
