@@ -389,7 +389,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const earlier = useMemo(() => earlierPAs(state), [state])
   const batterSlot = state.lineup[state.slot]
   // (軌跡 is picked on every batted ball: 內滾 → 滾地 and 外飛 → 飛球 are no longer filled in for the recorder, who has seen it)
-  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(plan); setRbiTouched(false) }
+  // (強度 starts on 中 for a batted ball; tap 中 again, or another, to change it)
+  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(NO_BATTED_BALL.has(result) ? plan : { ...plan, quality: '中' }); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
     if (!p) return p
     const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }

@@ -51,13 +51,13 @@ describe.each([['we bat', '客'], ['they bat', '主']] as const)('紀錄比賽 (
     fireEvent.click(screen.getByRole('button', { name: '平飛 L' }))
     expect(missingLine()).toBeNull()
     expect(send().disabled).toBe(false)
-    // 強度 stays optional
+    // 強度 starts on 中 (and can be changed or cleared)
     fireEvent.click(send())
     await wait(50)
     const d = readDraft(PRACTICE_KEY)!
     const row = homeAway === '客' ? d.batting[0] : d.pitching[0]
     expect(row).toMatchObject({ result: '一安', loc: 8, traj: 'L' })
-    expect(row.quality).toBeUndefined()
+    expect(row.quality).toBe('中')
   })
 
   it('every batted-ball result offers 落點 and 軌跡 and asks for them; the others never ask', () => {
