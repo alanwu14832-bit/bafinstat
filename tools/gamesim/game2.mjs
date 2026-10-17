@@ -57,6 +57,8 @@ const setDest = async (prefix, d) => {
 }
 let paNo = 0
 const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' }
+// 軌跡 is picked on every batted ball now (nothing is filled in from the result): the scripts pick what the result implies
+const IMPLIED_TRAJ = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 async function pa(side, spec) {
   paNo++
   await answerAsks(p, main, { ...(spec.hand ? { hand: spec.hand } : {}), ...(spec.bats ? { bats: spec.bats } : {}) })
@@ -75,7 +77,7 @@ async function pa(side, spec) {
   if (!shown.startsWith(spec.result)) notes.push(`#${paNo} ${who}: 結果顯示「${shown}」，預期 ${spec.result}`)
   if (spec.loc) { await main.getByRole('button', { name: new RegExp(`^${spec.loc} `) }).first().click(); await p.waitForTimeout(60) }
   // 軌跡 is required for a batted ball (batch 14); outs come with the one their result tells (內滾 G, 外飛 F …)
-  if (spec.traj) { const t = main.getByRole('button', { name: TRAJ[spec.traj], exact: true }); if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click(); await p.waitForTimeout(60) }
+  { const want = spec.traj ?? IMPLIED_TRAJ[spec.result]; if (want) { const t = main.getByRole('button', { name: TRAJ[want], exact: true }); if ((await t.getAttribute('aria-pressed')) !== 'true') await t.click(); await p.waitForTimeout(60) } }
   for (const [base, d] of Object.entries(spec.runners ?? {})) await setDest(`${base}B `, d)
   if (spec.batter !== undefined) await setDest('打者 ', spec.batter)
   for (const [who, kind] of Object.entries(spec.adv ?? {})) {

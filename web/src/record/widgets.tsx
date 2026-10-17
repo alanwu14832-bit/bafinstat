@@ -2,7 +2,7 @@
  * The buttons of the 紀錄比賽 screen — pitch pad, result chips, batted-ball picker — shared with the post-game
  * plate-appearance editor, so fixing a game later looks and works exactly like recording it.
  */
-import { LOC_HOLES, posNum } from '../data/types'
+import { LOC_HOLES, OUT_AT_LABEL, posNum, type OutAt } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import { OUT_RESULTS } from './model'
@@ -24,6 +24,17 @@ export { NO_BATTED_BALL } from '../data/types'
 
 export const bigBtn = 'h-12 rounded-[var(--radius-sm)] border border-border bg-surface text-[14px] font-medium text-ink hover:bg-surface-2 active:bg-surface-3 cursor-pointer transition-colors motion-reduce:transition-none'
 export const chipBtn = (active: boolean) => cx('h-9 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
+
+/** 壘死 / 壘上出局: which base he was put out at (1B 2B 3B 本壘). `value` undefined = not said yet (older records read as his own base). */
+const OUT_AT_CHOICES: OutAt[] = [1, 2, 3, 'home']
+export function OutAtChips({ value, onPick, name }: { value?: OutAt; onPick: (at: OutAt) => void; name?: string }) {
+  return (
+    <div className="basis-full flex items-center gap-1.5 flex-wrap" role="group" aria-label={`${name ? `${name} ` : ''}死在哪個壘包`}>
+      <span className="text-[12px] text-ink-2 mr-0.5">死在</span>
+      {OUT_AT_CHOICES.map((b) => <button key={String(b)} type="button" aria-label={`死在${OUT_AT_LABEL[b]}`} aria-pressed={value === b} onClick={() => onPick(b)} className={cx(chipBtn(value === b), 'h-9 pointer-fine:h-8 min-w-9 px-2.5 text-[12px]')}>{OUT_AT_LABEL[b]}</button>)}
+    </div>
+  )
+}
 
 /** The five big pitch buttons. */
 export function PitchPad({ onPitch, disabled }: { onPitch: (code: string) => void; disabled?: boolean }) {

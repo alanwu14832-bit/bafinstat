@@ -10,7 +10,6 @@ import { PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
 import { missingBattedBall, newGame, type RecordState } from '../record/model'
 import { answered } from './answered'
 import { NO_BATTED_BALL, RESULT_GROUPS } from '../record/widgets'
-import { TRAJ_OF } from '../data/types'
 
 const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
@@ -69,11 +68,11 @@ describe.each([['we bat', '客'], ['they bat', '主']] as const)('紀錄比賽 (
         expect(screen.queryByRole('group', { name: '落點' }), r).toBeNull()
         expect(missingLine(), r).toBeNull()
       } else {
-        // the result may already tell the 軌跡 (內滾 → G, 外飛 → F …): then only 落點 is asked
-        expect(missingLine()?.textContent, r).toBe(TRAJ_OF[r] ? '還沒選落點' : '還沒選落點、軌跡')
+        // the result no longer fills the 軌跡 in (內滾 → G, 外飛 → F …): every batted ball asks for both
+        expect(missingLine()?.textContent, r).toBe('還沒選落點、軌跡')
         expect(send().disabled, r).toBe(true)
         fireEvent.click(within(screen.getByRole('group', { name: '落點' })).getAllByRole('button', { name: /^6 SS/ })[0])
-        if (!TRAJ_OF[r]) fireEvent.click(within(screen.getByRole('group', { name: '軌跡' })).getByRole('button', { name: '滾地 G' }))
+        fireEvent.click(within(screen.getByRole('group', { name: '軌跡' })).getByRole('button', { name: '滾地 G' }))
         expect(missingLine(), r).toBeNull()
       }
       fireEvent.click(screen.getByRole('button', { name: /改結果/ }))

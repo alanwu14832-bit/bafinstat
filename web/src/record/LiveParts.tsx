@@ -12,7 +12,7 @@ import { RosterSortToggle } from '../components/ui/RosterSortToggle'
 import { BOARD, CountLights } from '../components/ui/Scoreboard'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { cx } from '../lib/format'
-import { POSITIONS, posNum } from '../data/types'
+import { OUT_AT_LABEL, POSITIONS, posNum, type OutAt } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { TEAM } from '../config/team'
 import { Diamond } from './Diamond'
@@ -144,7 +144,7 @@ export interface RunnerSheetProps {
   picked: number | null
   onPick: (row: number) => void
   /** `errBy` (失誤進壘): whose error — their fielder ('?' = 不知道) for our runner, ours for theirs */
-  onEvent: (r: Runner, ev: RunnerEvent, errBy?: string) => void
+  onEvent: (r: Runner, ev: RunnerEvent, errBy?: string, outAt?: OutAt) => void
   /** our fielders now, position → name (record/model fieldersNow): shown next to the positions when ours erred */
   fielders?: Map<string, string>
   /** 暴投 / 捕逸 / 投手犯規 with everyone moving up */
@@ -181,8 +181,11 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
   const r = ours.find((x) => x.row === picked) ?? (ours.length === 1 ? ours[0] : null)
   // 失誤進壘 asks whose error first (one tap): ours for their runner, theirs (or 不知道) for ours
   const [errFor, setErrFor] = useState<number | null>(null)
-  useEffect(() => { if (!open) setErrFor(null) }, [open])
+  // 壘死 asks which base he was put out at (one tap), like 失誤進壘 asks whose error
+  const [outFor, setOutFor] = useState<number | null>(null)
+  useEffect(() => { if (!open) { setErrFor(null); setOutFor(null) } }, [open])
   const asking = r && errFor === r.row
+  const askingOut = r && outFor === r.row
   return (
     <Sheet open={open} onClose={onClose} ariaLabel="壘上跑者" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
       <div className="p-5 flex flex-col gap-4">
@@ -202,7 +205,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
           <div className="flex flex-col gap-3" role="group" aria-label={`${r.base}B ${r.name} 的動作`}>
             <div className="text-[13px] text-ink-2"><span className="tnum text-muted mr-1">{r.base}B</span><span className="font-semibold text-ink">{r.name}</span> 發生了什麼？</div>
             <div className="grid grid-cols-3 gap-2">
-              {RUNNER_EVENTS.filter((e) => !e.side || e.side === r.side).map((e) => <button key={e.ev} type="button" aria-expanded={e.ev === 'err' ? !!asking : undefined} onClick={() => (e.ev === 'err' ? setErrFor(asking ? null : r.row) : onEvent(r, e.ev))} className={bigBtn(e.out, e.ev === 'err' && !!asking)}>{e.label}</button>)}
+              {RUNNER_EVENTS.filter((e) => !e.side || e.side === r.side).map((e) => <button key={e.ev} type="button" aria-expanded={e.ev === 'err' ? !!asking : e.ev === 'out' ? !!askingOut : undefined} onClick={() => (e.ev === 'err' ? setErrFor(asking ? null : r.row) : e.ev === 'out' ? setOutFor(askingOut ? null : r.row) : onEvent(r, e.ev))} className={bigBtn(e.out, e.ev === 'err' && !!asking)}>{e.label}</button>)}
             </div>
             {asking && (
               <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border bg-surface-2/50 p-3">
@@ -210,6 +213,16 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                   {[...FIELD_POSITIONS, ...(r.side === 'us' ? [UNKNOWN_FIELDER] : [])].map((pos) => (
                     <button key={pos} type="button" onClick={() => { setErrFor(null); onEvent(r, 'err', pos) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)}{r.side === 'opp' && fielders?.get(pos) && <>{' '}<span className="font-normal opacity-70">{fielders.get(pos)}</span></>}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {askingOut && (
+              <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border bg-surface-2/50 p-3">
+                <span className="text-[12px] text-ink-2">死在哪個壘包，點一下就記（他現在在 {r.base}B）</span>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="死在哪個壘包">
+                  {([1, 2, 3, 'home'] as const).map((b) => (
+                    <button key={String(b)} type="button" onClick={() => { setOutFor(null); onEvent(r, 'out', undefined, b) }} className="h-10 min-w-11 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer">{OUT_AT_LABEL[b]}</button>
                   ))}
                 </div>
               </div>

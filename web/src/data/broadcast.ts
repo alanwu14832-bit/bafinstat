@@ -10,7 +10,7 @@
  * The board's numbers live here too, one format each: the inning 「5局上」 (feed headers in Chinese numerals 「三局上」),
  * the count 「1-2」 (balls first), 「45 球」, a pitcher's line today 「2.1 局 5 安 2 失分 1 四死 3 三振」.
  */
-import { HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced, isRelief, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PlayEvent } from './types'
 import { WHERE, countBefore } from './gameText'
 import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
@@ -452,7 +452,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
     const side = sideOf(half)
     const tl: 'bat' | 'pit' = side === 'us' ? 'bat' : 'pit'
     const rows: Row[] = side === 'us' ? src.batting : src.pitching
-    const idx = rows.flatMap((r, i) => (r.inning === inning ? [i] : []))
+    const idx = rows.flatMap((r, i) => (r.inning === inning && !isRelief(r) ? [i] : []))
     const key = hkey(inning, half)
     const isLive = !!live && live.inning === inning && live.half === half
     const items: FeedItem[] = []

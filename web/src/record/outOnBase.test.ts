@@ -137,7 +137,7 @@ describe('紀錄比賽: the same play recorded live', () => {
     expect(s.runners).toEqual([])
     expect(s.batting[0]).toMatchObject({ result: '三安', code: 'I', outOnBase: 1 })
     expect('baserunningOuts' in s.batting[0]).toBe(false)
-    expect(s.batting[0].events).toEqual([batterOutMark('三安', 1)])
+    expect(s.batting[0].events).toEqual([batterOutMark('三安', 1, 'home')])  // out at the plate: the base after 3B
     expect(warnings(s.batting)).toEqual([])
     // the editor following the inning keeps exactly what was recorded
     const re = deriveHalf(s.batting, inferHalf(s.batting, [0], 'bat')!, 'bat')

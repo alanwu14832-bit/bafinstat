@@ -7,7 +7,7 @@ import { oppErrorCount, ourErrorCount } from './errors'
 import { countTrail, isTwoStrikeBattle } from './counts'
 import { pitcherSituations } from './pitchingSituations'
 import { liveGameIds } from './liveGames'
-import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isBattedBall, isDouble, isPlaced, isSingle, LOC_CODES, QUALITIES, TRAJ_OF, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
+import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isBattedBall, isDouble, isPlaced, isRelief, isSingle, LOC_CODES, QUALITIES, TRAJ_OF, type BattingPA, type Dataset, type FieldingLine, type Game, type GameResult, type Hand, type PitchingPA, type Player, type StatParams } from './types'
 
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
@@ -271,6 +271,8 @@ export function battedOutKind(pa: { result: string; traj?: string }): 'GO' | 'AO
 export const ipDisplay = (outs: number) => `${Math.floor(outs / 3)}.${outs % 3}`
 
 const OUT_NO: Record<string, number> = { I: 1, II: 2, III: 3 }
+/** Outs on the bases between this row's pitches (a runner play ending in 'out'; not the plays on the batted ball). */
+const basesOuts = (pa: { events?: Array<{ play?: boolean; from: number; to: unknown }> }) => (pa.events ?? []).filter((e) => e && !e.play && [1, 2, 3].includes(e.from) && e.to === 'out').length
 /**
  * How many outs each plate appearance's pitcher is credited with (IP), for a list of rows in game order.
  * Every out of an inning is counted once: its result code (I / II / III = the 1st / 2nd / 3rd out) is on the row of
@@ -298,10 +300,14 @@ export function outsCredited(pas: PitchingPA[]): Map<PitchingPA, number> {
       if (pa.result === '雙殺' && k >= 2 && (pa.outsBefore ?? 0) <= 1 && !owner.has(k - 1)) owner.set(k - 1, pa)
     }
     const timed = rows.every((r) => typeof r.outsBefore === 'number')
+    // outsBefore is read at the result, so an out on the bases during the plate appearance (牽制, 盜壘阻殺, 壘死 between
+    // pitches) is already in it: the plate appearance starts that many outs earlier. Without this the out went to the
+    // previous row's pitcher, which is a reliever's out of the runner he inherited given to the one he replaced.
+    const start = rows.map((r) => (typeof r.outsBefore === 'number' ? r.outsBefore - basesOuts(r) : 0))
     for (const [k, holder] of owner) {
       let at = holder
       if (timed) {
-        const i = rows.findIndex((r, j) => r.outsBefore! < k && (j === rows.length - 1 || rows[j + 1].outsBefore! >= k))
+        const i = rows.findIndex((_r, j) => start[j] < k && (j === rows.length - 1 || start[j + 1] >= k))
         if (i >= 0) at = rows[i]
       }
       credit.set(at, (credit.get(at) ?? 0) + 1)
@@ -314,8 +320,9 @@ export function outsCredited(pas: PitchingPA[]): Map<PitchingPA, number> {
 export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: number) {
   const r = pa.result
   if (!r) return
-  // a tie-break runner: not a batter faced; his outs on the bases and his run (never earned) are the pitcher's
-  if (isPlaced(pa)) {
+  // a tie-break runner: not a batter faced; his outs on the bases and his run (never earned) are the pitcher's.
+  // A 換投後未面對打者 row is the same: no batter faced, the outs it holds and his plays are the pitcher's
+  if (isPlaced(pa) || isRelief(pa)) {
     if (outs !== undefined) l.outs += outs
     else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += 1
     if (pa.code === 'R' || pa.code === 'ER') l.r++
