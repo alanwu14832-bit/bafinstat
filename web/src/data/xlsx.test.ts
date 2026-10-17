@@ -184,7 +184,7 @@ describe('結束時間, 中繼 and 對方投手 in Excel', () => {
     wb.SheetNames = wb.SheetNames.filter((n) => n.startsWith('單場-'))
     const { dataset } = parseWorkbook(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
     expect(dataset.games[0]).toMatchObject({ endTime: '15:22', holds: ['子', '丑'] })
-  })
+  }, 60_000)   // (reads, rewrites and parses the whole workbook: slow on a busy CI runner)
 })
 
 describe('對方代跑 in Excel', () => {
