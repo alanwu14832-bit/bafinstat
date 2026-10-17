@@ -134,7 +134,7 @@ STAT_DICTIONARY = [
     dict(key="pBABIP-FB", zh="飛球 BABIP", en="BABIP on Fly Balls", group="投球", formula="飛球被擊球的安打 ÷ 飛球被擊球（不含全壘打、觸擊）", status="新增", priority="P3", note="網站專屬；樣本通常很小"),
     dict(key="CSW%", zh="好球＋揮空率", en="Called Strikes + Whiffs", group="投球", formula="(CS + SS) ÷ 用球數", status="新增", priority="P1", note="現代投手評估的核心過程指標"),
     dict(key="FStrike%", zh="首球好球率", en="First-Pitch Strike %", group="投球", formula="第一球為好球/界外/場內 的打席 ÷ BF", status="新增", priority="P1", note=""),
-    dict(key="P/IP", zh="每局用球數", en="Pitches per Inning", group="投球", formula="PC ÷ IP", status="新增", priority="P1", note="投手效率"),
+    dict(key="P/IP", zh="每局用球數", en="Pitches per Inning", group="投球", formula="PC ÷ IP（只算有記逐球的打席的出局）", status="新增", priority="P1", note="投手效率；沒記逐球的打席不拉低每局用球數"),
     dict(key="P/BF", zh="每打席用球數", en="Pitches per Batter", group="投球", formula="PC ÷ BF", status="新增", priority="P2", note=""),
     dict(key="LOB%", zh="殘壘率", en="Left On Base %", group="投球", formula="(H + BB + HBP − R) ÷ (H + BB + HBP − 1.4×HR)", status="新增", priority="P2", note=""),
     # site-only: they need the whole game (runners, score) that the 總表 formulas cannot follow

@@ -123,7 +123,7 @@ describe('內野飛球 (P)', () => {
 describe('BIP = every batted ball (batch 14)', () => {
   const bat = (result: string, p: Partial<BattingPA> = {}): BattingPA => ({ gameId: game.id, inning: 1, batter: '甲', pitches: result === '三振' ? ['SS', 'SS', 'SS'] : ['IP'], result, sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
   const pit = (result: string, p: Partial<PitchingPA> = {}): PitchingPA => ({ gameId: game.id, inning: 1, pitcher: '丙', pitches: ['IP'], result, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
-  const roster = { ...ds, roster: [] }
+  const roster = { ...ds, roster: [{ name: '甲', bats: 'R' as const }] }
   it('a hit without 軌跡 counts in BIP but not in the GB% denominator', () => {
     const [l] = battingLines(roster, [bat('一安'), bat('內滾', { traj: 'G', loc: 6, quality: '弱' }), bat('外飛', { traj: 'F', loc: 8 })])
     expect(l.bip).toBe(3); expect(l.bipTraj).toBe(2); expect(l.gb).toBe(1)
@@ -148,8 +148,8 @@ describe('BIP = every batted ball (batch 14)', () => {
     const others = ['一安', '內安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤']
     const [l] = battingLines(roster, others.map((r) => bat(r)))
     expect(l.bip).toBe(others.length)
-    // GB% / FB% / LD% use the 軌跡 its result implies when none was recorded (內滾 G, 外飛 F…: 8 of these); a hit or an error has none
-    expect(l.bipTraj).toBe(8); expect(l.gb).toBe(4); expect(l.fb).toBe(4)
+    // GB% / FB% / LD% count the recorded 軌跡 only: a result does not stand in for a missing one
+    expect(l.bipTraj).toBe(0); expect(l.gbPct).toBeNull()
   })
   it('a hard-hit ball without 軌跡 is still a 強勁擊球 (Hard%, QAB)', () => {
     const [l] = battingLines(roster, [bat('失誤', { quality: '強' }), bat('內滾', { quality: '中', traj: 'G' })])
@@ -248,5 +248,37 @@ describe('優質打席 (QAB): 兩好球纏鬥 and 6球以上', () => {
     const all = teamBatting(ds, ds.batting)
     expect(all.qab).toBe(35)
     expect(all.qabPct).toBeCloseTo(35 / 64, 9)
+  })
+})
+
+describe('打擊慣用 and 軌跡 are never guessed', () => {
+  const mk = (p: Partial<BattingPA>): BattingPA => ({ gameId: game.id, inning: 1, batter: '甲', pitches: ['IP'], result: '一安', loc: 7, traj: 'G', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
+  const withBats = (bats?: 'L' | 'R' | 'S') => ({ ...ds, roster: [{ name: '甲', ...(bats ? { bats } : {}) }] })
+  it('a batter with no 打擊慣用 in the 球員名單 has no Pull／Center／Oppo (he is not taken for a right-handed batter)', () => {
+    const [l] = battingLines(withBats(), [mk({})])
+    expect(l.bip).toBe(1); expect(l.bipSpray).toBe(0); expect(l.pullPct).toBeNull()
+  })
+  it('a left-handed batter\'s pull side is the right side', () => {
+    const [l] = battingLines(withBats('L'), [mk({ loc: 9 }), mk({ loc: 7 })])
+    expect([l.pull, l.oppo]).toEqual([1, 1])
+  })
+  it('a switch hitter stands opposite the pitcher\'s hand in that plate appearance, and nowhere when it is not recorded', () => {
+    const [l] = battingLines(withBats('S'), [mk({ oppHand: 'R', loc: 9 }), mk({ oppHand: 'L', loc: 7 }), mk({ loc: 7 })])
+    // vs a right-hander he is left-handed (9 = pull); vs a left-hander right-handed (7 = pull); no hand recorded: not counted
+    expect([l.pull, l.oppo, l.bipSpray]).toEqual([2, 0, 2])
+  })
+  it('a ball with no 軌跡 is not given one by its result (GB%／FB% would lean toward outs)', () => {
+    const [l] = battingLines(withBats('R'), [mk({ result: '內滾', traj: undefined }), mk({ result: '一安', traj: 'L' })])
+    expect(l.bip).toBe(2); expect(l.bipTraj).toBe(1); expect(l.gb).toBe(0); expect(l.ldPct).toBe(1)
+  })
+})
+
+describe('P/IP counts only the outs of plate appearances with their pitches recorded', () => {
+  const row = (p: Partial<PitchingPA>): PitchingPA => ({ gameId: game.id, inning: 1, pitcher: '丙', pitches: ['B', 'IP'], result: '內滾', code: 'I', outsBefore: 0, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...p })
+  it('three outs, one of them without pitches: 2 pitches per recorded out', () => {
+    const rows = [row({}), row({ code: 'II', outsBefore: 1 }), row({ code: 'III', outsBefore: 2, pitches: [] })]
+    const [l] = pitchingLines(rows, [])
+    expect(l.outs).toBe(3); expect(l.pc).toBe(4); expect(l.outsPitched).toBe(2)
+    expect(l.pPerIP).toBeCloseTo(4 / (2 / 3), 9)
   })
 })

@@ -1174,10 +1174,10 @@
   "zh": "每局用球數",
   "en": "Pitches per Inning",
   "group": "投球",
-  "formula": "PC ÷ IP",
+  "formula": "PC ÷ IP（只算有記逐球的打席的出局）",
   "status": "新增",
   "priority": "P1",
-  "note": "投手效率"
+  "note": "投手效率；沒記逐球的打席不拉低每局用球數"
  },
  {
   "key": "P/BF",

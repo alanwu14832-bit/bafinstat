@@ -20,10 +20,10 @@ describe('擊球剖面 of a pitcher', () => {
   const l = pitchingLines(rows, [])[0]
   it('counts every batted ball, the rates only over the ones with that detail', () => {
     expect(l.bip).toBe(8)
-    expect(l.bipTraj).toBe(8)                       // the unmarked 內滾 is a grounder by its result
-    expect([l.gb, l.ld, l.fb, l.iffb]).toEqual([4, 1, 3, 1])
-    expect(l.gbPct).toBeCloseTo(4 / 8, 12)
-    expect(l.gbFb).toBeCloseTo(4 / 3, 12)
+    expect(l.bipTraj).toBe(7)                       // the unmarked 內滾 has no 軌跡: it is not taken for a grounder by its result
+    expect([l.gb, l.ld, l.fb, l.iffb]).toEqual([3, 1, 3, 1])
+    expect(l.gbPct).toBeCloseTo(3 / 7, 12)
+    expect(l.gbFb).toBeCloseTo(3 / 3, 12)
   })
   it('Pull / Center / Oppo use the batter\'s own side and need the 落點 and the side', () => {
     expect(l.bipSpray).toBe(7)                      // the last ball has no side
@@ -38,7 +38,7 @@ describe('擊球剖面 of a pitcher', () => {
   it('HR/FB: home runs that were fly balls over the fly balls; BABIP by 軌跡 leaves out home runs', () => {
     expect(l.hrFb).toBe(1)
     expect(l.hrFbPct).toBeCloseTo(1 / 3, 12)
-    expect([l.gbH, l.gbN]).toEqual([2, 4])          // G: 一安, 內滾, 一安, and the unmarked 內滾
+    expect([l.gbH, l.gbN]).toEqual([2, 3])          // G: 一安, 內滾, 一安 (the unmarked 內滾 has no 軌跡)
     expect([l.ldH, l.ldN]).toEqual([1, 1])
     expect([l.fbH, l.fbN]).toEqual([0, 2])          // the home run is out of BABIP
     expect(l.babipLd).toBe(1)

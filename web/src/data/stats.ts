@@ -34,18 +34,24 @@ const isRISP = (bases?: string) => !!bases && (bases.includes('2') || bases.incl
 // P = 內野飛球: a fly ball that stays in the infield (counted with the fly balls, and on its own for IFFB%)
 /** A recorded 軌跡 (G / F / L / P). BIP itself is every batted ball (types.isBattedBall), with or without one. */
 const hasTraj = (traj?: string) => traj === 'G' || traj === 'F' || traj === 'L' || traj === 'P'
-/** The 軌跡 of a batted ball: the one recorded, else the one its result implies (內滾 G, 外飛 F… types.TRAJ_OF; a hit or an error has none). */
-const trajOf = (pa: { result: string; traj?: string }): string | undefined => (hasTraj(pa.traj) ? pa.traj : TRAJ_OF[pa.result])
+/** The 軌跡 of a batted ball: only the one recorded. A result used to stand in for a missing one (內滾 G, 外飛 F…), but a hit has
+ *  no such stand-in, so GB%／FB% leaned toward outs wherever 軌跡 was left out: the rates now count the recorded ones only. */
+const trajOf = (pa: { result: string; traj?: string }): string | undefined => (hasTraj(pa.traj) ? pa.traj : undefined)
 const hasQuality = (q?: string) => !!q && (QUALITIES as readonly string[]).includes(q)
 
-export function batterHand(roster: Player[], name: string): Hand {
-  const p = roster.find((r) => r.name === name)
-  return p?.bats === 'L' ? 'L' : 'R'
+/** The side he stood on in this plate appearance: his 打擊慣用 from the 球員名單 (L / R), a switch hitter (S) the opposite of the
+ *  pitcher's hand; null when it is not known (not filled in, or a switch hitter against a pitcher with no hand recorded): such a
+ *  batted ball has no Pull／Center／Oppo instead of being taken for a right-handed batter's. */
+export function batterHand(roster: Player[], name: string, oppHand?: Hand): Hand | null {
+  const b = roster.find((r) => r.name === name)?.bats
+  if (b === 'L' || b === 'R') return b
+  if (b === 'S' && (oppHand === 'L' || oppHand === 'R')) return oppHand === 'L' ? 'R' : 'L'
+  return null
 }
 
-/** Pull / center / opposite from location 1–9 and handedness (switch hitters treated as R). */
-export function sprayDirection(loc: number | undefined, hand: Hand): 'pull' | 'center' | 'oppo' | null {
-  if (!loc) return null
+/** Pull / center / opposite from location 1–9 and the side he stood on (null when that is not known). */
+export function sprayDirection(loc: number | undefined, hand: Hand | null): 'pull' | 'center' | 'oppo' | null {
+  if (!loc || !hand) return null
   if ([1, 2, 8, 46].includes(loc)) return 'center'
   const pullR = [5, 6, 7, 56, 78].includes(loc)
   if (hand === 'L') return pullR ? 'oppo' : 'pull'
@@ -157,7 +163,7 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
   return l
 }
 
-export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
+export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand | null) {
   const r = pa.result
   if (!r) return
   // a tie-break runner is no plate appearance: only what he did on the bases counts (the game still counts for G)
@@ -193,7 +199,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
 export function lineFor(name: string, pas: BattingPA[], roster: Player[], params = DEFAULT_PARAMS): BattingLine {
   const l = emptyBatting(name)
   const games = new Set<string>()
-  for (const pa of pas) { if (!pa.result) continue; accumulateBatting(l, pa, batterHand(roster, pa.batter)); games.add(pa.gameId) }
+  for (const pa of pas) { if (!pa.result) continue; accumulateBatting(l, pa, batterHand(roster, pa.batter, pa.oppHand)); games.add(pa.gameId) }
   l.g = games.size
   return finalizeBatting(l, params)
 }
@@ -205,7 +211,7 @@ export function battingLines(ds: Dataset, pas: BattingPA[], params = DEFAULT_PAR
     if (!pa.batter) continue
     let l = map.get(pa.batter)
     if (!l) { l = emptyBatting(pa.batter); map.set(pa.batter, l); games.set(pa.batter, new Set()) }
-    accumulateBatting(l, pa, batterHand(ds.roster, pa.batter))
+    accumulateBatting(l, pa, batterHand(ds.roster, pa.batter, pa.oppHand))
     games.get(pa.batter)!.add(pa.gameId)
   }
   // 代跑: the run, steals and caught stealing after the batter reached belong to whoever ran for him
@@ -248,7 +254,7 @@ export function wrcPlus(l: { woba: number | null }, base: { woba: number | null;
 export function teamBatting(ds: Dataset, pas: BattingPA[], params = DEFAULT_PARAMS): BattingLine {
   const l = emptyBatting('球隊')
   const games = new Set<string>()
-  for (const pa of pas) { if (!pa.batter) continue; accumulateBatting(l, pa, batterHand(ds.roster, pa.batter)); games.add(pa.gameId) }
+  for (const pa of pas) { if (!pa.batter) continue; accumulateBatting(l, pa, batterHand(ds.roster, pa.batter, pa.oppHand)); games.add(pa.gameId) }
   l.g = games.size
   for (const x of runnerPlays(pas).values()) { l.xbtOpp += x.xbtOpp; l.xbt += x.xbt; l.xbtOut += x.xbtOut; l.thrownOut += x.thrownOut }
   finalizeBatting(l, params)
@@ -273,6 +279,8 @@ export interface PitchingLine extends BattedBallCounts, BattedBallRates {
   pPerIP: number | null; pPerBF: number | null; lobPct: number | null
   /** batters faced with their pitches recorded: P/BF and F-Strike% are over these */
   bfPitched: number
+  /** outs of the plate appearances (and no-batter rows) with their pitches recorded: P/IP's innings, like bfPitched for P/BF */
+  outsPitched: number
   /** 滾地／飛球出局 (battedOutKind) and walks who came around to score (保送得分) */
   go: number; ao: number; bbScored: number
   /** need whole games and the score (pitchingLines' ctx; 0 without it): leadoff batters faced / put out, half-innings
@@ -290,7 +298,7 @@ function emptyPitching(name: string): PitchingLine {
     r: 0, er: 0, wp: 0, sba: 0, cs: 0, pk: 0, bk: 0, ...emptyBattedBall(), ...emptyBattedBallRates(), whiffs: 0, swings: 0, called: 0, firstPitchStrike: 0,
     era: null, whip: null, k7: null, k9: null, bb9: null, h9: null, kbb: null, kPct: null, bbPct: null, oppAvg: null, oppObp: null, babip: null, fip: null, strikePct: null,
     whiffPct: null, cswPct: null, fStrikePct: null, pPerIP: null, pPerBF: null, lobPct: null,
-    go: 0, ao: 0, bbScored: 0, bfPitched: 0, leadoffBf: 0, leadoffOuts: 0, fullInn: 0, pitchInn: 0, inn13: 0, inn123: 0, ir: 0, irs: 0, bs: 0, sitGaps: 0,
+    go: 0, ao: 0, bbScored: 0, bfPitched: 0, outsPitched: 0, leadoffBf: 0, leadoffOuts: 0, fullInn: 0, pitchInn: 0, inn13: 0, inn123: 0, ir: 0, irs: 0, bs: 0, sitGaps: 0,
     goAo: null, bbScoredPct: null, leadoffOutPct: null, inn13Pct: null, irsPct: null,
     wpa: null, re24: null,
   }
@@ -372,8 +380,8 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: numbe
   // a tie-break runner: not a batter faced; his outs on the bases and his run (never earned) are the pitcher's.
   // A 換投後未面對打者 row is the same: no batter faced, the outs it holds and his plays are the pitcher's
   if (isPlaced(pa) || isNoBatter(pa)) {
-    if (outs !== undefined) l.outs += outs
-    else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += 1
+    const o = outs ?? (pa.code === 'I' || pa.code === 'II' || pa.code === 'III' ? 1 : 0)
+    l.outs += o; l.outsPitched += o
     if (pa.code === 'R' || pa.code === 'ER') l.r++
     if (pa.code === 'ER') l.er++
     // (a half that ended before anyone batted keeps its pitcher's plays on the last runner: record/model settlePending)
@@ -392,8 +400,9 @@ export function accumulatePitching(l: PitchingLine, pa: PitchingPA, outs?: numbe
   if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++; if (r === '犧飛') l.sf++
   if (r === '三振') l.k++; if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++
   // outs: counted once per out and credited to the pitcher on the mound (outsCredited)
-  if (outs !== undefined) l.outs += outs
-  else if (pa.code === 'I' || pa.code === 'II' || pa.code === 'III') l.outs += r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1
+  const o = outs ?? (pa.code === 'I' || pa.code === 'II' || pa.code === 'III' ? (r === '雙殺' && (pa.outsBefore ?? 0) <= 1 ? 2 : 1) : 0)
+  l.outs += o
+  if (mine.length > 0) l.outsPitched += o      // (P/IP: only the outs of plate appearances with their pitches recorded)
   if (pa.code === 'R' || pa.code === 'ER') l.r++
   if (pa.code === 'ER') l.er++
   l.wp += pa.wp; l.sba += pa.sba; l.cs += pa.cs; l.pk += pa.pk; l.bk += balksIn(pa.events)
@@ -444,7 +453,7 @@ export function finalizePitching(l: PitchingLine, p: StatParams = DEFAULT_PARAMS
   l.strikePct = div(l.strikes, l.pc)
   battedBallRates(l)
   l.whiffPct = div(l.whiffs, l.swings); l.cswPct = div(l.called + l.whiffs, l.pc); l.fStrikePct = div(l.firstPitchStrike, l.bfPitched)
-  l.pPerIP = ip > 0 ? l.pc / ip : null; l.pPerBF = div(l.pc, l.bfPitched)
+  l.pPerIP = l.outsPitched > 0 ? l.pc / (l.outsPitched / 3) : null; l.pPerBF = div(l.pc, l.bfPitched)
   const lobDen = l.h + l.bb + l.hbp - 1.4 * l.hr
   l.lobPct = lobDen > 0 ? (l.h + l.bb + l.hbp - l.r) / lobDen : null
   l.goAo = div(l.go, l.ao); l.bbScoredPct = div(l.bbScored, l.bb); l.leadoffOutPct = div(l.leadoffOuts, l.leadoffBf)
