@@ -263,3 +263,23 @@ export function availableGroups(side: SplitSide, ds: Pick<Dataset, 'batting' | '
 
 /** 「1壞2好」 for a 'b-s' count (a bare 1-2 is easily read the wrong way round). */
 export const countLabel = (k: string) => { const [b, s] = countParts(k); return `${b}壞${s}好` }
+
+export interface PlatoonRow { name: string; /** every row of this name that has the hand recorded, and those that do not */ known: number; unknown: number; L: BattingLine; R: BattingLine }
+/** 對左右打 (our pitchers: the side their batter stood on) / 對左右投 (our batters: the opponent pitcher's hand), one row per
+ *  player and a 「全隊」 row first. Plate appearances without the hand recorded are counted in `unknown`, not in L or R. */
+export function platoonRows(rows: Row[], ctx: WeakMap<object, PaContext>, side: SplitSide, roster: Player[]): PlatoonRow[] {
+  const by = new Map<string, { L: Row[]; R: Row[]; unknown: number }>()
+  const grab = (n: string) => { let e = by.get(n); if (!e) by.set(n, (e = { L: [], R: [], unknown: 0 })); return e }
+  const all = { L: [] as Row[], R: [] as Row[], unknown: 0 }
+  for (const r of rows) {
+    const c = ctx.get(r)
+    if (!c) continue
+    const name = side === 'bat' ? (r as BattingPA).batter : (r as PitchingPA).pitcher
+    const hand = side === 'bat' ? c.oppHand : c.oppBats
+    for (const e of [grab(name), all]) { if (hand) e[hand].push(r); else e.unknown++ }
+  }
+  const mk = (name: string, e: { L: Row[]; R: Row[]; unknown: number }): PlatoonRow => ({
+    name, known: e.L.length + e.R.length, unknown: e.unknown, L: lineOf(name, side, e.L, roster), R: lineOf(name, side, e.R, roster),
+  })
+  return [mk('全隊', all), ...[...by].map(([n, e]) => mk(n, e)).filter((r) => r.known + r.unknown > 0).sort((a, b) => b.known - a.known || b.unknown - a.unknown)]
+}
