@@ -27,6 +27,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { RosterEditor } from '../components/ui/RosterEditor'
+import { CompletenessCard } from '../components/ui/CompletenessCard'
 import { RegistrationEditor } from '../components/ui/RegistrationEditor'
 import { Tabs } from '../components/ui/Tabs'
 import { seasonOf } from '../data/registrations'
@@ -547,6 +548,7 @@ export function PlayersPage() {
           <RosterEditor base={base} busy={cloud.pushing} onCancel={() => setEditingRoster(false)} onSave={async (c) => { await saveRoster(c); setEditingRoster(false) }} />
         </Card>
       )}
+      {editingRoster && <CompletenessCard ds={base} />}
       {showRegs && (
         <Card title="報名名單" subtitle="每個杯賽每年一份；先發陣容與紀錄比賽選到那個杯賽的比賽時，只列出名單上的人" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setShowRegs(false)}>關閉</Button>}>
           <RegistrationEditor registrations={registrations} roster={base.roster} games={base.games} supported={registrationsSupported} canEdit={canEdit}

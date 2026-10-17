@@ -125,8 +125,8 @@ PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數"
             "守備失誤數",
             # batted balls with a 軌跡 / a 強度 recorded: the denominators of GB% and Hard% (at the very end, as in 打席紀錄)
             "有軌跡", "有強度",
-            # batters faced with their pitches filled in: F-Strike%'s denominator
-            "有球數"]
+            # batters faced with their pitches filled in: F-Strike%'s denominator; 有球出局 = the outs of those rows (P/IP's innings)
+            "有球數", "有球出局"]
 FLD_INPUT = ["比賽ID", "球員", "守位", "局數", "刺殺PO", "助殺A", "失誤E", "雙殺DP", "捕逸PB", "被盜壘SB", "阻殺CS", "備註"]
 FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "首列"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
@@ -187,7 +187,7 @@ ws.column_dimensions["A"].width = 4; ws.column_dimensions["B"].width = 110
 lines = [
     ("工作表結構", True),
     ("設定：每場局數、FIP 常數、wOBA 權重與所有下拉選單清單（杯賽、守位、打擊結果…）。新增杯賽或對手請先在這裡加入。", False),
-    ("球員名單：球員基本資料。總表的球員列由此帶出，最多 30 人；打擊慣用手用來計算拉打／反方向。", False),
+    ("球員名單：球員基本資料。總表的球員列由此帶出，最多 30 人；打擊慣用手（R／L／S 左右開弓）用來計算拉打／反方向，空白的打者不算。", False),
     ("比賽清單：每場比賽一列。黃色欄位手動輸入（比賽ID、日期、杯賽、對手、主客…），灰色欄位自動由紀錄算出（得分、安打、失誤、殘壘、逐局得分）。", False),
     ("比賽清單的最後幾欄：狀態（預定／取消，空白＝已打完）；當日登錄名單的先發名單（例 1.甲(CF)、2.乙(SS)…、P.壬(P)，P. 是有 DH 時不打擊的投手）、板凳（例 丙、丁）、替補紀錄（例 5上 第9棒 代打 戊 替 甲(PH)，「替」前後要空格）、允許再上場（是／空白）。網站紀錄的比賽會自動填好。", False),
     ("報名名單：每個杯賽每年報名的球員，一人一列（年度、杯賽、球員）。網站的先發陣容與紀錄比賽只會列出該場賽事報名的人；沒有名單的杯賽列出全隊。", False),
@@ -286,7 +286,7 @@ def dv(ws, name, rng, allow_blank=True):
 
 # ============================================================================ 球員名單
 ws = wb.create_sheet("球員名單")
-title(ws, "球員名單", 8, "黃底輸入。姓名必須與紀錄表中的寫法完全一致。打擊慣用手 R/L（用於拉打／反方向計算，空白視為 R）。")
+title(ws, "球員名單", 8, "黃底輸入。姓名必須與紀錄表中的寫法完全一致。打擊慣用手 R／L／S（左右開弓）：用於拉打／反方向計算，空白的打者不算。")
 ROSTER_COLS = ["背號", "姓名", "主守位", "副守位", "打擊慣用", "投球慣用", "狀態", "備註"]
 for i, h in enumerate(ROSTER_COLS):
     hdr(ws, 3, i + 1, h, width=[8, 14, 10, 10, 10, 10, 8, 30][i])
@@ -416,10 +416,9 @@ def pitch_counts(rr):
 
 # BIP (場內球) = every batted ball: a plate appearance whose result is not 三振／保送／故四／觸身／妨礙 (全壘打 included),
 def eff(X, Z):
-    """The 軌跡 of a batted ball: the one filled in, else the one its result implies (內滾／雙殺／犧觸／野選 G, 內飛 P,
-    外飛／界外飛／犧飛 F — the website's types.TRAJ_OF); a hit or an error with none has none."""
-    return (f'IF(OR({Z}="G",{Z}="F",{Z}="L",{Z}="P"),{Z},IF(OR({X}="內滾",{X}="雙殺",{X}="犧觸",{X}="犧牲",{X}="野選"),"G",'
-            f'IF({X}="內飛","P",IF(OR({X}="外飛",{X}="界外飛",{X}="犧飛"),"F",""))))')
+    """The 軌跡 of a batted ball: only the one filled in (a result used to stand in for a missing one, but a hit has no such
+    stand-in, so GB%／FB% leaned toward outs; the website counts the recorded ones only). X is kept for the callers."""
+    return f'IF(OR({Z}="G",{Z}="F",{Z}="L",{Z}="P"),{Z},"")'
 
 # 落點／軌跡／強度 recorded or not (the website's types.isBattedBall). The rates use only the batted balls with that detail.
 def batted_ball(pa_cell, X):
@@ -471,13 +470,16 @@ def bat_formulas(rr):
     f["兩好球纏鬥"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>=5),IF(SUMPRODUCT((COLUMN({rng})-COLUMN(${P1}{rr})<{c("用球數")}-3)*{sk})>=2,1,0),0)'
     f["6球以上"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>=6),1,0)'
     f["優質打席"] = f'=IF({c("打席")}=0,0,IF(OR({c("安打")}=1,{c("保送")}=1,{c("觸身")}=1,{c("犧觸")}=1,{c("犧飛")}=1,${BL["打點"]}{rr}>0,{c("6球以上")}=1,{c("兩好球纏鬥")}=1,{c("強擊")}=1),1,0)'
-    f["慣用手"] = f'=IF({G}="","",IFERROR(IF(INDEX(球員名單!$E$4:$E${3 + ROSTER_ROWS},MATCH({G},{ROSTER_NAME},0))="L","L","R"),"R"))'
+    # 打擊慣用: L／R from the 球員名單; S (左右開弓) is the opposite of the pitcher's hand in this plate appearance; not filled in = ""
+    # (no 拉打／中間／反方向 for that batted ball, like the website, instead of taking him for a right-handed batter)
+    _own = f'IFERROR(INDEX(球員名單!$E$4:$E${3 + ROSTER_ROWS},MATCH({G},{ROSTER_NAME},0)),"")'
+    f["慣用手"] = (f'=IF({G}="","",IF(OR({_own}="L",{_own}="R"),{_own},IF({_own}="S",IF(${BL["對方投手慣用"]}{rr}="L","R",IF(${BL["對方投手慣用"]}{rr}="R","L","")),"")))')
     H = c("慣用手")
     # 落點 may be a fielder (1–9) or a gap code: 56 三游 / 78 左中 are the left side, 34 一二 / 89 右中 the right, 46 二游 the middle
     left = f"OR({Y}=5,{Y}=6,{Y}=7,{Y}=56,{Y}=78)"; right = f"OR({Y}=3,{Y}=4,{Y}=9,{Y}=34,{Y}=89)"
-    f["拉打"] = f'=IF({c("場內球")}=0,0,IF({H}="L",IF({right},1,0),IF({left},1,0)))'
-    f["中間"] = f'=IF({c("場內球")}=0,0,IF(OR({Y}=1,{Y}=2,{Y}=8,{Y}=46),1,0))'
-    f["反方向"] = f'=IF({c("場內球")}=0,0,IF({H}="L",IF({left},1,0),IF({right},1,0)))'
+    f["拉打"] = f'=IF(OR({c("場內球")}=0,{H}=""),0,IF({H}="L",IF({right},1,0),IF({left},1,0)))'
+    f["中間"] = f'=IF(OR({c("場內球")}=0,{H}=""),0,IF(OR({Y}=1,{Y}=2,{Y}=8,{Y}=46),1,0))'
+    f["反方向"] = f'=IF(OR({c("場內球")}=0,{H}=""),0,IF({H}="L",IF({left},1,0),IF({right},1,0)))'
     f["有落點"] = f'={c("拉打")}+{c("中間")}+{c("反方向")}'
     f["首打席"] = f'=IF(AND({G}<>"",COUNTIFS($A$2:$A{rr},$A{rr},${BL["打者"]}$2:${BL["打者"]}{rr},{G})=1),1,0)'
     f["上壘"] = f'={c("安打")}+{c("保送")}+{c("觸身")}'
@@ -546,6 +548,7 @@ def pit_formulas(rr):
     f["場內球"] = batted_ball(c("打席"), X)
     f["有軌跡"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}<>""),1,0)'
     f["有球數"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>0),1,0)'
+    f["有球出局"] = f'=IF({c("用球數")}>0,{c("出局數")},0)'
     f["有強度"] = has_quality(c("場內球"), f"${PL['強度']}{rr}")
     f["滾地"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="G"),1,0)'
     f["飛球"] = f'=IF(AND({c("場內球")}=1,OR({eff(X,Z)}="F",{eff(X,Z)}="P")),1,0)'
@@ -883,7 +886,7 @@ def pit_stat_cols():
         ("Whiff%", "=IFERROR(" + p("揮空") + "/" + p("揮棒") + ',"")', "0.0%"),
         ("CSW%", "=IFERROR((" + p("看好球") + "+" + p("揮空") + ')/{PC},"")', "0.0%"),
         ("F-Strike%", "=IFERROR(" + p("首球好球") + "/" + p("有球數") + ',"")', "0.0%"),
-        ("P/IP", '=IFERROR({PC}/({出局數}/3),"")', "0.0"),
+        ("P/IP", '=IFERROR({PC}/(' + p("有球出局") + '/3),"")', "0.0"),
         ("LOB%", '=IFERROR(MAX(0,MIN(1,({H}+{BB}+{HBP}-{R})/({H}+{BB}+{HBP}-1.4*{HR}))),"")', "0.0%"),
         ("ERA排名", '=IF(OR({ERA}="",{出局數}/3<{MINIP}),"",RANK({ERA},{ERARANGE},1))', "0"),
     ]

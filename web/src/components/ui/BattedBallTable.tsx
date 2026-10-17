@@ -95,7 +95,7 @@ export function BattedBallTable({ kind, rows, id, title = '擊球剖面' }: { ki
           </div>
           <p className="px-5 py-3 text-[12px] text-muted leading-5 border-t border-border">
             GB＋LD＋FB＋PU 加起來是 100%（PU 是內野飛球）；AIR＝LD＋FB＋PU。HR/FB 的飛球含內野飛球；BABIP 不含全壘打與觸擊。
-            強度是紀錄員判斷的強／中／弱，不是球速；{pit ? 'Pull／Center／Oppo 用對方打者的左右打加落點' : 'Pull／Center／Oppo 用球員名單的打擊慣用加落點'}。共 {first.bip} 個擊球，
+            強度是紀錄員判斷的強／中／弱，不是球速；{pit ? 'Pull／Center／Oppo 用對方打者的左右打加落點' : 'Pull／Center／Oppo 用球員名單的打擊慣用加落點（沒填慣用的打者不算）'}。共 {first.bip} 個擊球，
             其中記了軌跡 {first.bipTraj}、落點 {first.bipSpray}、強度 {first.bipQuality}；沒記的在「修改資料」補上。
           </p>
         </>
