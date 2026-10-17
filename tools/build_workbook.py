@@ -108,7 +108,9 @@ BAT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數"
             "對手失誤數",
             # batted balls with that detail recorded: the denominators of GB%/FB%/LD%, Hard% and Pull%/Oppo% (場內球 = every
             # batted ball, detail or not), at the very end so every column before keeps its letter
-            "有軌跡", "有強度", "有落點"]
+            "有軌跡", "有強度", "有落點",
+            # plate appearances with their pitches filled in: P/PA's denominator (a row without pitches is left out of it)
+            "有球數"]
 PIT_INPUT = ["比賽ID", "局", "出局(前)", "壘上(前)", "對方棒次", "投手", "對方打者"] + [f"球{i}" for i in range(1, PITCH_N + 1)] + \
             ["好球", "界外", "壞球", "用球數", "打擊結果", "落點", "軌跡", "強度", "被盜壘", "阻殺", "暴投", "捕逸", "牽制出局", "守備失誤", "結果代碼", "備註", "跑壘事件",
              # 對方代跑, at the end of the inputs so copy-paste ranges made before still line up (no 總表 formula reads it)
@@ -122,7 +124,9 @@ PIT_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "打席", "打數"
             # our errors on this plate appearance (守備失誤 + a 失誤／妨礙 result), the website's rule
             "守備失誤數",
             # batted balls with a 軌跡 / a 強度 recorded: the denominators of GB% and Hard% (at the very end, as in 打席紀錄)
-            "有軌跡", "有強度"]
+            "有軌跡", "有強度",
+            # batters faced with their pitches filled in: F-Strike%'s denominator
+            "有球數"]
 FLD_INPUT = ["比賽ID", "球員", "守位", "局數", "刺殺PO", "助殺A", "失誤E", "雙殺DP", "捕逸PB", "被盜壘SB", "阻殺CS", "備註"]
 FLD_AUTO = ["日期", "杯賽", "對手", "主客", "勝敗", "首列"]
 GAME_COLS = ["比賽ID", "日期", "時間", "年度", "杯賽", "對手", "主客", "場地", "天氣", "紀錄者", "局數", "勝敗", "我隊得分", "對手得分", "我隊安打", "對手安打",
@@ -411,6 +415,12 @@ def pitch_counts(rr):
     }
 
 # BIP (場內球) = every batted ball: a plate appearance whose result is not 三振／保送／故四／觸身／妨礙 (全壘打 included),
+def eff(X, Z):
+    """The 軌跡 of a batted ball: the one filled in, else the one its result implies (內滾／雙殺／犧觸／野選 G, 內飛 P,
+    外飛／界外飛／犧飛 F — the website's types.TRAJ_OF); a hit or an error with none has none."""
+    return (f'IF(OR({Z}="G",{Z}="F",{Z}="L",{Z}="P"),{Z},IF(OR({X}="內滾",{X}="雙殺",{X}="犧觸",{X}="犧牲",{X}="野選"),"G",'
+            f'IF({X}="內飛","P",IF(OR({X}="外飛",{X}="界外飛",{X}="犧飛"),"F",""))))')
+
 # 落點／軌跡／強度 recorded or not (the website's types.isBattedBall). The rates use only the batted balls with that detail.
 def batted_ball(pa_cell, X):
     return f'=IF(AND({pa_cell}=1,{X}<>"三振",{X}<>"保送",{X}<>"故四",{X}<>"觸身",{X}<>"妨礙"),1,0)'
@@ -440,18 +450,19 @@ def bat_formulas(rr):
     f["得點圈打數"] = f'=IF(AND({c("打數")}=1,OR(ISNUMBER(SEARCH("2",{D})),ISNUMBER(SEARCH("3",{D})))),1,0)'
     f["得點圈安打"] = f'=IF(AND({c("得點圈打數")}=1,{c("安打")}=1),1,0)'
     f["場內球"] = batted_ball(c("打席"), X)
-    f["有軌跡"] = f'=IF(AND({c("場內球")}=1,OR({Z}="G",{Z}="F",{Z}="L",{Z}="P")),1,0)'
+    f["有軌跡"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}<>""),1,0)'
+    f["有球數"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>0),1,0)'
     f["有強度"] = has_quality(c("場內球"), f"${BL['強度']}{rr}")
-    f["滾地"] = f'=IF(AND({c("場內球")}=1,{Z}="G"),1,0)'
-    f["飛球"] = f'=IF(AND({c("場內球")}=1,OR({Z}="F",{Z}="P")),1,0)'
-    f["平飛"] = f'=IF(AND({c("場內球")}=1,{Z}="L"),1,0)'
+    f["滾地"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="G"),1,0)'
+    f["飛球"] = f'=IF(AND({c("場內球")}=1,OR({eff(X,Z)}="F",{eff(X,Z)}="P")),1,0)'
+    f["平飛"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="L"),1,0)'
     f["強擊"] = f'=IF(AND({c("場內球")}=1,${BL["強度"]}{rr}="強"),1,0)'
     f["揮空"] = f'={pc["_揮空"]}'
     f["揮棒"] = f'={pc["_揮棒"]}'
     f["看好球"] = f'={pc["_看好球"]}'
     # sSeager: balls he took (an intentional walk's do not count); 內野飛球 for IFFB%
     f["壞球不揮"] = f'=IF({X}="故四",0,{c("壞球")})'
-    f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{Z}="P"),1,0)'
+    f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="P"),1,0)'
     f["首球揮棒"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="SS",${P1}{rr}="F",${P1}{rr}="IP")),1,0)'
     # 兩好球纏鬥: 3+ pitches after reaching two strikes (the last one included) = the first (用球數 − 3) cells already hold
     # two of S/SS/CS/F (pitches entered from 球1 on, no gaps); 6球以上: 6+ pitches. Both are 優質打席.
@@ -533,14 +544,15 @@ def pit_formulas(rr):
     f["失分"] = f'=IF(OR({CODE}="R",{CODE}="ER"),1,0)'
     f["自責"] = f'=IF({CODE}="ER",1,0)'
     f["場內球"] = batted_ball(c("打席"), X)
-    f["有軌跡"] = f'=IF(AND({c("場內球")}=1,OR({Z}="G",{Z}="F",{Z}="L",{Z}="P")),1,0)'
+    f["有軌跡"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}<>""),1,0)'
+    f["有球數"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>0),1,0)'
     f["有強度"] = has_quality(c("場內球"), f"${PL['強度']}{rr}")
-    f["滾地"] = f'=IF(AND({c("場內球")}=1,{Z}="G"),1,0)'
-    f["飛球"] = f'=IF(AND({c("場內球")}=1,OR({Z}="F",{Z}="P")),1,0)'
-    f["平飛"] = f'=IF(AND({c("場內球")}=1,{Z}="L"),1,0)'
+    f["滾地"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="G"),1,0)'
+    f["飛球"] = f'=IF(AND({c("場內球")}=1,OR({eff(X,Z)}="F",{eff(X,Z)}="P")),1,0)'
+    f["平飛"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="L"),1,0)'
     f["強擊"] = f'=IF(AND({c("場內球")}=1,${PL["強度"]}{rr}="強"),1,0)'
     f["揮空"] = f'={pc["_揮空"]}'; f["揮棒"] = f'={pc["_揮棒"]}'; f["看好球"] = f'={pc["_看好球"]}'
-    f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{Z}="P"),1,0)'
+    f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="P"),1,0)'
     f["首球好球"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="S",${P1}{rr}="SS",${P1}{rr}="CS",${P1}{rr}="F",${P1}{rr}="IP")),1,0)'
     f["首人次"] = f'=IF(AND({F}<>"",COUNTIFS($A$2:$A{rr},$A{rr},${PL["投手"]}$2:${PL["投手"]}{rr},{F})=1),1,0)'
     f["先發"] = f'=IF(AND({F}<>"",COUNTIF($A$2:$A{rr},$A{rr})=1),1,0)'
@@ -769,7 +781,7 @@ def bat_stat_cols():
         ("RISP AVG", "=IFERROR(" + b("得點圈安打") + "/" + b("得點圈打數") + ',"")', "0.000"),
         ("QAB%", "=IFERROR(" + b("優質打席") + '/{PA},"")', "0.0%"),
         ("兩好球纏鬥", "=" + b("兩好球纏鬥"), "0"), ("6球以上", "=" + b("6球以上"), "0"),
-        ("P/PA", "=IFERROR(" + b("用球數") + '/{PA},"")', "0.00"),
+        ("P/PA", "=IFERROR(" + b("用球數") + "/" + b("有球數") + ',"")', "0.00"),
         ("Whiff%", "=IFERROR(" + b("揮空") + "/" + b("揮棒") + ',"")', "0.0%"),
         ("sSeager", "=IFERROR(" + b("壞球不揮") + "/(" + b("揮棒") + "+" + b("壞球不揮") + ")-" + b("看好球") + "/(" + b("看好球") + "+" + b("壞球不揮") + '),"")', "+0.0%;-0.0%;0.0%"),
         # BIP = every batted ball (全壘打 included), 落點／軌跡／強度 recorded or not; each rate is over the ones with that detail
@@ -869,7 +881,7 @@ def pit_stat_cols():
         ("IFFB%", "=IFERROR(" + p("內野飛球") + "/" + p("飛球") + ',"")', "0.0%"),
         ("Whiff%", "=IFERROR(" + p("揮空") + "/" + p("揮棒") + ',"")', "0.0%"),
         ("CSW%", "=IFERROR((" + p("看好球") + "+" + p("揮空") + ')/{PC},"")', "0.0%"),
-        ("F-Strike%", "=IFERROR(" + p("首球好球") + '/{BF},"")', "0.0%"),
+        ("F-Strike%", "=IFERROR(" + p("首球好球") + "/" + p("有球數") + ',"")', "0.0%"),
         ("P/IP", '=IFERROR({PC}/({出局數}/3),"")', "0.0"),
         ("LOB%", '=IFERROR(MAX(0,MIN(1,({H}+{BB}+{HBP}-{R})/({H}+{BB}+{HBP}-1.4*{HR}))),"")', "0.0%"),
         ("ERA排名", '=IF(OR({ERA}="",{出局數}/3<{MINIP}),"",RANK({ERA},{ERARANGE},1))', "0"),

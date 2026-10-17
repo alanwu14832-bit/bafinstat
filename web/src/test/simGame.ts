@@ -71,7 +71,7 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
   // 對方打者左右打: its own stream, and the side each of their slots has this game ('?' = 不知道)
   const y = rng(seed * 104729 + 7)
   const sides = new Map<number, OppBats | '?'>()
-  const pickSide = (): OppBats | null => { const v = y(); return v < 0.45 ? 'L' : v < 0.85 ? 'R' : null }
+  const pickSide = (): OppBats => (y() < 0.5 ? 'L' : 'R')
   const FIELD = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF']
   let clock = Date.UTC(2026, 0, 1, 5, 0)
   let stamped = s
@@ -202,7 +202,7 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
     if (sideKey === 'pit') {
       if (needsOppBats(s, true) !== !sides.has(s.oppOrder)) throw new Error(`needsOppBats disagrees for slot ${s.oppOrder}`)
       // asked once per batter; now and then a switch hitter takes the other side
-      if (!sides.has(s.oppOrder) || y() < 0.05) { const b = pickSide(); s = setOppBats(s, b); sides.set(s.oppOrder, b ?? '?') }
+      if (!sides.has(s.oppOrder) || y() < 0.05) { const b = pickSide(); s = setOppBats(s, b); sides.set(s.oppOrder, b) }
       const b = sides.get(s.oppOrder)
       want.bats[s.pitching.length] = b === '?' ? undefined : b
     }
@@ -214,5 +214,8 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
   }
   if (s.outs || s.runners.length) s = endHalf(s)
   s = stampTimes(stamped, s, new Date((clock += 60000)).toISOString())
+  // (a 未完成打席 row after the half's last plate appearance has no opponent batter or side to expect: pad the arrays to the rows)
+  want.pit.length = Math.max(want.pit.length, s.pitching.length)
+  want.bats.length = Math.max(want.bats.length, s.pitching.length)
   return { ...s, finished: true, truth, start, expect: want, names }
 }

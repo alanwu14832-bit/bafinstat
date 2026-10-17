@@ -14,7 +14,7 @@
  *  - fills game.innings when blank, and returns human-readable warnings per game
  *  - 對方投手 (L / R, name) and 對方打者 and 對方代跑 trimmed and dropped when blank, 結束時間 as 'HH:MM' · 對方打者左右打 L / R (anything else dropped)
  */
-import { LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppBats, type OppHand, type PitchingPA, type Player, type SubCharges } from './types'
+import { isUnfinished, LOC_CODES, LOC_HOLES, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Game, type OppBats, type OppHand, type PitchingPA, type Player, type PriorPitch, type SubCharges } from './types'
 import { auditGame, type AuditPlace } from './audit'
 import { outsCredited } from './stats'
 import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
@@ -57,6 +57,18 @@ const BATS: Record<string, OppBats> = { l: 'L', 左: 'L', 左打: 'L', lhb: 'L',
 export function cleanBats(v: unknown): OppBats | undefined {
   if (typeof v !== 'string') return undefined
   return BATS[v.trim().toLowerCase()]
+}
+
+/** 換投前的球數: entries with a name and a positive count, in order, never more pitches than the plate appearance has. */
+export function cleanPrior(v: unknown, pitches: number): PriorPitch[] {
+  const out: PriorPitch[] = []
+  let left = pitches
+  if (Array.isArray(v)) for (const x of v) {
+    const name = typeof x?.name === 'string' ? x.name.trim() : ''
+    const n = Math.min(left, Math.floor(Number(x?.pitches)))
+    if (name && n > 0) { out.push({ name, pitches: n }); left -= n }
+  }
+  return out
 }
 
 interface Seq { inning?: number; outsBefore?: number; code?: string; result: string; outOnBase?: number }
@@ -135,7 +147,7 @@ export function rowCharges(game: Pick<Game, 'dayRoster' | 'homeAway'>, pitching:
   const half = fieldingHalf(game)
   const subs = game.dayRoster?.subs ?? []
   const lastRow = new Map<number, number>()
-  rows.forEach((r, i) => lastRow.set(pitching[i].inning, Math.max(r, lastRow.get(pitching[i].inning) ?? 0)))
+  rows.forEach((r, i) => { if (!isUnfinished(pitching[i])) lastRow.set(pitching[i].inning, Math.max(r, lastRow.get(pitching[i].inning) ?? 0)) })
   return pitching.map((p, i) => {
     const e = errorsOf(p)
     const own = fielders?.(p.inning, rows[i])
@@ -172,9 +184,10 @@ export function rowCharges(game: Pick<Game, 'dayRoster' | 'homeAway'>, pitching:
 }
 
 /** Each opponent row's place in its inning (0 = the inning's first row), in the order given: what fieldersOf's `row` asks. */
-export function rowsInInning(pitching: Pick<PitchingPA, 'inning'>[]): number[] {
+export function rowsInInning(pitching: Pick<PitchingPA, 'inning' | 'result'>[]): number[] {
   const n = new Map<number, number>()
-  return pitching.map((p) => { const k = n.get(p.inning) ?? 0; n.set(p.inning, k + 1); return k })
+  // (a 未完成打席 row is no plate appearance and comes after the half's last one: it takes no place in the order)
+  return pitching.map((p) => { const k = n.get(p.inning) ?? 0; if (!isUnfinished(p)) n.set(p.inning, k + 1); return k })
 }
 
 /**
@@ -332,6 +345,19 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
       const f = at(p.loc, p.pitcher)
       if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++
     }
+    // a runner or the batter put out on a ball that put the batter on (a hit, an error: the 被刺殺／壘死／打者出局 marks say which
+    // base): the one who handled the ball gets the assist, whoever covers that base the putout (at 2B: SS for balls to the
+    // left side and the middle, 2B for balls to the right). 野選 has its own credit above.
+    if (r !== '野選') {
+      for (const e of p.events ?? []) {
+        if (!e.play || e.to !== 'out' || !e.outAt) continue
+        const f = at(p.loc, p.pitcher)
+        const cover = e.outAt === 1 ? '1B' : e.outAt === 3 ? '3B' : e.outAt === 'home' ? 'C' : (p.loc ?? 0) >= 7 || p.loc === 5 || p.loc === 6 || p.loc === 56 ? 'SS' : '2B'
+        const covering = byPos.get(cover)
+        if (f && f !== covering) a(f)
+        po(covering)
+      }
+    }
     // (a 盜壘阻殺 / 牽制出局 by whoever stood there then: a change in the middle of the plate appearance, rowCharges)
     for (const c of charges?.[i].catching ?? [{ cs: p.cs, pk: p.pk, at: undefined }]) {
       if (c.cs) { a(lineAt(c.at, 'C')); for (let k = 0; k < c.cs; k++) po(lineAt(c.at, 'SS')) }
@@ -428,8 +454,8 @@ export function normalizeDataset(input: Dataset, place: AuditPlace = 'page'): { 
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, oppBats, ...p }) => ({
-    ...p, ...(cleanBats(oppBats) ? { oppBats: cleanBats(oppBats) } : {}), ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, oppBats, priorPitchers, ...p }) => ({
+    ...p, ...(cleanPrior(priorPitchers, p.pitches.length).length ? { priorPitchers: cleanPrior(priorPitchers, p.pitches.length) } : {}), ...(cleanBats(oppBats) ? { oppBats: cleanBats(oppBats) } : {}), ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,

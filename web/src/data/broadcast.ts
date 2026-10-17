@@ -10,7 +10,7 @@
  * The board's numbers live here too, one format each: the inning 「5局上」 (feed headers in Chinese numerals 「三局上」),
  * the count 「1-2」 (balls first), 「45 球」, a pitcher's line today 「2.1 局 5 安 2 失分 1 四死 3 三振」.
  */
-import { HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced, isRelief, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isOppPinchHit, isNoBatter, isPA, isPlaced, pitchesByPitcher, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PriorPitch, type PlayEvent } from './types'
 import { WHERE, countBefore } from './gameText'
 import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
@@ -172,8 +172,9 @@ const PLAY_PHRASE: Record<string, { base?: string; home?: string; out?: string }
   advance: { base: '上', home: '回本壘得分' },
   score: { base: '上', home: '回本壘得分' },
   out: { out: '跑壘出局' },
+  tag: { out: '被刺殺出局' },
 }
-const CAUSE: Record<string, string> = { sb: '盜壘', cs: '盜壘失敗', wp: '投手暴投', pb: '捕手捕逸', bk: '投手犯規', err: '失誤', throw: '趁傳', pk: '牽制', advance: '進壘', score: '得分', out: '跑壘', outPlay: '' }
+const CAUSE: Record<string, string> = { sb: '盜壘', cs: '盜壘失敗', wp: '投手暴投', pb: '捕手捕逸', bk: '投手犯規', err: '失誤', throw: '趁傳', pk: '牽制', advance: '進壘', score: '得分', out: '跑壘', outPlay: '', tag: '被刺殺' }
 const destPlain = (to: PlayEvent['to']) => (to === 'home' ? '回本壘得分' : to === 'out' ? '出局' : `上${BASE_ZH[to]}`)
 /** One runner's play: 「盜壘上二壘」「投手暴投回本壘得分」「遭牽制出局」. */
 export function playPhrase(kind: string, to: PlayEvent['to']): string {
@@ -452,7 +453,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
     const side = sideOf(half)
     const tl: 'bat' | 'pit' = side === 'us' ? 'bat' : 'pit'
     const rows: Row[] = side === 'us' ? src.batting : src.pitching
-    const idx = rows.flatMap((r, i) => (r.inning === inning && !isRelief(r) ? [i] : []))
+    const idx = rows.flatMap((r, i) => (r.inning === inning && !isNoBatter(r) ? [i] : []))
     const key = hkey(inning, half)
     const isLive = !!live && live.inning === inning && live.half === half
     const items: FeedItem[] = []
@@ -502,6 +503,10 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
         const mid = midOf(st)
         const events = r.events ?? []
         const onPlay = (to: PlayEvent['to'], batter: boolean) => events.find((e) => e.play && !!e.batter === batter && (e.kind === 'throw' || e.kind === 'err') && e.to === to)
+        // an out on the play that says which base: 「在本壘被刺殺」 (a 壘死 is 「在三壘跑壘出局」)
+        const outAtOf = (e?: PlayEvent) => (e?.outAt ? (e.outAt === 'home' ? '本壘' : BASE_ZH[e.outAt]) : '')
+        const outMarkOf = (base: number | null) => events.find((e) => e.play && e.to === 'out' && (base === null ? !!e.batter : !e.batter && e.from === base))
+        const outPhrase = (e?: PlayEvent) => { const at = outAtOf(e); return at ? `在${at}${e!.kind === 'out' ? '跑壘出局' : '被刺殺'}` : '' }
         const scorers = mid.filter((o) => st.dest[o.row] === 'home')
         if (scorers.length) clauses.push(`${scorers.map((o) => name(o.row)).join('、')}回本壘得分`)
         // The half's last out made on the bases during the next batter's pitches (a 盜壘刺 or a 牽制 before he had a
@@ -538,7 +543,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
           if (d === 'home' || d === o.base) continue
           if (d === 'out') {
             if (isLater(o.row)) { laterLine(o.row); continue }
-            clauses.push(`${name(o.row)}${inPAReason(o.row) || '出局'}`)
+            clauses.push(`${name(o.row)}${inPAReason(o.row) || outPhrase(outMarkOf(o.base)) || '出局'}`)
             continue
           }
           const e = onPlay(d, false)
@@ -547,7 +552,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
         const be = st.batter !== 'out' ? onPlay(st.batter, true) : undefined
         if (be) clauses.push(`打者${be.kind === 'throw' ? '趁傳' : '因失誤'}${destPlain(be.to)}`)
         // a batter who reached and was put out on the same play (thrown out stretching it)
-        if (batterOut && !atPlate && r.result !== '三振' && !isPlaced(r)) clauses.push('打者出局')
+        if (batterOut && !atPlate && r.result !== '三振' && !isPlaced(r)) clauses.push(`打者${outPhrase(outMarkOf(null)) || '出局'}`)
         if (lateRow === i) laterLine(i)
         later.sort((a, b) => ((a as { outs: number }).outs - (b as { outs: number }).outs))
       } else {
@@ -645,9 +650,10 @@ export function hrCounts(rows: BattingPA[]): Map<string, number> {
 /* ------------------------------------------------------------------ the board's facts (/live) */
 
 /** Our pitcher today: pitches (every one, the ball put in play too — the 紀錄比賽 count) and 「2.1 局 5 安 2 失分 1 四死 3 三振」. */
-export function pitcherToday(pitching: PitchingPA[], name: string, livePitches = 0): { pc: number; line: string } {
-  const rows = pitching.filter((p) => p.pitcher === name)
-  const pc = rows.reduce((a, p) => a + p.pitches.length, 0) + livePitches
+export function pitcherToday(pitching: PitchingPA[], name: string, livePitches = 0, livePrior: PriorPitch[] = []): { pc: number; line: string } {
+  // (each pitcher's own pitches: the ones a pitcher threw before he left in the middle of a count are his — priorPitchers)
+  const pc = pitching.reduce((a, p) => a + pitchesByPitcher(p).filter((x) => x.pitcher === name).reduce((b, x) => b + x.pitches.length, 0), 0)
+    + livePitches + livePrior.filter((x) => x.name === name).reduce((a, x) => a + x.pitches, 0)
   // (pitchingLines credits each out to the pitcher on the mound when it was made, over the whole game)
   const l = pitchingLines(pitching, []).find((x) => x.name === name)
   const line = `${ipDisplay(l?.outs ?? 0)} 局 ${l?.h ?? 0} 安 ${l?.r ?? 0} 失分 ${(l?.bb ?? 0) + (l?.hbp ?? 0)} 四死 ${l?.k ?? 0} 三振`

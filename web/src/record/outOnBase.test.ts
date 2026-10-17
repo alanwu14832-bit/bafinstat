@@ -152,7 +152,7 @@ describe('紀錄比賽: the same play recorded live', () => {
     s = triple(s)
     expect(s.batting[2]).toMatchObject({ code: 'III', outOnBase: 1 })
     const text = buildFeed({ homeAway: '客', opponent: '測試隊', batting: s.batting, pitching: [], subs: [] }).flatMap((h) => h.items).map(itemText)
-    expect(text.at(-1)).toBe('丙 擊出中外野平飛球，三壘安打；打者出局。')
+    expect(text.at(-1)).toBe('丙 擊出中外野平飛球，三壘安打；打者在本壘被刺殺。')
     expect(text.some((t) => t.includes('牽制'))).toBe(false)
     const h = inferHalf(s.batting, [0, 1, 2], 'bat')!
     expect(splitTail(s.batting, h.steps, 'bat')).toBeNull()
@@ -185,7 +185,8 @@ describe('紀錄比賽: the same play recorded live', () => {
     const s0 = newGame({ ...game, homeAway: '主' }, lineup, '壬')
     const s = commitPA(addPitch(s0, 'IP'), { ...defaultPlan(s0, '三安'), loc: 8, traj: 'L', batter: 'out' })
     expect(s.pitching[0]).toMatchObject({ result: '三安', code: 'I' })
-    expect(s.pitching[0].events).toBeUndefined()
+    // (their batter carries the same mark as ours: it says where he was put out)
+    expect(s.pitching[0].events).toEqual([batterOutMark('三安', 1, 'home')])
     const l = pitchingLines(s.pitching, [s0.game]).find((x) => x.name === '壬')!
     expect(l).toMatchObject({ outs: 1, h: 1, bf: 1 })
   })

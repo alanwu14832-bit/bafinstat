@@ -154,7 +154,9 @@ describe('BIP = every batted ball (batch 14)', () => {
   it('every other result is a batted ball, 軌跡 recorded or not', () => {
     const others = ['一安', '內安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤']
     const [l] = battingLines(roster, others.map((r) => bat(r)))
-    expect(l.bip).toBe(others.length); expect(l.bipTraj).toBe(0)
+    expect(l.bip).toBe(others.length)
+    // GB% / FB% / LD% use the 軌跡 its result implies when none was recorded (內滾 G, 外飛 F…: 8 of these); a hit or an error has none
+    expect(l.bipTraj).toBe(8); expect(l.gb).toBe(4); expect(l.fb).toBe(4)
   })
   it('a hard-hit ball without 軌跡 is still a 強勁擊球 (Hard%, QAB)', () => {
     const [l] = battingLines(roster, [bat('失誤', { quality: '強' }), bat('內滾', { quality: '中', traj: 'G' })])

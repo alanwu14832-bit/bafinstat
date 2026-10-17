@@ -36,10 +36,19 @@ export const TIEBREAK = '突破僵局'
  */
 export const RELIEF = '未面對打者'
 export const isRelief = (r: { result: string }) => r.result === RELIEF
+/**
+ * 未完成打席: a pitching row (our pitcher) for the pitches of a plate appearance that never ended because the half-inning
+ * did — a 盜壘失敗 or 牽制 for the third out with the batter at 1-1. Not a plate appearance either (no BF, no result):
+ * only its pitches (PC, strikes, balls, whiffs, CSW%…) count, as his. The batter bats again next inning with a fresh count.
+ */
+export const UNFINISHED = '未完成打席'
+export const isUnfinished = (r: { result: string }) => r.result === UNFINISHED
+/** A pitching row that is no plate appearance and no part of an inning's runner timeline: 未面對打者 or 未完成打席. */
+export const isNoBatter = (r: { result: string }) => isRelief(r) || isUnfinished(r)
 /** A runner placed by the tie-break rule (not a plate appearance). */
 export const isPlaced = (r: { result: string }) => r.result === TIEBREAK
 /** A real plate appearance: has a result and is not a tie-break runner. Everything that counts PAs goes through it. */
-export const isPA = (r: { result: string }) => !!r.result && !isPlaced(r) && !isRelief(r)
+export const isPA = (r: { result: string }) => !!r.result && !isPlaced(r) && !isNoBatter(r)
 /** Bases of each hit (內安 = 內野安打 is a single). 場地二安 (ground-rule double: over the fence on a bounce, or stuck in it) is a double in every
  * stat; the batter gets second and every runner exactly two bases. */
 export const HIT_BASE_COUNT: Record<string, 1 | 2 | 3 | 4> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 4 }
@@ -192,6 +201,8 @@ export interface PlayEvent {
 }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
   sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規',
+  // (on the play only: a runner put out trying for a base on a ball that put the batter on — 壘死 is kind 'out', his own mistake)
+  tag: '被刺殺',
   // (on the play only, our batter: he reached, then was put out on that same play — record/timeline batterOutMark)
   outPlay: '出局',
 }
@@ -258,6 +269,24 @@ export interface BattingPA {
   oppHand?: OppHand
 }
 
+/** Pitches of one plate appearance thrown by a pitcher who left in the middle of it (換投 with a count on the batter). */
+export interface PriorPitch { name: string; pitches: number }
+/**
+ * A plate appearance's pitches split by who threw them: the pitchers who left in the middle of it first (priorPitchers, in
+ * order), the row's own pitcher the rest. The result, the batter faced and the 好球 of the first pitch stay with the row's pitcher.
+ */
+export function pitchesByPitcher(pa: { pitcher: string; pitches: string[]; priorPitchers?: PriorPitch[] }): Array<{ pitcher: string; pitches: string[] }> {
+  const out: Array<{ pitcher: string; pitches: string[] }> = []
+  let i = 0
+  for (const prior of pa.priorPitchers ?? []) {
+    const n = Math.max(0, Math.min(prior.pitches, pa.pitches.length - i))
+    out.push({ pitcher: prior.name, pitches: pa.pitches.slice(i, i + n) })
+    i += n
+  }
+  out.push({ pitcher: pa.pitcher, pitches: pa.pitches.slice(i) })
+  return out
+}
+
 export interface PitchingPA {
   gameId: string
   inning: number
@@ -286,8 +315,11 @@ export interface PitchingPA {
   errors?: string[]
   /** their batter's 打點 (the same rules as ours). Left out (0) when there is none. */
   rbi?: number
-  /** 對方打者左右打: the side he batted from in this plate appearance. Left out when unknown (不知道, older games). */
+  /** 對方打者左右打: the side he batted from in this plate appearance. Left out when unknown (older games). */
   oppBats?: OppBats
+  /** pitchers who threw the first pitches of this plate appearance and left before it ended (換投 mid-count): their share of
+   *  `pitches`, in order; the rest are this row's pitcher's. Left out when nobody did. See pitchesByPitcher. */
+  priorPitchers?: PriorPitch[]
   code?: string
   note?: string
   /** runner moves between this plate appearance's pitches, in order */

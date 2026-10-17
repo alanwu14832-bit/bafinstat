@@ -10,7 +10,7 @@ import { Select } from './Select'
 import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
-import { isPlaced, isRelief, missingBattedBallTag, type OutAt, OPP_BATS_LABEL, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../../data/types'
+import { isNoBatter, isPlaced, isUnfinished, missingBattedBallTag, type OutAt, OPP_BATS_LABEL, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../../data/types'
 import { count, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
@@ -96,7 +96,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                       {isBat(side, p) && p.pos && <span className="text-[11px] text-muted">{p.pos}</span>}
                       {pitcher && <span className="text-[11px] text-muted">投手 {pitcher}</span>}
                       {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>}
-                      {isRelief(p) && <span className="text-[11px] text-muted">不算打席</span>}
+                      {isNoBatter(p) && <span className="text-[11px] text-muted">不算打席</span>}
                       {p.code && <span className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{CODE_LABEL[p.code] ?? p.code}</span>}
                       {missingBattedBall(p).length > 0 && <span title={`這個擊球還沒記${missingBattedBall(p).join('、')}（可以先儲存，之後再補）`} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] border border-[color-mix(in_srgb,var(--warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-ink">{missingBattedBallTag(missingBattedBall(p))}</span>}
                       {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
@@ -221,10 +221,12 @@ export interface TimelineProps {
   /** one more base on the throw: moves him up one and marks it 趁傳進壘 */
   onThrowUp: (who: number | 'batter') => void
   /** (we bat) 壘死 rather than 出局: a runner put out by his own baserunning mistake on the play */
-  runningOut?: { of: (row: number) => boolean; set: (row: number, on: boolean, outAt?: OutAt) => void; /** 死在哪個壘包 (undefined = not said) */ atOf: (row: number) => OutAt | undefined }
+  runningOut?: { of: (row: number) => boolean; set: (row: number, on: boolean, outAt?: OutAt) => void }
+  /** 死在哪個壘包 (undefined = not said): a runner out on the play (a 壘死, or a ball that put the batter on) and the batter put out after reaching */
+  outAt?: { runner: (row: number) => { can: boolean; at?: OutAt }; setRunner: (row: number, at: OutAt) => void; batter: { can: boolean; at?: OutAt }; setBatter: (at: OutAt) => void }
   /** (we bat) the batter reached and was put out on the same play (記成壘上出局): `can` when his result put him on base;
    *  `on` 跑壘失誤（壘死）, his own baserunning mistake */
-  batterMistake?: { can: boolean; on: boolean; set: (on: boolean) => void; /** 死在哪個壘包 (undefined = not said) */ at: OutAt | undefined; setAt: (at: OutAt) => void }
+  batterMistake?: { can: boolean; on: boolean; set: (on: boolean) => void }
   /** opponent runs: earned (ER) or not (R), on the row of whoever scored; `rule` is what the rules say (record/earned.ts) */
   earned?: { of: (row: number) => boolean; rule?: (row: number) => { earned: boolean; why?: string } | undefined; toggle: (row: number) => void }
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
@@ -406,7 +408,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
                   mistake={tl.runningOut ? { on: tl.runningOut.of(o.row), set: (on) => tl.runningOut!.set(o.row, on) } : undefined} />
                 <ThrowChip tl={tl} who={o.row} name={name} />
                 {tl.earned && tl.step.dest[o.row] === 'home' && <EarnedChip on={tl.earned.of(o.row)} onToggle={() => tl.earned!.toggle(o.row)} />}
-                {tl.runningOut?.of(o.row) && <OutAtChips value={tl.runningOut.atOf(o.row)} onPick={(at) => tl.runningOut!.set(o.row, true, at)} name={name} />}
+                {tl.outAt?.runner(o.row).can && <OutAtChips value={tl.outAt.runner(o.row).at} onPick={(at) => tl.outAt!.setRunner(o.row, at)} name={name} />}
               </div>
               {tl.step.dest[o.row] === 'home' && <EarnedNote tl={tl} row={o.row} />}
               {tl.onPinchRunner && (tl.pinchText
@@ -430,13 +432,13 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
             )}
           </div>
           {step.batter === 'home' && <EarnedNote tl={tl} row={step.index} />}
+          {step.batter === 'out' && tl.outAt?.batter.can && <OutAtChips value={tl.outAt.batter.at} onPick={tl.outAt.setBatter} name={batterName} />}
           {step.batter === 'out' && tl.batterMistake?.can && (
             // he reached, then was put out on this same play (a triple, then tagged out at home): an out on the bases
             <div className="flex items-center gap-2 flex-wrap">
               <button type="button" aria-pressed={tl.batterMistake.on} onClick={() => tl.batterMistake!.set(!tl.batterMistake!.on)} title="自己跑壘失誤出局（衝過頭、離壘被觸殺），算他的壘死"
                 className={cx(chipBtn(tl.batterMistake.on), 'h-9 pointer-fine:h-8 px-2.5 text-[12px]')}>跑壘失誤（壘死）</button>
               <span className="text-[11px] text-muted">上壘後在壘上被觸殺：記成壘上出局，安打照算</span>
-              <OutAtChips value={tl.batterMistake.at} onPick={tl.batterMistake.setAt} name={batterName} />
             </div>
           )}
           {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">他打完停在哪一壘；之後的盜壘、暴投等在下一個打席記</span>}
@@ -575,7 +577,7 @@ function OppBatsEdit({ pa, count, onApply }: { pa: PitchingPA; count: number; on
 
 /** One plate appearance — or, for a 突破僵局 runner (not a plate appearance), the runner's own small panel. */
 export function PaPanel(props: PaPanelProps) {
-  return isPlaced(props.pa) ? <PlacedPanel {...props} /> : isRelief(props.pa) ? <ReliefPanel {...props} /> : <PlayPanel {...props} />
+  return isPlaced(props.pa) ? <PlacedPanel {...props} /> : isNoBatter(props.pa) ? <ReliefPanel {...props} /> : <PlayPanel {...props} />
 }
 
 /** A reliever who came in and made an out on the bases before he faced anyone (types.RELIEF): not a plate appearance. */
@@ -591,18 +593,29 @@ function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, 
         <Button size="sm" variant="outline" icon={<ChevronLeft />} onClick={() => onNav(index - 1)} disabled={index === 0}>上一個</Button>
         <Button size="sm" variant="outline" onClick={() => onNav(index + 1)} disabled={index >= total - 1}>下一個<ChevronRight className="size-4" /></Button>
       </div>
-      <div className="flex flex-col gap-1">
-        <h3 className="text-[15px] font-semibold text-ink">換投後未面對打者（不算打席）</h3>
-        <p className="text-[12px] text-muted">這位投手上場後、還沒面對任何打者，就讓壘上跑者出局（牽制、盜壘阻殺…）。這個出局和他的牽制次數算他的，不算前一位投手；跑者自己的出局碼仍記在原本那個打席。要排在這局最後一個打席之後。</p>
-      </div>
+      {isUnfinished(pit) ? (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[15px] font-semibold text-ink">未完成打席（不算打席）</h3>
+          <p className="text-[12px] text-muted">這個打席還沒打完，半局就因為盜壘失敗、牽制出局結束了：打者沒有結果，下一局重新打。已經投的 {pit.pitches.length} 球照樣算投手的用球數、好壞球、揮空。</p>
+          <PitchChips pitches={pit.pitches} />
+          {!!pit.priorPitchers?.length && <p className="text-[12px] text-muted">其中前 {pit.priorPitchers.reduce((a, p) => a + p.pitches, 0)} 球是換下的投手投的（{pit.priorPitchers.map((p) => `${p.name} ${p.pitches} 球`).join('、')}），算他的。</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <h3 className="text-[15px] font-semibold text-ink">換投後未面對打者（不算打席）</h3>
+          <p className="text-[12px] text-muted">這位投手上場後、還沒面對任何打者，就讓壘上跑者出局（牽制、盜壘阻殺…）。這個出局和他的牽制次數算他的，不算前一位投手；跑者自己的出局碼仍記在原本那個打席。要排在這局最後一個打席之後。</p>
+        </div>
+      )}
       <div className="flex items-end gap-2 flex-wrap">
         <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" placeholder="選投手" /></label>
-        <label className="flex flex-col gap-1 text-[12px] text-ink-2">換投時<Select value={String(pit.outsBefore ?? 0)} onChange={(e) => set({ outsBefore: Number(e.target.value) })} options={outsOpts} className="w-[140px]" /></label>
+        {!isUnfinished(pit) && <label className="flex flex-col gap-1 text-[12px] text-ink-2">換投時<Select value={String(pit.outsBefore ?? 0)} onChange={(e) => set({ outsBefore: Number(e.target.value) })} options={outsOpts} className="w-[140px]" /></label>}
       </div>
-      <div className="flex items-center gap-4 flex-wrap">
-        <Stepper label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
-        <Stepper label="阻殺" value={pit.cs} onChange={(v) => set({ cs: v })} />
-      </div>
+      {!isUnfinished(pit) && (
+        <div className="flex items-center gap-4 flex-wrap">
+          <Stepper label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
+          <Stepper label="阻殺" value={pit.cs} onChange={(v) => set({ cs: v })} />
+        </div>
+      )}
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pit.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">

@@ -1,6 +1,6 @@
 /**
  * 紀錄比賽 (batch 18): the opponent pitcher's hand and the opponent batter's side are required — the pitch pad and the
- * results wait for 左投／右投 (we bat) or 左打／右打 (they bat), 「不知道」 counting as an answer; before the 2026-10-16
+ * results wait for 左投／右投／不知道 (we bat) or 左打／右打 (they bat, no 不知道); before the 2026-10-16
  * migration the batter-side question is not shown at all.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -103,14 +103,15 @@ describe('紀錄比賽: 對方打者左打／右打', () => {
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)
     expect(draft().pitching[0].oppBats).toBe('L')
-    // the next batter: asked again; 不知道 leaves the key out
+    // the next batter: asked again, and there is no 不知道 — a side has to be picked
     expect(ball().disabled).toBe(true)
-    fireEvent.click(within(chips()).getByRole('button', { name: '不知道' }))
+    expect(within(chips()).queryByRole('button', { name: '不知道' })).toBeNull()
+    fireEvent.click(within(chips()).getByRole('button', { name: '右打' }))
     await wait(50)
     fireEvent.click(screen.getByRole('button', { name: '三振' }))
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)
-    expect('oppBats' in draft().pitching[1]).toBe(false)
+    expect(draft().pitching[1].oppBats).toBe('R')
   })
   it('a batter already picked this game is pre-filled (one tap per batter per game)', () => {
     const s = { ...newGame(game('主'), lineup, '甲'), oppBatsBySlot: { 1: 'R' as const } }

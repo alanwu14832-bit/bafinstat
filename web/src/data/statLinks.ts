@@ -2,7 +2,7 @@
  * Where each 數據字典 term can be seen ranked: the table, tab and sort column (lower-is-better rates sort
  * ascending). Terms with no column on the site (IBB, SH, SF, FC, QS) have no link.
  */
-type Link = [page: 'batting' | 'pitching' | 'fielding', view: 'basic' | 'advanced' | 'process' | '', sort: string, dir?: 'asc']
+type Link = [page: 'batting' | 'pitching' | 'fielding', view: 'basic' | 'advanced' | 'process' | 'batted' | '', sort: string, dir?: 'asc']
 
 const L: Record<string, Link> = {
   G: ['batting', '', 'g'], PA: ['batting', '', 'pa'], AB: ['batting', '', 'ab'], R: ['batting', '', 'r'], H: ['batting', '', 'h'],
@@ -16,6 +16,7 @@ const L: Record<string, Link> = {
   'P/PA': ['batting', 'process', 'pPerPA'], 'Swing%': ['batting', 'process', 'swingPct'], 'Whiff%': ['batting', 'process', 'whiffPct', 'asc'],
   'Contact%': ['batting', 'process', 'contactPct'], 'FirstPitchSwing%': ['batting', 'process', 'fpsPct'], 'GB%': ['batting', 'process', 'gbPct'],
   'FB%': ['batting', 'process', 'fbPct'], 'LD%': ['batting', 'process', 'ldPct'], 'Hard%': ['batting', 'process', 'hardPct'],
+  'XBT%': ['batting', 'process', 'xbtPct'], XBTout: ['batting', 'process', 'xbtOut', 'asc'], 被刺殺: ['batting', 'process', 'thrownOut', 'asc'],
   'Pull%': ['batting', 'process', 'pullPct'], 'Oppo%': ['batting', 'process', 'oppoPct'], BIP: ['batting', 'process', 'bip'],
   pG: ['pitching', '', 'g'], GS: ['pitching', '', 'gs'], W: ['pitching', '', 'w'], L: ['pitching', '', 'l'], SV: ['pitching', '', 'sv'], HLD: ['pitching', '', 'hld'],
   IP: ['pitching', '', 'outs'], BF: ['pitching', '', 'bf'], PC: ['pitching', '', 'pc'], pK: ['pitching', '', 'k'], pBB: ['pitching', '', 'bb'],
@@ -27,7 +28,9 @@ const L: Record<string, Link> = {
   OppAVG: ['pitching', 'advanced', 'oppAvg', 'asc'], OppOBP: ['pitching', 'advanced', 'oppObp', 'asc'], pBABIP: ['pitching', 'advanced', 'babip', 'asc'],
   FIP: ['pitching', 'advanced', 'fip', 'asc'], 'LOB%': ['pitching', 'advanced', 'lobPct'],
   'Strike%': ['pitching', 'process', 'strikePct'], 'FStrike%': ['pitching', 'process', 'fStrikePct'], 'CSW%': ['pitching', 'process', 'cswPct'],
-  'pWhiff%': ['pitching', 'process', 'whiffPct'], pBIP: ['pitching', 'process', 'bip'], 'pGB%': ['pitching', 'process', 'gbPct'],
+  'pWhiff%': ['pitching', 'process', 'whiffPct'], pBIP: ['pitching', 'process', 'bip'], 'pGB%': ['pitching', 'process', 'gbPct'], 'pFB%': ['pitching', 'batted', 'fbPct'], 'pLD%': ['pitching', 'batted', 'ldPct'], 'pGB/FB': ['pitching', 'batted', 'gbFb'], 'pHR/FB': ['pitching', 'batted', 'hrFbPct', 'asc'],
+  'pPull%': ['pitching', 'batted', 'pullPct'], 'pCent%': ['pitching', 'batted', 'centerPct'], 'pOppo%': ['pitching', 'batted', 'oppoPct'], 'pSoft%': ['pitching', 'batted', 'softPct'], 'pMed%': ['pitching', 'batted', 'medPct'], 'pHard%': ['pitching', 'batted', 'hardPct', 'asc'],
+  'pBABIP-GB': ['pitching', 'batted', 'babipGb', 'asc'], 'pBABIP-LD': ['pitching', 'batted', 'babipLd', 'asc'], 'pBABIP-FB': ['pitching', 'batted', 'babipFb', 'asc'],
   'P/IP': ['pitching', 'process', 'pPerIP', 'asc'], 'P/BF': ['pitching', 'process', 'pPerBF', 'asc'],
   fG: ['fielding', '', 'g'], Inn: ['fielding', '', 'innings'], PO: ['fielding', '', 'po'], A: ['fielding', '', 'a'], E: ['fielding', '', 'e'],
   DP: ['fielding', '', 'dp'], TC: ['fielding', '', 'tc'], FPCT: ['fielding', '', 'fpct'], 'RF/G': ['fielding', '', 'rfg'], PB: ['fielding', '', 'pb'],

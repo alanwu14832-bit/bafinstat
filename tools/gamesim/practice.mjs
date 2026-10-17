@@ -27,16 +27,16 @@ if (!(await main.getByText('練習中：不會存檔').count())) fails.push('狀
 if (await main.getByRole('button', { name: /放棄這場/ }).count()) fails.push('練習中不該有「放棄這場」')
 // three strikeouts (主場: they bat first)
 for (let i = 0; i < 3; i++) {
-  // (batch 18) the pitch pad waits for their batter's side: 左打 for the first, 右打, then 不知道
+  // (batch 18) the pitch pad waits for their batter's side: 左打 for the first, then 右打, 左打
   const chips = main.getByRole('group', { name: '對方打者左打或右打' })
   if (!(await main.getByRole('button', { name: /^揮空/ }).first().isDisabled())) fails.push(`第 ${i + 1} 位打者還沒選左右打，投球按鈕就能按`)
-  await chips.getByRole('button', { name: ['左打', '右打', '不知道'][i], exact: true }).click(); await p.waitForTimeout(120)
+  await chips.getByRole('button', { name: ['左打', '右打', '左打'][i], exact: true }).click(); await p.waitForTimeout(120)
   for (let k = 0; k < 3; k++) { await main.getByRole('button', { name: /^揮空/ }).first().click(); await p.waitForTimeout(60) }
   await main.getByRole('button', { name: /^送出/ }).click(); await p.waitForTimeout(250)
 }
 const prac = await p.evaluate(() => JSON.parse(localStorage.getItem('bafin.record.practice.v1') || 'null'))
 if (!prac?.game.id.startsWith('PRACTICE-') || prac.pitching.length !== 3) fails.push(`練習進度不對：${prac?.game.id} ${prac?.pitching.length} 個打席`)
-else if (JSON.stringify(prac.pitching.map((x) => x.oppBats ?? null)) !== JSON.stringify(['L', 'R', null])) fails.push(`練習的左右打存成 ${JSON.stringify(prac.pitching.map((x) => x.oppBats ?? null))}，預期 L、R、（不知道）`)
+else if (JSON.stringify(prac.pitching.map((x) => x.oppBats ?? null)) !== JSON.stringify(['L', 'R', 'L'])) fails.push(`練習的左右打存成 ${JSON.stringify(prac.pitching.map((x) => x.oppBats ?? null))}，預期 L、R、L`)
 await main.getByRole('button', { name: '結束練習' }).click(); await p.waitForTimeout(300)
 await p.getByRole('dialog', { name: '結束練習' }).getByRole('button', { name: '結束（不存檔）' }).click(); await p.waitForTimeout(300)
 if (!(await main.getByText(/練習結束，沒有存檔：.* 0：0 練習對手，共記了 3 個打席。/).count())) fails.push('結束後沒有「練習結束，沒有存檔」')

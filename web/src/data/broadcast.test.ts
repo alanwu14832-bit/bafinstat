@@ -160,7 +160,7 @@ describe('3.3 runner plays and 3.5 substitutions', () => {
     const want: Record<string, Partial<Record<'2' | 'home' | 'out', string>>> = {
       sb: { 2: '盜壘上二壘', home: '盜壘回本壘得分' }, cs: { out: '盜壘刺出局' }, wp: { 2: '投手暴投上二壘', home: '投手暴投回本壘得分' },
       pb: { 2: '捕手捕逸上二壘', home: '捕手捕逸回本壘得分' }, bk: { 2: '投手犯規上二壘', home: '投手犯規回本壘得分' }, err: { 2: '因失誤上二壘', home: '因失誤回本壘得分' },
-      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' }, outPlay: { out: '出局' },
+      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, tag: { out: '被刺殺出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' }, outPlay: { out: '出局' },
     }
     for (const kind of Object.keys(PLAY_EVENT_LABELS).filter((k) => k !== 'pkSafe')) {
       expect(want[kind], kind).toBeTruthy()
@@ -398,7 +398,7 @@ describe('runner clauses on the batted ball', () => {
     expect(texts([feed(s)[0]]).slice(2)).toEqual(['劉哲宏 揮棒落空，不死三振上壘。', '劉哲宏盜壘刺出局。'])
     let u = start()
     u = pa(u, ['IP'], '一安', (p) => { p.loc = 8; p.batter = 'out' })
-    expect(texts(feed(u))).toEqual(['林昱丞 擊出中外野方向一壘安打；打者出局。'])
+    expect(texts(feed(u))).toEqual(['林昱丞 擊出中外野方向一壘安打；打者在二壘被刺殺。'])   // (the mark says where: the base after the single)
     expect(pas(feed(u))[0].outs).toBe(1)
   })
 })
@@ -607,6 +607,7 @@ describe('對方打者左打／右打 (batch 18)', () => {
     s = setOppBats(s, 'R')
     const lv = all(feed(s, true)).find((i) => i.kind === 'live') as Extract<FeedItem, { kind: 'live' }>
     expect(lv.bats).toBe('右打')
-    expect(liveSourceOf(setOppBats(start({ homeAway: '主' }), null)).batter.bats).toBeUndefined()
+    // a draft saved while 不知道 still existed ('?'): no side is shown
+    expect(liveSourceOf({ ...start({ homeAway: '主' }), oppBatsBySlot: { 1: '?' } }).batter.bats).toBeUndefined()
   })
 })

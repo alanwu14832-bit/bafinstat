@@ -15,16 +15,19 @@ export const OPP_RUNNER_UNSUPPORTED = `對方代跑沒有存進雲端（其他�
 export const OPP_ERRORS_UNSUPPORTED = `對方失誤（守位）沒有存進雲端（打擊結果「失誤」照常算；其他紀錄照常儲存）：請管理員在 Supabase 執行 ${OPP_RUNNER_MIGRATION}`
 export const OPP_RBI_UNSUPPORTED = `對方打點沒有存進雲端（其他紀錄照常儲存）：請管理員在 Supabase 執行 ${OPP_RUNNER_MIGRATION}`
 export const OPP_BATS_MIGRATION = 'supabase/migrations/2026-10-16_opp_bats.sql'
+export const PRIOR_PITCHERS_MIGRATION = 'supabase/migrations/2026-10-18_prior_pitchers.sql'
+export const PRIOR_PITCHERS_UNSUPPORTED = `換投前投手在同一個打席投的球沒有分開存進雲端（那些球會算給接手的投手；其他紀錄照常儲存）：請管理員在 Supabase 執行 ${PRIOR_PITCHERS_MIGRATION}`
 export const OPP_BATS_UNSUPPORTED = `對方打者左打／右打沒有存進雲端（其他紀錄照常儲存）：請管理員在 Supabase 執行 ${OPP_BATS_MIGRATION}`
 
 /** Whether the cloud has the columns (local mode: always). */
 export interface RecordFields { endTime: boolean; oppPitcher: boolean; /** pitching_pa.runner (對方代跑) */ oppRunner: boolean
   /** batting_pa.errors (對方失誤) */ oppErrors: boolean; /** pitching_pa.rbi (對方打點) */ oppRbi: boolean
-  /** pitching_pa.opp_bats (對方打者左右打) */ oppBats: boolean }
-export const ALL_RECORD_FIELDS: RecordFields = { endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: true }
+  /** pitching_pa.opp_bats (對方打者左右打) */ oppBats: boolean
+  /** pitching_pa.prior_pitchers (換投時這個打席已投的球算給誰) */ priorPitchers: boolean }
+export const ALL_RECORD_FIELDS: RecordFields = { endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: true, priorPitchers: true }
 
 /** What a save lost because the cloud lacks the columns: only when the saved data actually had those values. */
-export function recordFieldWarnings(fields: RecordFields, fragment: { games: Pick<Game, 'endTime'>[]; batting: Pick<BattingPA, 'oppHand' | 'oppPitcher' | 'errors'>[]; pitching?: Pick<PitchingPA, 'runner' | 'rbi' | 'oppBats'>[] }, gameId = ''): GameWarning[] {
+export function recordFieldWarnings(fields: RecordFields, fragment: { games: Pick<Game, 'endTime'>[]; batting: Pick<BattingPA, 'oppHand' | 'oppPitcher' | 'errors'>[]; pitching?: Pick<PitchingPA, 'runner' | 'rbi' | 'oppBats' | 'priorPitchers'>[] }, gameId = ''): GameWarning[] {
   const out: GameWarning[] = []
   if (!fields.endTime && fragment.games.some((g) => g.endTime)) out.push({ gameId, message: END_TIME_UNSUPPORTED })
   if (!fields.oppPitcher && fragment.batting.some((b) => b.oppHand || b.oppPitcher)) out.push({ gameId, message: OPP_PITCHER_UNSUPPORTED })
@@ -32,5 +35,6 @@ export function recordFieldWarnings(fields: RecordFields, fragment: { games: Pic
   if (!fields.oppErrors && fragment.batting.some((b) => b.errors?.length)) out.push({ gameId, message: OPP_ERRORS_UNSUPPORTED })
   if (!fields.oppRbi && fragment.pitching?.some((p) => p.rbi)) out.push({ gameId, message: OPP_RBI_UNSUPPORTED })
   if (!fields.oppBats && fragment.pitching?.some((p) => p.oppBats)) out.push({ gameId, message: OPP_BATS_UNSUPPORTED })
+  if (!fields.priorPitchers && fragment.pitching?.some((p) => p.priorPitchers?.length)) out.push({ gameId, message: PRIOR_PITCHERS_UNSUPPORTED })
   return out
 }

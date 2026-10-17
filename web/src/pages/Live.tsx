@@ -17,7 +17,7 @@ import { Maximize2, Minimize2 } from 'lucide-react'
 import { useMediaQuery, usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { RollingNumber } from '../components/motion/RollingNumber'
 import { EASE } from '../components/motion/Reveal'
-import { count, offense, oppBatterOf, oppPitchCount, score, type RecordState } from '../record/model'
+import { count, liveSplit, offense, oppBatterOf, oppPitchCount, score, type RecordState } from '../record/model'
 import { oppPitcherText } from '../record/OppParts'
 import { hhmm } from '../lib/dates'
 import { useLiveGames } from '../hooks/useLiveGames'
@@ -239,7 +239,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   }, [s.plays, livePlays])
 
   // the matchup: the pitcher defending, then the batter
-  const ourP = pitcherToday(s.pitching, s.pitcher, side === 'opp' ? s.pitches.length : 0)
+  const ourP = pitcherToday(s.pitching, s.pitcher, side === 'opp' ? liveSplit(s).current : 0, side === 'opp' ? s.priorPitchers : undefined)
   const pitcherName = side === 'opp' ? s.pitcher || '投手' : oppPitcherText(s.oppPitcher) || '對方投手'
   const pitchCount = side === 'opp' ? ourP.pc : oppPitchCount(s)
   const pitcherLine = side === 'opp' ? ourP.line : oppPitcherToday(oppStintRows(s.batting, s.oppPitcher, s.oppPitcherFrom))

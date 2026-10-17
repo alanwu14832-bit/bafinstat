@@ -26,7 +26,7 @@ import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
 import { applyEarned, earnedAll, type EarnedCall } from '../../record/earned'
 import { addPlacedRows, extraInnings, removePlacedRows } from '../../record/tiebreak'
-import { missingBattedBall, type Base } from '../../record/model'
+import { liveBall, missingBattedBall, type Base } from '../../record/model'
 
 /** 結果 options of the tables: the plate-appearance results, and 突破僵局 for a runner the tie-break rule put on */
 const RESULT_OPTIONS = [...PA_RESULTS, TIEBREAK]
@@ -458,24 +458,48 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // 壘死 (we bat): a runner put out on the play by his own baserunning mistake — a mark on this plate appearance
     // (kind 'out' from his base) that the timeline turns into his row's 壘死; 出局 clears it
     const midBase = (row: number) => midOf(step).find((o) => o.row === row)?.base
-    const outMark = (row: number) => (rows[i].events ?? []).find((e) => e.play && !e.batter && e.kind === 'out' && e.to === 'out' && e.from === midBase(row))
+    const outMarkAny = (row: number) => (rows[i].events ?? []).find((e) => e.play && !e.batter && e.to === 'out' && (e.kind === 'out' || e.kind === 'tag') && e.from === midBase(row))
+    const outMark = (row: number) => { const e = outMarkAny(row); return e?.kind === 'out' ? e : undefined }
+    // a runner put out on a ball that put the batter on is marked too (kind 'tag', 被刺殺), so the base can be said
+    const live = liveBall(rows[i].result)
+    const markAt = (kind: string, from: 1 | 2 | 3, outAt?: OutAt): PlayEvent => ({ at: rows[i].pitches.length, kind, from, to: 'out' as const, play: true as const, ...(outAt ? { outAt } : {}) })
+    const withEvents = (events: PlayEvent[], row: number, drop?: (r: BattingPA | PitchingPA) => void) => rows.map((r, k) => {
+      if (k === i) { const n = { ...r, events }; if (!events.length) delete (n as { events?: unknown }).events; return n }
+      if (drop && k === row) { const n = { ...r } as BattingPA | PitchingPA; drop(n); return n }
+      return r
+    })
     // (their runner too: only the mark, they have no 壘死 column)
     const runningOut = {
       of: (row: number) => step.dest[row] === 'out' && !!outMark(row),
-      /** 死在哪個壘包 (undefined: not said, so it reads as his own base) */
-      atOf: (row: number) => outMark(row)?.outAt,
       set: (row: number, on: boolean, outAt?: OutAt) => {
         const from = midBase(row)
         if (!from) return
-        const keep = outAt ?? outMark(row)?.outAt
-        const rest = (rows[i].events ?? []).filter((e) => e !== outMark(row))
-        const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'out', from, to: 'out' as const, play: true as const, ...(keep ? { outAt: keep } : {}) }] : rest
-        const next = rows.map((r, k) => {
-          if (k === i) { const n = { ...r, events }; if (!events.length) delete (n as { events?: unknown }).events; return n }
-          if (side === 'bat' && k === row && !on) { const n = { ...(r as BattingPA) }; delete n.baserunningOuts; return n }
-          return r
-        })
-        onEnd(row, 'out', next)
+        const was = outMarkAny(row)
+        const keep = outAt ?? was?.outAt
+        const rest = (rows[i].events ?? []).filter((e) => e !== was)
+        const kind = on ? 'out' : live ? 'tag' : null
+        const events = kind ? [...rest, markAt(kind, from, keep)] : rest
+        onEnd(row, 'out', withEvents(events, row, side === 'bat' && !on ? (n) => { delete (n as BattingPA).baserunningOuts } : undefined))
+      },
+    }
+    // 死在哪個壘包: for a runner out on the play (a 壘死 or a ball that put the batter on) and for the batter put out after reaching
+    const outAt = {
+      runner: (row: number) => ({ can: step.dest[row] === 'out' && (!!outMarkAny(row) || live), at: outMarkAny(row)?.outAt }),
+      setRunner: (row: number, at: OutAt) => {
+        const from = midBase(row)
+        if (!from) return
+        const was = outMarkAny(row)
+        const events = [...(rows[i].events ?? []).filter((e) => e !== was), markAt(was?.kind ?? 'tag', from, at)]
+        onEnd(row, 'out', withEvents(events, row))
+      },
+      batter: { can: step.batter === 'out' && reachedOn(rows[i].result), at: (rows[i].events ?? []).find(isBatterOutMark)?.outAt },
+      setBatter: (at: OutAt) => {
+        const marked = (evs: PlayEvent[] | undefined): PlayEvent[] => {
+          const list = evs ?? []
+          return list.some(isBatterOutMark) ? list.map((e) => (isBatterOutMark(e) ? { ...e, outAt: at } : e)) : [...list, batterOutMark(rows[i].result, rows[i].pitches.length, at)]
+        }
+        if (side === 'bat') setBat((b) => b.map((x, k) => (k === i ? { ...x, outOnBase: Math.max(1, +x.outOnBase || 0), events: marked(x.events) } : x)))
+        else setPit((p) => p.map((x, k) => (k === i ? { ...x, events: marked(x.events) } : x)))
       },
     }
     const pinch = side === 'bat' ? {
@@ -501,15 +525,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         if (on) n.baserunningOuts = 1; else delete n.baserunningOuts
         return n
       })),
-      /** 死在哪個壘包: on his out mark (undefined: not said, so it reads as the base his result put him on) */
-      at: (me.events ?? []).find(isBatterOutMark)?.outAt,
-      setAt: (outAt: OutAt) => setBat((b) => b.map((x, k) => {
-        if (k !== i) return x
-        const events = (x.events ?? []).some(isBatterOutMark) ? (x.events ?? []).map((e) => (isBatterOutMark(e) ? { ...e, outAt } : e)) : [...(x.events ?? []), batterOutMark(me.result, me.pitches.length, outAt)]
-        return { ...x, outOnBase: Math.max(1, +x.outOnBase || 0), events }
-      })),
     } : undefined
-    return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut, batterMistake,
+    return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut, outAt, batterMistake,
       ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', rule: (row: number) => earnedNow.get(row), toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
   const paPanel = (side: PaSide) => {

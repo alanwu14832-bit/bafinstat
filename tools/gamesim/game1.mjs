@@ -59,7 +59,7 @@ const TRAJ = { G: '滾地 G', F: '飛球 F', L: '平飛 L', P: '內野飛球 P' 
 // 軌跡 is picked on every batted ball now (nothing is filled in from the result): the scripts pick what the result implies
 const IMPLIED_TRAJ = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 // batch 18: their batters' sides as seen on the video, by slot (不知道 for the 5th); asked once per batter per game
-const SIDES = { 1: '左打', 2: '右打', 3: '右打', 4: '左打', 5: '不知道', 6: '右打', 7: '右打', 8: '左打', 9: '右打' }
+const SIDES = { 1: '左打', 2: '右打', 3: '右打', 4: '左打', 5: '左打', 6: '右打', 7: '右打', 8: '左打', 9: '右打' }
 const sideSeen = new Set()
 async function pa(side, spec) {
   paNo++
@@ -290,7 +290,7 @@ else {
   const pit = ds.base.pitching.filter((x) => x.gameId === saved.id && x.result !== '突破僵局')
   const off = pit.filter((x) => (x.oppBats ?? null) !== (want[SIDES[x.oppOrder]] ?? null))
   if (!pit.length || off.length) fails.push(`${off.length} / ${pit.length} 個對方打席的左右打不對：${JSON.stringify(off.map((x) => [x.inning, x.oppOrder, x.oppBats ?? null]))}`)
-  if (!pit.some((x) => x.oppBats === 'L') || !pit.some((x) => x.oppBats === 'R') || !pit.some((x) => !x.oppBats)) fails.push('對方打席應該有左打、右打和不知道')
+  if (!pit.some((x) => x.oppBats === 'L') || !pit.some((x) => x.oppBats === 'R') || pit.some((x) => !x.oppBats)) fails.push('對方打席應該有左打、右打，而且每一個都有（沒有「不知道」）')
 }
 await dlg.getByRole('tab', { name: /逐球・打擊/ }).click(); await p.waitForTimeout(300)
 if (!(await dlg.getByText('對方先發・右投', { exact: true }).count())) fails.push('逐球・打擊沒有「對方先發・右投」')

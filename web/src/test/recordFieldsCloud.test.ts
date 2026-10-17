@@ -13,7 +13,7 @@ function respond(table: string) {
   if (table === 'games') return { data: [state.migrated ? { ...game, end_time: null } : game], error: null }
   // (the 2026-10-15 one: batting_pa.errors, pitching_pa.runner and .rbi)
   if (table === 'batting_pa') return { data: [{ ...row, ...(state.migrated ? { opp_hand: null, opp_pitcher: null } : {}), ...(state.oppRunner ? { errors: null } : {}) }], error: null }
-  if (table === 'pitching_pa') return { data: [{ ...(state.oppRunner ? { ...prow, runner: null, rbi: 0 } : prow), ...(state.oppBats ? { opp_bats: null } : {}) }], error: null }
+  if (table === 'pitching_pa') return { data: [{ ...(state.oppRunner ? { ...prow, runner: null, rbi: 0 } : prow), ...(state.oppBats ? { opp_bats: null } : {}), prior_pitchers: null }], error: null }
   return { data: [], error: null }
 }
 function builder(table: string): unknown {
@@ -41,7 +41,7 @@ describe('結束時間 / 對方投手 / 對方代跑・失誤・打點 before an
     const { useDataStore } = await import('../store/data')
     const { END_TIME_UNSUPPORTED, OPP_PITCHER_UNSUPPORTED, OPP_RUNNER_UNSUPPORTED, OPP_ERRORS_UNSUPPORTED, OPP_RBI_UNSUPPORTED, OPP_BATS_UNSUPPORTED } = await import('../data/recordFields')
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: false, oppPitcher: false, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: false, oppPitcher: false, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false, priorPitchers: true })
     useDataStore.setState({ cloud: { ...useDataStore.getState().cloud, user: { id: 'u', email: 'a@b.c' } as never, isEditor: true } })
     const g = { id: 'G1', date: '2026-10-09', tournament: '大專盃', opponent: '台大', homeAway: '主' as const, time: '13:07', endTime: '15:22' }
     const pa = { gameId: 'G1', inning: 1, outsBefore: 0, batter: '甲', pitches: ['IP'], result: '一安', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, oppHand: 'R' as const, errors: ['C'] }
@@ -65,15 +65,15 @@ describe('結束時間 / 對方投手 / 對方代跑・失誤・打點 before an
     // the admin runs the SQL: the next load sees the columns
     state.migrated = true
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: false, oppErrors: false, oppRbi: false, oppBats: false, priorPitchers: true })
     // then the 2026-10-15 one (對方代跑, 對方失誤, 對方打點)
     state.oppRunner = true
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: false })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: false, priorPitchers: true })
     // and the 2026-10-16 one (對方打者左右打)
     state.oppBats = true
     await useDataStore.getState().loadCloud()
-    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: true })
+    expect(useDataStore.getState().recordFields).toEqual({ endTime: true, oppPitcher: true, oppRunner: true, oppErrors: true, oppRbi: true, oppBats: true, priorPitchers: true })
     const after = (await useDataStore.getState().saveGame({ game: g, batting: [pa], pitching: [opp], fielding: [] })).map((x) => x.message)
     expect(after).not.toContain(END_TIME_UNSUPPORTED)
     expect(after).not.toContain(OPP_PITCHER_UNSUPPORTED)

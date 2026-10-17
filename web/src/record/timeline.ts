@@ -19,7 +19,7 @@
  * 突破僵局: a runner the tie-break rule put on base is a row (result 突破僵局) before the inning's first plate
  * appearance, lead runner first; his step puts him on his base (`placedBases`) and moves nobody.
  */
-import { HIT_BASE_COUNT, isDouble, isPlaced, isRelief, TIEBREAK, type BattingPA, type OutAt, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isDouble, isNoBatter, isPlaced, TIEBREAK, type BattingPA, type OutAt, type PitchingPA, type PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
@@ -120,8 +120,8 @@ export function leftMarks(mid: Array<{ row: number; base: number }>, dest: Recor
 /** Rows of each inning, in order (indexes into `rows`). */
 export function inningsOf(rows: Row[]): Map<number, number[]> {
   const m = new Map<number, number[]>()
-  // (a 換投後未面對打者 row is no plate appearance: no half-inning follows it)
-  rows.forEach((r, i) => { if (!isRelief(r)) m.set(r.inning, [...(m.get(r.inning) ?? []), i]) })
+  // (a 未面對打者 / 未完成打席 row is no plate appearance: no half-inning follows it)
+  rows.forEach((r, i) => { if (!isNoBatter(r)) m.set(r.inning, [...(m.get(r.inning) ?? []), i]) })
   return m
 }
 
@@ -528,8 +528,10 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     else delete r.events
     // outs in the order they happened, then the runs
     // a runner out on the play: 壘死 when the play says so (a mark from his base), else the row's own count stands
-    const runningOut = new Set(onPlay.filter((e) => e.to === 'out' && !e.batter).flatMap((e) => mid.filter((o) => o.base === e.from).map((o) => o.row)))
-    for (const row of s.outs) end(row, 'out', row === s.index, runningOut.has(row) ? true : undefined)
+    // (a 被刺殺 mark says he was plainly put out trying for the base: no 壘死)
+    const rowsOf = (kind: (k: string) => boolean) => new Set(onPlay.filter((e) => e.to === 'out' && !e.batter && kind(e.kind)).flatMap((e) => mid.filter((o) => o.base === e.from).map((o) => o.row)))
+    const runningOut = rowsOf((k) => k !== 'tag'), taggedOut = rowsOf((k) => k === 'tag')
+    for (const row of s.outs) end(row, 'out', row === s.index, runningOut.has(row) ? true : taggedOut.has(row) ? false : undefined)
     for (const o of mid) if (s.dest[o.row] === 'home') end(o.row, 'home', false)
     if (s.batter === 'home') end(s.index, 'home', true)
   }

@@ -93,6 +93,7 @@ create table if not exists pitching_pa (
   runner       text,          -- 對方代跑（姓名或背號，選填）：記在那位跑者上壘的那一列
   rbi          smallint not null default 0,  -- 對方打者的打點
   opp_bats     text,          -- 對方打者這個打席站 L 左打 / R 右打（不知道就是 NULL）
+  prior_pitchers jsonb,       -- 換投時這個打席已投的球算給誰：[{name, pitches}]，照順序（沒換投就是 NULL）
   primary key (game_id, seq)
 );
 
@@ -704,6 +705,14 @@ alter table pitching_pa add column if not exists opp_bats text;
 do $$
 begin
   begin alter table pitching_pa add constraint pitching_pa_opp_bats check (opp_bats in ('L', 'R')) not valid; exception when duplicate_object then null; end;
+end $$;
+
+-- ---------------------------------------------------------------- 2026-10-18 換投時這個打席已投的球算給誰（舊資料庫補欄位）
+-- 新建的已在上面。說明見 migrations/2026-10-18_prior_pitchers.sql。
+alter table pitching_pa add column if not exists prior_pitchers jsonb;
+do $$
+begin
+  begin alter table pitching_pa add constraint pitching_pa_prior_pitchers check (prior_pitchers is null or (jsonb_typeof(prior_pitchers) = 'array' and pg_column_size(prior_pitchers) < 2000)) not valid; exception when duplicate_object then null; end;
 end $$;
 
 -- ---------------------------------------------------------------- 2026-10-13 存檔保護

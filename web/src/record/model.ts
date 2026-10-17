@@ -26,7 +26,7 @@
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
-import { HIT_BASE_COUNT, isPA, isPlaced, isRelief, OPP_PR_UNNAMED, RELIEF, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
+import { HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -58,6 +58,9 @@ export interface RecordState {
   pitching: PitchingPA[]
   /** pitches of the plate appearance in progress */
   pitches: string[]
+  /** (we field) pitchers who threw the first pitches of the plate appearance in progress and left before it ended: their
+   *  counts, in order (the rest of `pitches` is `pitcher`'s); goes on the row at commitPA (PitchingPA.priorPitchers) */
+  priorPitchers?: PriorPitch[]
   /** opponent-offense events during the PA in progress */
   extras: Extras
   /** runner moves during the PA in progress, in order (saved on its row as `events`) */
@@ -312,11 +315,11 @@ export function answerOppHand(s: RecordState, hand: OppHand | null): RecordState
 /* ------------------------------------------------ 對方打者左右打 */
 /** Their batter up now: the side picked for his slot this game, '?' = 不知道, undefined = not asked yet. */
 export const oppBatsNow = (s: RecordState): OppBats | '?' | undefined => s.oppBatsBySlot?.[s.oppOrder]
-/** While they bat (when the cloud can store it: `on`), the pitch pad and the results wait for 左打／右打／不知道. */
-export const needsOppBats = (s: RecordState, on: boolean): boolean => on && !s.finished && offense(s) === 'opp' && !oppBatsNow(s)
-/** 左打 / 右打 / 不知道 (null) for their batter up now; his later plate appearances this game start from it. */
-export function setOppBats(s: RecordState, bats: OppBats | null): RecordState {
-  return { ...s, oppBatsBySlot: { ...s.oppBatsBySlot, [s.oppOrder]: bats ?? '?' } }
+/** While they bat (when the cloud can store it: `on`), the pitch pad and the results wait for 左打／右打. */
+export const needsOppBats = (s: RecordState, on: boolean): boolean => on && !s.finished && offense(s) === 'opp' && (!oppBatsNow(s) || oppBatsNow(s) === '?')
+/** 左打 / 右打 for their batter up now (no 不知道: a draft saved with one is asked again); his later plate appearances this game start from it. */
+export function setOppBats(s: RecordState, bats: OppBats): RecordState {
+  return { ...s, oppBatsBySlot: { ...s.oppBatsBySlot, [s.oppOrder]: bats } }
 }
 /** Someone else is in that slot now (對方代打, 對方代跑, a new name in their order): ask again. */
 function clearOppBats(s: RecordState, slot: number): RecordState {
@@ -334,7 +337,22 @@ export function reliefPitchers(s: RecordState): string[] {
 
 /** A ball in play (IP) is the last pitch of the plate appearance: nothing is added after it (a double tap stays one IP). */
 export const addPitch = (s: RecordState, code: string): RecordState => (s.pitches[s.pitches.length - 1] === 'IP' ? s : { ...s, pitches: [...s.pitches, code] })
-export const undoPitch = (s: RecordState): RecordState => ({ ...s, pitches: s.pitches.slice(0, -1) })
+/** (we field) the pitches of the count in progress by who threw them: the pitcher now's, and the ones who left (priorPitchers). */
+export function liveSplit(s: RecordState): { current: number; prior: PriorPitch[] } {
+  const prior = s.priorPitchers ?? []
+  return { current: Math.max(0, s.pitches.length - prior.reduce((a, p) => a + p.pitches, 0)), prior }
+}
+export function undoPitch(s: RecordState): RecordState {
+  const pitches = s.pitches.slice(0, -1)
+  // (a pitch taken back that an earlier pitcher threw comes off his count)
+  let over = (s.priorPitchers ?? []).reduce((a, p) => a + p.pitches, 0) - pitches.length
+  const prior = (s.priorPitchers ?? []).slice()
+  for (let i = prior.length - 1; i >= 0 && over > 0; i--) { const cut = Math.min(over, prior[i].pitches); prior[i] = { ...prior[i], pitches: prior[i].pitches - cut }; over -= cut }
+  const kept = prior.filter((p) => p.pitches > 0)
+  const { priorPitchers: _p, ...rest } = s
+  void _p
+  return { ...rest, pitches, ...(kept.length ? { priorPitchers: kept } : {}) }
+}
 export const addExtra = (s: RecordState, key: Exclude<keyof Extras, 'errors' | 'oppErrors'>): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
 /** One error by our fielder at `pos` during the opponent plate appearance in progress (a hit plus an error, a bad throw…). */
 export const addError = (s: RecordState, pos: string): RecordState => ({ ...s, extras: { ...s.extras, errors: [...(s.extras.errors ?? []), pos] } })
@@ -378,6 +396,9 @@ export function changePitcher(s: RecordState, name: string): RecordState {
     lineup = s.lineup.map((l, i) => (fielder >= 0 ? (i === fielder ? { ...l, pos: 'P' } : l) : i === old ? { name, pos: 'P' } : l))
   }
   const sub = withBefore(s, { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}), ...rowNow(s) })
+  // a change with a count on the batter: the pitches so far are the pitcher who leaves's, the rest the new one's
+  const left = offense(s) === 'opp' && s.pitcher ? s.pitches.length - (s.priorPitchers ?? []).reduce((a, p) => a + p.pitches, 0) : 0
+  const priorPitchers = left > 0 ? [...(s.priorPitchers ?? []), { name: s.pitcher, pitches: left }] : s.priorPitchers
   // a new pitcher before the first pitch of a tie-break half takes over its placed runners (the pitcher who starts
   // the half is charged with them)
   let pitching = s.pitching
@@ -386,7 +407,7 @@ export function changePitcher(s: RecordState, name: string): RecordState {
     // (only while nothing has happened yet: a pickoff or a balk before the first pitch is the old pitcher's)
     if (half.some(isPlaced) && !half.some(isPA) && !s.plays?.length) pitching = s.pitching.map((p) => (p.inning === s.inning && isPlaced(p) ? { ...p, pitcher: name } : p))
   }
-  return { ...s, pitcher: name, lineup, pitching, subs: [...(s.subs ?? []), sub] }
+  return { ...s, pitcher: name, lineup, pitching, subs: [...(s.subs ?? []), sub], ...(priorPitchers?.length ? { priorPitchers } : {}) }
 }
 /** A change made while we field, after some of this half's opponent rows: DayRosterSub.row (those rows keep the old
  *  alignment, data/gameRoster defenseTimeline). Nothing at the start of the half or while we bat. */
@@ -598,6 +619,8 @@ export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batte
  * the base he stands on). The recorder can pick another.
  */
 const FLY_OUTS = new Set(['內飛', '外飛', '界外飛', '犧飛'])
+/** A ball in play that put the batter on (a hit — not a home run, which nobody is out on — an error or a fielder's choice). */
+export const liveBall = (result: string): boolean => (result in HIT_BASE_COUNT && result !== '全壘打') || result === '失誤' || result === '野選'
 export function defaultOutAt(s: RecordState, plan: Pick<PAPlan, 'result'>, who: number | 'batter'): OutAt {
   const base = defaultPlan(s, plan.result)
   const was = who === 'batter' ? base.batter : base.runners[who]
@@ -707,7 +730,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
       errors.push(pos)
     }
     const bats = oppBatsNow(s)
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: oppBatterOf(s) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), note })
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: oppBatterOf(s) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}), note })
     rowIndex = pitching.length - 1
   }
   // the plays between pitches, then 趁傳進壘／失誤進壘 on the batted ball (from where the hit alone put him)
@@ -721,13 +744,16 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     return [{ at: base.pitches.length, kind, from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
   }
   const errAdv = new Set(plan.errAdv ?? [])
-  const runningOut = (plan.runningOuts ?? []).flatMap((row) => {
-    const r = s.runners.find((x) => x.row === row)
-    return r && plan.runners[row] === 'out' ? [{ at: base.pitches.length, kind: 'out', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[row] ?? defaultOutAt(s, plan, row) }] : []
+  // runners put out on the play: a 壘死 (his own baserunning mistake) is kind 'out'; on a ball that put the batter on
+  // (a hit, an error) any other runner out is a 'tag' (被刺殺 trying for the base): both say where, either side
+  const mistakes = new Set(plan.runningOuts ?? [])
+  const runningOut = s.runners.flatMap((r) => {
+    if (plan.runners[r.row] !== 'out' || !(mistakes.has(r.row) || liveBall(plan.result))) return []
+    return [{ at: base.pitches.length, kind: mistakes.has(r.row) ? 'out' : 'tag', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[r.row] ?? defaultOutAt(s, plan, r.row) }]
   })
-  // our batter who reached and was put out on the same play (a triple, then thrown out at home): an out on the bases,
-  // marked as made on the play (record/timeline batterOutMark)
-  const batterOnBases = side === 'us' && plan.batter === 'out' && reachedOn(plan.result)
+  // the batter who reached and was put out on the same play (a triple, then thrown out at home; a single stretched):
+  // an out on the bases, marked as made on the play (record/timeline batterOutMark) — theirs too, so the box can say where
+  const batterOnBases = plan.batter === 'out' && reachedOn(plan.result)
   const thrown: PlayEvent[] = [
     ...runningOut,
     ...(batterOnBases ? [batterOutMark(plan.result, base.pitches.length, plan.outAt?.batter ?? defaultOutAt(s, plan, 'batter'))] : []),
@@ -775,6 +801,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   next.outs = outs
   next.runners = runners.sort((a, b) => b.base - a.base)
   next.pitches = []
+  delete next.priorPitchers
   next.extras = { ...EXTRAS0 }
   next.plays = []
   if (side === 'us') next.slot = (s.slot + 1) % s.lineup.length
@@ -785,7 +812,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
 /** 自責／非自責 of every opponent run of `inning` not called by hand, by the rules on the inning as it now stands
  *  (record/earned.ts); `pitching` is changed in place. */
 function recallEarned(pitching: PitchingPA[], inning: number, byHand: Record<number, boolean> = {}) {
-  const idx = pitching.flatMap((p, i) => (p.inning === inning && !isRelief(p) ? [i] : []))
+  const idx = pitching.flatMap((p, i) => (p.inning === inning && !isNoBatter(p) ? [i] : []))
   const half = inferHalf(pitching, idx, 'pit')
   const calls = half ? earnedCalls(pitching, half) : new Map<number, { earned: boolean }>()
   for (const i of idx) {
@@ -964,7 +991,14 @@ export function endHalf(s: RecordState): RecordState {
   // their half over (the third out between pitches, or 結束半局): the inning is complete now, so its runs are called
   // again the way the saved game reads them
   if (offense(s) === 'opp') recallEarned(pitching, s.inning, s.earnedByHand)
-  return { ...s, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
+  // the count on the batter when the half ended between pitches (a 盜壘失敗 or 牽制 for the third out): those pitches were
+  // thrown, so they are his (and the earlier pitcher's) — a 未完成打席 row holds them, no batter faced
+  if (offense(s) === 'opp' && s.pitches.length > 0 && s.pitcher) {
+    pitching.push({ gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitcher: s.pitcher, pitches: s.pitches.slice(), result: UNFINISHED, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}) })
+  }
+  const { priorPitchers: _pp, ...kept } = s
+  void _pp
+  return { ...kept, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
 }
 
 export interface Score { us: number; opp: number; lineUs: number[]; lineOpp: number[] }

@@ -103,6 +103,10 @@ select pg_temp.refused($q$select save_games('[{"id":"G4","date":"2026-10-05"}]',
 select pg_temp.ok(pg_temp.val($q$select array_to_string(errors, ',') from batting_pa where game_id = 'G4'$q$) = 'C,?', 'and the game keeps its rows');
 -- 2026-10-16: 對方打者左右打 (pitching_pa.opp_bats) goes through save_games too; only L / R (or nothing)
 select pg_temp.ok(save_games('[{"id":"G5","date":"2026-10-06"}]', '[]', '[{"game_id":"G5","seq":1,"inning":1,"pitcher":"甲","pitches":["IP"],"result":"一安","opp_bats":"L"},{"game_id":"G5","seq":2,"inning":1,"pitcher":"甲","pitches":["S"],"result":"三振","opp_bats":"R"},{"game_id":"G5","seq":3,"inning":1,"pitcher":"甲","pitches":["S"],"result":"三振"}]') = 1, 'A saves 對方打者左右打');
+-- 2026-10-18: 換投時這個打席已投的球算給誰 (pitching_pa.prior_pitchers) goes through save_games too; a list of {name, pitches} (or nothing)
+select pg_temp.ok(save_games('[{"id":"G6","date":"2026-10-06"}]', '[]', '[{"game_id":"G6","seq":1,"inning":1,"pitcher":"乙","pitches":["B","CS","IP"],"result":"內滾","prior_pitchers":[{"name":"甲","pitches":2}]},{"game_id":"G6","seq":2,"inning":1,"pitcher":"乙","pitches":["IP"],"result":"內滾"}]') = 1, 'A saves 換投前的球數');
+select pg_temp.ok((select prior_pitchers->0->>'name' from pitching_pa where game_id = 'G6' and seq = 1) = '甲', '換投前的球數存進去了');
+select pg_temp.ok((select prior_pitchers is null from pitching_pa where game_id = 'G6' and seq = 2), '沒換投的打席是空的');
 select pg_temp.ok(pg_temp.val($q$select string_agg(coalesce(opp_bats, '-'), ',' order by seq) from pitching_pa where game_id = 'G5'$q$) = 'L,R,-', 'pitching_pa.opp_bats reads back, NULL when not known');
 select pg_temp.refused($q$select save_games('[{"id":"G5","date":"2026-10-06"}]', '[]', '[{"game_id":"G5","seq":1,"inning":1,"pitcher":"甲","result":"一安","opp_bats":"X"}]')$q$, 'an opp_bats other than L / R is refused');
 select pg_temp.ok(pg_temp.val($q$select string_agg(coalesce(opp_bats, '-'), ',' order by seq) from pitching_pa where game_id = 'G5'$q$) = 'L,R,-', 'and the game keeps its rows');
