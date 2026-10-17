@@ -504,10 +504,30 @@
   "zh": "飛球率",
   "en": "Fly Ball %",
   "group": "打擊過程",
-  "formula": "飛球(F + P) ÷ 有記軌跡的擊球",
+  "formula": "飛球(F，不含內野飛球 P) ÷ 有記軌跡的擊球",
   "status": "新增",
   "priority": "P1",
-  "note": ""
+  "note": "Baseball Savant 的分法：GB% + LD% + FB% + PU% = 100%"
+ },
+ {
+  "key": "PU%",
+  "zh": "內野飛球占比",
+  "en": "Pop-up %",
+  "group": "打擊過程",
+  "formula": "內野飛球(P) ÷ 有記軌跡的擊球",
+  "status": "新增",
+  "priority": "P2",
+  "note": "Baseball Savant 的 PU%；幾乎都是出局，打者越低越好。和 IFFB%（占所有飛球的比例）不同"
+ },
+ {
+  "key": "AIR%",
+  "zh": "空中球率",
+  "en": "Air Ball %",
+  "group": "打擊過程",
+  "formula": "(平飛 L + 飛球 F + 內野飛球 P) ÷ 有記軌跡的擊球",
+  "status": "新增",
+  "priority": "P2",
+  "note": "＝ 1 − GB%"
  },
  {
   "key": "LD%",
@@ -984,10 +1004,30 @@
   "zh": "飛球率",
   "en": "Fly Ball % Against",
   "group": "投球",
-  "formula": "飛球(F + P) ÷ 有記軌跡的被擊球",
+  "formula": "飛球(F，不含內野飛球 P) ÷ 有記軌跡的被擊球",
   "status": "新增",
   "priority": "P2",
-  "note": "網站專屬；沒記軌跡的擊球不算進分母"
+  "note": "網站專屬；沒記軌跡的擊球不算進分母；GB% + LD% + FB% + PU% = 100%"
+ },
+ {
+  "key": "pPU%",
+  "zh": "內野飛球占比",
+  "en": "Pop-up % Against",
+  "group": "投球",
+  "formula": "內野飛球(P) ÷ 有記軌跡的被擊球",
+  "status": "新增",
+  "priority": "P2",
+  "note": "網站專屬；投手越高越好"
+ },
+ {
+  "key": "pAIR%",
+  "zh": "空中球率",
+  "en": "Air Ball % Against",
+  "group": "投球",
+  "formula": "(平飛 + 飛球 + 內野飛球) ÷ 有記軌跡的被擊球",
+  "status": "新增",
+  "priority": "P2",
+  "note": "網站專屬；＝ 1 − GB%"
  },
  {
   "key": "pLD%",

@@ -33,7 +33,7 @@ import { seasonOf } from '../data/registrations'
 import { useDataStore } from '../store/data'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
 import { SplitsCard } from '../components/ui/SplitsCard'
-import { BattedBallProfile } from '../components/ui/BattedBallProfile'
+import { BattedBallTable } from '../components/ui/BattedBallTable'
 import { minOutsPitched, minPlateAppearances, outsGapText, paGapText } from '../data/qualify'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -605,6 +605,7 @@ export function PlayersPage() {
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          {bat.bip > 0 && <BattedBallTable kind="bat" rows={[{ name: player.name, line: bat }, { name: '全隊', line: s.team }]} />}
           <SplitsCard side="bat" only="hand" title="對左投・對右投" subtitle="這位打者面對左投、右投的成績；打席不到 10 個的列變淡。" rows={splitBat} who={player.name} perPlayer />
           <SplitsCard side="bat" rows={splitBat} who={player.name} perPlayer />
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
@@ -630,7 +631,7 @@ export function PlayersPage() {
               <StatTile label="三上三下" to={rank('/pitching?view=process&sort=inn123')} toLabel="全隊排行" value={pit.inn123} display={String(pit.inn123)} note={`13 球內 ${pit.inn13}/${pit.pitchInn} 局`} />
               <StatTile label="首打出局" to={rank('/pitching?view=process&sort=leadoffOutPct')} toLabel="全隊排行" value={(pit.leadoffOutPct ?? 0) * 100} display={pct0(pit.leadoffOutPct)} note={`${pit.leadoffOuts}/${pit.leadoffBf}・滾飛比 ${f2(pit.goAo)}`} />
             </StatGroup>
-          {pit.bip > 0 && <BattedBallProfile pit={pit} />}
+          {pit.bip > 0 && <BattedBallTable kind="pit" rows={[{ name: player.name, line: pit }, { name: '全隊投手', line: s.teamPitch }]} />}
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" flush
               action={<><Button variant="ghost" size="sm" icon={<Download />} onClick={() => shareCompare('pitching')} title="把這張比較表存成 PNG 圖片">存成圖片</Button><Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button></>}>
