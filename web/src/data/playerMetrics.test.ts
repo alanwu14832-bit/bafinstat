@@ -4,9 +4,9 @@ import type { BattingLine, PitchingLine } from './stats'
 import { hintFor } from './glossary'
 
 const BAT0 = {
-  g: 1, pa: 0, ab: 0, h: 0, hr: 0, rbi: 0, sb: 0, baserunningOuts: 0, swings: 0, called: 0, ballsTaken: 0, bip: 0, fb: 0, rispAB: 0,
+  g: 1, pa: 0, ab: 0, h: 0, hr: 0, rbi: 0, sb: 0, baserunningOuts: 0, swings: 0, called: 0, bip: 0, fb: 0, rispAB: 0,
   avg: null, obp: null, slg: null, ops: null, opsPlus: null, wrcPlus: null, woba: null, iso: null, kPct: null, bbPct: null, whiffPct: null,
-  sSeager: null, iffbPct: null, hardPct: null, rispAvg: null, qabPct: null,
+  iffbPct: null, hardPct: null, rispAvg: null, qabPct: null,
 }
 const bl = (name: string, x: Partial<BattingLine> = {}) => ({ ...BAT0, name, ...x }) as unknown as BattingLine
 const PIT0 = {
@@ -55,10 +55,10 @@ describe('percentileRows', () => {
     expect(r.pr).toBeNull()
     expect(r.display).toBe('—')
   })
-  it('has 13 batting and 14 pitching bars, unique and explained in the glossary', () => {
-    expect(BAT_PCT).toHaveLength(13)
+  it('has 12 batting and 14 pitching bars, unique and explained in the glossary', () => {
+    expect(BAT_PCT).toHaveLength(12)
     expect(PIT_PCT).toHaveLength(14)
-    expect(new Set(BAT_PCT.map((m) => m.key)).size).toBe(13)
+    expect(new Set(BAT_PCT.map((m) => m.key)).size).toBe(12)
     expect(new Set(PIT_PCT.map((m) => m.key)).size).toBe(14)
     for (const m of [...BAT_PCT, ...PIT_PCT]) expect(hintFor(m.label), m.label).not.toBeNull()
   })

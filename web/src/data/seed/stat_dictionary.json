@@ -460,16 +460,6 @@
   "note": "內野飛球幾乎都是出局，打者越低越好"
  },
  {
-  "key": "sSeager",
-  "zh": "選擇性積極度",
-  "en": "Simple SEAGER",
-  "group": "打擊過程",
-  "formula": "壞球沒揮(B) ÷ (揮棒 + 壞球沒揮) − 好球沒揮(CS) ÷ (好球沒揮 + 壞球沒揮)",
-  "status": "新增",
-  "priority": "P2",
-  "note": "Robert Orr 的 SEAGER 簡化版（Sky Kalkman）；越高越好。沒有記錄進壘點：沒揮的球依裁判判決分好壞球，揮棒一律當成好球帶內；故意四壞不計"
- },
- {
   "key": "Contact%",
   "zh": "擊球率",
   "en": "Contact Rate",

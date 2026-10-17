@@ -49,7 +49,7 @@ import { useStats } from '../hooks/useStats'
 import { usePrefersReducedMotion } from '../hooks/useMediaQuery'
 import { isPA, type BattingPA } from '../data/types'
 import { battingLines, ipDisplay, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
-import { f2, f3, pct0, percentile, posLabel, shortDate, signedPct } from '../lib/fmt'
+import { f2, f3, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
 
 /** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
@@ -581,7 +581,6 @@ export function PlayersPage() {
               <StatTile label="K% / BB%" to={rank('/batting?view=advanced&sort=kPct&dir=asc')} toLabel="全隊排行" value={(bat.kPct ?? 0) * 100} format="pct" display={`${pct0(bat.kPct)}/${pct0(bat.bbPct)}`} note={`${bat.so} K / ${bat.bb} BB`} />
               <StatTile label="得點圈 AVG" to={rank('/batting?view=advanced&sort=rispAvg')} toLabel="全隊排行" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
               <StatTile label="Whiff% / Hard%" to={rank('/batting?view=process&sort=whiffPct&dir=asc')} toLabel="全隊排行" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note={`揮空 ${bat.whiffs}/${bat.swings} 揮・強勁 ${bat.hard}/${bat.bipQuality} 球（判讀）`} />
-              <StatTile label="sSeager" to={rank('/batting?view=process&sort=sSeager')} toLabel="全隊排行" value={(bat.sSeager ?? 0) * 100} display={signedPct(bat.sSeager)} note="好球敢打、壞球忍得住" />
             </StatGroup>
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 1）" flush

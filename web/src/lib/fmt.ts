@@ -5,7 +5,7 @@ export const f3 = (v: number | null | undefined): string => (v === null || v ===
 export const f2 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : v.toFixed(2))
 export const f1 = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : v.toFixed(1))
 export const pct = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${(v * 100).toFixed(1)}%`)
-/** A difference of two rates, in percentage points with its sign: +12.3% / −4.0% (sSeager). */
+/** A difference of two rates, in percentage points with its sign: +12.3% / −4.0%. */
 export const signedPct = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? DASH : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v * 100).toFixed(1)}%`)
 /** A signed value with a real minus sign: signed(1.25, 2) → '+1.25', signed(-0.4, 2) → '−0.40' (WPA, RE24). */
 export const signed = (v: number | null | undefined, digits = 2): string => {

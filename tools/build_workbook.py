@@ -460,7 +460,7 @@ def bat_formulas(rr):
     f["揮空"] = f'={pc["_揮空"]}'
     f["揮棒"] = f'={pc["_揮棒"]}'
     f["看好球"] = f'={pc["_看好球"]}'
-    # sSeager: balls he took (an intentional walk's do not count); 內野飛球 for IFFB%
+    # 壞球不揮: balls he took (an intentional walk's do not count); 內野飛球 for IFFB%
     f["壞球不揮"] = f'=IF({X}="故四",0,{c("壞球")})'
     f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="P"),1,0)'
     f["首球揮棒"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="SS",${P1}{rr}="F",${P1}{rr}="IP")),1,0)'
@@ -783,7 +783,6 @@ def bat_stat_cols():
         ("兩好球纏鬥", "=" + b("兩好球纏鬥"), "0"), ("6球以上", "=" + b("6球以上"), "0"),
         ("P/PA", "=IFERROR(" + b("用球數") + "/" + b("有球數") + ',"")', "0.00"),
         ("Whiff%", "=IFERROR(" + b("揮空") + "/" + b("揮棒") + ',"")', "0.0%"),
-        ("sSeager", "=IFERROR(" + b("壞球不揮") + "/(" + b("揮棒") + "+" + b("壞球不揮") + ")-" + b("看好球") + "/(" + b("看好球") + "+" + b("壞球不揮") + '),"")', "+0.0%;-0.0%;0.0%"),
         # BIP = every batted ball (全壘打 included), 落點／軌跡／強度 recorded or not; each rate is over the ones with that detail
         ("BIP", "=" + b("場內球"), "0"),
         ("GB%", "=IFERROR(" + b("滾地") + "/" + b("有軌跡") + ',"")', "0.0%"),

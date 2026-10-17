@@ -4,14 +4,14 @@
  * Pure functions, no React.
  */
 import { ipDisplay, type BattingLine, type PitchingLine } from './stats'
-import { f2, f3, percentile, pct, signedPct } from '../lib/fmt'
+import { f2, f3, percentile, pct } from '../lib/fmt'
 
 /** volume: a count of chances (G, PA, IP) — more of it is 較多, not 較佳 */
 export type Metric<T> = { label: string; get: (l: T) => number | null | undefined; fmt: (v: number) => string; lowerBetter?: boolean; volume?: boolean; min?: (l: T) => boolean }
 export const BAT_METRICS: Metric<BattingLine>[] = [
   { label: 'G', get: (l) => l.g, fmt: String, volume: true }, { label: 'PA', get: (l) => l.pa, fmt: String, volume: true }, { label: 'H', get: (l) => l.h, fmt: String }, { label: 'HR', get: (l) => l.hr, fmt: String }, { label: 'RBI', get: (l) => l.rbi, fmt: String }, { label: 'SB', get: (l) => l.sb, fmt: String },
   { label: 'AVG', get: (l) => l.avg, fmt: f3 }, { label: 'OBP', get: (l) => l.obp, fmt: f3 }, { label: 'SLG', get: (l) => l.slg, fmt: f3 }, { label: 'OPS', get: (l) => l.ops, fmt: f3 }, { label: 'OPS+', get: (l) => l.opsPlus, fmt: String }, { label: 'wRC+', get: (l) => l.wrcPlus, fmt: String }, { label: 'wOBA', get: (l) => l.woba, fmt: f3 },
-  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'sSeager', get: (l) => l.sSeager, fmt: signedPct }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct, lowerBetter: true }, { label: '壘死', get: (l) => l.baserunningOuts, fmt: String, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
+  { label: 'K%', get: (l) => l.kPct, fmt: pct, lowerBetter: true }, { label: 'BB%', get: (l) => l.bbPct, fmt: pct }, { label: 'Whiff%', get: (l) => l.whiffPct, fmt: pct, lowerBetter: true }, { label: 'IFFB%', get: (l) => l.iffbPct, fmt: pct, lowerBetter: true }, { label: '壘死', get: (l) => l.baserunningOuts, fmt: String, lowerBetter: true }, { label: 'Hard%', get: (l) => l.hardPct, fmt: pct }, { label: 'RISP AVG', get: (l) => l.rispAvg, fmt: f3 }, { label: 'QAB%', get: (l) => l.qabPct, fmt: pct },
 ]
 export const PIT_METRICS: Metric<PitchingLine>[] = [
   { label: 'IP', get: (l) => l.outs, fmt: ipDisplay, volume: true }, { label: 'ERA', get: (l) => l.era, fmt: f2, lowerBetter: true }, { label: 'FIP', get: (l) => l.fip, fmt: f2, lowerBetter: true }, { label: 'WHIP', get: (l) => l.whip, fmt: f2, lowerBetter: true },
@@ -46,7 +46,6 @@ export const BAT_PCT: PctMetric<BattingLine>[] = [
   bat('kPct', 'K%', '三振率', '選球與揮棒', (l) => l.kPct, pct, paOf, 10, '打席', true),
   bat('bbPct', 'BB%', '保送率', '選球與揮棒', (l) => l.bbPct, pct, paOf, 10, '打席'),
   bat('whiffPct', 'Whiff%', '揮空率', '選球與揮棒', (l) => l.whiffPct, pct, (l) => l.swings, 15, '次揮棒', true),
-  bat('sSeager', 'sSeager', '選擇性積極', '選球與揮棒', (l) => l.sSeager, signedPct, (l) => l.called + l.ballsTaken, 15, '顆沒揮的球'),
   bat('qabPct', 'QAB%', '好打席率', '選球與揮棒', (l) => l.qabPct, pct, paOf, 10, '打席'),
   bat('hardPct', 'Hard%', '強勁擊球率', '擊球品質', (l) => l.hardPct, pct, (l) => l.bipQuality, 10, '個有記強度的擊球'),
   bat('iffbPct', 'IFFB%', '內野飛球率', '擊球品質', (l) => l.iffbPct, pct, (l) => l.fb, 5, '個飛球', true),
