@@ -10,7 +10,7 @@ import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
 import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
 import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, isMove, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -240,6 +240,14 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     else setPit((p) => [...p.slice(0, at), toPitDraft(blankPitchingAt(p.map(fromPitDraft), at, game.id)), ...p.slice(at)])
     setSel({ side, index: at })
   }
+  // 換投後未面對打者: a row for a reliever who made an out on the bases before facing anyone, at the end of that inning
+  const addRelief = (inning: number) => {
+    const last = pitRows.reduce((m, r, i) => (r.inning === inning ? i : m), -1)
+    const at = last + 1
+    const row: PitchingPA = { gameId: game.id, inning, outsBefore: Math.min(2, pitRows[last]?.outsBefore ?? 0), pitcher: '', pitches: [], result: RELIEF, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+    setPit((p) => [...p.slice(0, at), toPitDraft(row), ...p.slice(at)])
+    setSel({ side: 'pit', index: at })
+  }
   // the runner timeline of every inning that can be followed (rows with 壘上(前) / 出局(前) throughout)
   const halves = useMemo(() => ({ bat: inferAll(batRows, 'bat'), pit: inferAll(pitRows, 'pit') }), [batRows, pitRows])
   const [tlNotice, setTlNotice] = useState<string | null>(null)
@@ -344,8 +352,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // plate appearance for the opponent) follow from commitHalf, which counts every play the inning has before and after
     // (a 失誤進壘 between pitches: their error while we bat goes on the list as 不知道; ours needs the fielder, picked
     // in 我隊守備失誤 — saving is blocked until then)
-    const onPlay = (pitch: number, kind: string, who: number[]) => {
-      const { half: h, added } = addPlay(half, i, pitch, kind, who)
+    const onPlay = (pitch: number, kind: string, who: number[], outAt?: OutAt) => {
+      const { half: h, added } = addPlay(half, i, pitch, kind, who, outAt)
       if (!added.length) return
       const errs = side === 'bat' ? added.filter((m) => m.kind === 'err').length : 0
       let next: Array<BattingPA | PitchingPA> = rows
@@ -454,11 +462,14 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     // (their runner too: only the mark, they have no 壘死 column)
     const runningOut = {
       of: (row: number) => step.dest[row] === 'out' && !!outMark(row),
-      set: (row: number, on: boolean) => {
+      /** 死在哪個壘包 (undefined: not said, so it reads as his own base) */
+      atOf: (row: number) => outMark(row)?.outAt,
+      set: (row: number, on: boolean, outAt?: OutAt) => {
         const from = midBase(row)
         if (!from) return
+        const keep = outAt ?? outMark(row)?.outAt
         const rest = (rows[i].events ?? []).filter((e) => e !== outMark(row))
-        const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'out', from, to: 'out' as const, play: true as const }] : rest
+        const events = on ? [...rest, { at: rows[i].pitches.length, kind: 'out', from, to: 'out' as const, play: true as const, ...(keep ? { outAt: keep } : {}) }] : rest
         const next = rows.map((r, k) => {
           if (k === i) { const n = { ...r, events }; if (!events.length) delete (n as { events?: unknown }).events; return n }
           if (side === 'bat' && k === row && !on) { const n = { ...(r as BattingPA) }; delete n.baserunningOuts; return n }
@@ -489,6 +500,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         if (!(n.events ?? []).some(isBatterOutMark)) n.events = [...(n.events ?? []), batterOutMark(me.result, me.pitches.length)]
         if (on) n.baserunningOuts = 1; else delete n.baserunningOuts
         return n
+      })),
+      /** 死在哪個壘包: on his out mark (undefined: not said, so it reads as the base his result put him on) */
+      at: (me.events ?? []).find(isBatterOutMark)?.outAt,
+      setAt: (outAt: OutAt) => setBat((b) => b.map((x, k) => {
+        if (k !== i) return x
+        const events = (x.events ?? []).some(isBatterOutMark) ? (x.events ?? []).map((e) => (isBatterOutMark(e) ? { ...e, outAt } : e)) : [...(x.events ?? []), batterOutMark(me.result, me.pitches.length, outAt)]
+        return { ...x, outOnBase: Math.max(1, +x.outOnBase || 0), events }
       })),
     } : undefined
     return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut, batterMistake,
@@ -632,7 +650,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
           : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
         {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />
-          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
+          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} onAddRelief={addRelief} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
         {tab === 'fld' && (
           <div className="flex flex-col gap-3">
             <ErrorFixNotice fixes={errorFixes} onApply={applyFixes} />

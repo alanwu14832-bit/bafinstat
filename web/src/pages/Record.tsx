@@ -20,7 +20,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type Registration } from '../data/types'
+import { isPA, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -34,7 +34,7 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
@@ -55,7 +55,7 @@ import { RestHint, useOutings } from '../components/ui/RestHint'
 import { ARCHIVE } from '../config/archive'
 import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
-import { ADV_HINT, AdvChoice, BattedBallPicker, chipBtn, ErrorByChips, NO_BATTED_BALL, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
+import { ADV_HINT, AdvChoice, BattedBallPicker, chipBtn, ErrorByChips, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
 import { TiebreakCard, TiebreakSelects } from '../record/TiebreakCard'
 import { basesLabel, parseTiebreakBases, placeTiebreak, setTiebreakRule, skipTiebreak, tiebreakDue } from '../record/tiebreak'
 
@@ -382,7 +382,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // 這位打者今天前幾個打席 (plain text under who is up)
   const earlier = useMemo(() => earlierPAs(state), [state])
   const batterSlot = state.lineup[state.slot]
-  const choose = (result: string) => { setPlan(defaultPlan(state, result)); setRbiTouched(false) }
+  // (軌跡 is picked on every batted ball: 內滾 → 滾地 and 外飛 → 飛球 are no longer filled in for the recorder, who has seen it)
+  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(plan); setRbiTouched(false) }
   const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
     if (!p) return p
     const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
@@ -665,11 +666,13 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <div className="flex flex-col gap-1.5">
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
                       <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)}
-                        mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined} />
+                        mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined}
+                        outAt={{ show: side === 'us' && !!plan.runningOuts?.includes(r.row), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
                     ))}
                     <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
                       // (we bat) he reached and was put out on the same play: 壘上出局 by itself, 壘死 when it was his own mistake
-                      mistake={side === 'us' && reachedOn(plan.result) ? { on: !!plan.batterRunningOut, set: (on) => { setDest('batter', 'out'); setPlan((p) => (p ? { ...p, batterRunningOut: on } : p)) } } : undefined} />
+                      mistake={side === 'us' && reachedOn(plan.result) ? { on: !!plan.batterRunningOut, set: (on) => { setDest('batter', 'out'); setPlan((p) => (p ? { ...p, batterRunningOut: on } : p)) } } : undefined}
+                      outAt={{ show: side === 'us' && reachedOn(plan.result) && plan.batter === 'out', value: plan.outAt?.batter ?? defaultOutAt(state, plan, 'batter'), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, batter: a } } : p)), name: '打者' }} />
                   </div>
                 </div>
                 {(!!plan.throws?.length || !!plan.errAdv?.length || [...state.runners.map((r) => r.row as number | 'batter'), 'batter' as const].some((w) => beyondDefault(state, plan, w))) && <p className="text-[11px] text-muted -mt-1">{ADV_HINT}</p>}
@@ -762,7 +765,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
 
       <RunnerSheet open={runnerOpen && offRunners.length > 0} onClose={() => setRunnerOpen(false)} runners={state.runners} side={side} picked={runnerPick} onPick={setRunnerPick} fielders={fielders}
         context={`${state.outs} 出局・${state.pitches.length ? `第 ${state.pitches.length} 球後` : '第一球前'}`}
-        onEvent={(r, ev, errBy) => { act((s) => runnerEvent(s, r.row, r.side, ev, undefined, errBy)); setRunnerOpen(false) }}
+        onEvent={(r, ev, errBy, outAt) => { act((s) => runnerEvent(s, r.row, r.side, ev, undefined, errBy, outAt)); setRunnerOpen(false) }}
         onAll={allUp}
         oppPinch={side === 'opp' ? { names: oppPinchNames, onPinch: (r, name) => { act((s) => pinchRunOpp(s, r.row, name)); setRunnerOpen(false) } } : undefined}
         pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) } } : undefined} />
@@ -782,7 +785,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
 }
 
 
-function DestRow({ label, value, onChange, min, batter, extra, mistake }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void } }) {
+function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void }; /** 壘死: 死在哪個壘包 (shown while `show`) */ outAt?: { show: boolean; value: OutAt; set: (a: OutAt) => void; name: string } }) {
   // a runner of ours can also be 壘死: out by his own baserunning mistake (charged to him), next to a plain 出局
   type Opt = { v: Dest; l: string; m?: boolean }
   const opts: Opt[] = [{ v: 'out', l: '出局', m: false }, ...(mistake ? [{ v: 'out' as Dest, l: '壘死', m: true }] : []), { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
@@ -798,6 +801,7 @@ function DestRow({ label, value, onChange, min, batter, extra, mistake }: { labe
         ))}
       </div>
       {extra}
+      {outAt?.show && value === 'out' && <OutAtChips value={outAt.value} onPick={outAt.set} name={outAt.name} />}
     </div>
   )
 }

@@ -19,7 +19,7 @@
  * 突破僵局: a runner the tie-break rule put on base is a row (result 突破僵局) before the inning's first plate
  * appearance, lead runner first; his step puts him on his base (`placedBases`) and moves nobody.
  */
-import { HIT_BASE_COUNT, isDouble, isPlaced, TIEBREAK, type BattingPA, type PitchingPA, type PlayEvent } from '../data/types'
+import { HIT_BASE_COUNT, isDouble, isPlaced, isRelief, TIEBREAK, type BattingPA, type OutAt, type PitchingPA, type PlayEvent } from '../data/types'
 
 export type Side = 'bat' | 'pit'
 export type Base = 1 | 2 | 3
@@ -27,7 +27,7 @@ export type Base = 1 | 2 | 3
 export type End = Base | 'home' | 'out'
 export interface OnBase { row: number; base: Base }
 /** A runner play between pitches: after `at` pitches of this plate appearance (0 = before the first one). */
-export interface Move { at: number; kind: string; row: number; from: Base; to: End }
+export interface Move { at: number; kind: string; row: number; from: Base; to: End; /** (to 'out') the base the out was made at, when the recorder said */ outAt?: OutAt }
 export interface Step {
   /** index of the plate appearance in the side's rows */
   index: number
@@ -120,7 +120,8 @@ export function leftMarks(mid: Array<{ row: number; base: number }>, dest: Recor
 /** Rows of each inning, in order (indexes into `rows`). */
 export function inningsOf(rows: Row[]): Map<number, number[]> {
   const m = new Map<number, number[]>()
-  rows.forEach((r, i) => m.set(r.inning, [...(m.get(r.inning) ?? []), i]))
+  // (a 換投後未面對打者 row is no plate appearance: no half-inning follows it)
+  rows.forEach((r, i) => { if (!isRelief(r)) m.set(r.inning, [...(m.get(r.inning) ?? []), i]) })
   return m
 }
 
@@ -178,7 +179,7 @@ export function inferHalf(rows: Row[], idx: number[], side: Side): Half | null {
       if (e.to === 'out') { o++; if (outNo(rows[who.row]) !== o) return null }
       else if (e.to === 'home') { if (!scored(rows[who.row], side)) return null }
       else { if (e.to <= e.from || mid.some((x) => x.base === e.to)) return null; mid.push({ row: who.row, base: e.to }) }
-      moves.push({ at: e.at, kind: e.kind, row: who.row, from: e.from, to: e.to })
+      moves.push({ at: e.at, kind: e.kind, row: who.row, from: e.from, to: e.to, ...(e.to === 'out' && e.outAt ? { outAt: e.outAt } : {}) })
     }
     mid.sort((a, z) => z.base - a.base)
     const lo = r.outsBefore!
@@ -357,7 +358,7 @@ export const OUT_PLAYS = new Set(['cs', 'pk', 'out'])
  * a double steal is two steals, a wild pitch moves him on the same wild pitch, anything else just advances him.
  * Returns the plays added, so the caller can count them (盜壘, 暴投…).
  */
-export function addPlay(half: Half, at: number, pitch: number, kind: string, rows: number[]): { half: Half; added: Move[] } {
+export function addPlay(half: Half, at: number, pitch: number, kind: string, rows: number[], outAt?: OutAt): { half: Half; added: Move[] } {
   const steps = half.steps.map((s) => ({ ...s, moves: s.moves.slice(), dest: { ...s.dest } }))
   const i = steps.findIndex((s) => s.index === at)
   if (i < 0) return { half, added: [] }
@@ -372,7 +373,7 @@ export function addPlay(half: Half, at: number, pitch: number, kind: string, row
     if (typeof to === 'number') { const ahead = on.find((o) => o.base === to); if (ahead) move(ahead.row, k === 'sb' || k === 'wp' || k === 'pb' || k === 'bk' ? k : 'advance') }
     on = on.filter((o) => o.row !== row)
     if (typeof to === 'number') on.push({ row, base: to })
-    added.push({ at: pitch, kind: k, row, from: r.base, to })
+    added.push({ at: pitch, kind: k, row, from: r.base, to, ...(to === 'out' && k === 'out' && outAt ? { outAt } : {}) })
   }
   for (const row of [...rows].sort((a, z) => (on.find((o) => o.row === z)?.base ?? 0) - (on.find((o) => o.row === a)?.base ?? 0))) move(row, kind)
   const was = midOf(st)
@@ -522,7 +523,7 @@ export function deriveHalf<T extends Row>(rows: T[], half: Half, side: Side): T[
     const onPlay = (r.events ?? []).filter((e) => e.play && (e.kind === 'bk' || (e.batter ? s.batter === e.to && (e.to !== 'out' || reachedOn(r.result)) : e.to === 'out' ? mid.some((o) => o.base === e.from && s.dest[o.row] === 'out') : mid.some((o) => s.dest[o.row] === e.to))))
     // the inning's last one: where the runners left on base ended has to be written down (no next 壘上(前) says it)
     if (s === half.steps[half.steps.length - 1]) onPlay.push(...leftMarks(mid, s.dest, { row: s.index, result: r.result, end: s.batter, ...(isPlaced(r) && typeof s.batter === 'number' ? { start: s.batter } : {}) }, onPlay, r.pitches.length))
-    const events = [...s.moves.map(({ at, kind, from, to }) => ({ at, kind, from, to })), ...onPlay]
+    const events = [...s.moves.map(({ at, kind, from, to, outAt }) => ({ at, kind, from, to, ...(to === 'out' && outAt ? { outAt } : {}) })), ...onPlay]
     if (events.length) r.events = events
     else delete r.events
     // outs in the order they happened, then the runs
@@ -555,9 +556,9 @@ export const isBatterOutMark = (e: PlayEvent) => !!e.play && !!e.batter && e.to 
  *  out mark, which 修改資料's 「設成壘上出局」 or 壘上跑者 also adds to an old game typed as counts only. Steals kept
  *  only as counts in such a game are no double count. */
 export const hasRunnerPlays = (rows: ReadonlyArray<{ events?: PlayEvent[] }>): boolean => rows.some((r) => (r.events ?? []).some((e) => !isBatterOutMark(e)))
-export function batterOutMark(result: string, at: number): PlayEvent {
+export function batterOutMark(result: string, at: number, outAt?: OutAt): PlayEvent {
   const b = hitBase(result)
-  return { at, kind: 'outPlay', from: (typeof b === 'number' ? b : 3) as Base, to: 'out', play: true, batter: true }
+  return { at, kind: 'outPlay', from: (typeof b === 'number' ? b : 3) as Base, to: 'out', play: true, batter: true, ...(outAt ? { outAt } : {}) }
 }
 /** Where a batter stands right after his result (nobody records where he goes later on his own row). */
 export function batterEndFor(result: string): End {

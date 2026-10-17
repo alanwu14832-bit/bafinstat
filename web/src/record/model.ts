@@ -26,7 +26,7 @@
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
-import { HIT_BASE_COUNT, isPA, isPlaced, OPP_PR_UNNAMED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
+import { HIT_BASE_COUNT, isPA, isPlaced, isRelief, OPP_PR_UNNAMED, RELIEF, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -577,6 +577,8 @@ export interface PAPlan {
   runningOuts?: number[]
   /** (we bat) the batter reached, then was put out on the same play by his own baserunning mistake: 壘死, not just 出局 */
   batterRunningOut?: boolean
+  /** 死在哪個壘包 for a 壘死 runner (by row) or the batter who reached and was put out ('batter'); left out = defaultOutAt */
+  outAt?: Record<string, OutAt>
   /** 備註 typed in the confirm panel (kept on the row's note, after 「牽制 N 次」) */
   note?: string
 }
@@ -588,6 +590,22 @@ export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batte
   const was = who === 'batter' ? base.batter : base.runners[who]
   const now = who === 'batter' ? plan.batter : plan.runners[who]
   return typeof was === 'number' && destNum(now) > was
+}
+
+/**
+ * The base a 壘死 is most likely made at: the one after where the result alone leaves him (a single, then out at 2B; a
+ * runner the single sends to 2B, out at 3B; one the result would score, out at the plate; doubled off after a fly ball,
+ * the base he stands on). The recorder can pick another.
+ */
+const FLY_OUTS = new Set(['內飛', '外飛', '界外飛', '犧飛'])
+export function defaultOutAt(s: RecordState, plan: Pick<PAPlan, 'result'>, who: number | 'batter'): OutAt {
+  const base = defaultPlan(s, plan.result)
+  const was = who === 'batter' ? base.batter : base.runners[who]
+  const stood = s.runners.find((r) => r.row === who)?.base ?? 1
+  // a fly ball caught with him off the bag: he is doubled off where he stands (the base he was going back to)
+  if (typeof who === 'number' && FLY_OUTS.has(plan.result)) return stood
+  const n = was === 'home' ? 4 : typeof was === 'number' ? was : stood
+  return n >= 3 ? 'home' : ((n + 1) as 1 | 2 | 3)
 }
 
 /** Sensible default destinations for a result; the recorder adjusts before confirming. */
@@ -705,14 +723,14 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const errAdv = new Set(plan.errAdv ?? [])
   const runningOut = (plan.runningOuts ?? []).flatMap((row) => {
     const r = s.runners.find((x) => x.row === row)
-    return r && plan.runners[row] === 'out' ? [{ at: base.pitches.length, kind: 'out', from: r.base, to: 'out' as const, play: true as const }] : []
+    return r && plan.runners[row] === 'out' ? [{ at: base.pitches.length, kind: 'out', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[row] ?? defaultOutAt(s, plan, row) }] : []
   })
   // our batter who reached and was put out on the same play (a triple, then thrown out at home): an out on the bases,
   // marked as made on the play (record/timeline batterOutMark)
   const batterOnBases = side === 'us' && plan.batter === 'out' && reachedOn(plan.result)
   const thrown: PlayEvent[] = [
     ...runningOut,
-    ...(batterOnBases ? [batterOutMark(plan.result, base.pitches.length)] : []),
+    ...(batterOnBases ? [batterOutMark(plan.result, base.pitches.length, plan.outAt?.batter ?? defaultOutAt(s, plan, 'batter'))] : []),
     ...(plan.throws ?? []).filter((w) => !errAdv.has(w)).flatMap((w) => onPlay(w, 'throw')),
     ...[...errAdv].flatMap((w) => onPlay(w, 'err')),
   ]
@@ -767,7 +785,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
 /** 自責／非自責 of every opponent run of `inning` not called by hand, by the rules on the inning as it now stands
  *  (record/earned.ts); `pitching` is changed in place. */
 function recallEarned(pitching: PitchingPA[], inning: number, byHand: Record<number, boolean> = {}) {
-  const idx = pitching.flatMap((p, i) => (p.inning === inning ? [i] : []))
+  const idx = pitching.flatMap((p, i) => (p.inning === inning && !isRelief(p) ? [i] : []))
   const half = inferHalf(pitching, idx, 'pit')
   const calls = half ? earnedCalls(pitching, half) : new Map<number, { earned: boolean }>()
   for (const i of idx) {
@@ -782,15 +800,33 @@ function recallEarned(pitching: PitchingPA[], inning: number, byHand: Record<num
 const UNEARNED_REACH = new Set(['失誤', '妨礙', TIEBREAK])
 const AIDED_KINDS = new Set<string>(['pb', 'err'])
 
+/**
+ * A reliever who came in this half-inning and makes an out on the bases before he has a row of his own (the 牽制出局 of
+ * the runner he inherited, a 盜壘阻殺) has no plate appearance to hold that out, and the row before it is the pitcher he
+ * replaced — who would be credited with it. So he gets a 換投後未面對打者 row (types.RELIEF) now, with the outs as they stand
+ * (the out about to be made is the next one), and his later plays and a half that ends on this out land on it.
+ * Only while we field and only when the last row of the inning is another pitcher's.
+ */
+function withReliefRow(s: RecordState): RecordState {
+  if (offense(s) !== 'opp' || !s.pitcher) return s
+  let last = -1
+  s.pitching.forEach((p, i) => { if (p.inning === s.inning) last = i })
+  if (last < 0 || s.pitching[last].pitcher === s.pitcher) return s
+  const row: PitchingPA = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitcher: s.pitcher, pitches: [], result: RELIEF, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+  return { ...s, pitching: [...s.pitching, row] }
+}
+
 /** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances.
  *  bk = 投手犯規 (balk): every runner moves up one (see balk); no column, BK is counted from the plays. */
 export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk'
 
 /** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
  *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
-export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent, logAs?: RunnerEvent, errBy?: string): RecordState {
+export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerEvent, logAs?: RunnerEvent, errBy?: string, outAt?: OutAt): RecordState {
   let runner = s.runners.find((r) => r.row === row && r.side === side)
   if (!runner) return s
+  // an out on the bases by a reliever who has no row yet gets him one first (withReliefRow)
+  if (side === 'opp' && (ev === 'cs' || ev === 'pk' || ev === 'out')) s = withReliefRow(s)
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
   // error just moves him along (counted once), so two runners never share a base
   if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'bk' || ev === 'err' || ev === 'throw' || ev === 'advance') {
@@ -832,7 +868,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   // (an opponent run between pitches: called again by the rules once this plate appearance is sent)
   else if (dest === 'home') { if (side === 'us') { (r as BattingPA).run = 1; r.code = 'R' } else r.code = (s.earnedByHand?.[row] ?? !(AIDED_KINDS.has(logAs ?? ev) || UNEARNED_REACH.has(r.result))) ? 'ER' : 'R' }
   else runners = [...runners, { ...runner, base: dest }]
-  const plays = dest === at ? s.plays : [...(s.plays ?? []), { at: s.pitches.length, kind: logAs ?? ev, from: at, to: dest }]
+  const plays = dest === at ? s.plays : [...(s.plays ?? []), { at: s.pitches.length, kind: logAs ?? ev, from: at, to: dest, ...(dest === 'out' && ev === 'out' && outAt ? { outAt } : {}) }]
   const next: RecordState = { ...s, batting, pitching, extras, outs, plays, runners: runners.sort((a, b) => b.base - a.base) }
   return outs >= 3 ? endHalf(next) : next
 }

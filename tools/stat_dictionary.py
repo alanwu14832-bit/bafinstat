@@ -49,7 +49,7 @@ STAT_DICTIONARY = [
     dict(key="wRC+", zh="加權得分創造指數", en="Weighted Runs Created Plus", group="打擊", formula="100 × ((wOBA − 隊wOBA) ÷ 1.232 + 隊R/PA) ÷ 隊R/PA", status="新增", priority="P1", note="以同一篩選範圍的全隊為基準（100 = 隊平均，130 = 多創造三成得分）；1.232 為 FanGraphs 2025 wOBA scale；不做球場修正"),
     # ---------------- 獲勝機率模型 (網站專屬) ----------------
     dict(key="WPA", zh="獲勝機率增加值", en="Win Probability Added", group="打擊", formula="每個打席（含自己的盜壘、盜壘失敗、牽制出局、壘死）前後我隊獲勝機率的差，加總；投手是他投球期間的變化", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。+1.00 約等於多贏一場；描述發生了什麼，不代表預測能力"),
-    dict(key="RE24", zh="局面得分增值", en="Run Expectancy (24 base-out states)", group="打擊", formula="RE(打席後局面) − RE(打席前局面) + 這個打席的得分；投手取負號", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。RE 依本隊比賽 24 種壘上與出局局面推算，不看比分"),
+    dict(key="RE24", zh="局面得分增值", en="Run Expectancy (24 base-out states)", group="打擊", formula="RE(結束局面) − RE(開始局面) + 這個打席的得分（FanGraphs 定義）；投手相反（少失分為正）；平均是 0，盜壘也算", status="新增", priority="P2", note="網站專屬；Excel 總表不計算（需要獲勝機率模型）。RE 依本隊比賽 24 種壘上與出局局面推算，不看比分"),
     dict(key="K%", zh="三振率", en="Strikeout Rate", group="打擊", formula="SO ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB%", zh="保送率", en="Walk Rate", group="打擊", formula="BB ÷ PA", status="新增", priority="P0", note=""),
     dict(key="BB/K", zh="保送三振比", en="Walk-to-Strikeout", group="打擊", formula="BB ÷ SO", status="新增", priority="P2", note=""),

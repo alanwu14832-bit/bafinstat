@@ -27,10 +27,19 @@ export type PAResult = (typeof PA_RESULTS)[number] | '犧牲'
  * an opponent's placed runner who scores is never an earned run. Deliberately not in PA_RESULTS (never a result chip).
  */
 export const TIEBREAK = '突破僵局'
+/**
+ * 換投後未面對打者: a pitching row (our pitcher, 0 pitches) for a reliever who came in and made an out on the bases —
+ * a 牽制出局 of the runner he inherited, a 盜壘阻殺 — before he faced anyone, so no plate appearance of his holds that
+ * out. It is NOT a plate appearance (no BF, no pitches): only the outs it holds (the inning's outs that passed while it
+ * was the last row) and his 牽制／盜壘阻殺／暴投 counts are his; he shows up with a game pitched and 0.1 IP. outsBefore =
+ * the outs when he came in. Deliberately not in PA_RESULTS (never a result chip; 修改資料 adds it by hand).
+ */
+export const RELIEF = '未面對打者'
+export const isRelief = (r: { result: string }) => r.result === RELIEF
 /** A runner placed by the tie-break rule (not a plate appearance). */
 export const isPlaced = (r: { result: string }) => r.result === TIEBREAK
 /** A real plate appearance: has a result and is not a tie-break runner. Everything that counts PAs goes through it. */
-export const isPA = (r: { result: string }) => !!r.result && !isPlaced(r)
+export const isPA = (r: { result: string }) => !!r.result && !isPlaced(r) && !isRelief(r)
 /** Bases of each hit (內安 = 內野安打 is a single). 場地二安 (ground-rule double: over the fence on a bounce, or stuck in it) is a double in every
  * stat; the batter gets second and every runner exactly two bases. */
 export const HIT_BASE_COUNT: Record<string, 1 | 2 | 3 | 4> = { 一安: 1, 內安: 1, 二安: 2, 場地二安: 2, 三安: 3, 全壘打: 4 }
@@ -162,6 +171,10 @@ export { ALBUMS_MIGRATION } from '../config/teamDefaults'
 /** A tournament registration list (報名名單) for one year. Not part of Dataset: it lives in its own store slice (like albums). */
 export interface Registration { season: number; tournament: string; players: string[]; updatedAt?: string }
 
+/** The base an out on the bases was made at (本壘 = 'home'). */
+export type OutAt = 1 | 2 | 3 | 'home'
+export const OUT_AT_LABEL: Record<string, string> = { 1: '1B', 2: '2B', 3: '3B', home: '本壘' }
+
 /**
  * Something that happened to a runner between pitches of a plate appearance (盜壘, 暴投進壘, 牽制出局…), in order.
  * `at` = how many pitches had been thrown when it happened; `from` = the base he was on; `to` = where he ended up
@@ -169,6 +182,9 @@ export interface Registration { season: number; tournament: string; players: str
  */
 export interface PlayEvent {
   at: number; kind: string; from: 1 | 2 | 3; to: 'out' | 1 | 2 | 3 | 'home'
+  /** (to 'out') the base he was put out at: 1B 2B 3B or 本壘 — the base he was heading for, not always the one he came from.
+   *  Left out on older games and on a 盜壘失敗 / 牽制出局 (those read as before: from his base). */
+  outAt?: OutAt
   /** on the batted-ball play itself, not between pitches: 趁傳進壘 after a hit, `from` is where the hit alone put him */
   play?: true
   /** (on the play) it was the batter */

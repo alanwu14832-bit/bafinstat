@@ -593,7 +593,7 @@ describe('延長賽突破僵局 and 投手犯規 in the live model', () => {
     expect(s.pitching[2]).toMatchObject({ cs: 1, events: [{ at: 3, kind: 'bk', from: 1, to: 2, play: true }] })
     expect(pitchingLines(s.pitching, [])[0]).toMatchObject({ bk: 1, cs: 1, outs: 3 })
   })
-  it('a reliever balks, then a pickoff ends the half: nothing is charged to the pitcher he replaced', async () => {
+  it('a reliever balks, then a pickoff ends the half: it is his (a 未面對打者 row), nothing is charged to the pitcher he replaced', async () => {
     const { balk } = await import('./model')
     let s = newGame(game, lineup, '壬')
     s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 9, traj: 'L' })
@@ -605,7 +605,10 @@ describe('延長賽突破僵局 and 投手犯規 in the live model', () => {
     expect(s.half).toBe('bottom')
     expect(s.pitching[2]).toMatchObject({ pitcher: '壬', pk: 0 })
     expect(s.pitching[2].events).toBeUndefined()
-    expect(pitchingLines(s.pitching, [])).toEqual([expect.objectContaining({ name: '壬', bk: 0, pk: 0, outs: 3 })])
+    // he came in, balked and picked the runner off for the third out without a batter: a row of his own holds all that
+    expect(s.pitching[3]).toMatchObject({ pitcher: '子', result: '未面對打者', pk: 1, pitches: [] })
+    const lines = pitchingLines(s.pitching, [])
+    expect(lines).toEqual([expect.objectContaining({ name: '壬', bk: 0, pk: 0, outs: 2, bf: 3 }), expect.objectContaining({ name: '子', bk: 1, pk: 1, outs: 1, bf: 0, g: 1 })])
   })
   it('a walk-off wild pitch by a reliever who came in during the plate appearance is not the old pitcher\'s', async () => {
     const { placeTiebreak } = await import('./tiebreak')

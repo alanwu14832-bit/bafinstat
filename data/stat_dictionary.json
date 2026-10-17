@@ -364,7 +364,7 @@
   "zh": "局面得分增值",
   "en": "Run Expectancy (24 base-out states)",
   "group": "打擊",
-  "formula": "RE(打席後局面) − RE(打席前局面) + 這個打席的得分；投手取負號",
+  "formula": "RE(結束局面) − RE(開始局面) + 這個打席的得分（FanGraphs 定義）；投手相反（少失分為正）；平均是 0，盜壘也算",
   "status": "新增",
   "priority": "P2",
   "note": "網站專屬；Excel 總表不計算（需要獲勝機率模型）。RE 依本隊比賽 24 種壘上與出局局面推算，不看比分"
