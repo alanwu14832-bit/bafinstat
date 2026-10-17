@@ -52,9 +52,9 @@ describe('players: percentile bars and comparing up to nine', () => {
     expect(new URLSearchParams(search).getAll('cmp')).toEqual([C])
   })
 
-  it('draws 13 batting bars, and the radar on request', () => {
+  it('draws 12 batting bars, and the radar on request', () => {
     at(q(A, []))
-    expect(screen.getAllByTestId('pct-row')).toHaveLength(13)
+    expect(screen.getAllByTestId('pct-row')).toHaveLength(12)
     fireEvent.click(screen.getByRole('tab', { name: '雷達' }))
     expect(screen.queryAllByTestId('pct-row')).toHaveLength(0)
     expect(screen.getByText(/越外圈越好/)).toBeInTheDocument()

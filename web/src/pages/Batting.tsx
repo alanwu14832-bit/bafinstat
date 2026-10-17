@@ -26,7 +26,7 @@ import { DonutCard } from '../components/charts/DonutCard'
 import { StackedBarCard } from '../components/charts/StackedBarCard'
 import { useStats } from '../hooks/useStats'
 import type { BattingLine } from '../data/stats'
-import { f2, f3, pct, signed1, signed2, signedPct } from '../lib/fmt'
+import { f2, f3, pct, signed1, signed2 } from '../lib/fmt'
 import { useWinData } from '../hooks/useWinData'
 import { teamWinBatting, withWinBatting } from '../data/winTimeline'
 
@@ -44,7 +44,6 @@ function columnsFor(view: View): Column<BattingLine>[] {
   const frac = (key: keyof BattingLine & string, header: string, parts: (r: BattingLine) => [number, number], fmt: (v: number | null) => string): Column<BattingLine> => ({ key, header, align: 'right', sortable: true, format: (v, r) => withFraction(fmt(v as number | null), ...parts(r)), text: (v) => fmt(v as number | null) })
   const plus: Column<BattingLine> = { key: 'opsPlus', header: 'OPS+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
   const wrc: Column<BattingLine> = { key: 'wrcPlus', header: 'wRC+', align: 'right', sortable: true, format: (v) => (v === null || v === undefined ? '—' : String(v)) }
-  const seager: Column<BattingLine> = { key: 'sSeager', header: 'sSeager', align: 'right', sortable: true, format: (v) => signedPct(v as number | null) }
   // 獲勝機率模型 (data/winTimeline): site only, never in the Excel 總表
   const wpa: Column<BattingLine> = { key: 'wpa', header: 'WPA', align: 'right', sortable: true, format: signed2 }
   const re24: Column<BattingLine> = { key: 're24', header: 'RE24', align: 'right', sortable: true, format: signed1 }
@@ -52,7 +51,7 @@ function columnsFor(view: View): Column<BattingLine>[] {
   if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, wpa, re24, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
   // 兩好球纏鬥: the count, with the plate appearances that reached two strikes in small grey type (CSV: the count only)
   const battles: Column<BattingLine> = { key: 'twoStrikeBattles', header: '兩好球纏鬥', align: 'right', sortable: true, format: (v, r) => <span className="inline-flex items-baseline gap-1 justify-end">{String(v)}<span className="text-[11px] text-muted font-normal">/{r.twoStrikePA}</span></span>, text: (v) => String(v) }
-  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bipQuality], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%'),
+  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bipQuality], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%'),
     // 跑壘（打擊球上，Baseball-Reference 的 XBT%）: 安打時多跑一個壘（一壘上三壘、二壘回本壘…）的機會與成功；被刺殺＝安打時多跑被傳殺、打者打完被刺殺（不含盜壘失敗）
     frac('xbtPct', 'XBT%', (r) => [r.xbt, r.xbtOpp], pct), n('xbtOut', '擴張被殺'), n('thrownOut', '被刺殺')]
 }

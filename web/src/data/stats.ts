@@ -74,14 +74,10 @@ export interface BattingLine {
   paPitched: number
   /** plate appearances that reached two strikes / of those, 3+ more pitches after it (兩好球纏鬥) / 6+ pitches (6球以上) */
   twoStrikePA: number; twoStrikeBattles: number; longPA: number
-  /** balls he took (not counting an intentional walk's) — the out-of-zone takes of sSeager */
-  ballsTaken: number
   pull: number; center: number; oppo: number
   avg: number | null; obp: number | null; slg: number | null; ops: number | null; opsPlus: number | null; iso: number | null; babip: number | null; woba: number | null
   /** wRC+ against the same slice of the team (100 = team average) */
   wrcPlus: number | null
-  /** Simple SEAGER: selective aggression (see finalizeBatting) */
-  sSeager: number | null
   kPct: number | null; bbPct: number | null; bbK: number | null; sbPct: number | null; rispAvg: number | null; qabPct: number | null
   pPerPA: number | null; whiffPct: number | null; contactPct: number | null; swingPct: number | null; fpsPct: number | null
   gbPct: number | null; fbPct: number | null; ldPct: number | null; iffbPct: number | null; hardPct: number | null; pullPct: number | null; centerPct: number | null; oppoPct: number | null
@@ -92,8 +88,8 @@ export interface BattingLine {
 function emptyBatting(name: string): BattingLine {
   return {
     name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0, xbtOpp: 0, xbt: 0, xbtOut: 0, thrownOut: 0, xbtPct: null,
-    rispAB: 0, rispH: 0, bip: 0, bipTraj: 0, bipQuality: 0, bipLoc: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0, ballsTaken: 0, pull: 0, center: 0, oppo: 0,
-    avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, sSeager: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
+    rispAB: 0, rispH: 0, bip: 0, bipTraj: 0, bipQuality: 0, bipLoc: 0, gb: 0, fb: 0, ld: 0, iffb: 0, hard: 0, pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0, pull: 0, center: 0, oppo: 0,
+    avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
     pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null, gbPct: null, fbPct: null, ldPct: null, iffbPct: null, hardPct: null, pullPct: null, centerPct: null, oppoPct: null,
     wpa: null, re24: null,
   }
@@ -113,11 +109,6 @@ export function finalizeBatting(l: BattingLine, p: StatParams = DEFAULT_PARAMS):
   l.rispAvg = div(l.rispH, l.rispAB); l.qabPct = div(l.qab, l.pa); l.xbtPct = div(l.xbt, l.xbtOpp)
   l.pPerPA = div(l.pitches, l.paPitched); l.whiffPct = div(l.whiffs, l.swings); l.contactPct = l.whiffPct === null ? null : 1 - l.whiffPct
   l.swingPct = div(l.swings, l.pitches); l.fpsPct = div(l.firstPitchSwing, l.paPitched)
-  // Simple SEAGER (Sky Kalkman's take on Robert Orr's SEAGER): out-of-zone takes ÷ (zone swings + out-of-zone takes)
-  // − zone takes ÷ all takes. No pitch location is recorded, so a take's zone is the umpire's call (called strike =
-  // in the zone, ball = out of it) and every swing counts as a zone swing.
-  const takes = l.called + l.ballsTaken
-  l.sSeager = takes > 0 && l.swings + l.ballsTaken > 0 ? l.ballsTaken / (l.swings + l.ballsTaken) - l.called / takes : null
   l.gbPct = div(l.gb, l.bipTraj); l.fbPct = div(l.fb, l.bipTraj); l.ldPct = div(l.ld, l.bipTraj); l.iffbPct = div(l.iffb, l.fb); l.hardPct = div(l.hard, l.bipQuality)
   l.pullPct = div(l.pull, l.bipLoc); l.centerPct = div(l.center, l.bipLoc); l.oppoPct = div(l.oppo, l.bipLoc)
   return l
@@ -151,7 +142,6 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand) {
   }
   l.pitches += pt.pitches; l.whiffs += pt.whiffs; l.swings += pt.swings; l.called += pt.called
   if (pt.pitches > 0) l.paPitched++
-  if (r !== '故四') l.ballsTaken += pt.balls
   if (SWING_CODES.has(pa.pitches[0] ?? '')) l.firstPitchSwing++
   const hardBIP = batted && pa.quality === '強'
   // 兩好球纏鬥: 3+ pitches after reaching two strikes (the last one included); 6球以上: 6+ pitches

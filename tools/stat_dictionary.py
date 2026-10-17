@@ -60,7 +60,6 @@ STAT_DICTIONARY = [
     dict(key="Swing%", zh="揮棒率", en="Swing Rate", group="打擊過程", formula="揮棒(SS+F+IP) ÷ 總球數", status="新增", priority="P2", note=""),
     dict(key="Whiff%", zh="揮空率", en="Whiff Rate", group="打擊過程", formula="揮空(SS) ÷ 揮棒(SS+F+IP)", status="新增", priority="P1", note="MLB Statcast 指標；舊表已有逐球資料即可算"),
     dict(key="IFFB%", zh="內野飛球率", en="Infield Fly Ball %", group="打擊過程", formula="軌跡 P ÷ 飛球(F + P)", status="新增", priority="P2", note="內野飛球幾乎都是出局，打者越低越好"),
-    dict(key="sSeager", zh="選擇性積極度", en="Simple SEAGER", group="打擊過程", formula="壞球沒揮(B) ÷ (揮棒 + 壞球沒揮) − 好球沒揮(CS) ÷ (好球沒揮 + 壞球沒揮)", status="新增", priority="P2", note="Robert Orr 的 SEAGER 簡化版（Sky Kalkman）；越高越好。沒有記錄進壘點：沒揮的球依裁判判決分好壞球，揮棒一律當成好球帶內；故意四壞不計"),
     dict(key="Contact%", zh="擊球率", en="Contact Rate", group="打擊過程", formula="1 − Whiff%", status="新增", priority="P2", note=""),
     dict(key="FirstPitchSwing%", zh="首球揮棒率", en="First-Pitch Swing %", group="打擊過程", formula="第一球為 SS/F/IP 的打席 ÷ PA", status="新增", priority="P2", note=""),
     dict(key="BIP", zh="擊球進場", en="Balls In Play", group="打擊過程", formula="打擊結果不是三振、保送、故四、觸身、妨礙的打席（突破僵局跑者不算）", status="新增", priority="P1", note="全壘打也算（是打出去的球）；不管有沒有記落點、軌跡、強度都算"),
