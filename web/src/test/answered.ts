@@ -8,5 +8,5 @@ import type { RecordState } from '../record/model'
 export const answered = (s: RecordState): RecordState => ({
   ...s,
   oppPitcher: s.oppPitcher ?? { handUnknown: true },
-  oppBatsBySlot: { ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, '?' as const])), ...s.oppBatsBySlot },
+  oppBatsBySlot: { ...Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, 'R' as const])), ...s.oppBatsBySlot },
 })

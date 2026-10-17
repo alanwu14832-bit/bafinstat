@@ -196,7 +196,7 @@ describe('the live board over random games', () => {
 
 describe('對方打者左右打 (batch 18)', () => {
   const seeds = Array.from({ length: 150 }, (_, i) => i + 1)
-  it.each(seeds)('game %i: each of their plate appearances carries the side picked for his slot (不知道: none); it survives saving; the split adds up', (seed) => {
+  it.each(seeds)('game %i: each of their plate appearances carries the side picked for his slot ; it survives saving; the split adds up', (seed) => {
     const g = playGame(seed)
     expect(g.pitching.map((p, i) => (isPA(p) ? g.expect.bats[i] : undefined))).toEqual(g.pitching.map((p) => p.oppBats))
     // a 突破僵局 runner never has one
@@ -210,12 +210,12 @@ describe('對方打者左右打 (batch 18)', () => {
     expect(t.rows.find((r) => r.key === 'vs-RHB')?.line.pa).toBe(n('R'))
     expect(t.missing).toBe(fragment.pitching.filter((p) => isPA(p) && !p.oppBats).length)
   })
-  it('the games have 左打, 右打 and 不知道, and switch hitters', () => {
+  it('the games have 左打, 右打 and switch hitters (every opponent batter has a side)', () => {
     const games = seeds.slice(0, 40).map(playGame)
     const all = games.flatMap((g) => g.pitching.filter(isPA))
     expect(all.some((p) => p.oppBats === 'L')).toBe(true)
     expect(all.some((p) => p.oppBats === 'R')).toBe(true)
-    expect(all.some((p) => !p.oppBats)).toBe(true)
+    expect(all.every((p) => !!p.oppBats)).toBe(true)
     // the same slot and batter on both sides in one game
     const both = games.some((g) => [1, 2, 3, 4, 5, 6, 7, 8, 9].some((o) => new Set(g.pitching.filter((p) => isPA(p) && p.oppOrder === o && p.oppBats).map((p) => p.oppBats)).size > 1))
     expect(both).toBe(true)

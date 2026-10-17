@@ -754,7 +754,7 @@ describe('對方投手左右投 is required (batch 18)', () => {
 
 describe('對方打者左右打 (batch 18)', () => {
   const home = game   // they bat first
-  it('is required while they bat, remembered per slot, stamped on their row; 不知道 leaves the key out', () => {
+  it('is required while they bat, remembered per slot, stamped on their row (no 不知道)', () => {
     let s = newGame(home, lineup, '壬')
     expect(needsOppBats(s, true)).toBe(true)
     expect(needsOppBats(s, false)).toBe(false)
@@ -763,11 +763,12 @@ describe('對方打者左右打 (batch 18)', () => {
     expect(needsOppBats(s, true)).toBe(false)
     s = commitPA(s, defaultPlan(s, '三振'))
     expect(s.pitching[0].oppBats).toBe('L')
-    // slot 2: 不知道
+    // slot 2: asked; a draft saved while 不知道 still existed ('?') is asked again
     expect(needsOppBats(s, true)).toBe(true)
-    s = commitPA(setOppBats(s, null), defaultPlan(s, '三振'))
-    expect('oppBats' in s.pitching[1]).toBe(false)
+    expect(needsOppBats({ ...s, oppBatsBySlot: { ...s.oppBatsBySlot, 2: '?' } }, true)).toBe(true)
     s = commitPA(setOppBats(s, 'R'), defaultPlan(s, '三振'))
+    expect(s.pitching[1].oppBats).toBe('R')
+    s = commitPA(setOppBats(s, 'L'), defaultPlan(s, '三振'))
     // our half: nothing asked
     expect(offense(s)).toBe('us')
     expect(needsOppBats(s, true)).toBe(false)
@@ -779,9 +780,9 @@ describe('對方打者左右打 (batch 18)', () => {
     expect(needsOppBats(s, true)).toBe(false)
     s = commitPA(s, defaultPlan(s, '三振'))
     expect(s.pitching[s.pitching.length - 1].oppBats).toBe('L')
-    // slot 2 had 不知道: remembered too (asked once per batter), changeable
-    expect(oppBatsNow(s)).toBe('?')
-    expect(oppBatsNow(setOppBats(s, 'R'))).toBe('R')
+    // slot 2 was R: remembered too (asked once per batter), changeable
+    expect(oppBatsNow(s)).toBe('R')
+    expect(oppBatsNow(setOppBats(s, 'L'))).toBe('L')
   })
   it('a switch hitter: the side he took this time (a later plate appearance can change it)', () => {
     let s = commitPA(setOppBats(newGame(home, lineup, '壬'), 'L'), defaultPlan(newGame(home, lineup, '壬'), '三振'))
@@ -813,6 +814,6 @@ describe('對方打者左右打 (batch 18)', () => {
     const draft = JSON.parse(JSON.stringify(picked)) as RecordState
     expect(oppBatsNow(draft)).toBe('L')
     expect(describeChange(s, picked)).toBe('對方第 1 棒：左打')
-    expect(describeChange(s, setOppBats(s, null))).toBe('對方第 1 棒：左右打不知道')
+    expect(describeChange(s, { ...s, oppBatsBySlot: { 1: '?' } })).toBe('對方第 1 棒：左右打不知道')   // (an old draft)
   })
 })

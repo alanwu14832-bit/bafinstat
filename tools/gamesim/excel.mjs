@@ -202,7 +202,7 @@ function totalsVsSite(label, ds, loFile) {
     pit: { G: 'g', GS: 'gs', W: 'w', L: 'l', SV: 'sv', HLD: 'hld', 出局數: 'outs', IP: 'ipNumber', BF: 'bf', PC: 'pc', 好球: 'strikes', 壞球: 'balls', 'Strike%': 'strikePct', K: 'k', BB: 'bb', IBB: 'ibb', HBP: 'hbp', H: 'h', '2B': 'h2', '3B': 'h3', HR: 'hr', R: 'r', ER: 'er', WP: 'wp', SBA: 'sba', CS: 'cs', PK: 'pk', ERA: 'era', WHIP: 'whip', 'K/7': 'k7', 'K/9': 'k9', 'BB/9': 'bb9', 'K/BB': 'kbb', 'K%': 'kPct', 'BB%': 'bbPct', OppAVG: 'oppAvg', OppOBP: 'oppObp', BABIP: 'babip', FIP: 'fip', 'GB%': 'gbPct', BIP: 'bip', 'IFFB%': 'iffbPct' },
     fld: { G: 'g', Inn: 'innings', PO: 'po', A: 'a', E: 'e', DP: 'dp', TC: 'tc', FPCT: 'fpct', 'RF/G': 'rfg', PB: 'pb', SB: 'sb', CS: 'cs', 'CS%': 'csPct' },
   }
-  const more = (l) => ({ ...l, qabPct: l.pa ? l.qab / l.pa : null, pPerPA: l.pa ? l.pitches / l.pa : null, ipNumber: l.ipDisplay !== undefined ? Number(l.ipDisplay) : undefined })
+  const more = (l) => ({ ...l, qabPct: l.pa ? l.qab / l.pa : null, pPerPA: l.pPerPA, ipNumber: l.ipDisplay !== undefined ? Number(l.ipDisplay) : undefined })
   let cells = 0
   const same = (what, got, want) => {
     cells++

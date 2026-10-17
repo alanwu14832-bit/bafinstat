@@ -3,7 +3,7 @@
  * `events`; in a spreadsheet they are one text column, e.g. 「2 暴投 1-2；3 盜壘 2-3」. A balk moves every runner up
  * one base and is logged once per runner, lead runner first: 「2 投手犯規 3-H；2 投手犯規 1-2」.
  */
-import { PLAY_EVENT_LABELS, type OutAt, type PlayEvent } from './types'
+import { PLAY_EVENT_LABELS, type OutAt, type PlayEvent, type PriorPitch } from './types'
 
 const BASE = { 1: '1B', 2: '2B', 3: '3B', home: '本壘', out: '出局' } as const
 export const playLabel = (kind: string) => PLAY_EVENT_LABELS[kind] ?? kind
@@ -51,4 +51,24 @@ export function balksIn(events?: PlayEvent[]): number {
     if (!prev || prev.kind !== 'bk' || prev.at !== e.at || e.from >= prev.from) n++
   })
   return n
+}
+
+/**
+ * 跑壘事件 column of a pitching row: the runner plays, then — when the pitcher changed in the middle of that count — 「換投前
+ * 林昱丞 3」 for each pitcher who threw the first pitches and left (types.PriorPitch), in order. The 總表 does not read it:
+ * a pitcher's PC there is every pitch of the rows he pitched.
+ */
+export function pitchingPlaysText(events?: PlayEvent[], prior?: PriorPitch[]): string {
+  return [playsText(events), ...(prior ?? []).map((p) => `換投前 ${p.name} ${p.pitches}`)].filter(Boolean).join('；')
+}
+/** Back from the column: the runner plays and the prior pitchers. */
+export function parsePitchingPlays(v: unknown): { events: PlayEvent[]; priorPitchers: PriorPitch[] } {
+  const prior: PriorPitch[] = []
+  const rest: string[] = []
+  for (const part of String(v ?? '').split(/[；;\n]/)) {
+    const m = part.trim().match(/^換投前\s+(\S+)\s+(\d+)$/)
+    if (m && Number(m[2]) > 0) prior.push({ name: m[1], pitches: Number(m[2]) })
+    else rest.push(part)
+  }
+  return { events: parsePlays(rest.join('；')), priorPitchers: prior }
 }

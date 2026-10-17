@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { auditGame } from '../data/audit'
+import { normalizeGameEdit } from '../data/edit'
 import { normalizeDataset } from '../data/normalize'
 import { ourPitchingBox } from '../data/boxScore'
 import { parsePlays, playsText, playText } from '../data/plays'
@@ -128,5 +129,41 @@ describe('壘死 at which base', () => {
     const b = commitPA(addPitch(s, 'IP'), { ...plan, outAt: { batter: 'home' } })
     expect(b.batting[0].events).toEqual([expect.objectContaining({ kind: 'outPlay', outAt: 'home' })])
     expect(b.batting[0]).toMatchObject({ result: '一安', outOnBase: 1, code: 'I' })
+  })
+})
+
+describe('安打後被刺殺: their runner and batter, the base and the fielders', () => {
+  const rosterOf = lineup.map((l) => ({ name: l.name, primaryPos: l.pos }))
+  // we field (主): 壬 pitches; their batter singles to CF and is thrown out at 2B (CF assist, SS putout), their runner on 1st is thrown out at 3B
+  const play = (outAt?: Record<string, import('../data/types').OutAt>) => {
+    let s = newGame(game, lineup, '壬')
+    s = single(s)                                                      // runner on 1B
+    const plan = { ...defaultPlan(s, '一安'), loc: 8, traj: 'L', runners: { 0: 'out' as const }, batter: 'out' as const, ...(outAt ? { outAt } : {}) }
+    return commitPA(addPitch(s, 'IP'), plan)
+  }
+  it('both outs carry a mark that says where (the batter 2B, the runner 3B), as a plain 被刺殺 for the runner', () => {
+    const s = play()
+    expect(s.pitching[1].events).toEqual([
+      expect.objectContaining({ kind: 'tag', from: 1, to: 'out', play: true, outAt: 3 }),
+      expect.objectContaining({ kind: 'outPlay', batter: true, outAt: 2 }),
+    ])
+    expect(s.outs).toBe(2)
+  })
+  it('the recorder\'s pick wins; a 壘死 stays kind out', () => {
+    const s = play({ batter: 'home', 0: 2 })
+    expect(s.pitching[1].events).toEqual([expect.objectContaining({ kind: 'tag', outAt: 2 }), expect.objectContaining({ kind: 'outPlay', outAt: 'home' })])
+    let t = newGame({ ...game, homeAway: '客' as const }, lineup, '壬')
+    t = single(t)
+    const mistake = commitPA(addPitch(t, 'IP'), { ...defaultPlan(t, '一安'), loc: 8, traj: 'L', runners: { 0: 'out' as const }, runningOuts: [0] })
+    expect(mistake.batting[1].events).toEqual([expect.objectContaining({ kind: 'out', from: 1, outAt: 3 })])
+  })
+  it('stats: the hits count, both outs are our pitcher\'s; the fielding credits the CF an assist per throw and the covering men a putout', () => {
+    const s = play()
+    const edit = toGameEdit(s)
+    const { fragment } = normalizeGameEdit(rosterOf as never, { ...edit, game: { ...edit.game, id: 'G1' } } as never)
+    const l = pitchingLines(fragment.pitching, [])[0]
+    expect(l).toMatchObject({ h: 2, outs: 2 })
+    const fld = (pos: string) => fragment.fielding.find((f) => f.pos === pos)
+    expect([fld('CF')?.a, fld('3B')?.po, fld('SS')?.po]).toEqual([2, 1, 1])   // 2B-cover for a ball to CF is the SS
   })
 })

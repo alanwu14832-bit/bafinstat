@@ -17,7 +17,7 @@ import {
   DEFAULT_PARAMS, EMPTY_DATASET, HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced,
   OPP_BATS_LABEL, type BattingPA, type Dataset, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type PitchingPA, type Player, type StatParams,
 } from './types'
-import { dayRosterOf, offense, oppBatterOf, oppPitchCount, oppStintStart, type OppPitcher, type RecordState } from '../record/model'
+import { dayRosterOf, liveSplit, offense, oppBatterOf, oppPitchCount, oppStintStart, type OppPitcher, type RecordState } from '../record/model'
 
 /* ------------------------------------------------------------------ the game page's lines (攻守成績) */
 
@@ -155,6 +155,8 @@ export interface BoxSource {
     atBat?: { side: 'us'; name: string } | { side: 'opp'; key: string; slot: number; pinchHit: boolean; /** 左打／右打 picked for him */ bats?: OppBats }
     /** our pitcher on the mound and the pitches of the plate appearance in progress he threw */
     pitcher: string; pitcherNow: boolean; livePitches: number
+    /** pitchers who threw the first pitches of the count in progress and left (record/model priorPitchers): theirs, not `pitcher`'s */
+    livePrior?: Array<{ name: string; pitches: number }>
     /**
      * the opponent pitcher's stint now: where it starts in our rows, who, his pitch count (record/model oppPitchCount),
      * the pitches of that first plate appearance thrown before him (`carried`) and who he took over from (`out`); and
@@ -220,7 +222,7 @@ export function boxScore(src: BoxSource): BoxScore {
   // ---- 我隊投球
   const pitchers: BoxPitcher[] = ourPitchingBox(src.pitching, [src.game], params).map((l) => ({
     name: l.name, ip: l.ipDisplay, outs: l.outs, h: l.h, r: l.r, er: l.er, bb: l.bb + l.hbp, k: l.k,
-    pc: l.pc + (live && l.name === live.pitcher ? live.livePitches : 0), now: !!live?.pitcherNow && l.name === live.pitcher,
+    pc: l.pc + (live && l.name === live.pitcher ? live.livePitches : 0) + (live?.livePrior ?? []).filter((x) => x.name === l.name).reduce((a, x) => a + x.pitches, 0), now: !!live?.pitcherNow && l.name === live.pitcher,
   }))
   // (a reliever who has not faced anyone yet)
   if (live?.pitcher && !pitchers.some((p) => p.name === live.pitcher)) pitchers.push({ name: live.pitcher, ip: '0.0', outs: 0, h: 0, r: 0, er: 0, bb: 0, k: 0, pc: live.livePitches, now: live.pitcherNow })
@@ -283,7 +285,7 @@ export function liveBoxScore(s: RecordState, opts: { inPlay: boolean; roster?: P
     live: {
       lineup: s.lineup,
       ...(inPlay ? { atBat: side === 'us' ? { side: 'us' as const, name: s.lineup[s.slot]?.name ?? '' } : { side: 'opp' as const, key: oppKey({ oppBatter: curBatter, oppOrder: s.oppOrder }), slot: s.oppOrder, pinchHit: isOppPinchHit(s.oppBatter), ...batsNow(s) } } : {}),
-      pitcher: s.pitcher, pitcherNow: inPlay && side === 'opp', livePitches: side === 'opp' ? s.pitches.length : 0,
+      pitcher: s.pitcher, pitcherNow: inPlay && side === 'opp', livePitches: side === 'opp' ? liveSplit(s).current : 0, ...(side === 'opp' && s.priorPitchers?.length ? { livePrior: s.priorPitchers } : {}),
       opp: {
         start, ...(s.oppPitcher?.name ? { name: s.oppPitcher.name } : {}), ...(s.oppPitcher?.hand ? { hand: s.oppPitcher.hand } : {}),
         pc, carried: from && from.row === start ? from.pitches : 0, ...(cur?.out ? { out: cur.out } : {}), changes, now: inPlay && side === 'us',

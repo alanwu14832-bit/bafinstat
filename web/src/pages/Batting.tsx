@@ -51,7 +51,9 @@ function columnsFor(view: View): Column<BattingLine>[] {
   if (view === 'advanced') return [name, n('pa', 'PA'), r3('ops', 'OPS'), plus, r3('iso', 'ISO'), r3('babip', 'BABIP'), r3('woba', 'wOBA'), wrc, wpa, re24, frac('kPct', 'K%', (r) => [r.so, r.pa], pct), frac('bbPct', 'BB%', (r) => [r.bb, r.pa], pct), { key: 'bbK', header: 'BB/K', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, r3('rispAvg', 'RISP AVG'), n('rispAB', 'RISP AB'), p('qabPct', 'QAB%'), n('tb', 'TB'), n('xbh', 'XBH'), n('gidp', 'GIDP'), n('roe', 'ROE'), frac('sbPct', 'SB%', (r) => [r.sb, r.sb + r.cs], pct)]
   // 兩好球纏鬥: the count, with the plate appearances that reached two strikes in small grey type (CSV: the count only)
   const battles: Column<BattingLine> = { key: 'twoStrikeBattles', header: '兩好球纏鬥', align: 'right', sortable: true, format: (v, r) => <span className="inline-flex items-baseline gap-1 justify-end">{String(v)}<span className="text-[11px] text-muted font-normal">/{r.twoStrikePA}</span></span>, text: (v) => String(v) }
-  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bipQuality], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%')]
+  return [name, n('pa', 'PA'), { key: 'pPerPA', header: 'P/PA', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('longPA', '6球以上'), battles, p('swingPct', 'Swing%'), p('whiffPct', 'Whiff%'), p('contactPct', 'Contact%'), seager, p('fpsPct', '首球揮棒%'), n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj], pct), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), frac('hardPct', 'Hard%（判讀）', (r) => [r.hard, r.bipQuality], pct), p('pullPct', 'Pull%'), p('centerPct', 'Center%'), p('oppoPct', 'Oppo%'),
+    // 跑壘（打擊球上，Baseball-Reference 的 XBT%）: 安打時多跑一個壘（一壘上三壘、二壘回本壘…）的機會與成功；被刺殺＝安打時多跑被傳殺、打者打完被刺殺（不含盜壘失敗）
+    frac('xbtPct', 'XBT%', (r) => [r.xbt, r.xbtOpp], pct), n('xbtOut', '擴張被殺'), n('thrownOut', '被刺殺')]
 }
 
 
@@ -150,7 +152,7 @@ export function BattingPage() {
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: view === 'process' ? 'pa' : 'ops', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={520} />
       </Card>
-      <SplitsCard id="splits" side="bat" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} />
+      <SplitsCard id="splits" side="bat" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} perPlayer={!!splitWho} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
         <DonutCard title="擊球型態" subtitle={trajNote} segments={bbType} centerCaption="有記軌跡" />

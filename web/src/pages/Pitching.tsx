@@ -31,7 +31,7 @@ import { f1, f2, f3, pct, shortDate, signed1, signed2 } from '../lib/fmt'
 import { useWinData } from '../hooks/useWinData'
 import { teamWinPitching, withWinPitching } from '../data/winTimeline'
 
-type View = 'basic' | 'advanced' | 'process'
+type View = 'basic' | 'advanced' | 'process' | 'batted'
 
 function columnsFor(view: View): Column<PitchingLine>[] {
   const name: Column<PitchingLine> = { key: 'name', header: '投手', className: 'font-medium', sortable: true }
@@ -48,6 +48,12 @@ function columnsFor(view: View): Column<PitchingLine>[] {
   if (view === 'advanced') return [name, ip, r2('era', 'ERA'), r2('fip', 'FIP'), wpa, re24, r2('whip', 'WHIP'), r2('k7', 'K/7'), r2('k9', 'K/9'), r2('bb9', 'BB/9'), r2('h9', 'H/9'), r2('kbb', 'K/BB'), frac('kPct', 'K%', (r) => [r.k, r.bf]), frac('bbPct', 'BB%', (r) => [r.bb, r.bf]), r3('oppAvg', '被打擊率'), r3('oppObp', '被上壘率'), r3('babip', 'BABIP'), p('lobPct', 'LOB%'), n('wp', 'WP'), n('bk', 'BK'), n('sba', 'SBA'), n('cs', 'CS'), n('pk', 'PK'),
     // 繼承跑者 (IR) and how many scored, 救援失敗, walks who came around to score
     n('ir', 'IR'), frac('irsPct', 'IRS%', (r) => [r.irs, r.ir]), n('bs', 'BS'), frac('bbScoredPct', '保送得分%', (r) => [r.bbScored, r.bb])]
+  // 擊球剖面 (FanGraphs 的 Batted Ball): 各比率只算有記那一項的擊球 (軌跡／落點＋對方打者左右打／強度)，分母看 BIP 旁的小字
+  if (view === 'batted') return [name, n('bip', 'BIP'), frac('gbPct', 'GB%', (r) => [r.gb, r.bipTraj]), frac('ldPct', 'LD%', (r) => [r.ld, r.bipTraj]), frac('fbPct', 'FB%', (r) => [r.fb, r.bipTraj]), frac('iffbPct', 'IFFB%', (r) => [r.iffb, r.fb]),
+    { key: 'gbFb', header: 'GB/FB', align: 'right', sortable: true, format: (v, r) => withFraction(f2(v as number | null), r.gb, r.fb), text: (v) => f2(v as number | null) }, frac('hrFbPct', 'HR/FB', (r) => [r.hrFb, r.fb]),
+    frac('pullPct', 'Pull%', (r) => [r.pull, r.bipSpray]), frac('centerPct', 'Cent%', (r) => [r.center, r.bipSpray]), frac('oppoPct', 'Oppo%', (r) => [r.oppo, r.bipSpray]),
+    frac('softPct', 'Soft%', (r) => [r.soft, r.bipQuality]), frac('medPct', 'Med%', (r) => [r.med, r.bipQuality]), frac('hardPct', 'Hard%', (r) => [r.hard, r.bipQuality]),
+    r3('babipGb', 'BABIP 滾地'), r3('babipLd', 'BABIP 平飛'), r3('babipFb', 'BABIP 飛球')]
   return [name, n('bf', 'BF'), n('pc', 'PC'), frac('strikePct', 'Strike%', (r) => [r.strikes, r.pc]), p('fStrikePct', 'F-Strike%'), p('cswPct', 'CSW%'), p('whiffPct', 'Whiff%'), { key: 'pPerIP', header: 'P/IP', align: 'right', sortable: true, format: (v) => f1(v as number | null) }, { key: 'pPerBF', header: 'P/BF', align: 'right', sortable: true, format: (v) => f2(v as number | null) }, n('bip', 'BIP'), p('gbPct', 'GB%'), p('fbPct', 'FB%'), p('iffbPct', 'IFFB%'), p('ldPct', 'LD%'), p('hardPct', 'Hard%'),
     { key: 'goAo', header: 'GO/AO', align: 'right', sortable: true, format: (v, r) => withFraction(f2(v as number | null), r.go, r.ao), text: (v) => f2(v as number | null) },
     frac('leadoffOutPct', '首打者出局%', (r) => [r.leadoffOuts, r.leadoffBf]), n('inn123', '三上三下'), frac('inn13Pct', '13球內局%', (r) => [r.inn13, r.pitchInn])]
@@ -59,7 +65,7 @@ export function PitchingPage() {
   const navigate = useNavigate()
   const openGame = useOpenGame()
   const params = s.params
-  const linked = useLinkedSort<View>(['basic', 'advanced', 'process'], 'basic')
+  const linked = useLinkedSort<View>(['basic', 'advanced', 'process', 'batted'], 'basic')
   const { view, setView } = linked
   // a player's tile linked here (球員頁「全隊排行」): mark his row
   const { search } = useLocation()
@@ -109,7 +115,7 @@ export function PitchingPage() {
 
   const tableView = useTableView()
   const below = (r: PitchingLine) => (r.outs < minOuts ? <BelowMinimum gap={college ? outsGapText(r.outs, minOuts) : undefined} /> : null)
-  const COMPACT: Record<View, string[]> = { basic: ['outs', 'era', 'whip', 'k'], advanced: ['outs', 'era', 'fip', 'k7'], process: ['pc', 'strikePct', 'cswPct', 'whiffPct'] }
+  const COMPACT: Record<View, string[]> = { basic: ['outs', 'era', 'whip', 'k'], advanced: ['outs', 'era', 'fip', 'k7'], process: ['pc', 'strikePct', 'cswPct', 'whiffPct'], batted: ['bip', 'gbPct', 'fbPct', 'hardPct'] }
   const full = withJerseyColumn(columnsFor(view))
   const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
@@ -146,9 +152,9 @@ export function PitchingPage() {
         <StatTile label="CSW%" to="?view=process&sort=cswPct#stats" value={(s.teamPitch.cswPct ?? 0) * 100} format="pct" note="未揮棒好球＋揮空 ÷ 用球數" />
         <StatTile label="首球好球率" to="?view=process&sort=fStrikePct#stats" value={(s.teamPitch.fStrikePct ?? 0) * 100} format="pct" />
       </StatGroup>
-      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標${college ? '還差幾局' : '「未達門檻」'}，不列入領先者與圖表${gapNote}${view === 'advanced' ? `。${winNote}；投手的 RE24 正值＝比一般情況少失分` : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
+      <Card id="stats" title="投手成績" subtitle={`點投手開啟個人檔案；IP < ${minIP} 標${college ? '還差幾局' : '「未達門檻」'}，不列入領先者與圖表${gapNote}${view === 'advanced' ? `。${winNote}；投手的 RE24 正值＝比一般情況少失分` : view === 'batted' ? '。每個比率只算有記那一項的擊球（括號是 分子/分母）：GB／LD／FB 看軌跡、Pull／Cent／Oppo 看落點加對方打者左右打、Soft／Med／Hard 看強度；BABIP 不含全壘打與觸擊' : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
-        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }]} /></div>
+        <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }, { value: 'batted', label: '擊球剖面' }]} /></div>
         <DataTable columns={tableColumns} rows={withNumbers(rows, s.dataset.roster)} rowKey={(r) => r.name} footer={footer} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columnsFor(view).some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as never, dir: linked.dir } : { key: 'outs', dir: 'desc' }} highlightKey={hl} onRowClick={openPlayer} dense maxHeight={480} />
       </Card>
       <SplitsCard id="splits" side="pit" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} title="情境拆分（面對的打者）" />

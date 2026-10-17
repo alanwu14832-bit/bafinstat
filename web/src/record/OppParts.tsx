@@ -49,7 +49,8 @@ export function OppPitcherStrip({ onHand, onName, name }: { onHand: (h: OppHand 
  * 左打｜右打 (and a small 不知道) for their batter up now, next to 「對方第 N 棒」. `value`: what his slot has this game
  * ('?' = 不知道), undefined = not picked yet (the pitch pad waits: 先選對方打者左打或右打).
  */
-export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick: (b: OppBats | null) => void }) {
+export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick: (b: OppBats) => void }) {
+  // (no 不知道: every opponent batter's side is recorded — the batted-ball profile needs it for Pull / Oppo)
   return (
     <div role="group" aria-label="對方打者左打或右打" className="flex items-center gap-1.5">
       <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border">
@@ -58,8 +59,6 @@ export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick:
             className={cx('h-9 min-w-12 px-2.5 rounded-[6px] text-[13px] font-medium cursor-pointer', value === b ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2')}>{OPP_BATS_LABEL[b]}</button>
         ))}
       </div>
-      <button type="button" aria-pressed={value === '?'} onClick={() => onPick(null)}
-        className={cx('h-9 px-2 rounded-[6px] text-[12px] cursor-pointer', value === '?' ? 'bg-surface-3 text-ink font-medium' : 'text-muted hover:text-ink underline underline-offset-2')}>不知道</button>
     </div>
   )
 }

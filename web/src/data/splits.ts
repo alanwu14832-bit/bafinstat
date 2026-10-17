@@ -251,12 +251,13 @@ export function countGrid(rows: Row[], ctx: WeakMap<object, PaContext>, side: Sp
 
 /** The tabs to show: 對左右投 only for batters, once some plate appearance has the opponent pitcher's hand; 對左右打
  *  only for pitchers, once some plate appearance has the opponent batter's side. */
-export function availableGroups(side: SplitSide, ds: Pick<Dataset, 'batting' | 'pitching'>, ctx: WeakMap<object, PaContext>): SplitGroup[] {
+export function availableGroups(side: SplitSide, ds: Pick<Dataset, 'batting' | 'pitching'>, ctx: WeakMap<object, PaContext>, perPlayer = false): SplitGroup[] {
   const groups: SplitGroup[] = ['count', 'situation', 'inning', 'order', 'nth']
   if (side === 'bat' && ds.batting.some((p) => ctx.get(p)?.oppHand)) groups.push('hand')
   if (side === 'pit' && ds.pitching.some((p) => ctx.get(p)?.oppBats)) groups.push('bats')
   // (our batters by their own side: always, so 「未填」 tells who still needs it in the 球員名單)
-  if (side === 'bat' && ds.batting.some((p) => ctx.get(p)?.ownBats)) groups.push('bats')
+  // (not for one batter: his own side is one row and the other rows would all be empty; 對左右投 is his left/right split)
+  if (side === 'bat' && !perPlayer && ds.batting.some((p) => ctx.get(p)?.ownBats)) groups.push('bats')
   return groups
 }
 

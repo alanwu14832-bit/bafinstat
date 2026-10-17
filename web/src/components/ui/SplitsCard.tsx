@@ -54,7 +54,7 @@ function columnsFor(side: SplitSide, compact = false): Column<View>[] {
 }
 const COMPACT = ['label', 'pa', 'avg', 'obp', 'ops']
 
-export function SplitsCard({ side, rows, title, subtitle, who, action, id }: {
+export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPlayer }: {
   side: SplitSide
   /** the plate appearances to split (already filtered) */
   rows: Array<BattingPA | PitchingPA>
@@ -62,6 +62,8 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id }: {
   subtitle?: string
   /** whose rows these are, for the CSV (「全隊」, a name) */
   who: string
+  /** the rows are one player's: no 左右打 tab for a batter (his own side is a single row; 對左右投 is his split) */
+  perPlayer?: boolean
   /** e.g. the 「對象」 picker */
   action?: ReactNode
   id?: string
@@ -69,7 +71,7 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id }: {
   const s = useStats()
   const filters = useDataStore((st) => st.filters)
   const ctx = useMemo(() => paContexts(s.dataset, side), [s.dataset, side])
-  const groups = useMemo(() => availableGroups(side, s.dataset, ctx), [side, s.dataset, ctx])
+  const groups = useMemo(() => availableGroups(side, s.dataset, ctx, perPlayer), [side, s.dataset, ctx, perPlayer])
   const [picked, setGroup] = useState<SplitGroup>('count')
   const group = groups.includes(picked) ? picked : 'count'
   const roster = s.dataset.roster

@@ -20,7 +20,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
+import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -34,7 +34,7 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveBall, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
@@ -354,8 +354,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   useEffect(() => { if (implied && !plan) choose(implied) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [implied])
 
   const params = useDataStore((st) => st.params)
-  const pitchCount = useMemo(() => { const m = new Map<string, number>(); for (const p of state.pitching) m.set(p.pitcher, (m.get(p.pitcher) ?? 0) + p.pitches.length); return m }, [state.pitching])
-  const currentCount = (pitchCount.get(state.pitcher) ?? 0) + (side === 'opp' ? state.pitches.length : 0)
+  // (each pitcher's own pitches: a pitcher who left in the middle of a count keeps the ones he threw — priorPitchers)
+  const pitchCount = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of state.pitching) for (const part of pitchesByPitcher(p)) m.set(part.pitcher, (m.get(part.pitcher) ?? 0) + part.pitches.length)
+    for (const pr of state.priorPitchers ?? []) m.set(pr.name, (m.get(pr.name) ?? 0) + pr.pitches)
+    return m
+  }, [state.pitching, state.priorPitchers])
+  const currentCount = (pitchCount.get(state.pitcher) ?? 0) + (side === 'opp' ? liveSplit(state).current : 0)
   const countTone = currentCount >= params.pitchMax ? 'critical' : currentCount >= params.pitchWarn ? 'warning' : 'ok'
   // 投手休息表 (Pitch Smart 建議): pitches today = this game + his other games today (a doubleheader). This game's own
   // rows are left out of the saved games (in cloud mode they are synced there already), so nothing counts twice.
@@ -667,12 +673,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
                       <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)}
                         mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined}
-                        outAt={{ show: side === 'us' && !!plan.runningOuts?.includes(r.row), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
+                        outAt={{ show: plan.runners[r.row] === 'out' && (!!plan.runningOuts?.includes(r.row) || liveBall(plan.result)), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
                     ))}
                     <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
                       // (we bat) he reached and was put out on the same play: 壘上出局 by itself, 壘死 when it was his own mistake
                       mistake={side === 'us' && reachedOn(plan.result) ? { on: !!plan.batterRunningOut, set: (on) => { setDest('batter', 'out'); setPlan((p) => (p ? { ...p, batterRunningOut: on } : p)) } } : undefined}
-                      outAt={{ show: side === 'us' && reachedOn(plan.result) && plan.batter === 'out', value: plan.outAt?.batter ?? defaultOutAt(state, plan, 'batter'), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, batter: a } } : p)), name: '打者' }} />
+                      outAt={{ show: reachedOn(plan.result) && plan.batter === 'out', value: plan.outAt?.batter ?? defaultOutAt(state, plan, 'batter'), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, batter: a } } : p)), name: '打者' }} />
                   </div>
                 </div>
                 {(!!plan.throws?.length || !!plan.errAdv?.length || [...state.runners.map((r) => r.row as number | 'batter'), 'batter' as const].some((w) => beyondDefault(state, plan, w))) && <p className="text-[11px] text-muted -mt-1">{ADV_HINT}</p>}

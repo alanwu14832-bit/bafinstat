@@ -11,6 +11,7 @@ import { TEAM } from '../config/team'
 import { addDays, weekday } from '../lib/dates'
 import { playedGames } from './filters'
 import { outsCredited, pitchTotals } from './stats'
+import { pitchesByPitcher } from './types'
 import { isPA, type Dataset } from './types'
 
 /** Same shape as TEAM_DEFAULTS.pitchRest. */
@@ -81,11 +82,16 @@ export function outings(ds: Dataset): Outing[] {
   const rows = ds.pitching.filter((p) => ids.has(p.gameId))
   const credit = outsCredited(rows)
   const by = new Map<string, Outing>()
-  for (const p of rows) {
-    const key = `${p.gameId}\u0000${p.pitcher}`
+  const outing = (gameId: string, pitcher: string) => {
+    const key = `${gameId}\u0000${pitcher}`
     let o = by.get(key)
-    if (!o) { o = { pitcher: p.pitcher, gameId: p.gameId, date: '', opponent: '', pitches: 0, batters: 0, outs: 0, unknownPAs: 0 }; by.set(key, o) }
-    o.pitches += pitchTotals(p.pitches ?? []).pitches
+    if (!o) { o = { pitcher, gameId, date: '', opponent: '', pitches: 0, batters: 0, outs: 0, unknownPAs: 0 }; by.set(key, o) }
+    return o
+  }
+  for (const p of rows) {
+    const o = outing(p.gameId, p.pitcher)
+    // each pitcher's own pitches (a pitcher who left in the middle of a count keeps the ones he threw)
+    for (const part of pitchesByPitcher({ ...p, pitches: p.pitches ?? [] })) outing(p.gameId, part.pitcher).pitches += pitchTotals(part.pitches).pitches
     o.outs += credit.get(p) ?? 0
     if (isPA(p)) {
       o.batters += 1
