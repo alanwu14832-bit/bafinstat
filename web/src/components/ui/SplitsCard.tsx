@@ -54,7 +54,7 @@ function columnsFor(side: SplitSide, compact = false): Column<View>[] {
 }
 const COMPACT = ['label', 'pa', 'avg', 'obp', 'ops']
 
-export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPlayer }: {
+export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPlayer, only }: {
   side: SplitSide
   /** the plate appearances to split (already filtered) */
   rows: Array<BattingPA | PitchingPA>
@@ -64,6 +64,8 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   who: string
   /** the rows are one player's: no 左右打 tab for a batter (his own side is a single row; 對左右投 is his split) */
   perPlayer?: boolean
+  /** show just this one tab (no tab bar), even before anything is recorded for it: 對左右打 for pitchers ('bats'), 對左右投 for batters ('hand') */
+  only?: SplitGroup
   /** e.g. the 「對象」 picker */
   action?: ReactNode
   id?: string
@@ -73,7 +75,7 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   const ctx = useMemo(() => paContexts(s.dataset, side), [s.dataset, side])
   const groups = useMemo(() => availableGroups(side, s.dataset, ctx, perPlayer), [side, s.dataset, ctx, perPlayer])
   const [picked, setGroup] = useState<SplitGroup>('count')
-  const group = groups.includes(picked) ? picked : 'count'
+  const group = only ?? (groups.includes(picked) ? picked : 'count')
   const roster = s.dataset.roster
   const innings = s.params.inningsPerGame
   const table = useMemo(() => splitTable(rows, ctx, side, group, { roster, innings }), [rows, ctx, side, group, roster, innings])
@@ -82,6 +84,8 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   const columns = useMemo(() => (tableView.compact ? columnsFor(side, true).filter((c) => COMPACT.includes(c.key)) : full), [tableView.compact, side, full])
   const view: View[] = table.rows.map((r) => ({ id: r.key, label: r.label, desc: r.desc, small: r.small, all: r.all, pa: r.line.pa, ab: r.line.ab, h: r.line.h, h2: r.line.h2, hr: r.line.hr, bb: r.line.bb, so: r.line.so, avg: r.line.avg, obp: r.line.obp, slg: r.line.slg, ops: r.line.ops, kPct: r.line.kPct, bbPct: r.line.bbPct }))
   const any = rows.some((r) => ctx.has(r))
+  // (only) no plate appearance has the hand recorded yet
+  const noHand = !!only && table.rows[0].line.pa === 0
   const groupLabel = SPLIT_GROUP_LABEL[group](side)
   const note = (() => {
     if (group === 'count') return `球數由逐球紀錄推算：界外球在兩好球前算一個好球，兩好球後不加。記成『好球（S）』的球當作沒揮。沒記逐球的打席不列入（這段期間有 ${table.missing} 個）。`
@@ -103,11 +107,14 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   return (
     <Card id={id} title={title ?? '情境拆分'} subtitle={sub} flush
       action={<span className="flex items-center gap-2 flex-wrap justify-end">{action}{tableView.toggle}<Button size="sm" variant="ghost" icon={<Download />} title="把目前分頁的表下載成 CSV，可用 Excel 開" onClick={csv} disabled={!any}>CSV</Button></span>}>
-      {!any ? <EmptyState compact title="目前篩選條件下沒有打席" /> : (
+      {!any ? <EmptyState compact title="目前篩選條件下沒有打席" /> : noHand ? (
+        <EmptyState compact title={side === 'pit' ? '目前篩選條件下，還沒有記對方打者左右打的打席' : '目前篩選條件下，還沒有記對方投手左右投的打席'}
+          description={side === 'pit' ? '紀錄比賽時每個打席都要選對方打者左打或右打，記了才會出現。' : '紀錄比賽時要選對方投手左投或右投，記了才會出現。'} />
+      ) : (
         <>
-          <div className="px-5 py-3 border-b border-border">
+          {!only && <div className="px-5 py-3 border-b border-border">
             <Tabs size="sm" aria-label="情境" value={group} onChange={setGroup} items={groups.map((g) => ({ value: g, label: SPLIT_GROUP_LABEL[g](side) }))} />
-          </div>
+          </div>}
           {group === 'count' && <div className="px-5 py-4 border-b border-border"><CountGrid rows={rows} ctx={ctx} side={side} roster={roster} /></div>}
           <DataTable columns={columns} rows={view} rowKey={(r) => r.id} dense maxHeight={520} />
           {note && <p className="px-5 py-3 text-[12px] text-muted leading-5 border-t border-border">{note}</p>}

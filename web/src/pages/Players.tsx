@@ -606,6 +606,7 @@ export function PlayersPage() {
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
           {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          <SplitsCard side="bat" only="hand" title="對左投・對右投" subtitle="這位打者面對左投、右投的成績；打席不到 10 個的列變淡。" rows={splitBat} who={player.name} perPlayer />
           <SplitsCard side="bat" rows={splitBat} who={player.name} perPlayer />
           <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
             <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
@@ -646,6 +647,7 @@ export function PlayersPage() {
           </div>
           {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
             : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
+          <SplitsCard side="pit" only="bats" title="對左打・對右打" subtitle="這位投手面對左打者、右打者的成績（被打擊率、被OPS 越低越好）；打席不到 10 個的列變淡。" rows={splitPit} who={player.name} />
           <SplitsCard side="pit" rows={splitPit} who={player.name} title="情境拆分（面對的打者）" />
           <Card title="逐場投球" subtitle="點一列看那一場" flush>
             <DataTable columns={pitchCols} rows={pitchLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
