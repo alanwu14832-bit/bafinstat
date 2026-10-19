@@ -208,7 +208,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const editable = !current.game.isDemo ? extractGame(base, id) : null
   // batting-order slot (a 代跑 who never batted sits in the slot he ran for), then first appearance (data/boxScore.ts:
   // the lines 即時比分's Box Score shows too)
-  const boxB = useMemo(() => ourBattingBox(s.dataset, s.dataset.batting.filter((p) => p.gameId === id)), [id, s.dataset])
+  const boxB = useMemo(() => ourBattingBox(s.dataset, s.dataset.batting.filter((p) => p.gameId === id), undefined, current.game.dayRoster?.starters), [id, s.dataset, current.game.dayRoster])
   const pbpBat = useMemo(() => s.dataset.batting.filter((p) => p.gameId === id), [id, s.dataset])
   const pbpPit = useMemo(() => s.dataset.pitching.filter((p) => p.gameId === id), [id, s.dataset])
   // 獲勝機率: this game's events, its key plays, and WPA on the box score and the 逐球 rows
@@ -225,7 +225,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const oppTot = useMemo(() => oppTotals(pbpPit), [pbpPit])
   const oppNamed = useMemo(() => pbpPit.some(hasOppName), [pbpPit])
   const innings = Math.max(current.lineUs.length, current.lineOpp.length)
-  const sheetUs = useMemo(() => buildScoresheet(pbpBat, 'bat', { innings, subs: current.game.dayRoster?.subs }), [pbpBat, innings, current.game.dayRoster])
+  const sheetUs = useMemo(() => buildScoresheet(pbpBat, 'bat', { innings, subs: current.game.dayRoster?.subs, starters: current.game.dayRoster?.starters }), [pbpBat, innings, current.game.dayRoster])
   const sheetOpp = useMemo(() => buildScoresheet(pbpPit, 'pit', { innings }), [pbpPit, innings])
   const statUs = useMemo(() => { const m = new Map(boxB.map((l) => [l.name, l])); return (n: string) => m.get(n) }, [boxB])
   const statOpp = useMemo(() => { const m = new Map(oppLines.map((l) => [l.label, { ab: l.ab, h: l.h, rbi: l.rbi }])); return (n: string) => m.get(n) }, [oppLines])

@@ -96,7 +96,7 @@ const endBase = (e: End): number => (e === 'home' ? 4 : e === 'out' ? 0 : e)
  * pitching = their batting for 'pit'). `innings`: the scheduled length (the grid shows at least that many).
  * `subs`: the game's dayRoster.subs, so a defensive replacement who never batted still gets his slot line.
  */
-export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number; subs?: DayRosterSub[] }): Scoresheet {
+export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number; subs?: DayRosterSub[]; /** (ours) the 當日登錄名單's starters: one who was replaced before he batted is listed too */ starters?: Array<{ name: string; pos?: string; order?: number }> }): Scoresheet {
   const halves = inferAll(rows, side)
   const unfollowed: number[] = []
   const notes = rows.map(() => [] as string[])
@@ -167,6 +167,8 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
   // a substitute reads the same way everywhere: 代打 / 代跑 (the rows store PH / PR)
   const addPlayer = (l: SheetLine, p: SheetPlayer) => { if (!l.players.some((x) => x.name === p.name)) l.players.push(p.pos && SUB_POS[p.pos] ? { ...p, pos: SUB_POS[p.pos] } : p) }
   const prDone = new Set<string>()
+  // the starters first, each at the top of his slot (also the one replaced before he ever batted)
+  if (side === 'bat') for (const st of opts.starters ?? []) if (st.order && st.name) addPlayer(lineFor(st.order), { name: st.name, ...(st.pos ? { pos: st.pos } : {}) })
 
   rows.forEach((r, k) => {
     const t = perInning[r.inning] ?? (perInning[r.inning] = { r: 0, h: 0, e: 0, lob: 0 })
