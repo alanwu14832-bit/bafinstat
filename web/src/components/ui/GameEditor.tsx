@@ -712,8 +712,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
             </div>
             <div className="flex flex-col gap-2">
               <div className="text-[12px] font-medium text-ink-2">每局守備 <span className="text-muted font-normal">依先發與替補紀錄；失誤、刺殺、助殺算給當時守那個位置的人</span></div>
-              <DefenseByInning roster={rosterNow} innings={Math.max(game.innings ?? 0, ...pitRows.map((p) => p.inning), ...batRows.map((p) => p.inning), 1)} homeAway={game.homeAway} names={names}
-                onAdd={(x) => setSubs((l) => [...l, x])} />
+              <DefenseByInning roster={rosterNow} innings={Math.max(game.innings ?? 0, ...pitRows.map((p) => p.inning), ...batRows.map((p) => p.inning), 1)} homeAway={game.homeAway} names={names} bench={bench} subs={subs} reentry={reentry}
+                onAdd={(x) => setSubs((l) => [...l, x])} onRemove={(i) => setSubs((l) => l.filter((_, k) => k !== i))} />
             </div>
           </div>
         )}
