@@ -19,7 +19,9 @@ const chip = (on: boolean) => cx('h-9 pointer-fine:h-8 min-w-9 px-2.5 rounded-[v
  * someone in the game moves there (a 守位變動; the position he left is flagged as empty until it is filled). The changes
  * of the inning are listed under the grid, each with its own delete.
  */
-export function DefenseByInning({ roster, innings, homeAway, names, bench = [], subs = [], reentry = false, onAdd, onRemove }: {
+export function DefenseByInning({ roster, innings, homeAway, names, bench = [], subs = [], reentry = false, onAdd, onRemove, battersIn }: {
+  /** how many of their batters came up in an inning (the change can start in the middle of it: 從第 N 位打者起) */
+  battersIn?: (inning: number) => number
   roster?: Pick<GameDayRoster, 'starters' | 'subs'>
   innings: number
   homeAway: HomeAway
@@ -39,6 +41,7 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
   const [who, setWho] = useState('')
   // someone coming in at an empty position: who he replaces (no one stands there to take over from)
   const [forWho, setForWho] = useState('')
+  const [fromRow, setFromRow] = useState(0)
   const half: 'top' | 'bottom' = homeAway === '客' ? 'bottom' : 'top'
   const timeline = useMemo(() => defenseTimeline(roster), [roster])
   const n = Math.max(1, innings)
@@ -66,8 +69,8 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
     if (!out) return
     // the batting slot goes with the change (the Box Score and 逐局表 place him by it): his own, or the one he takes over
     const slot = d.slot.get(out)
-    onAdd({ kind: 'DEF', in: who, out, pos, inning: at, half, ...(slot === undefined ? {} : { slot }) })
-    setWho(''); setPos(''); setForWho('')
+    onAdd({ kind: 'DEF', in: who, out, pos, inning: at, half, ...(slot === undefined ? {} : { slot }), ...(fromRow > 0 ? { row: fromRow } : {}) })
+    setWho(''); setPos(''); setForWho(''); setFromRow(0)
   }
   // a change counts from the first half we field at or after it (one logged while we bat — a 代打 who stays in — shows
   // in the next inning we field, as the grid already has it)
@@ -131,6 +134,14 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
                 {[...d.inGame].map((x) => <button key={x} type="button" aria-pressed={forWho === x} onClick={() => setForWho(x)} className={chip(forWho === x)}>{x}{tag(x)}</button>)}
               </div>
             </div>
+          )}
+          {/* (the change in the middle of the inning: the errors and putouts before it stay with who stood there then) */}
+          {who && (battersIn?.(at) ?? 0) > 1 && (
+            <label className="flex items-center gap-2 text-[12px] text-ink-2 flex-wrap">從
+              <select value={fromRow} onChange={(e) => setFromRow(Number(e.target.value))} className="h-9 pointer-fine:h-8 rounded-[var(--radius-sm)] border border-border bg-surface px-2 text-[13px]">
+                {Array.from({ length: battersIn!(at) }, (_, k) => <option key={k} value={k}>{k === 0 ? '這局一開始' : `這局第 ${k + 1} 位打者`}</option>)}
+              </select>起生效
+            </label>
           )}
           {sentence && <p className="text-[13px] text-ink">{sentence}{entering && played.has(who) && !reentry ? '（他已下場：要在上面的板凳勾「允許被換下的球員再上場」）' : ''}</p>}
           <div className="flex items-center gap-2">

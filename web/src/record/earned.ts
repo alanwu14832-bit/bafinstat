@@ -243,6 +243,8 @@ function lastStepUnsure(rows: PitchingPA[], half: Half): boolean {
   return !(last.batter === 'out' && last.outs[last.outs.length - 1] === last.index && batterEndFor(rows[last.index]?.result ?? '') === 'out')
 }
 
+/** Put on a run's row note when the recorder keeps a call made by hand (比賽頁「這是我的判定，不用再提醒」). */
+export const EARNED_BY_HAND_NOTE = '自責分人工判定'
 /** Runs whose code is not what the rules say (older games, or a call made by hand), for the recorder to review. */
 export function earnedRepairs(pitching: PitchingPA[]): EarnedFix[] {
   const out: EarnedFix[] = []
@@ -251,7 +253,7 @@ export function earnedRepairs(pitching: PitchingPA[]): EarnedFix[] {
     const unsure = lastStepUnsure(pitching, half) ? new Set(runsIn(half.steps[half.steps.length - 1])) : new Set<number>()
     for (const [i, c] of earnedCalls(pitching, half)) {
       const r = pitching[i]
-      if (!isRun(r) || unsure.has(i)) continue
+      if (!isRun(r) || unsure.has(i) || r.note?.includes(EARNED_BY_HAND_NOTE)) continue
       const to = c.earned ? 'ER' : 'R'
       if (r.code === to) continue
       out.push({ index: i, inning: r.inning, name: `對方${r.oppBatter ? ` ${r.oppBatter}` : r.oppOrder ? `第 ${r.oppOrder} 棒` : ''}（投手 ${r.pitcher}）`, from: r.code as 'R' | 'ER', to, why: c.why })

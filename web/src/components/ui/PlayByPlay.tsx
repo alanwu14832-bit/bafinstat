@@ -26,8 +26,8 @@ const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }>
   B: { label: 'B', cls: 'bg-surface-3 text-ink-2', title: '壞球' },
 }
 
-/** One chip per pitch; with `onRemove` each chip is a button that deletes that pitch. */
-export function PitchChips({ pitches, onRemove }: { pitches: string[]; onRemove?: (index: number) => void }) {
+/** One chip per pitch; with `onRemove` each chip is a button (修改資料: it picks that pitch to change; `verb` names it). */
+export function PitchChips({ pitches, onRemove, verb = '刪除', picked }: { pitches: string[]; onRemove?: (index: number) => void; verb?: string; picked?: number }) {
   if (!pitches.length) return <span className="text-muted">—</span>
   return (
     <span className="inline-flex flex-wrap gap-1">
@@ -35,7 +35,7 @@ export function PitchChips({ pitches, onRemove }: { pitches: string[]; onRemove?
         const s = PITCH_STYLE[p] ?? { label: p, cls: 'bg-surface-2 text-ink-2', title: p }
         const cls = cx('inline-flex items-center justify-center px-1 rounded-[4px] font-medium tnum', s.cls)
         return onRemove
-          ? <button key={i} type="button" onClick={() => onRemove(i)} title={`刪除第 ${i + 1} 球（${s.title}）`} aria-label={`刪除第 ${i + 1} 球 ${s.title}`} className={cx(cls, 'h-8 min-w-8 text-[12px] cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/50')}>{s.label}</button>
+          ? <button key={i} type="button" onClick={() => onRemove(i)} aria-pressed={picked === undefined ? undefined : picked === i} title={`${verb}第 ${i + 1} 球（${s.title}）`} aria-label={`${verb}第 ${i + 1} 球 ${s.title}`} className={cx(cls, picked === i && 'ring-2 ring-[var(--ink)]', 'h-8 min-w-8 text-[12px] cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/50')}>{s.label}</button>
           : <span key={i} title={`第 ${i + 1} 球：${s.title}`} className={cx(cls, 'h-5 min-w-5 text-[11px]')}>{s.label}</span>
       })}
     </span>
@@ -57,9 +57,9 @@ function PlayPill({ e, who, big, onRemove }: { e: PlayEvent; who?: string; big?:
  * 逐球 with the runner plays between them: 「B  CS  [暴投 1B→2B]  B  [盜壘 2B→3B]  IP」. With the remove handlers each
  * pitch and play is a button that deletes it (the plate-appearance editor).
  */
-export function PitchPlays({ pitches, events, whoOf, onRemovePitch, onRemovePlay }: { pitches: string[]; events?: PlayEvent[]; whoOf?: (n: number) => string | undefined; onRemovePitch?: (index: number) => void; onRemovePlay?: (n: number) => void }) {
+export function PitchPlays({ pitches, events, whoOf, onRemovePitch, onRemovePlay, verb, picked }: { pitches: string[]; events?: PlayEvent[]; whoOf?: (n: number) => string | undefined; onRemovePitch?: (index: number) => void; onRemovePlay?: (n: number) => void; verb?: string; picked?: number }) {
   const plays = (events ?? []).map((e, n) => ({ e, n }))
-  if (!plays.length) return <PitchChips pitches={pitches} onRemove={onRemovePitch} />
+  if (!plays.length) return <PitchChips pitches={pitches} onRemove={onRemovePitch} verb={verb} picked={picked} />
   const at = (k: number) => plays.filter(({ e }) => (k < pitches.length ? e.at === k : e.at >= k))
   const pill = ({ e, n }: { e: PlayEvent; n: number }) => <PlayPill key={`p${n}`} e={e} who={whoOf?.(n)} big={!!onRemovePlay} onRemove={onRemovePlay && (() => onRemovePlay(n))} />
   return (
@@ -67,7 +67,7 @@ export function PitchPlays({ pitches, events, whoOf, onRemovePitch, onRemovePlay
       {at(0).map(pill)}
       {pitches.map((p, i) => (
         <Fragment key={i}>
-          <PitchChips pitches={[p]} onRemove={onRemovePitch && (() => onRemovePitch(i))} />
+          <PitchChips pitches={[p]} onRemove={onRemovePitch && (() => onRemovePitch(i))} verb={verb} picked={picked === i ? 0 : picked === undefined ? undefined : -1} />
           {at(i + 1).map(pill)}
         </Fragment>
       ))}

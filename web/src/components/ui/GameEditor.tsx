@@ -16,7 +16,7 @@ import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
 import { PaList, PaPanel, type PaSide } from './PaEditor'
 import { auditGame } from '../../data/audit'
-import { applyOppBats, applyOppPitcher, blankBattingAt, oppSlotRowsOf, oppStintOf, blankPitchingAt, rowName, stillOn } from '../../record/paEdit'
+import { applyOppBats, applyOppPitcher, blankBattingAt, oppSlotRowsOf, oppStintOf, blankPitchingAt, rowName, shiftOrders, stillOn } from '../../record/paEdit'
 import { HoldPicker } from './HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
@@ -73,15 +73,16 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
       <table className="border-collapse text-[12px] min-w-full">
         <thead className="bg-surface-2/60">
           <tr>
-            <th className="px-2 h-8 text-left text-[11px] font-medium text-muted w-8">#</th>
-            {cols.map((c) => <th key={c.key} className="px-1 h-8 text-left text-[11px] font-medium text-muted whitespace-nowrap" style={{ minWidth: c.w ?? 64 }}>{c.label}</th>)}
+            {/* (# and the name stay in view while the table scrolls sideways on a phone) */}
+            <th className="px-2 h-8 text-left text-[11px] font-medium text-muted w-8 sticky left-0 z-[1] bg-surface-2">#</th>
+            {cols.map((c) => <th key={c.key} className={cx('px-1 h-8 text-left text-[11px] font-medium text-muted whitespace-nowrap', c.kind === 'name' && 'sticky left-8 z-[1] bg-surface-2')} style={{ minWidth: c.w ?? 64 }}>{c.label}</th>)}
             <th className="px-2 h-8 w-[88px]" />
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-border">
-              <td className="px-2 py-1 text-muted tnum">{i + 1}</td>
+              <td className="px-2 py-1 text-muted tnum sticky left-0 z-[1] bg-surface">{i + 1}</td>
               {cols.map((c) => {
                 const v = (r as Record<string, unknown>)[c.key]
                 const str = v === undefined || v === null ? '' : String(v)
@@ -98,7 +99,7 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
                 if (c.kind === 'name') {
                   // names come from the roster dropdown; a name that is not on the roster stays selectable so nothing is lost
                   return (
-                    <td key={c.key} className="px-1 py-1">
+                    <td key={c.key} className="px-1 py-1 sticky left-8 z-[1] bg-surface">
                       <select value={str} onChange={(e) => update(i, c.key, e.target.value, c.kind)} className={cx(cell, 'appearance-none pr-1 cursor-pointer')} style={{ width: c.w ?? 96 }} aria-label={c.label} data-list={listId}>
                         <option value=""></option>
                         {(str && !names.includes(str) ? [str, ...names] : names).map((o) => <option key={o} value={o}>{o}</option>)}
@@ -261,10 +262,22 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   // the half-innings a plate appearance was inserted into or deleted from: their runners must add up again before saving
   const [touched, setTouched] = useState<Set<string>>(() => new Set())
   const touch = (side: PaSide, inning: number) => setTouched((t) => new Set(t).add(`${side}:${inning}`))
+  // the table changed a result, the bases or the outs of a row (or added / removed one): that half must add up again too
+  const touchTable = (side: PaSide, was: Array<BatDraft | PitDraft>, next: Array<BatDraft | PitDraft>) => {
+    const key = (r?: BatDraft | PitDraft) => (r ? `${r.inning}|${r.result}|${r.basesBefore ?? ''}|${r.outsBefore ?? ''}|${r.code ?? ''}` : '')
+    for (let i = 0; i < Math.max(was.length, next.length); i++) if (key(was[i]) !== key(next[i])) for (const r of [was[i], next[i]]) if (r) touch(side, +r.inning || 1)
+  }
   const insertPa = (side: PaSide, at: number, inning?: number) => {
     const rows = side === 'bat' ? batRows : pitRows
-    if (side === 'bat') setBat((b) => [...b.slice(0, at), toBatDraft(blankBattingAt(b.map(fromBatDraft), at, game.id, inning)), ...b.slice(at)])
-    else setPit((p) => [...p.slice(0, at), toPitDraft(blankPitchingAt(p.map(fromPitDraft), at, game.id, inning)), ...p.slice(at)])
+    // after a half that already has its third out: it goes into the next inning (unless the recorder says otherwise)
+    const prev = rows[at - 1]
+    if (prev && prev.code === 'III' && (inning === undefined || inning === prev.inning) && at === rows.filter((r) => r.inning <= prev.inning).length
+      && window.confirm(`第 ${prev.inning} 局已經三出局：新的打席加在第 ${prev.inning + 1} 局？（按「取消」仍加在第 ${prev.inning} 局）`)) inning = prev.inning + 1
+    // the plate appearances after it: one slot further along the order (棒次 and who holds it), if that is what happened
+    const later = rows.slice(at).filter((r) => (side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder) && r.result).length
+    const shift = later > 0 && window.confirm(`後面 ${later} 個打席的棒次要一起往後順延一棒嗎？（漏記一個打席時通常要；只是補一列就按「取消」）`)
+    if (side === 'bat') setBat((b) => { const rows2 = [...b.slice(0, at).map(fromBatDraft), blankBattingAt(b.map(fromBatDraft), at, game.id, inning), ...b.slice(at).map(fromBatDraft)]; return (shift ? shiftOrders(rows2, at + 1, 1) : rows2).map(toBatDraft) })
+    else setPit((p) => { const rows2 = [...p.slice(0, at).map(fromPitDraft), blankPitchingAt(p.map(fromPitDraft), at, game.id, inning), ...p.slice(at).map(fromPitDraft)]; return (shift ? shiftOrders(rows2, at + 1, 1) : rows2).map(toPitDraft) })
     touch(side, inning ?? rows[at - 1]?.inning ?? rows[at]?.inning ?? 1)
     setSel({ side, index: at })
   }
@@ -557,15 +570,62 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     return { step, nameOf: nameOf(side), batterOf: batterOf(side), onEnd: (who, end) => onEnd(who, end), onPlay, onRemovePlay, throwOf, onThrow, onThrowUp, onResult, runningOut, outAt, batterMistake,
       ...(side === 'pit' ? { earned: { of: (row: number) => pitRows[row]?.code !== 'R', rule: (row: number) => earnedNow.get(row), toggle: (row: number) => setPit((p) => p.map((x, k) => (k === row && (x.code === 'R' || x.code === 'ER') ? { ...x, code: x.code === 'R' ? 'ER' : 'R' } : x))) } } : {}), notice: tlNotice, ...pinch }
   }
+  // 下一個缺落點／軌跡的: after this one, then from the top; none left (or only this one) = no button
+  const nextMissingFrom = (rows: Array<BattingPA | PitchingPA>, i: number) => {
+    const all = rows.flatMap((r, k) => (k !== i && missingBattedBall(r).length ? [k] : []))
+    return all.find((k) => k > i) ?? all[0]
+  }
+  // a plate appearance's batter changed to someone who had not been in the game: a 代打 the recorder missed — offered
+  // to the 登錄名單 (replacing whoever had that slot), so the box, the 逐局表 and the 文字轉播 say so too
+  const missedSub = (was: BattingPA, now: BattingPA) => {
+    const name = now.batter.trim()
+    if (!name || name === was.batter || !was.batter || !now.order) return
+    const appeared = batRows.some((r) => r.batter === name || r.runner === name) || starters.some((x) => x.name === name) || subs.some((x) => x.in === name)
+    if (appeared) return
+    if (!window.confirm(`把 ${name} 記成代打（第 ${now.inning} 局，替 ${was.batter}，第 ${now.order} 棒）？會加進「登錄名單」的替補紀錄；按「取消」只改這個打席的名字。`)) return
+    setSubs((l) => [...l, { kind: 'PH', in: name, out: was.batter, pos: 'PH', inning: now.inning, half: game.homeAway === '客' ? 'top' : 'bottom', slot: now.order! - 1 }])
+  }
+  // two starters' 棒次 traded (the order was written down wrong): their plate appearances can trade names too
+  // (against the 登錄名單 as the game was opened: the two 棒次 are typed one at a time; asked once per pair)
+  const swapAsked = useRef(new Set<string>())
+  const swapSlots = (was: StarterDraft[], next: StarterDraft[]) => {
+    const before = new Map(was.map((x) => [x.name, x.order]))
+    const moved = next.flatMap((x) => { const from = before.get(x.name); return x.name && from && x.order && from !== x.order ? [{ name: x.name, from, to: x.order }] : [] })
+    if (moved.length !== 2 || moved[0].from !== moved[1].to || moved[1].from !== moved[0].to) return
+    const [a, b] = moved
+    const pair = [a.name, b.name].sort().join('|')
+    if (swapAsked.current.has(pair)) return
+    swapAsked.current.add(pair)
+    const count = batRows.filter((r) => (r.order === a.from && r.batter === a.name) || (r.order === b.from && r.batter === b.name)).length
+    if (!count || !window.confirm(`${a.name} 改第 ${a.to} 棒、${b.name} 改第 ${b.to} 棒：這兩棒的 ${count} 個打席要一起換人嗎？（第 ${a.from} 棒的打席改成 ${b.name}，第 ${b.from} 棒的打席改成 ${a.name}）`)) return
+    setBat((rows) => rows.map((r) => (r.order === a.from && r.batter === a.name ? { ...r, batter: b.name } : r.order === b.from && r.batter === b.name ? { ...r, batter: a.name } : r)))
+  }
+  // someone put in for another in 每局守備: the one who left still batting after it is most likely the one who came in
+  const laterBats = (x: DayRosterSub) => {
+    if (!x.out || x.out === x.in) return
+    const ourHalf = game.homeAway === '客' ? 'top' : 'bottom'
+    const after = (r: BattingPA) => r.inning > x.inning || (r.inning === x.inning && (x.half === ourHalf ? false : ourHalf === 'bottom'))
+    const rows = batRows.filter((r) => r.batter === x.out && after(r))
+    if (!rows.length || !window.confirm(`${x.out} 在第 ${x.inning} 局被換下，但之後還有 ${rows.length} 個打席記在他名下：要改成 ${x.in} 嗎？`)) return
+    setBat((b) => b.map((d) => { const r = fromBatDraft(d); return r.batter === x.out && after(r) ? { ...d, batter: x.in } : d }))
+  }
   const paPanel = (side: PaSide) => {
     const rows = side === 'bat' ? batRows : pitRows
     if (!sel || sel.side !== side || !rows[sel.index]) return null
     const i = sel.index
     return (
-      <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames}
-        onChange={(pa) => (side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x))).map(toPitDraft)))}
+      <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames} nextMissing={nextMissingFrom(rows, i)}
+        onChange={(pa) => { if (side === 'bat') missedSub(rows[i] as BattingPA, pa as BattingPA); return side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x))).map(toPitDraft)) }}
         onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
-        onDelete={() => { touch(side, rows[i].inning); setRows(side, (r) => r.filter((_, k) => k !== i)); setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null) }}
+        onDelete={() => {
+          touch(side, rows[i].inning)
+          // the plate appearances after it: one slot back along the order, if this one was recorded by mistake
+          const later = rows.slice(i + 1).filter((r) => (side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder) && r.result).length
+          const shift = later > 0 && window.confirm(`後面 ${later} 個打席的棒次要一起往前移一棒嗎？（多記了一個打席時通常要）`)
+          if (side === 'bat') setBat((b) => { const rows2 = b.filter((_, k) => k !== i).map(fromBatDraft); return (shift ? shiftOrders(rows2, i, -1) : rows2).map(toBatDraft) })
+          else setPit((p) => { const rows2 = p.filter((_, k) => k !== i).map(fromPitDraft); return (shift ? shiftOrders(rows2, i, -1) : rows2).map(toPitDraft) })
+          setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null)
+        }}
         onInsert={(at, inning) => insertPa(side, at, inning)}
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
@@ -724,7 +784,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         {/* folded by default: most fixes are to plate appearances, which then sit right under the tabs */}
         <button type="button" aria-expanded={infoOpen} onClick={() => setInfoOpen(!infoOpen)} className="flex items-center gap-2 text-left cursor-pointer min-h-9 pointer-fine:min-h-7 group">
           <ChevronRight className={cx('size-4 text-muted transition-transform motion-reduce:transition-none', infoOpen && 'rotate-90')} />
-          <span className="text-[13px] font-semibold text-ink">比賽資訊</span>
+          <span className="text-[13px] font-semibold text-ink whitespace-nowrap shrink-0">比賽資訊</span>
           <span className="text-[12px] text-muted tnum truncate min-w-0">{game.id}{infoOpen ? '' : `・${game.date}・vs ${game.opponent}・${game.homeAway === '主' ? '主場' : '客場'}${game.winningPitcher ? `・勝投 ${game.winningPitcher}` : ''}${game.holds?.length ? `・中繼 ${game.holds.join('、')}` : ''}`}</span>
           <span className="ml-auto text-[12px] text-ink-2 group-hover:text-ink underline underline-offset-2 shrink-0">{infoOpen ? '收起' : '修改'}</span>
         </button>
@@ -764,9 +824,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
             {paView === 'table' && <span className="text-xs text-muted">一次看全部欄位，適合大量修改。</span>}
           </div>
         )}
-        {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={setBat} blank={blankBat} listId="game-editor-names" names={names} />
+        {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={(next) => { touchTable('bat', bat, next); setBat(next) }} blank={blankBat} listId="game-editor-names" names={names} />
           : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
-        {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={setPit} blank={blankPit} listId="game-editor-names" names={names} />
+        {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={(next) => { touchTable('pit', pit, next); setPit(next) }} blank={blankPit} listId="game-editor-names" names={names} />
           : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} onAddRelief={addRelief} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
         {tab === 'fld' && (
           <div className="flex flex-col gap-3">
@@ -781,7 +841,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
                 <div className="text-[12px] font-medium text-ink-2">先發 <span className="text-muted font-normal">棒次留空＝不打擊的投手（指定打擊時）</span></div>
                 {starters.length === 0 && bat.some((p) => p.order) && <Button size="sm" variant="ghost" onClick={inferStarters}>由打席推定先發</Button>}
               </div>
-              <EditableTable rows={starters} cols={starterCols} onChange={setStarters} blank={blankStarter} listId="game-editor-names" names={names} />
+              <EditableTable rows={starters} cols={starterCols} onChange={(next) => { swapSlots(initial.game.dayRoster?.starters ?? [], next); setStarters(next) }} blank={blankStarter} listId="game-editor-names" names={names} />
             </div>
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -801,7 +861,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
               </div>
               {subs.length > 0 ? (
                 <ol className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[13px] text-ink-2">
-                  {subs.map((x, i) => (
+                  {/* in game order (inning, top before bottom, then the row), whatever order they were added in */}
+                  {subs.map((x, i) => [x, i] as const).sort(([a], [b]) => (a.inning - b.inning) || (a.half === b.half ? 0 : a.half === 'top' ? -1 : 1) || ((a.row ?? 0) - (b.row ?? 0))).map(([x, i]) => (
                     <li key={i} className="pl-3 pr-1 py-1 tnum flex items-center gap-2 min-h-10">
                       <span className="flex-1 min-w-0">{subText(x)}</span>
                       <button type="button" aria-label={`刪除這筆替補紀錄：${subText(x)}`} onClick={() => setSubs((l) => l.filter((_, k) => k !== i))} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>
@@ -813,7 +874,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
             <div className="flex flex-col gap-2">
               <div className="text-[12px] font-medium text-ink-2">每局守備 <span className="text-muted font-normal">依先發與替補紀錄；失誤、刺殺、助殺算給當時守那個位置的人</span></div>
               <DefenseByInning roster={rosterNow} innings={Math.max(game.innings ?? 0, ...pitRows.map((p) => p.inning), ...batRows.map((p) => p.inning), 1)} homeAway={game.homeAway} names={names} bench={bench} subs={subs} reentry={reentry}
-                onAdd={(x) => setSubs((l) => [...l, x])} onRemove={(i) => setSubs((l) => l.filter((_, k) => k !== i))} />
+                onAdd={(x) => { setSubs((l) => [...l, x]); laterBats(x) }} onRemove={(i) => setSubs((l) => l.filter((_, k) => k !== i))} battersIn={(inn) => pitRows.filter((r) => r.inning === inn).length} />
             </div>
           </div>
         )}

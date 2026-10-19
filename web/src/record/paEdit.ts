@@ -3,7 +3,7 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { END_PITCH, isDouble, isPA, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
+import { END_PITCH, isDouble, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
 import { oppKey } from '../data/opponent'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
@@ -92,6 +92,27 @@ export function blankBattingAt(rows: BattingPA[], at: number, gameId: string, in
   const near = prev ?? rows[at]
   const opp = { ...(near?.oppPitcher ? { oppPitcher: near.oppPitcher } : {}), ...(near?.oppHand ? { oppHand: near.oppHand } : {}) }
   return { gameId, inning: inning ?? prev?.inning ?? rows[at]?.inning ?? 1, order, batter, ...(pos ? { pos } : {}), pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...opp }
+}
+/**
+ * A plate appearance was inserted (delta 1) or deleted (delta -1) at `from`: the rows after it move one slot along the
+ * order — the 棒次 and who holds that slot then (the name last seen in it before; ours by 打者, theirs by 對方打者 when
+ * kept). Rows with no 棒次 (a 突破僵局 runner, 未完成打席 / 未面對打者) are left as they are.
+ */
+export function shiftOrders<T extends BattingPA | PitchingPA>(rows: T[], from: number, delta: 1 | -1): T[] {
+  const ours = (r: T): r is T & BattingPA => 'batter' in r
+  const slotOf = (r: T) => (ours(r) ? r.order : (r as PitchingPA).oppOrder)
+  const nameOf = (r: T) => (ours(r) ? r.batter : (r as PitchingPA).oppBatter)
+  const holder = new Map<number, string | undefined>()
+  rows.slice(0, from).forEach((r) => { const k = slotOf(r); if (k && !isPlaced(r) && !isNoBatter(r)) holder.set(k, ours(r) ? r.runner || r.batter : nameOf(r)) })
+  return rows.map((r, i) => {
+    const k = slotOf(r)
+    if (i < from || !k || isPlaced(r) || isNoBatter(r)) return r
+    const next = ((k - 1 + delta + 9) % 9) + 1
+    const name = holder.has(next) ? holder.get(next) : nameOf(r)
+    const moved = ours(r) ? { ...r, order: next, ...(name ? { batter: name } : {}) } : { ...r, oppOrder: next, ...(name ? { oppBatter: name } : {}) }
+    holder.set(next, ours(r) ? (moved as BattingPA).runner || (moved as BattingPA).batter : nameOf(moved as T))
+    return moved as T
+  })
 }
 /** A blank opponent row to insert at index `at`: inning (or `inning`, as above) and pitcher of the row before it, next
  *  batter in their order. */

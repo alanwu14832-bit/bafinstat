@@ -3,7 +3,7 @@
  * ask first, and the changes stay on this device until saved — the next 修改資料 offers 接著改／丟掉.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { GameEditor } from '../components/ui/GameEditor'
 import { Sheet } from '../components/ui/Sheet'
 import { changeCount, readEditDraft } from '../components/ui/editDraft'
@@ -123,5 +123,20 @@ describe('修改資料: unsaved changes', () => {
     answer = true
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('修改資料: one pitch', () => {
+  it('tap a pitch: insert one before it, change it, or delete it', async () => {
+    const { onSave } = open({ initial: { ...initial, batting: [bat({ pitches: ['B', 'CS', 'IP'] })] } })
+    fireEvent.click(screen.getByRole('button', { name: /^修改第 1 個打席/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^修改第 2 球/ }))
+    fireEvent.click(screen.getByRole('button', { name: '在前面插入一球' }))
+    fireEvent.click(within(screen.getByRole('group', { name: '第 2 球' })).getByRole('button', { name: '壞球' }))
+    fireEvent.click(screen.getByRole('button', { name: /^修改第 1 球/ }))
+    fireEvent.click(screen.getByRole('button', { name: '改成…' }))
+    fireEvent.click(within(screen.getByRole('group', { name: '第 1 球' })).getByRole('button', { name: '界外' }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '儲存修改' })) })
+    expect((onSave.mock.calls[0] as unknown as [GameEdit])[0].batting[0].pitches).toEqual(['F', 'B', 'CS', 'IP'])
   })
 })

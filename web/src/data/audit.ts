@@ -2,7 +2,7 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, LOC_HOLES, type BattingPA, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, isRelief, isUnfinished, LOC_HOLES, type BattingPA, type PitchingPA, type PlayEvent } from './types'
 import { pitchTotals } from './stats'
 import { hasRunnerPlays } from '../record/timeline'
 
@@ -159,6 +159,17 @@ function checkRunsAndSteals(batting: BattingPA[], pitching: PitchingPA[], out: I
 }
 
 /** `place`: where the messages are read (see AuditPlace); the game page by default. */
+/** Each plate appearance is the slot after the last one (a 未完成打席's batter leads off again). */
+function checkOrder(rows: Array<BattingPA | PitchingPA>, side: 'bat' | 'pit', out: Issue[]) {
+  let prev: { k: number; again: boolean } | null = null
+  rows.forEach((r, i) => {
+    const k = side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder
+    if (!k || isPlaced(r) || isRelief(r)) return
+    const want = prev ? (prev.again ? prev.k : (prev.k % 9) + 1) : k
+    if (k !== want) out.push({ side, index: i, message: `第 ${r.inning} 局：棒次接不上（前一個打席第 ${prev!.k} 棒，這裡第 ${k} 棒）：是不是漏記或多記了一個打席？` })
+    prev = { k, again: isUnfinished(r) }
+  })
+}
 export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: AuditPlace = 'page'): Issue[] {
   const out: Issue[] = []
   checkSequence(batting, 'bat', out, place)
@@ -171,7 +182,13 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: A
     if (p.rbi > 0 && (p.result === '三振' || p.result === '雙殺') ) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」通常不會有打點` })
   })
   checkRunsAndSteals(batting, pitching, out)
+  // (修改資料: a 棒次 that does not follow on from the one before — a plate appearance missed, or recorded twice)
+  if (place === 'editor') { checkOrder(batting, 'bat', out); checkOrder(pitching, 'pit', out) }
   pitching.forEach((p, i) => {
+    // their 打點 (the same rule as ours)
+    const rbi = p.rbi ?? 0
+    if (rbi > 4) out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：打點 ${rbi} 超過 4` })
+    if (rbi > 0 && (p.result === '三振' || p.result === '雙殺' || p.result === '失誤')) out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：「${p.result}」通常不會有打點` })
     if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛' && p.result !== '三振') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
   })
   return out

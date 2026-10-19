@@ -70,11 +70,23 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
   const placedAt: Record<number, number> = {}
   if (rows.some(isPlaced)) for (const idx of inningsOf(rows).values()) Object.assign(placedAt, placedBases(rows, idx))
   const hasPlaced = (inning: number) => rows.some((r) => r.inning === inning && isPlaced(r))
+  // 只看缺落點／軌跡: the batted balls still to fill in
+  const missing = rows.flatMap((r, i) => (missingBattedBall(r).length ? [i] : []))
+  const [onlyMissing, setOnlyMissing] = useState(false)
+  const shown = onlyMissing && missing.length ? new Set(missing) : null
   return (
+    <>
+    {missing.length > 0 && (
+      <label className="flex items-center gap-2 text-[12px] text-ink-2 min-h-9 pointer-fine:min-h-7 cursor-pointer w-fit">
+        <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} className="size-4 accent-[var(--ink)]" />
+        只看缺落點／軌跡的打席（{missing.length}）
+      </label>
+    )}
     <div className="border border-border rounded-[var(--radius-sm)] overflow-hidden">
       {rows.length === 0 && <div className="px-3 py-6 text-center text-[13px] text-muted">沒有打席</div>}
       <ul>
         {rows.map((p, i) => {
+          if (shown && !shown.has(i)) return null
           const header = p.inning !== last
           last = p.inning
           const extra = extrasOf(side, p, fielderAt, i)
@@ -118,6 +130,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
         <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(rows.length)}>在最後新增一個打席</Button>
       </div>
     </div>
+    </>
   )
 }
 
@@ -459,6 +472,8 @@ export interface PaPanelProps {
   pitcherNames: string[]
   onChange: (pa: AnyPA) => void
   onNav: (index: number) => void
+  /** the next plate appearance (after this one, then from the top) whose batted ball lacks its 落點／軌跡 */
+  nextMissing?: number
   onClose: () => void
   onDelete: () => void
   /** `inning`: the inning of the row it goes next to */
@@ -684,11 +699,18 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
   )
 }
 
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt }: PaPanelProps) {
+// the pitches 修改資料 inserts or changes to (the result's own last pitch — 擊進場內, 觸身 — comes from the result)
+const PITCH_EDIT: Array<[string, string]> = [['B', '壞球'], ['CS', '好球・未揮'], ['SS', '揮空'], ['F', '界外'], ['T', '擦棒']]
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
   const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
   const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
+  // one pitch picked to change: 在前面插入 (a pitch missed — the plays before it stay before it), 改成, 刪除
+  const [pitchSel, setPitchSel] = useState<{ i: number; mode?: 'insert' | 'change' } | null>(null)
+  useEffect(() => setPitchSel(null), [index])
+  const insertPitch = (i: number, code: string) => set({ pitches: [...pa.pitches.slice(0, i), code, ...pa.pitches.slice(i)], ...(pa.events ? { events: pa.events.map((e) => (e.at >= i ? { ...e, at: e.at + 1 } : e)) } : {}) })
+  const changePitch = (i: number, code: string) => set({ pitches: pa.pitches.map((p, k) => (k === i ? code : p)) })
   const c = count(pa.pitches)
   const bases = new Set((pa.basesBefore ?? '').split(''))
   const codes = side === 'bat' ? ['I', 'II', 'III', 'L', 'R'] : ['I', 'II', 'III', 'L', 'R', 'ER']
@@ -708,6 +730,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         <div className="flex-1 min-w-0 text-center text-[13px] text-ink tnum whitespace-nowrap" aria-label={`第 ${index + 1} / ${total} 個打席`}><span className="hidden sm:inline">第 </span>{index + 1} / {total}<span className="hidden sm:inline"> 個打席</span></div>
         <Button size="sm" variant="outline" icon={<ChevronLeft />} onClick={() => onNav(index - 1)} disabled={index === 0}>上一個</Button>
         <Button size="sm" variant="outline" onClick={() => onNav(index + 1)} disabled={index >= total - 1}>下一個<ChevronRight className="size-4" /></Button>
+        {nextMissing !== undefined && <Button size="sm" variant="ghost" className="basis-full sm:basis-auto" onClick={() => onNav(nextMissing)}>下一個缺落點／軌跡的<ChevronRight className="size-4" /></Button>}
       </div>
 
       {/* situation */}
@@ -774,13 +797,28 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       {pit && onOppBats && <OppBatsEdit key={index} pa={pit} count={oppSlotCount} onApply={onOppBats} />}
 
       {/* pitches */}
-      <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球或一個跑壘事件可刪除</span>}>
+      <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球可插入、改或刪；點跑壘事件可刪除</span>}>
         <div className="flex items-center gap-2 min-h-8 flex-wrap">
           {timeline
-            ? <PitchPlays pitches={pa.pitches} events={timeline.step.moves} whoOf={(n) => timeline.nameOf(timeline.step.moves[n]?.row)} onRemovePitch={removePitch} onRemovePlay={timeline.onRemovePlay} />
-            : <PitchChips pitches={pa.pitches} onRemove={removePitch} />}
+            ? <PitchPlays pitches={pa.pitches} events={timeline.step.moves} whoOf={(n) => timeline.nameOf(timeline.step.moves[n]?.row)} onRemovePitch={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} onRemovePlay={timeline.onRemovePlay} />
+            : <PitchChips pitches={pa.pitches} onRemove={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} />}
           {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [], ...(pa.events ? { events: pa.events.map((e) => ({ ...e, at: 0 })) } : {}) })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
         </div>
+        {pitchSel && pitchSel.i < pa.pitches.length && (
+          <div role="group" aria-label={`第 ${pitchSel.i + 1} 球`} className="flex items-center gap-1.5 flex-wrap rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-1.5">
+            <span className="text-[12px] text-ink-2 tnum mr-1">第 {pitchSel.i + 1} 球：</span>
+            {!pitchSel.mode ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setPitchSel({ ...pitchSel, mode: 'insert' })}>在前面插入一球</Button>
+                <Button size="sm" variant="outline" onClick={() => setPitchSel({ ...pitchSel, mode: 'change' })}>改成…</Button>
+                <Button size="sm" variant="ghost" className="text-critical hover:text-critical" onClick={() => { removePitch(pitchSel.i); setPitchSel(null) }}>刪除這一球</Button>
+              </>
+            ) : PITCH_EDIT.map(([code, label]) => (
+              <Button key={code} size="sm" variant="outline" onClick={() => { if (pitchSel.mode === 'insert') insertPitch(pitchSel.i, code); else changePitch(pitchSel.i, code); setPitchSel(null) }}>{label}</Button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => setPitchSel(null)}>取消</Button>
+          </div>
+        )}
         {/* why the last change to the runners did not go through, right where it was tried */}
         {timeline?.notice && <p role="alert" className="text-[12px] text-critical">{timeline.notice}</p>}
         <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code] }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} twoStrikes={count(pa.pitches).strikes === 2} />
