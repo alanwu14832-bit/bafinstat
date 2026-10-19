@@ -401,11 +401,11 @@ export async function listCloudDrafts<T = unknown>(): Promise<CloudDraft<T>[] | 
   return (data ?? []) as CloudDraft<T>[]
 }
 /** What the site-wide 「比賽進行中」 check reads of each draft: a few fields, never the whole recording state. */
-export interface CloudDraftHead { game_id: string; updated_at: string; finished: boolean | null; practice: boolean | null }
+export interface CloudDraftHead { game_id: string; updated_at: string; finished: boolean | null; practice: boolean | null; suspended?: string | null }
 /** The drafts' heads (game id, time, finished / practice), for the 30 s check every page runs; null = no table yet. */
 export async function listCloudDraftHeads(): Promise<CloudDraftHead[] | null> {
   const { data, error } = await supabase().from('record_drafts')
-    .select('game_id, updated_at, finished:state->finished, practice:state->practice')
+    .select('game_id, updated_at, finished:state->finished, practice:state->practice, suspended:state->suspended')
     .order('updated_at', { ascending: false })
   if (draftsMissing(error)) return null
   if (error) throw new Error(error.message)

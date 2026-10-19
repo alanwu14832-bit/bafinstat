@@ -49,3 +49,13 @@ describe('the third out on the play', () => {
     expect(planProblems(s, { ...plan, runners: { ...plan.runners, [row(s, 3)]: 'home' } }).some((m) => m.includes('5.08'))).toBe(true)
   })
 })
+
+describe('no more than three outs', () => {
+  it('a 雙殺 with two out, or a runner marked out on top of the third out, is blocked', () => {
+    const s = addPitch(walk(out(out(newGame(game, lineup, '壬')))), 'IP')
+    const dp = defaultPlan(s, '雙殺')
+    expect(planProblems(s, dp).some((m) => m.includes('4 個出局') && m.includes('兩出局時不會有雙殺'))).toBe(true)
+    const one = defaultPlan(s, '內滾')
+    expect(planProblems(s, one)).toEqual([])
+  })
+})

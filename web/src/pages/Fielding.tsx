@@ -18,7 +18,7 @@ import { LeaderStrip, leaderOf, type Leader } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { SprayChart } from '../components/charts/SprayChart'
 import { useStats } from '../hooks/useStats'
-import type { FieldingStat } from '../data/stats'
+import { ipDisplay, type FieldingStat } from '../data/stats'
 import { f2, f3, pct } from '../lib/fmt'
 
 const POS_ORDER = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF', 'DH']
@@ -56,7 +56,8 @@ export function FieldingPage() {
     { key: 'name', header: '球員', className: 'font-medium', sortable: true },
     { key: 'positions', header: '守位', className: 'text-ink-2', format: (v) => (v as string[]).join(' / ') },
     { key: 'g', header: 'G', align: 'right', sortable: true },
-    { key: 'innings', header: 'Inn', align: 'right', sortable: true },
+    // innings the baseball way (8.1 = 8⅓), as on every other page
+    { key: 'innings', header: 'Inn', align: 'right', sortable: true, format: (v) => ipDisplay(Math.round((v as number) * 3)), text: (v) => ipDisplay(Math.round((v as number) * 3)) },
     { key: 'po', header: 'PO', align: 'right', sortable: true }, { key: 'a', header: 'A', align: 'right', sortable: true }, { key: 'e', header: 'E', align: 'right', sortable: true }, { key: 'dp', header: 'DP', align: 'right', sortable: true }, { key: 'tc', header: 'TC', align: 'right', sortable: true },
     { key: 'fpct', header: 'FPCT', align: 'right', sortable: true, format: (v) => f3(v as number | null) },
     { key: 'rfg', header: 'RF/G', align: 'right', sortable: true, format: (v) => f2(v as number | null) },

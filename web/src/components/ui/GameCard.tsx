@@ -11,8 +11,8 @@ const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); retur
 
 /** 勝 / 敗 / 和 as a small scoreboard plate: the team colour carries the wins (as on the homepage). A game still being
  *  recorded has no result yet: 「比賽進行中」 with the live dot. */
-export function ResultPlate({ result, className }: { result: GameSummary['result']; className?: string }) {
-  if (result === 'live') return <LiveBadge className={cx('h-7 px-2.5 text-[12px]', className)} />
+export function ResultPlate({ result, className, id }: { result: GameSummary['result']; className?: string; id?: string }) {
+  if (result === 'live') return <LiveBadge id={id} className={cx('h-7 px-2.5 text-[12px]', className)} />
   return (
     <span className={cx('figure inline-flex items-center justify-center size-9 rounded-[10px] text-[17px] font-bold leading-none shrink-0',
       result === 'W' ? 'bg-accent text-accent-ink' : result === 'L' ? 'bg-surface-3 text-ink-2' : 'border border-border-strong text-ink-2', className)}>
@@ -67,7 +67,7 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
           <div className="text-[11px] text-muted mt-0.5 truncate">{[g.tournament, g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・')}</div>
         </div>
         {/* (a game being recorded: its wider 比賽進行中 plate goes under the other badges, so the date line keeps its width) */}
-        <span className={cx('inline-flex gap-1.5 shrink-0', live ? 'flex-col items-end' : 'items-center')}>{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} /></span>
+        <span className={cx('inline-flex gap-1.5 shrink-0', live ? 'flex-col items-end' : 'items-center')}>{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} id={g.id} /></span>
       </div>
       <div className="relative flex flex-col gap-1.5">
         {teams.map((t) => (

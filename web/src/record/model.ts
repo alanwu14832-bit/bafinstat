@@ -31,6 +31,7 @@ import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
 import { hhmm, localDate } from '../lib/dates'
+import { TEAM } from '../config/team'
 
 export type Half = 'top' | 'bottom'
 export type Side = 'us' | 'opp'
@@ -44,6 +45,8 @@ export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: n
 
 export interface RecordState {
   game: Game
+  /** 保留比賽: when the game was suspended (to be resumed another day); cleared by 恢復比賽 */
+  suspended?: string
   lineup: LineupSlot[]
   /** index of the next batter in `lineup` */
   slot: number
@@ -612,6 +615,28 @@ export interface PAPlan {
   outAt?: Record<string, OutAt>
   /** 備註 typed in the confirm panel (kept on the row's note, after 「牽制 N 次」) */
   note?: string
+  /** (三振, 保送…) how a runner set to 出局 on that pitch was put out: 盜壘失敗 (default), 牽制出局, 跑壘出局 */
+  outHow?: Record<number, OutHow>
+}
+export type OutHow = 'cs' | 'pk' | 'run'
+export const OUT_HOW_LABEL: Record<OutHow, string> = { cs: '盜壘失敗', pk: '牽制出局', run: '跑壘出局' }
+/** Results with no ball in play: a runner out on that pitch was thrown out stealing, picked off or out running. */
+export const NO_BIP_OUT = new Set(['三振', '保送', '故四', '觸身', '妨礙'])
+/**
+ * 三振雙殺 and the like: a runner put out on the pitch that ended the plate appearance with no ball in play is recorded as
+ * that runner event right after it (盜壘失敗 by default — the catcher's 阻殺 and the 盜壘刺 count), then the plate
+ * appearance without him. Other results go through unchanged.
+ */
+export function baseOutsFirst(s: RecordState, plan: PAPlan): { s: RecordState; plan: PAPlan } {
+  if (!NO_BIP_OUT.has(plan.result)) return { s, plan }
+  const runners = { ...plan.runners }
+  for (const r of [...s.runners].sort((a, b) => b.base - a.base)) {
+    if (plan.runners[r.row] !== 'out') continue
+    const how = plan.outHow?.[r.row] ?? 'cs'
+    s = runnerEvent(s, r.row, r.side, how === 'run' ? 'out' : how)
+    delete runners[r.row]
+  }
+  return { s, plan: { ...plan, runners, runningOuts: (plan.runningOuts ?? []).filter((w) => runners[w] === 'out') } }
 }
 
 const destNum = (d: Dest | undefined) => (d === 'home' ? 4 : typeof d === 'number' ? d : 0)
@@ -689,7 +714,40 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   // recorder's call), the runners not put out stay where they were (left on base)
   if (s.outs + outsOnPlay(s, plan) >= 3) for (const r of s.runners) if (plan.runners[r.row] !== 'out') plan.runners[r.row] = r.base
   plan.rbi = defaultRbi(plan)
-  return plan
+  return walkOffPlan(s, plan) ?? plan
+}
+
+/**
+ * 再見 (rule 9.06(f)): the home team, batting in the last scheduled inning or later, goes ahead on this play. The game
+ * ends as the winning run scores: only the runs up to it count, and a hit is credited with as many bases as the winning
+ * runner advanced (bases loaded, a double that scores him from third is a single) — everyone else moves that many bases.
+ * A home run counts every run. Null when the play is no walk-off or there is nothing to trim.
+ */
+export function walkOffPlan(s: RecordState, plan: PAPlan): PAPlan | null {
+  const w = walkOffRunner(s, plan)
+  if (!w || w.credit >= 4) return null
+  const { winner, credit } = w
+  const adv = (base: number): Dest => (base + credit >= 4 ? 'home' : ((base + credit) as Base))
+  const runners: Record<number, Dest> = {}
+  for (const r of s.runners) runners[r.row] = plan.runners[r.row] === 'out' ? 'out' : r.base >= winner.base ? (plan.runners[r.row] === 'home' ? 'home' : plan.runners[r.row]) : adv(r.base)
+  const hit = plan.result in HIT_BASES && plan.result !== '全壘打'
+  const result = hit && HIT_BASE_COUNT[plan.result] > credit ? (credit === 1 ? '一安' : credit === 2 ? '二安' : '三安') : plan.result
+  const batter: Dest = plan.batter === 'out' ? 'out' : hit ? (Math.min(credit, HIT_BASE_COUNT[plan.result]) as Base) : plan.batter === 'home' ? adv(0) : plan.batter
+  const next: PAPlan = { ...plan, result, batter, runners }
+  if (result === plan.result && batter === plan.batter && s.runners.every((r) => runners[r.row] === plan.runners[r.row])) return null
+  return { ...next, rbi: defaultRbi(next) }
+}
+/** The runner whose run wins the game on this play (home team, last inning or later) and the bases he advanced; null otherwise. */
+export function walkOffRunner(s: RecordState, plan: Pick<PAPlan, 'result' | 'batter' | 'runners'>, regulation = s.game.innings ?? TEAM.innings): { winner: Runner | { base: 0 }; credit: number } | null {
+  if (s.half !== 'bottom' || s.inning < regulation || plan.result === '全壘打') return null
+  const sc = score(s)
+  const need = (offense(s) === 'us' ? sc.opp - sc.us : sc.us - sc.opp) + 1
+  if (need < 1) return null
+  const scorers: Array<Runner | { base: 0 }> = [...s.runners].filter((r) => plan.runners[r.row] === 'home').sort((a, b) => b.base - a.base)
+  if (plan.batter === 'home') scorers.push({ base: 0 })
+  if (scorers.length < need) return null
+  const winner = scorers[need - 1]
+  return { winner, credit: 4 - winner.base }
 }
 
 /** The outs a plan makes: the batter and the runners it puts out. */
@@ -738,8 +796,13 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
     else if (ahead && to > ahead.to) out.push(`${p.name} 跑到${label(to)}，超過了前面的 ${ahead.name}（${label(ahead.to)}）`)
     ahead = { name: p.name, to }
   }
+  // a half-inning has three outs: more on one play is a mistake (a 雙殺 with two out, a runner marked out twice)
+  const outs = s.outs + outsOnPlay(s, plan)
+  if (outs > 3) out.push(`這個打席加起來會有 ${outs} 個出局，一個半局只有 3 個：請把多的出局改回壘上${plan.result === '雙殺' ? '（兩出局時不會有雙殺，請改記內滾或野選）' : ''}`)
   const third = thirdOutRule(s, plan).block
   if (third) out.push(third)
+  const walk = walkOffRunner(s, plan)
+  if (walk && walk.credit < 4 && scoredOn(plan) > scoredOn(walkOffPlan(s, plan) ?? plan)) out.push('再見：比賽在致勝的那一分回來時就結束，之後的跑者不算得分（規則 9.06(f)）')
   return out
 }
 
@@ -1089,6 +1152,12 @@ export function dayRosterOf(s: RecordState): GameDayRoster {
 export function toGameEdit(s: RecordState, extra: Partial<Game> = {}): GameEdit {
   // a game that ended in the middle of a plate appearance (a walk-off balk): what it had goes on the last row
   if (s.finished) s = settlePending(s)
+  // ended in the middle of a half-inning (a walk-off, time called): the runners still on are left on base, as 結束半局 does
+  if (s.finished && s.runners.length) {
+    const batting = s.batting.map((p) => ({ ...p })), pitching = s.pitching.map((p) => ({ ...p }))
+    for (const r of s.runners) { const row = r.side === 'us' ? batting[r.row] : pitching[r.row]; if (row && !row.code) row.code = 'L' }
+    s = { ...s, batting, pitching }
+  }
   const played = Math.max(1, ...s.batting.map((p) => p.inning), ...s.pitching.map((p) => p.inning))
   // only drafts started with the roster fields know the bench; older ones keep whatever the game already had
   const roster = s.starters ? { dayRoster: dayRosterOf(s) } : {}

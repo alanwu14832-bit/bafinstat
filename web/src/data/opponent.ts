@@ -11,7 +11,7 @@
  */
 import { battingLines, summarizeGame, teamBatting, type BattingLine } from './stats'
 import { inferAll, midOf } from '../record/timeline'
-import { EMPTY_DATASET, isPA, OPP_BATS_LABEL, OPP_PR_UNNAMED, oppBatterName, type BattingPA, type Dataset, type Game, type OppBats, type PitchingPA } from './types'
+import { EMPTY_DATASET, isNoBatter, isPA, OPP_BATS_LABEL, OPP_PR_UNNAMED, oppBatterName, type BattingPA, type Dataset, type Game, type OppBats, type PitchingPA } from './types'
 
 const PLACEHOLDER = /^(對方)?\s*(第\s*)?\d+\s*棒次?$/
 const NO_SLOT = '棒次未記'
@@ -102,7 +102,8 @@ export function asOppBatting(pa: PitchingPA, running?: OppRunning): BattingPA {
     run: pa.code === 'R' || pa.code === 'ER' ? 1 : 0, rbi: pa.rbi ?? 0,
   }
 }
-const asOppRows = (pas: PitchingPA[]): BattingPA[] => { const run = oppRunning(pas); return pas.map((p) => asOppBatting(p, run.get(p))) }
+// (a 未完成打席 or 未面對打者 row is no batter's: its pitches and the runner events on it stay with the runners)
+const asOppRows = (pas: PitchingPA[]): BattingPA[] => { const run = oppRunning(pas); return pas.flatMap((p) => (isNoBatter(p) ? [] : [asOppBatting(p, run.get(p))])) }
 
 export type OppBattingLine = BattingLine & { slot?: number; label: string }
 

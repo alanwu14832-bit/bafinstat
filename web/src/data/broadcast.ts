@@ -97,7 +97,10 @@ export const RESULT_TEXT: Record<PAResult | '突破僵局', ResultFn> = {
   內飛: play(flyOr('內野高飛球'), '接殺出局', (T) => `擊出${inField(T)}，接殺出局`),
   外飛: play(flyOr('高飛球'), '接殺出局', (T) => `擊出外野${T}，接殺出局`),
   界外飛: play(() => '界外飛球', '接殺出局', () => '擊出界外飛球，接殺出局'),
-  雙殺: play(tw('G'), '雙殺打', (T) => `擊出${inField(T)}，雙殺打`),
+  // a line drive or fly caught with a runner doubled off is a double play, not the batter's 雙殺打 (GIDP)
+  雙殺: (a) => (a.traj === 'L' || a.traj === 'F' || a.traj === 'P'
+    ? play(tw('G'), '被接殺，跑者回不去形成雙殺', (T) => `擊出${inField(T)}，被接殺，跑者回不去形成雙殺`)(a)
+    : play(tw('G'), '雙殺打', (T) => `擊出${inField(T)}，雙殺打`)(a)),
   犧觸: play(() => '觸擊球', '犧牲短打', () => '犧牲短打'),
   犧牲: play(() => '觸擊球', '犧牲短打', () => '犧牲短打'),
   犧飛: play(flyOr('高飛球'), '犧牲飛球', () => '犧牲飛球'),

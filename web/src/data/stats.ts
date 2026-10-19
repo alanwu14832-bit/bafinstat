@@ -13,6 +13,8 @@ import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isBattedBall, isDouble,
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 export const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
+/** a line drive or fly ball: a 雙殺 on one is a runner doubled off, not the batter's 雙殺打 (GIDP) */
+const FLY_TRAJ = new Set(['L', 'F', 'P'])
 const SWING_CODES = new Set(['SS', 'F', 'IP', 'T'])
 const STRIKE_CODES = new Set(['S', 'SS', 'CS', 'F', 'IP'])
 
@@ -179,7 +181,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand | nu
   if (hit) l.h++
   if (isSingle(r)) l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
-  if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺') l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
+  if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺' && !FLY_TRAJ.has(pa.traj ?? '')) l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
   l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0
   if (isAB && isRISP(pa.basesBefore)) { l.rispAB++; if (hit) l.rispH++ }
   const batted = isBattedBall(pa)

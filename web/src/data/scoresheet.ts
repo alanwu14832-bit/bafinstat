@@ -11,7 +11,7 @@ import { errorsOf, oppErrorsOf } from './errors'
 import { countBefore, gridCell, type GridTone } from './gameText'
 import { oppKey } from './opponent'
 import { isHitResult, pitchTotals } from './stats'
-import { isPlaced, pinchMark, type BattingPA, type DayRosterSub, type PitchingPA } from './types'
+import { isNoBatter, isPlaced, pinchMark, type BattingPA, type DayRosterSub, type PitchingPA } from './types'
 
 type Row = BattingPA | PitchingPA
 
@@ -178,9 +178,12 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
     if (totals.e !== null) totals.e += e
     if (r.code === 'L') { t.lob++; totals.lob++ }
     const placedRow = isPlaced(r)
-    if (!placedRow && r.result) { totals.pa++; if (!NON_AB.has(r.result)) totals.ab++ }
+    // (a 未完成打席 or 未面對打者 row faced no batter: no plate appearance, no at-bat)
+    if (!placedRow && r.result && !isNoBatter(r)) { totals.pa++; if (!NON_AB.has(r.result)) totals.ab++ }
     const rbi = (side === 'bat' ? (r as BattingPA).rbi : (r as PitchingPA).rbi) ?? 0
     totals.rbi += rbi
+    // no batter, no box on the sheet (its runner events show on the runners' boxes)
+    if (isNoBatter(r)) return
 
     const slot = slotOf(r)
     const line = lineFor(slot)

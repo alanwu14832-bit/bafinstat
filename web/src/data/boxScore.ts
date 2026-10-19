@@ -14,7 +14,7 @@ import { oppBatsLabel, oppBattingLines, oppKey, oppRunnerKey, oppTotals, type Op
 import { boxOrderOf, pitcherOrder } from './gameNotes'
 import { oppPitcherName } from './broadcast'
 import {
-  DEFAULT_PARAMS, EMPTY_DATASET, HIT_BASE_COUNT, isOppPinchHit, isPA, isPlaced,
+  DEFAULT_PARAMS, EMPTY_DATASET, HIT_BASE_COUNT, isNoBatter, isOppPinchHit, isPA, isPlaced,
   OPP_BATS_LABEL, type BattingPA, type Dataset, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type PitchingPA, type Player, type StatParams,
 } from './types'
 import { dayRosterOf, liveSplit, offense, oppBatterOf, oppPitchCount, oppStintStart, type OppPitcher, type RecordState } from '../record/model'
@@ -190,6 +190,8 @@ export function boxScore(src: BoxSource): BoxScore {
   const oppLines = new Map<string, OppBattingLine>(oppBattingLines(src.pitching).map((l) => [l.label, l]))
   const opp = new Slots()
   for (const p of src.pitching) {
+    // (a 未完成打席 or 未面對打者 row is no batter: no line of its own)
+    if (isNoBatter(p)) continue
     const k = oppKey(p)
     opp.add(p.oppOrder, k, isOppPinchHit(p.oppBatter) ? '代打' : '')
     const r = oppRunnerKey(p)

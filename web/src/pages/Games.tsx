@@ -53,7 +53,7 @@ export function GamesPage() {
     { key: 'tournament', header: '杯賽', sortable: true, className: 'text-ink-2' },
     { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
     { key: 'homeAway', header: '主客', align: 'center', className: 'text-ink-2' }, { key: 'venue', header: '場地', className: 'text-ink-2' },
-    { key: 'result', header: '結果', align: 'center', format: (v) => resultBadge(v as GameRow['result']) },
+    { key: 'result', header: '結果', align: 'center', format: (v, r) => resultBadge(v as GameRow['result'], r.id) },
     { key: 'score', header: '比分', align: 'right', className: 'font-medium' }, { key: 'hitsUs', header: '安打', align: 'right', sortable: true }, { key: 'hitsOpp', header: '被安打', align: 'right', sortable: true }, { key: 'errorsUs', header: '失誤', align: 'right', sortable: true }, { key: 'lob', header: '殘壘', align: 'right', sortable: true }, { key: 'pitches', header: '投手用球', align: 'right', sortable: true },
   ]
   // 卡片 (scoreboard cards, the default) or 表格 (the sortable table), kept in the address as ?layout=table

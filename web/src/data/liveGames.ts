@@ -15,7 +15,7 @@ import { addDays, localDate } from '../lib/dates'
 export const LIVE_STALE_MS = 12 * 60 * 60 * 1000
 
 /** What the live list needs of a draft (record/model RecordState has these fields). */
-export interface LiveDraftState { game: { id: string }; finished?: boolean; practice?: boolean; startedAt?: string; updatedAt?: string }
+export interface LiveDraftState { game: { id: string }; finished?: boolean; practice?: boolean; startedAt?: string; updatedAt?: string; /** 保留比賽: when it was suspended (resumed another day) */ suspended?: string | null }
 export interface LiveDraft<S extends LiveDraftState = LiveDraftState> { state: S; updatedAt: string; by?: string | null }
 
 const timeOf = (iso: string | undefined) => { const t = iso ? Date.parse(iso) : NaN; return Number.isNaN(t) ? null : t }
@@ -24,6 +24,8 @@ const timeOf = (iso: string | undefined) => { const t = iso ? Date.parse(iso) : 
 export function isLiveDraft(d: LiveDraft, now: number = Date.now()): boolean {
   const s = d.state
   if (!s?.game?.id || s.finished || s.practice || isPracticeId(s.game.id)) return false
+  // 保留比賽 (suspended, to be resumed another day): in progress however long ago it was touched — no 勝／敗 yet
+  if (s.suspended) return true
   const t = timeOf(d.updatedAt) ?? timeOf(s.updatedAt) ?? timeOf(s.startedAt)
   return t !== null && now - t <= LIVE_STALE_MS
 }
@@ -50,6 +52,10 @@ const listeners = new Set<() => void>()
 /** The ids of the games in progress (the same Set object until the list changes, so it can key a cache). */
 export const liveGameIds = (): ReadonlySet<string> => ids
 export const isLiveGame = (id: string) => ids.has(id)
+// the ones of them suspended (保留比賽): shown as 保留中, not 比賽進行中
+let held: ReadonlySet<string> = EMPTY
+export const isSuspendedGame = (id: string) => held.has(id)
+export function setSuspendedGameIds(next: Iterable<string>) { const n = new Set(next); held = n.size ? n : EMPTY }
 /** A short key of the set, for cache keys. */
 export const liveKey = (s: ReadonlySet<string> = ids) => [...s].sort().join(',')
 
