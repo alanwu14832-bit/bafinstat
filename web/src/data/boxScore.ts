@@ -9,7 +9,7 @@
  * (record_drafts or this device's draft): its rows, plus the plate appearance in progress only where it is final — its
  * pitches count in 用球數, nothing else of it does until it is sent.
  */
-import { battingLines, pitchingLines, teamBatting, type BattingLine, type PitchingLine } from './stats'
+import { battingLines, emptyBatting, pitchingLines, teamBatting, type BattingLine, type PitchingLine } from './stats'
 import { oppBatsLabel, oppBattingLines, oppKey, oppRunnerKey, oppTotals, type OppBattingLine } from './opponent'
 import { boxOrderOf, pitcherOrder } from './gameNotes'
 import { oppPitcherName } from './broadcast'
@@ -22,9 +22,13 @@ import { dayRosterOf, liveSplit, offense, oppBatterOf, oppPitchCount, oppStintSt
 /* ------------------------------------------------------------------ the game page's lines (攻守成績) */
 
 /** 我隊打擊 of the game page: battingLines in box order (slot, then first appearance; a 代跑 in the slot he ran for). */
-export function ourBattingBox(ds: Pick<Dataset, 'roster'>, pas: BattingPA[], params: StatParams = DEFAULT_PARAMS): BattingLine[] {
+export function ourBattingBox(ds: Pick<Dataset, 'roster'>, pas: BattingPA[], params: StatParams = DEFAULT_PARAMS, starters?: Array<{ name: string; order?: number }>): BattingLine[] {
   const at = boxOrderOf(pas)
-  return battingLines({ ...EMPTY_DATASET, roster: ds.roster }, pas, params).sort((a, b) => at(a.name) - at(b.name))
+  const lines = battingLines({ ...EMPTY_DATASET, roster: ds.roster }, pas, params)
+  // a starter replaced before he ever batted (the 當日登錄名單 has him): an empty line at the top of his slot
+  const missing = (starters ?? []).filter((st) => st.order && st.name && !lines.some((l) => l.name === st.name))
+  const rank = (n: string) => { const st = missing.find((x) => x.name === n); return st ? st.order! * 1000 - 1 : at(n) }
+  return [...lines, ...missing.map((st) => emptyBatting(st.name))].sort((a, b) => rank(a.name) - rank(b.name))
 }
 /** 我隊投球 of the game page: pitchingLines in the order they pitched (not by innings). */
 export function ourPitchingBox(pas: PitchingPA[], games: Game[], params: StatParams = DEFAULT_PARAMS): PitchingLine[] {

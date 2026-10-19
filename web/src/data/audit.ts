@@ -15,6 +15,8 @@ const BALL_RESULTS = new Set(['保送', '故四'])
 // scorers write the hit-by-pitch ball as B, so four balls + 觸身 is normal
 const FOUR_BALL_OK = new Set(['保送', '故四', '觸身'])
 
+/** 犧觸／犧飛 with the batter safe on an error (the error is on the row): the sacrifice stands, he reached (no out code). */
+const sacReachedOnError = (p: { result: string; code?: string; errors?: unknown[] }) => (p.result === '犧觸' || p.result === '犧飛') && !(p.code && p.code in OUT_CODES) && !!p.errors?.length
 /** 不死三振: struck out, but the batter reached (his row then ends R / ER / L, or is put out later on the bases). */
 const reachedOnStrikeout = (p: { result: string; code?: string }) => p.result === '三振' && (p.code === 'R' || p.code === 'ER' || p.code === 'L')
 
@@ -95,7 +97,7 @@ function checkSequence<T extends { inning: number; code?: string; result: string
     const where = whereOf(p)
     const code = p.code ?? ''
     // result vs code
-    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
+    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p) && !sacReachedOnError(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
     if (side === 'bat' && needsOutOnBase(p as unknown as BattingPA)) out.push({ side, index: i, message: outOnBaseMessage(where, p.result, code, place) })
     if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) out.push({ side, index: i, message: `${where}：2 出局後不可能雙殺` })
     // pitches vs result

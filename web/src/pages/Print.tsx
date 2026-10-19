@@ -56,7 +56,7 @@ function GameSheets() {
     const opp = ds.pitching.filter((p) => p.gameId === game.id)
     const summary = summarizeGame(ds, game, live)
     const innings = Math.max(game.innings ?? TEAM.innings, summary.lineUs.length, summary.lineOpp.length)
-    const sheetUs = withAllSlots(buildScoresheet(us, 'bat', { innings, subs: game.dayRoster?.subs }))
+    const sheetUs = withAllSlots(buildScoresheet(us, 'bat', { innings, subs: game.dayRoster?.subs, starters: game.dayRoster?.starters }))
     const sheetOpp = withAllSlots(buildScoresheet(opp, 'pit', { innings }))
     const weHome = game.homeAway === '主'
     const lastPlayed = Math.max(0, ...us.map((r) => r.inning), ...opp.map((r) => r.inning))

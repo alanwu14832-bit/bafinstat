@@ -325,6 +325,8 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
     const first = byPos.get('1B')
     // 三振：捕手刺殺，但不死三振而打者上壘（代碼不是 I/II/III）時沒有出局，不記刺殺
     if (r === '三振') { if (!p.code || p.code in OUT_CODES) po(byPos.get('C')) }
+    // a 犧觸／犧飛 the batter reached on (an error on the row, no out code): nobody put him out
+    else if ((r === '犧觸' || r === '犧飛') && !((p.code ?? '') in OUT_CODES) && !!p.errors?.length) { /* no putout */ }
     else if (GROUND.has(r)) {
       const f = at(p.loc, p.pitcher)
       if (p.loc === 3) po(first)                       // unassisted at first

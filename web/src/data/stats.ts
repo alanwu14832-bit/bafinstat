@@ -140,7 +140,7 @@ function battedBallRates(l: BattedBallCounts & BattedBallRates) {
   l.babipGb = div(l.gbH, l.gbN); l.babipLd = div(l.ldH, l.ldN); l.babipFb = div(l.fbH, l.fbN)
 }
 
-function emptyBatting(name: string): BattingLine {
+export function emptyBatting(name: string): BattingLine {
   return {
     name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0, xbtOpp: 0, xbt: 0, xbtOut: 0, thrownOut: 0, xbtPct: null,
     rispAB: 0, rispH: 0, ...emptyBattedBall(), ...emptyBattedBallRates(), pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0,

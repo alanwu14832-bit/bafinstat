@@ -65,6 +65,8 @@ const TIEBREAK_KEY = 'bafin.tiebreak.v1'
 const TIEBREAK_BASES = ['12', '2', '123']
 // two out: a double play cannot happen (the result would make four outs)
 const TWO_OUT_OFF = new Set(['雙殺'])
+// a sacrifice the batter is safe on: he reached on an error
+const SAC_RESULTS = new Set(['犧觸', '犧飛'])
 function readTiebreakPref(): { on: boolean; bases: string } {
   const team = TEAM.tiebreak || '12'
   try {
@@ -417,7 +419,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     for (const [row, d] of moves) moved = row === 'batter' ? { ...moved, batter: d } : { ...moved, runners: { ...moved.runners, [row]: d } }
     // a 趁傳 mark goes away once he no longer goes further than the result gives
     // (a 壘死 mark goes away once he is no longer out)
-    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)), runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out'), batterRunningOut: moved.batter === 'out' ? moved.batterRunningOut : undefined }
+    // 犧觸／犧飛 with the batter safe: on an error (whose is asked below, as for any 失誤進壘)
+    const sacSafe = SAC_RESULTS.has(moved.result) && moved.batter !== 'out'
+    const kept = (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w))
+    const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: sacSafe ? [...kept, 'batter' as const] : kept, runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out'), batterRunningOut: moved.batter === 'out' ? moved.batterRunningOut : undefined }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
   const inPlay = state.pitches[state.pitches.length - 1] === 'IP'
