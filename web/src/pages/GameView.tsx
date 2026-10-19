@@ -15,7 +15,7 @@ import { sortNames } from '../data/rosterSort'
 import { useDataStore } from '../store/data'
 import { extractGame, reconcileFielding } from '../data/edit'
 import { applyStealRepairs, stealRepairs } from '../data/stealRepair'
-import { applyEarnedRepairs, earnedRepairs } from '../record/earned'
+import { applyEarnedRepairs, EARNED_BY_HAND_NOTE, earnedRepairs } from '../record/earned'
 import { auditGame } from '../data/audit'
 import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { gameRecap } from '../data/recap'
@@ -275,6 +275,15 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
       setNotice(warnings.length ? { kind: 'warn', lines: ['自責分已重新判定並儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: [`自責分已依規則重新判定（${earnedFixes.length} 分），防禦率等統計已重新計算。`] })
     } catch (e) { setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] }) }
   }
+  // the calls were the recorder's on purpose: noted on those rows, never brought up again
+  const keepEarned = async () => {
+    if (!editable || !earnedFixes.length) return
+    const rows = new Set(earnedFixes.map((f) => f.index))
+    try {
+      await saveGame({ ...editable, pitching: editable.pitching.map((p, i) => (rows.has(i) ? { ...p, note: [p.note, EARNED_BY_HAND_NOTE].filter(Boolean).join('；') } : p)) })
+      setNotice({ kind: 'ok', lines: ['已記下：這幾分照你的判定，不會再提醒。'] })
+    } catch (e) { setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] }) }
+  }
   const flags = useMemo(() => {
     const bat = new Map<number, string[]>(), pit = new Map<number, string[]>()
     for (const i of issues) { const m = i.side === 'bat' ? bat : pit; m.set(i.index, [...(m.get(i.index) ?? []), i.message]) }
@@ -429,7 +438,10 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                   {earnedFixes.map((f) => <li key={f.index}>第 {f.inning} 局 {f.name}：目前{earnedLabel(f.from)}，依規則是<span className="font-medium text-ink">{earnedLabel(f.to)}</span>{f.why ? `（${f.why}）` : ''}</li>)}
                 </ul>
                 <span className="text-muted">系統依失誤、捕逸把這半局重建一次來判定（規則 9.16）。如果是你刻意的判定（例如漏接界外飛球讓打者多了機會），可以不用理會；這段只有紀錄員看得到。</span>
-                <Button size="sm" variant="outline" className="self-start" disabled={cloud.pushing} onClick={() => void repairEarned()}>依規則重新判定自責分</Button>
+                <span className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" disabled={cloud.pushing} onClick={() => void keepEarned()}>這是我的判定，不用再提醒</Button>
+                  <Button size="sm" variant="ghost" disabled={cloud.pushing} onClick={() => void repairEarned()}>依規則重新判定自責分</Button>
+                </span>
               </div>
             )}
             <LineScore s={current} />
