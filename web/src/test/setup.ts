@@ -1,4 +1,8 @@
 import '@testing-library/jest-dom/vitest'
+import { afterEach } from 'vitest'
+
+// 修改資料 keeps unsaved changes on the device (components/ui/editDraft.ts): one test's must not greet the next one
+afterEach(() => { try { for (const k of Object.keys(localStorage)) if (k.startsWith('bafin.gameEdit.')) localStorage.removeItem(k) } catch { /* no storage */ } })
 
 // jsdom lacks matchMedia and ResizeObserver; provide minimal stubs for components that use them.
 if (!window.matchMedia) {

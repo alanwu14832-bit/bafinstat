@@ -251,7 +251,7 @@ describe('buildFeed: one game, both sides', () => {
     expect(h.map((x) => x.title)).toEqual(['一局上 對方進攻', '一局下 我隊進攻'])
     expect(itemText(latestItem(h)!)).toBe('林昱丞 擊出右外野方向一壘安打。')
     // the double play: lead runner out on the play, two outs at once
-    expect(texts(h)[1]).toBe('對方第 2 棒 擊出游擊方向滾地球，雙殺打；對方第 1 棒出局。')
+    expect(texts(h)[1]).toBe('對方第 2 棒 擊出游擊方向滾地球，雙殺打；對方第 1 棒在二壘被封殺。')
     expect(pas(h)[1].outs).toBe(2)
   })
   it('the plate appearance in progress: its plays name the runners, runs and outs count', () => {

@@ -30,7 +30,7 @@ describe('editing one plate appearance with the recording buttons', () => {
     expect(lastPitchFor(['CS', 'B', 'SS'], '二安')).toEqual(['CS', 'B', 'IP'])
     expect(lastPitchFor(['CS', 'B', 'IP'], '三振')).toEqual(['CS', 'B', 'SS'])
     expect(lastPitchFor(['B', 'B', 'B', 'IP'], '保送')).toEqual(['B', 'B', 'B', 'B'])
-    expect(lastPitchFor(['B', 'IP'], '觸身')).toEqual(['B'])
+    expect(lastPitchFor(['B', 'IP'], '觸身')).toEqual(['B', 'HP'])
     expect(lastPitchFor(['CS', 'CS', 'CS'], '三振')).toEqual(['CS', 'CS', 'CS'])
     expect(withResult(bat({ pitches: ['CS', 'SS', 'SS'], result: '三振', code: 'II', outsBefore: 1 }), '二安')).toMatchObject({ pitches: ['CS', 'SS', 'IP'] })
   })
@@ -60,6 +60,9 @@ describe('editing one plate appearance with the recording buttons', () => {
     expect(blankBattingAt([], 0, 'G')).toMatchObject({ order: 1, inning: 1, batter: '' })
     expect(blankPitchingAt([pit({ oppOrder: 4, pitcher: '子', inning: 3 })], 1, 'G')).toMatchObject({ oppOrder: 5, pitcher: '子', inning: 3 })
     expect(blankPitchingAt([pit({ oppOrder: 4, pitcher: '子', inning: 3 })], 0, 'G')).toMatchObject({ oppOrder: 1, pitcher: '子', inning: 3 })
+    // 「在前面插入」 at the 2nd inning's first batter: it is the 2nd inning's
+    expect(blankBattingAt(rows.slice(0, 3), 2, 'G', 2)).toMatchObject({ order: 3, inning: 2 })
+    expect(blankPitchingAt([pit({ oppOrder: 3, inning: 1 }), pit({ oppOrder: 4, inning: 2, oppBats: 'L' })], 1, 'G', 2)).toMatchObject({ oppOrder: 4, inning: 2 })
   })
 })
 

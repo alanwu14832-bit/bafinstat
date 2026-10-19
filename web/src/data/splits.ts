@@ -55,7 +55,7 @@ export function asBattingPA(p: PitchingPA): BattingPA {
   }
 }
 
-const SWING = new Set(['SS', 'F', 'IP'])
+const SWING = new Set(['SS', 'F', 'IP', 'T'])
 const TAKE = new Set(['B', 'CS', 'S'])
 
 /** The situation of every plate appearance of one side, over the whole dataset (rows keyed by object). */

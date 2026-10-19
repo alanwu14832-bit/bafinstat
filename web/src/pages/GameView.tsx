@@ -21,7 +21,7 @@ import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearanc
 import { gameRecap } from '../data/recap'
 import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
-import { resultText, shownLine, withLiveResult, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
+import { boardLine, resultText, shownLine, withLiveResult, type BattingLine, type GameSummary, type PitchingLine } from '../data/stats'
 import { PendingBadge, resultBadge } from '../components/ui/ResultBadge'
 import { mayBeLive } from '../data/liveGames'
 import { useLiveGames } from '../hooks/useLiveGames'
@@ -49,6 +49,7 @@ import { SharePanel } from '../components/game/SharePanel'
 import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
 import { Broadcast } from '../components/ui/Broadcast'
 import { buildFeed, seasonHrBefore } from '../data/broadcast'
+import { confirmLeave } from '../lib/unsaved'
 
 export { resultBadge } from '../components/ui/ResultBadge'
 
@@ -111,8 +112,8 @@ function LineScore({ s }: { s: GameSummary }) {
   // (every inning a column; a game being recorded leaves the innings not reached yet blank)
   const n = Math.max(s.game.innings ?? 0, s.lineUs.length, s.lineOpp.length)
   // each team's E is the errors that team made (ours from our fielding lines, theirs from our batters reaching on 失誤)
-  const opp = { name: s.game.opponent, line: shownLine(s, 'opp'), r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
-  const us = { name: TEAM_NAME, line: shownLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
+  const opp = { name: s.game.opponent, line: boardLine(s, 'opp'), r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
+  const us = { name: TEAM_NAME, line: boardLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
   const top = s.game.homeAway === '主' ? opp : us
   const bottom = s.game.homeAway === '主' ? us : opp
   return (
@@ -365,7 +366,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                   onClick={() => { if (window.confirm(`確定刪除 ${id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(id).then(onClose).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />
               </>
             )}
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label={page ? '回比賽列表' : '關閉'} icon={<X />} />
+            <Button variant="ghost" size="sm" onClick={() => { if (confirmLeave()) onClose() }} aria-label={page ? '回比賽列表' : '關閉'} icon={<X />} />
           </div>
         </div>
         {!editing && (

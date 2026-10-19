@@ -13,7 +13,7 @@ import { BATTER_OUT_BIP, DEFAULT_PARAMS, HIT_BASE_COUNT, isBattedBall, isDouble,
 // ------------------------------------------------------------------ helpers
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 export const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
-const SWING_CODES = new Set(['SS', 'F', 'IP'])
+const SWING_CODES = new Set(['SS', 'F', 'IP', 'T'])
 const STRIKE_CODES = new Set(['S', 'SS', 'CS', 'F', 'IP'])
 
 export const div = (n: number, d: number): number | null => (d > 0 ? n / d : null)
@@ -25,9 +25,12 @@ export function pitchTotals(pitches: string[]): PitchTotals {
   const fouls = count(pitches, 'F')
   const inPlay = count(pitches, 'IP')
   const called = count(pitches, 'CS') + count(pitches, 'S')
-  const balls = count(pitches, 'B')
-  const strikes = whiffs + inPlay + called // "好球" column: S/SS/CS/IP
-  return { pitches: strikes + fouls + balls, strikes: strikes + fouls, balls, fouls, whiffs, swings: whiffs + fouls + inPlay, called }
+  // (the pitch of a 觸身／妨礙 — HP / CI — is thrown, and counted with the balls, as MLB's pitches-strikes)
+  const balls = count(pitches, 'B') + count(pitches, 'HP') + count(pitches, 'CI')
+  // T 擦棒 (a foul tip held by the catcher): a strike, a swing with contact — not a whiff
+  const tips = count(pitches, 'T')
+  const strikes = whiffs + inPlay + called + tips // "好球" column: S/SS/CS/IP/T
+  return { pitches: strikes + fouls + balls, strikes: strikes + fouls, balls, fouls, whiffs, swings: whiffs + fouls + inPlay + tips, called }
 }
 
 const isRISP = (bases?: string) => !!bases && (bases.includes('2') || bases.includes('3'))
@@ -584,6 +587,8 @@ export interface GameSummary {
   lineUs: number[]; lineOpp: number[]
   /** the last inning each side has a plate appearance in (its line goes no further while the game is being recorded) */
   playedUs?: number; playedOpp?: number
+  /** the innings each side batted in (a half with no rows was not played) */
+  battedUs?: number[]; battedOpp?: number[]
   /** 'live' while the game is being recorded (data/liveGames.ts): no 勝／敗 yet, the score is the current one */
   result: SummaryResult
   pitchesUs: number
@@ -606,6 +611,23 @@ export function shownLine(s: GameSummary, side: 'us' | 'opp'): number[] {
   const line = side === 'us' ? s.lineUs : s.lineOpp
   const played = side === 'us' ? s.playedUs : s.playedOpp
   return s.result === 'live' && played !== undefined ? line.slice(0, played) : line
+}
+
+/**
+ * The line score as a scoreboard shows it: runs in the innings a side batted, X in the home team's last half when it was
+ * not needed (ahead after the top of the last inning played), blank for a half nobody batted (a game called early, the
+ * innings of a 7-inning game not reached). A game being recorded: blank from the inning in progress on.
+ */
+export function boardLine(s: GameSummary, side: 'us' | 'opp'): Array<number | null | 'X'> {
+  const line = side === 'us' ? s.lineUs : s.lineOpp
+  const batted = side === 'us' ? s.battedUs : s.battedOpp
+  if (s.result === 'live') return shownLine(s, side)
+  if (!batted) return line
+  const home = (side === 'us') === (s.game.homeAway === '主')
+  const last = Math.max(s.playedUs ?? 0, s.playedOpp ?? 0)
+  const ahead = side === 'us' ? s.runsUs > s.runsOpp : s.runsOpp > s.runsUs
+  const has = new Set(batted)
+  return line.map((v, i) => (has.has(i + 1) ? v : home && ahead && i + 1 === last ? 'X' : null))
 }
 
 /** `s` with its result as of the live set now (a summary computed before the game started or ended being live). */
@@ -637,6 +659,7 @@ export function summarizeGame(ds: Dataset, game: Game, live: ReadonlySet<string>
     lobUs: bat.filter((p) => p.code === 'L').length,
     lineUs, lineOpp,
     playedUs: Math.max(0, ...bat.map((p) => p.inning)), playedOpp: Math.max(0, ...pit.map((p) => p.inning)),
+    battedUs: [...new Set(bat.map((p) => p.inning))], battedOpp: [...new Set(pit.map((p) => p.inning))],
     result: live.has(game.id) ? 'live' : runsUs > runsOpp ? 'W' : runsUs < runsOpp ? 'L' : 'T',
     pitchesUs: pit.reduce((a, p) => a + pitchTotals(p.pitches).pitches, 0),
   }

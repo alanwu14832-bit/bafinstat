@@ -159,7 +159,7 @@ LISTS = {
     "名單守位": ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "IF", "OF", "UT"],
     "打擊結果": ["一安", "內安", "二安", "場地二安", "三安", "全壘打", "保送", "故四", "觸身", "三振", "內滾", "內飛", "外飛", "界外飛", "野選", "失誤", "犧觸", "犧飛", "雙殺", "妨礙", "突破僵局"],
     "落點": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "56", "46", "34", "78", "89"],
-    "逐球代碼": ["S", "SS", "CS", "F", "IP", "B"],
+    "逐球代碼": ["S", "SS", "CS", "F", "IP", "B", "T", "HP", "CI"],
     "結果代碼": ["I", "II", "III", "L", "R", "ER"],
     "壘上代碼": ["無", "1", "2", "3", "12", "13", "23", "123"],
     "對手清單": sorted({g["opponent"] for g in GAMES}),
@@ -203,7 +203,7 @@ lines = [
     ("   也可以把整個檔案上傳到網站版儀表板（資料匯入頁），網站會自動讀取這三張紀錄表。", False),
     ("", False),
     ("逐球代碼", True),
-    ("S 好球(未指定)　SS 揮棒落空　CS 未揮棒好球　F 界外　IP 擊球進場(In Play)　B 壞球", False),
+    ("S 好球(未指定)　SS 揮棒落空　CS 未揮棒好球　F 界外　IP 擊球進場(In Play)　B 壞球　T 擦棒被捕（好球，兩好球後就是三振）　HP 觸身球　CI 捕手妨礙（HP／CI 算一球、計入壞球數，但不算進好壞球數；網站紀錄觸身／妨礙時會自動補上）", False),
     ("逐球從『球1』開始依序填，中間不要留空格（首球揮棒、兩好球後纏鬥都看第幾格）；一個打席最多記 12 球。", False),
     ("打擊結果", True),
     ("一安 內安(內野安打，算一安) 二安 場地二安(彈出或卡在全壘打牆，算二安，跑者都進兩個壘) 三安 全壘打 保送 故四(故意四壞) 觸身 三振(含不死三振) 內滾 內飛 外飛 界外飛(界外接殺) 野選 失誤(失誤上壘) 犧觸 犧飛 雙殺 妨礙(捕手妨礙)", False),
@@ -405,12 +405,12 @@ def build_log(name, inputs, autos, formulas_fn, widths, subtitle):
 def pitch_counts(rr):
     rng = f"${P1}{rr}:${P12}{rr}"
     return {
-        "好球": f'=COUNTIF({rng},"S")+COUNTIF({rng},"SS")+COUNTIF({rng},"CS")+COUNTIF({rng},"IP")',
+        "好球": f'=COUNTIF({rng},"S")+COUNTIF({rng},"SS")+COUNTIF({rng},"CS")+COUNTIF({rng},"IP")+COUNTIF({rng},"T")',
         "界外": f'=COUNTIF({rng},"F")',
-        "壞球": f'=COUNTIF({rng},"B")',
+        "壞球": f'=COUNTIF({rng},"B")+COUNTIF({rng},"HP")+COUNTIF({rng},"CI")',
         "用球數": f'={BL["好球"]}{rr}+{BL["界外"]}{rr}+{BL["壞球"]}{rr}',
         "_揮空": f'COUNTIF({rng},"SS")',
-        "_揮棒": f'(COUNTIF({rng},"SS")+COUNTIF({rng},"F")+COUNTIF({rng},"IP"))',
+        "_揮棒": f'(COUNTIF({rng},"SS")+COUNTIF({rng},"F")+COUNTIF({rng},"IP")+COUNTIF({rng},"T"))',
         "_看好球": f'(COUNTIF({rng},"CS")+COUNTIF({rng},"S"))',
     }
 
@@ -462,11 +462,11 @@ def bat_formulas(rr):
     # 壞球不揮: balls he took (an intentional walk's do not count); 內野飛球 for IFFB%
     f["壞球不揮"] = f'=IF({X}="故四",0,{c("壞球")})'
     f["內野飛球"] = f'=IF(AND({c("場內球")}=1,{eff(X,Z)}="P"),1,0)'
-    f["首球揮棒"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="SS",${P1}{rr}="F",${P1}{rr}="IP")),1,0)'
+    f["首球揮棒"] = f'=IF(AND({c("打席")}=1,OR(${P1}{rr}="SS",${P1}{rr}="F",${P1}{rr}="IP",${P1}{rr}="T")),1,0)'
     # 兩好球纏鬥: 3+ pitches after reaching two strikes (the last one included) = the first (用球數 − 3) cells already hold
     # two of S/SS/CS/F (pitches entered from 球1 on, no gaps); 6球以上: 6+ pitches. Both are 優質打席.
     rng = f"${P1}{rr}:${P12}{rr}"
-    sk = f'(({rng}="S")+({rng}="SS")+({rng}="CS")+({rng}="F"))'
+    sk = f'(({rng}="S")+({rng}="SS")+({rng}="CS")+({rng}="F")+({rng}="T"))'
     f["兩好球纏鬥"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>=5),IF(SUMPRODUCT((COLUMN({rng})-COLUMN(${P1}{rr})<{c("用球數")}-3)*{sk})>=2,1,0),0)'
     f["6球以上"] = f'=IF(AND({c("打席")}=1,{c("用球數")}>=6),1,0)'
     f["優質打席"] = f'=IF({c("打席")}=0,0,IF(OR({c("安打")}=1,{c("保送")}=1,{c("觸身")}=1,{c("犧觸")}=1,{c("犧飛")}=1,${BL["打點"]}{rr}>0,{c("6球以上")}=1,{c("兩好球纏鬥")}=1,{c("強擊")}=1),1,0)'

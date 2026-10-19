@@ -3,10 +3,12 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { isDouble, isPA, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
+import { END_PITCH, isDouble, isPA, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
 import { oppKey } from '../data/opponent'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
+
+const END_PITCH_CODES = new Set<string>(Object.values(END_PITCH))
 
 type PA = BattingPA | PitchingPA
 const OUT_CODES = new Set(['I', 'II', 'III'])
@@ -37,8 +39,13 @@ export function codeFor(result: string, outsBefore: number | undefined, code: st
 }
 
 /** The last pitch follows a changed result: a ball in play ends on IP (a swinging strike becomes contact), a
- *  strikeout on a swinging strike, a walk on a ball; an HBP / interference has no IP. */
+ *  strikeout on a swinging strike, a walk on a ball; an HBP / interference ends on its HP / CI pitch. */
 export function lastPitchFor(pitches: string[], result: string): string[] {
+  // (an HP / CI left from the result it was before goes; the new 觸身／妨礙 gets its own — in place of an IP)
+  const end = END_PITCH[result]
+  const bare = END_PITCH_CODES.has(pitches[pitches.length - 1]) && pitches[pitches.length - 1] !== end ? pitches.slice(0, -1) : pitches
+  if (end) return withInPlay(bare[bare.length - 1] === 'IP' ? bare.slice(0, -1) : bare, result)
+  pitches = bare
   const last = pitches[pitches.length - 1]
   if (BIP_RESULTS.has(result)) return last === 'SS' ? [...pitches.slice(0, -1), 'IP'] : withInPlay(pitches, result)
   if (last !== 'IP') return pitches
@@ -70,9 +77,10 @@ export function toggleBase(bases: string | undefined, base: 1 | 2 | 3): string {
   return [...set].sort().join('') || '無'
 }
 
-/** A blank batting row to insert at index `at`: the inning of the row before it, the next slot, and whoever holds that
+/** A blank batting row to insert at index `at`: the inning of the row before it (or `inning`, the row it was inserted
+ *  next to — 「在前面插入」 at an inning's first batter belongs to that inning), the next slot, and whoever holds that
  *  slot by then (the last batter there, or his 代跑, who took the slot over). */
-export function blankBattingAt(rows: BattingPA[], at: number, gameId: string): BattingPA {
+export function blankBattingAt(rows: BattingPA[], at: number, gameId: string, inning?: number): BattingPA {
   const prev = rows[at - 1]
   const order = prev?.order ? (prev.order % 9) + 1 : prev ? undefined : 1
   // earlier in the game: that slot's last batter, or his 代跑 who took the slot over; otherwise its next batter
@@ -83,16 +91,19 @@ export function blankBattingAt(rows: BattingPA[], at: number, gameId: string): B
   // the opponent pitcher of the plate appearance before it (or after it, at the top)
   const near = prev ?? rows[at]
   const opp = { ...(near?.oppPitcher ? { oppPitcher: near.oppPitcher } : {}), ...(near?.oppHand ? { oppHand: near.oppHand } : {}) }
-  return { gameId, inning: prev?.inning ?? rows[at]?.inning ?? 1, order, batter, ...(pos ? { pos } : {}), pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...opp }
+  return { gameId, inning: inning ?? prev?.inning ?? rows[at]?.inning ?? 1, order, batter, ...(pos ? { pos } : {}), pitches: [], result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...opp }
 }
-/** A blank opponent row to insert at index `at`: inning and pitcher of the row before it, next batter in their order. */
-export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string): PitchingPA {
+/** A blank opponent row to insert at index `at`: inning (or `inning`, as above) and pitcher of the row before it, next
+ *  batter in their order. */
+export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string, inning?: number): PitchingPA {
   const prev = rows[at - 1]
   const near = prev ?? rows[at]
   const oppOrder = prev?.oppOrder ? (prev.oppOrder % 9) + 1 : prev ? undefined : 1
   // that slot's batter the last time it came up (the names are only there when the recorder kept them)
   const oppBatter = oppOrder ? [...rows.slice(0, at)].reverse().find((p) => p.oppOrder === oppOrder)?.oppBatter : undefined
-  return { gameId, inning: near?.inning ?? 1, oppOrder, pitcher: near?.pitcher ?? '', ...(oppBatter ? { oppBatter } : {}), pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
+  // (that slot's 左打／右打 this game comes along)
+  const oppBats = oppOrder ? [...rows.slice(0, at)].reverse().find((p) => p.oppOrder === oppOrder)?.oppBats : undefined
+  return { gameId, inning: inning ?? near?.inning ?? 1, oppOrder, pitcher: near?.pitcher ?? '', ...(oppBatter ? { oppBatter } : {}), ...(oppBats ? { oppBats } : {}), pitches: [], result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0 }
 }
 
 const oppKeyOf = (p: BattingPA) => `${p.oppPitcher ?? ''}\u0000${p.oppHand ?? ''}`

@@ -618,8 +618,21 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
       on = stepAfter(step)
       continue
     }
+    // the plays between pitches already written down (steals, wild pitches, pickoffs, 壘死…) are kept, replayed over the
+    // runners as they are rebuilt; one whose runner is no longer on that base (or would not move forward) is left out
+    const moves: Move[] = []
+    let mid = before.slice()
+    for (const e of eventsOf(r)) {
+      const who = mid.find((x) => x.base === e.from)
+      if (!who || (typeof e.to === 'number' && e.to <= who.base)) continue
+      moves.push({ at: e.at, kind: e.kind, row: who.row, from: who.base, to: e.to, ...(e.outAt ? { outAt: e.outAt } : {}) })
+      mid = mid.filter((x) => x !== who)
+      if (typeof e.to === 'number') mid.push({ row: who.row, base: e.to })
+      if (e.to === 'out') outs++
+    }
+    mid.sort((a, z) => z.base - a.base)
     const dest: Record<number, End> = {}
-    const has = (b: number) => before.some((o) => o.base === b)
+    const has = (b: number) => mid.some((o) => o.base === b)
     const up = (o: OnBase, n: number): End => (o.base + n >= 4 ? 'home' : ((o.base + n) as Base))
     const reachedOnK = r.result === '三振' && (r.code === 'R' || r.code === 'ER' || r.code === 'L')
     let batter: End = reachedOnK ? 1 : batterEndFor(r.result)
@@ -627,7 +640,7 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
     const n = r.result === '內安' ? 0 : HIT_BASE_COUNT[r.result] ?? 0
     const forcedWalk = ['內安', '保送', '故四', '觸身', '妨礙'].includes(r.result) || reachedOnK
     const outsHere: number[] = []
-    for (const o of before) {
+    for (const o of mid) {
       if (n) dest[o.row] = up(o, n)
       else if (forcedWalk) dest[o.row] = o.base === 1 || (o.base === 2 && has(1)) || (o.base === 3 && has(1) && has(2)) ? up(o, 1) : o.base
       else if (r.result === '失誤' || r.result === '犧觸') dest[o.row] = up(o, 1)
@@ -635,17 +648,17 @@ export function rebuildHalf(rows: Row[], idx: number[], side: Side): Half {
       else dest[o.row] = o.base
     }
     // the forced runner is the other out of a double play / the one thrown out on a fielder's choice
-    if ((r.result === '雙殺' || r.result === '野選') && before.length && outs < 2) {
-      const lead = before.find((o) => o.base === 1) ?? before[before.length - 1]
+    if ((r.result === '雙殺' || r.result === '野選') && mid.length && outs < 2) {
+      const lead = mid.find((o) => o.base === 1) ?? mid[mid.length - 1]
       dest[lead.row] = 'out'
       outsHere.push(lead.row)
       outs++
-      if (r.result === '野選') for (const o of before) if (o !== lead && typeof dest[o.row] === 'number') dest[o.row] = up(o, 1)
+      if (r.result === '野選') for (const o of mid) if (o !== lead && typeof dest[o.row] === 'number') dest[o.row] = up(o, 1)
     }
-    for (const o of before) if (dest[o.row] === 3 && scored(rows[o.row], side)) dest[o.row] = 'home'
+    for (const o of mid) if (dest[o.row] === 3 && scored(rows[o.row], side)) dest[o.row] = 'home'
     if (batter === 'out') { outsHere.push(k); outs++ }
     if (r.result === '全壘打') batter = 'home'
-    const step: Step = { index: k, before, moves: [], dest, batter, outs: outsHere }
+    const step: Step = { index: k, before, moves, dest, batter, outs: outsHere }
     steps.push(step)
     on = stepAfter(step)
     if (outs >= 3) { outs = 0; on = [] }

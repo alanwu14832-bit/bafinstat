@@ -286,7 +286,7 @@ else { const c = await badges(midCard); if (c['勝'] || c['敗'] || c['和']) fa
 await lv.goto(`${URL}/games/${encodeURIComponent(gid)}`, { waitUntil: 'networkidle' }); await lv.waitForTimeout(400)
 
 // ---------------------------------------------------------------- 結束比賽: the game page's 文字轉播 tab says the same
-await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
+await main.getByRole('button', { name: '結束比賽', exact: true }).click(); await p.waitForTimeout(300)
 await p.getByRole('button', { name: '儲存並結束' }).click(); await p.waitForTimeout(1200)
 const dlg = p.getByRole('dialog').last()
 // batch 13: finished, the game shows 勝 again (the recorder's game sheet, the other tab without reloading, after a reload)

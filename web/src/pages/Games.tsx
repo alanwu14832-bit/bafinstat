@@ -15,6 +15,7 @@ import { auditGame } from '../data/audit'
 import { useStats } from '../hooks/useStats'
 import { summarizeGame, type SummaryResult } from '../data/stats'
 import { TEAM_NAME } from '../data/seed'
+import { confirmLeave } from '../lib/unsaved'
 
 interface GameRow { id: string; date: string; tournament: string; opponent: string; homeAway: string; venue: string; result: SummaryResult; score: string; hitsUs: number; hitsOpp: number; errorsUs: number; lob: number; pitches: number; isDemo: boolean }
 
@@ -87,7 +88,7 @@ export function GamesPage() {
           </Card>
         )}
       </>)}
-      <Sheet open={!!current} onClose={close} ariaLabel="逐場成績" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl">
+      <Sheet open={!!current} onClose={close} confirmClose={confirmLeave} ariaLabel="逐場成績" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl">
         {current && <GameView key={current.game.id} summary={current} mode="sheet" onClose={close} />}
       </Sheet>
     </>

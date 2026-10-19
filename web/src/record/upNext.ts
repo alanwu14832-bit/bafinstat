@@ -65,6 +65,17 @@ export function halfPlayed(s: RecordState, sc: Score, regulation: number): boole
   return s.inning <= regulation || away - awayIn === home
 }
 
+/**
+ * The game is over now: the half in progress will not be played (the home team ahead after the top of the last inning,
+ * a regulation or extra inning finished with a leader), or the home team went ahead in the bottom of the last inning or
+ * later (a walk-off). Only the regulation rule: no mercy rule, no time limit.
+ */
+export function gameOverNow(s: RecordState, sc: Score, regulation: number): boolean {
+  if (!halfPlayed(s, sc, regulation)) return true
+  const { home, away } = homeAway(s, sc)
+  return s.half === 'bottom' && s.inning >= regulation && home > away
+}
+
 /** Will the next half-inning be played? Only the regulation rule: no mercy rule, no time limit. */
 export function nextHalfPlayed(s: RecordState, sc: Score, regulation: number): boolean {
   if (!halfPlayed(s, sc, regulation)) return false

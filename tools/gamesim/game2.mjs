@@ -245,7 +245,7 @@ await check('再見後', '4下 1出局 8:7')
 await p.screenshot({ path: `${S}/game2-live.png`, fullPage: true })
 
 // ---------------------------------------------------------------- finish and read what the site shows
-await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
+await main.getByRole('button', { name: '結束比賽', exact: true }).click(); await p.waitForTimeout(300)
 await p.getByLabel('勝投').selectOption(B4)
 await p.getByRole('button', { name: '儲存並結束' }).click(); await p.waitForTimeout(1200)
 log('url', p.url())

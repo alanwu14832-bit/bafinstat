@@ -85,6 +85,16 @@ describe('rebuilding an inning whose saved bases do not add up', () => {
     expect(fixed[0]).toMatchObject({ run: 1, code: 'R' })
     expect(fixed.slice(3).map((r) => r.code)).toEqual(['I', 'II', 'III'])
   })
+  it('keeps the plays between pitches (a wild pitch), replayed over the runners it lays out', async () => {
+    const { rebuildHalf, midOf } = await import('./timeline')
+    // 丁 at bat with 乙 on 3B and 丙 on 1B: a wild pitch on his first pitch, written down
+    const withWp = inning.map((r, i) => (i === 3 ? { ...r, events: [{ at: 1, kind: 'wp', from: 3 as const, to: 'home' as const }, { at: 1, kind: 'wp', from: 1 as const, to: 2 as const }] } : r))
+    const rb = rebuildHalf(withWp, idx, 'bat')
+    expect(rb.steps[3].moves.map((m) => `${m.kind} ${m.from}>${m.to}`)).toEqual(['wp 3>home', 'wp 1>2'])
+    expect(midOf(rb.steps[3]).map((o) => o.base)).toEqual([2])
+    const fixed = deriveHalf(withWp, rb, 'bat')
+    expect(fixed[3].events).toEqual([{ at: 1, kind: 'wp', from: 3, to: 'home' }, { at: 1, kind: 'wp', from: 1, to: 2 }])
+  })
 })
 
 describe('逐球跑壘: runner plays between pitches', () => {

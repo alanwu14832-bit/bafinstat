@@ -153,7 +153,7 @@ describe('即時比分: Box Score', () => {
 
   it('after 結束比賽 the game page shows the same numbers as the last /live box', async () => {
     // a whole random game, the moment before 結束比賽 is tapped (the board says 比賽結束，等待紀錄員確認)
-    const s = { ...playGame(4), finished: false } as RecordState
+    const s = { ...playGame(2), finished: false } as RecordState
     localStorage.setItem('bafin.live.panel', 'box')
     show(s, { ...EMPTY_DATASET, roster })
     await screen.findByText('比賽結束，等待紀錄員確認')

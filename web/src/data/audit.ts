@@ -100,7 +100,7 @@ function checkSequence<T extends { inning: number; code?: string; result: string
     if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) out.push({ side, index: i, message: `${where}：2 出局後不可能雙殺` })
     // pitches vs result
     const t = pitchTotals(p.pitches)
-    const strikes = p.pitches.reduce((s, c) => (c === 'S' || c === 'SS' || c === 'CS' ? s + 1 : c === 'F' && s < 2 ? s + 1 : s), 0)
+    const strikes = p.pitches.reduce((s, c) => (c === 'S' || c === 'SS' || c === 'CS' || c === 'T' ? s + 1 : c === 'F' && s < 2 ? s + 1 : s), 0)
     if (p.pitches.length && t.balls >= 4 && !FOUR_BALL_OK.has(p.result)) out.push({ side, index: i, message: `${where}：記了 ${t.balls} 個壞球，結果卻是「${p.result || '空白'}」` })
     if (p.pitches.length && strikes >= 3 && p.result !== '三振') out.push({ side, index: i, message: `${where}：已達 3 好球，結果卻是「${p.result || '空白'}」` })
     if (p.result === '三振' && p.pitches.length && strikes < 3) out.push({ side, index: i, message: `${where}：三振但逐球只有 ${strikes} 個好球` })

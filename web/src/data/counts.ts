@@ -8,8 +8,8 @@
  * the plate appearance (a data slip) no longer moves the count, but still counts towards twoStrikeAt, the way the
  * workbook's 兩好球纏鬥 formula reads the cells.
  */
-export const KNOWN_PITCHES = new Set(['S', 'SS', 'CS', 'F', 'IP', 'B'])
-const STRIKEISH = new Set(['S', 'SS', 'CS', 'F'])
+export const KNOWN_PITCHES = new Set(['S', 'SS', 'CS', 'F', 'IP', 'B', 'T', 'HP', 'CI'])
+const STRIKEISH = new Set(['S', 'SS', 'CS', 'F', 'T'])
 
 export const countKey = (b: number, s: number) => `${b}-${s}`
 
@@ -36,7 +36,7 @@ export function countTrail(pitches: string[]): CountTrail {
     if (final !== null) return
     const here = countKey(b, s)
     pass(here)
-    if (p === 'IP') final = here
+    if (p === 'IP' || p === 'HP' || p === 'CI') final = here
     else if (p === 'B') { b++; if (b === 4) final = here }
     else if (p === 'F') { if (s < 2) s++ }
     else { s++; if (s === 3) final = here }

@@ -252,7 +252,7 @@ await check('5下結束', '6上 0出局 7:6')
 await p.screenshot({ path: `${S}/game1-live.png`, fullPage: true })
 
 // ---------------------------------------------------------------- finish and read what the site shows
-await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
+await main.getByRole('button', { name: '結束比賽', exact: true }).click(); await p.waitForTimeout(300)
 // (the only reliever, B4, gets the 中繼 here, so the win goes to the starter: W and HLD both have a value for excel.mjs)
 await p.getByLabel('勝投').selectOption(S9)
 const holdChip = p.getByRole('group', { name: '中繼' }).getByRole('button', { name: B4 })

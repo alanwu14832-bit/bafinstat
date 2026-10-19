@@ -69,7 +69,7 @@ export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick:
  * 對方換投 (a new pitcher from the next plate appearance, his count from 0). The first time it just sets him.
  * Name optional, one-tap chips of pitchers already met, 左投／右投.
  */
-export function OppPitcherSheet({ open, onClose, current, options, earlierRows, onConfirm, onCorrect, stintRows = 0 }: {
+export function OppPitcherSheet({ open, onClose, current, options, earlierRows, onConfirm, onCorrect, stintRows = 0, quickChange = false }: {
   open: boolean
   onClose: () => void
   current?: OppPitcher
@@ -82,13 +82,15 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
   onCorrect?: (p: OppPitcher) => void
   /** our plate appearances against the pitcher on the mound so far (what 更正 rewrites) */
   stintRows?: number
+  /** opened from the 對方換投 button: starts on 對方換投, and a tap on 左投／右投／不知道 finishes it (a name typed first goes with it) */
+  quickChange?: boolean
 }) {
   const [name, setName] = useState('')
   // 'unknown' = 不知道 (OppPitcher.handUnknown)
   const [hand, setHand] = useState<OppHand | 'unknown' | undefined>(undefined)
   const [mode, setMode] = useState<'correct' | 'change'>('correct')
   const fill = (p?: OppPitcher) => { setName(p?.name ?? ''); setHand(p?.hand ?? (p?.handUnknown ? 'unknown' : undefined)) }
-  useEffect(() => { if (open) { fill(current); setMode('correct') } }, [open, current?.name, current?.hand, current?.handUnknown]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { if (quickChange && current) { fill(undefined); setMode('change') } else { fill(current); setMode('correct') } } }, [open, quickChange, current?.name, current?.hand, current?.handUnknown]) // eslint-disable-line react-hooks/exhaustive-deps
   const choosing = !!current && !!onCorrect
   const correcting = choosing && mode === 'correct'
   // 左投／右投 or 不知道 is required (the pitch pad waits for it); a name stays optional
@@ -97,6 +99,13 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
   const picked = (): OppPitcher => ({ name: name.trim() || undefined, ...(hand === 'unknown' ? { handUnknown: true as const } : hand ? { hand } : {}) })
   const pick = (m: 'correct' | 'change') => { if (m === mode) return; setMode(m); fill(m === 'correct' ? current : undefined) }
   const modes: Array<{ v: 'correct' | 'change'; l: string }> = [{ v: 'correct', l: '更正這位投手' }, { v: 'change', l: '對方換投' }]
+  // (the quick 對方換投: the hand is the last thing to pick, so the tap on it finishes)
+  const tapHand = (h: OppHand | 'unknown') => {
+    setHand(h)
+    if (quickChange && mode === 'change') { onConfirm({ name: name.trim() || undefined, ...(h === 'unknown' ? { handUnknown: true as const } : { hand: h }) }); onClose() }
+  }
+  // 更正 with another name typed in: most likely a new pitcher
+  const renamed = correcting && !!current?.name && !!name.trim() && name.trim() !== current.name
   return (
     <Sheet open={open} onClose={onClose} ariaLabel="對方投手" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-md" contentClassName="record-zoom max-h-[86vh] overflow-y-auto">
       <div className="p-5 flex flex-col gap-4">
@@ -135,12 +144,14 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
         </label>
         <div className="flex flex-col gap-1.5">
           <div className="grid grid-cols-[1fr_1fr_auto] gap-2" role="group" aria-label="左投或右投">
-            {HANDS.map((h) => <button key={h} type="button" aria-pressed={hand === h} onClick={() => setHand(h)} className={cx(chipBtn(hand === h), 'h-12 text-[15px]')}>{OPP_HAND_LABEL[h]}</button>)}
-            <button type="button" aria-pressed={hand === 'unknown'} onClick={() => setHand('unknown')} className={cx(chipBtn(hand === 'unknown'), 'h-12 px-3 text-[13px]')}>不知道</button>
+            {HANDS.map((h) => <button key={h} type="button" aria-pressed={hand === h} onClick={() => tapHand(h)} className={cx(chipBtn(hand === h), 'h-12 text-[15px]')}>{OPP_HAND_LABEL[h]}</button>)}
+            <button type="button" aria-pressed={hand === 'unknown'} onClick={() => tapHand('unknown')} className={cx(chipBtn(hand === 'unknown'), 'h-12 px-3 text-[13px]')}>不知道</button>
           </div>
           {!hand && <span className="text-[11px] text-muted">一定要選一個（看不出來就選「不知道」）</span>}
         </div>
         {!current && earlierRows > 0 && <p className="text-[12px] text-ink-2">這半局前面 {earlierRows} 個打席也會記成這位投手</p>}
+        {renamed && <p role="status" className="text-[12px] text-warning">名字換成 {name.trim()}：如果是換了一位投手，請改選上面的「對方換投」（更正會把 {current!.name} 投過的打席都改成 {name.trim()}）</p>}
+        {quickChange && mode === 'change' && <p className="text-[12px] text-muted">點左投／右投／不知道就完成換投（要記名字先填好姓名）</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button variant="primary" disabled={!can} onClick={() => { const p = picked(); if (correcting) onCorrect!(p); else onConfirm(p); onClose() }}>{correcting ? '更正' : choosing ? '換投' : '確定'}</Button>

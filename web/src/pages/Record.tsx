@@ -34,11 +34,11 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveBall, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
-  type Dest, type LineupSlot, type PAPlan, type RecordState,
+  type Base, type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppBatsChips, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
 import { describeChange } from '../record/summary'
@@ -57,6 +57,7 @@ import { readLineup, toLineupSlots } from '../record/lineup'
 import { TEAM } from '../config/team'
 import { ADV_HINT, AdvChoice, BattedBallPicker, chipBtn, ErrorByChips, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../record/widgets'
 import { TiebreakCard, TiebreakSelects } from '../record/TiebreakCard'
+import { gameOverNow } from '../record/upNext'
 import { basesLabel, parseTiebreakBases, placeTiebreak, setTiebreakRule, skipTiebreak, tiebreakDue } from '../record/tiebreak'
 
 /** 突破僵局 on this device: the bases last picked ('12' / '2' / '123'), or 'off' for 不採用 */
@@ -314,6 +315,13 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const fielders = fieldersNow(state)
   const fielderName = (pos: string) => fielders.get(pos) ? <>{' '}<span className="font-normal opacity-70">{fielders.get(pos)}</span></> : null
   const sc = score(state)
+  // the game is over (the last inning decided, a walk-off): say so plainly and hold the pitch pad until 結束比賽 — or
+  // 繼續記下一局 (extra innings, a friendly played on)
+  const regulation = state.game.innings ?? TEAM.innings
+  const over = !state.finished && (state.batting.length > 0 || state.pitching.length > 0) && gameOverNow(state, sc, regulation)
+  const overKey = `${state.inning}-${state.half}-${sc.us}-${sc.opp}`
+  const [goOn, setGoOn] = useState<string | null>(null)
+  const holdOver = over && goOn !== overKey
   const c = count(state.pitches)
   const [plan, setPlan] = useState<PAPlan | null>(null)
   const [rbiTouched, setRbiTouched] = useState(false)
@@ -326,6 +334,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [phName, setPhName] = useState('')
   // 對方投手 / 對方打序 sheets
   const [oppPitcherOpen, setOppPitcherOpen] = useState(false)
+  // opened from the 對方換投 button (straight to a new pitcher) or from the pitcher's chip (更正 first)
+  const [oppQuick, setOppQuick] = useState(false)
   const [oppLineupOpen, setOppLineupOpen] = useState(false)
   const oppOptions = useMemo(() => oppPitcherOptions(base, state.game.opponent, state.batting), [base, state.game.opponent, state.batting])
   const oppNameList = useMemo(() => (state.oppNames ? oppBatterNames(base, state.game.opponent) : []), [base, state.game.opponent, state.oppNames])
@@ -340,7 +350,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
   const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && isPA(b) && !b.oppHand && !b.oppPitcher).length : 0
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
-  useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerOpen(false); setErrOpen(false); setPhOpen(false) }, [side, state.inning])
+  useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerOpen(false); setErrOpen(false); setPhOpen(false); if (hasPlay) toBatter() }, [side, state.inning]) // eslint-disable-line react-hooks/exhaustive-deps
+  const hasPlay = state.batting.length > 0 || state.pitching.length > 0
   // every play ends with one line saying what went in, and a way to take it back
   const [toast, setToast] = useState<ToastData | null>(null)
   const act = (fn: (s: RecordState) => RecordState) => {
@@ -351,7 +362,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   }
   const openRunners = (row: number | null = null) => { setRunnerPick(row); setRunnerOpen(true); setToast(null) }
   const implied = impliedResult(state.pitches)
-  useEffect(() => { if (implied && !plan) choose(implied) /* eslint-disable-line react-hooks/exhaustive-deps */ }, [implied])
+  // where the open result came from: ball four / strike three ('implied'), the 擊進場內 chips ('ip'), or a tap ('pick');
+  // taking that pitch back (刪最後一球, 復原) closes the result again
+  const planFrom = useRef<'implied' | 'ip' | 'pick' | null>(null)
+  useEffect(() => { if (implied && !plan) { choose(implied); planFrom.current = 'implied' } /* eslint-disable-line react-hooks/exhaustive-deps */ }, [implied])
 
   const params = useDataStore((st) => st.params)
   // (each pitcher's own pitches: a pitcher who left in the middle of a count keeps the ones he threw — priorPitchers)
@@ -390,22 +404,38 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const batterSlot = state.lineup[state.slot]
   // (軌跡 is picked on every batted ball: 內滾 → 滾地 and 外飛 → 飛球 are no longer filled in for the recorder, who has seen it)
   // (強度 starts on 中 for a batted ball; tap 中 again, or another, to change it)
-  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(NO_BATTED_BALL.has(result) ? plan : { ...plan, quality: '中' }); setRbiTouched(false) }
-  const setDest = (row: number | 'batter', d: Dest) => setPlan((p) => {
+  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(NO_BATTED_BALL.has(result) ? plan : { ...plan, quality: '中' }); setRbiTouched(false); planFrom.current = state.pitches.at(-1) === 'IP' ? 'ip' : 'pick' }
+  const setDest = (row: number | 'batter', d: Dest) => setDests([[row, d]])
+  // several at once (全部進一壘／全部不動)
+  const setDests = (moves: Array<[number | 'batter', Dest]>) => setPlan((p) => {
     if (!p) return p
-    const moved = row === 'batter' ? { ...p, batter: d } : { ...p, runners: { ...p.runners, [row]: d } }
+    let moved = p
+    for (const [row, d] of moves) moved = row === 'batter' ? { ...moved, batter: d } : { ...moved, runners: { ...moved.runners, [row]: d } }
     // a 趁傳 mark goes away once he no longer goes further than the result gives
     // (a 壘死 mark goes away once he is no longer out)
     const next = { ...moved, throws: (moved.throws ?? []).filter((w) => beyondDefault(state, moved, w)), errAdv: (moved.errAdv ?? []).filter((w) => beyondDefault(state, moved, w)), runningOuts: (moved.runningOuts ?? []).filter((w) => moved.runners[w] === 'out'), batterRunningOut: moved.batter === 'out' ? moved.batterRunningOut : undefined }
     return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
   })
-  const problems = plan ? planProblems(state, plan) : []
-  // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點 and 軌跡
   const inPlay = state.pitches[state.pitches.length - 1] === 'IP'
+  const problems = plan ? planProblems(state, plan) : []
+  // the pitch that opened the result is gone: close it (the count no longer ends the plate appearance)
+  useEffect(() => {
+    if (!plan) return
+    if ((planFrom.current === 'implied' && implied !== plan.result) || (planFrom.current === 'ip' && !inPlay)) { setPlan(null); planFrom.current = null }
+  }, [implied, inPlay]) // eslint-disable-line react-hooks/exhaustive-deps
+  // the runners moved while the result was open (a steal on ball four, a wild pitch on strike three): send them on from
+  // where they stand now, never back to where they were
+  const runnerKey = state.runners.map((r) => `${r.row}:${r.base}`).join(',')
+  useEffect(() => { setPlan((p) => (p ? refreshPlan(state, p, rbiTouched) : p)) }, [runnerKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const thirdWarn = plan ? thirdOutRule(state, plan).warn : undefined
+  // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點 and 軌跡
   // 擊進場內 → straight to the results (just below the scoreboard bar)
   const resultsRef = useRef<HTMLDivElement>(null)
   const jump = useRef(false)
   const toResults = () => { jump.current = true }
+  // after 送出 (and at a new half): back up to who is up next — his 左打／右打 and the pitch buttons — not left where 送出 was
+  const upRef = useRef<HTMLDivElement>(null)
+  const toBatter = () => requestAnimationFrame(() => upRef.current?.scrollIntoView?.({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }))
   useEffect(() => {
     if (!inPlay || !jump.current) return
     jump.current = false
@@ -429,7 +459,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     }
     return <AdvChoice name={name} kind={kind} onPick={pick} erring={side === 'opp' ? 'us' : 'them'} />
   }
-  const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null) }
+  const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => commitPA(s, plan)); setPlan(null); toBatter() }
   // the opponent's runs on this play, called by the rules (record/earned.ts) on the inning as it would stand; tap one to call it by hand
   const runCalls = (() => {
     if (!plan || side !== 'opp') return []
@@ -445,6 +475,15 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   })()
   const liveCalls = logTab === 'pit' ? earnedAll(state.pitching) : new Map<number, { why?: string }>()
   const willEnd = plan ? state.outs + (plan.batter === 'out' ? 1 : 0) + Object.values(plan.runners).filter((d) => d === 'out').length >= 3 : false
+  // one line of what 送出 will write: 「林昱丞 一安・曾亭維 上3B・打點 1」
+  const planSummary = (() => {
+    if (!plan) return ''
+    const where = (d: Dest) => (d === 'home' ? '得分' : d === 'out' ? '出局' : `上${d}B`)
+    const who = side === 'us' ? batterSlot?.name ?? '打者' : oppName || `對方第 ${state.oppOrder} 棒`
+    const moves = [...state.runners].sort((a, b) => b.base - a.base).flatMap((r) => { const d = plan.runners[r.row] ?? r.base; return d === r.base ? [] : [`${r.name} ${where(d)}`] })
+    const batter = plan.batter === 'out' ? (reachedOn(plan.result) ? '打者出局' : '') : plan.batter === 'home' ? '' : plan.batter !== 1 ? `打者${where(plan.batter)}` : ''
+    return [`${who} ${plan.result}`, ...moves, batter, plan.rbi ? `打點 ${plan.rbi}` : ''].filter(Boolean).join('・')
+  })()
   // substitutions: 換人 works in both halves (defensive changes happen while we field) on any slot, defaulting to the current batter
   // while fielding the 守位 box starts from the slot's position — except a P that is no longer the pitcher (after a fielder
   // moved to the mound), which would put a second P in the lineup
@@ -532,7 +571,18 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undo} canUndo={canUndo} focus={focus} practice={practice} />
       <div className="record-zoom grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
         <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 min-w-0">
+          <div ref={upRef} aria-hidden className="scroll-mt-[196px] sm:scroll-mt-[150px]" />
           <Card still bodyClassName="p-4 md:p-5 flex flex-col gap-4">
+            {holdOver && (
+              <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft p-3">
+                <div className="text-[15px] font-semibold text-ink">比賽結束：{TEAM_NAME} {sc.us} : {sc.opp} {state.game.opponent || '對手'}</div>
+                <p className="text-[12px] text-ink-2">{state.half === 'bottom' && state.inning >= regulation && (state.game.homeAway === '主' ? sc.us > sc.opp : sc.opp > sc.us) ? '主隊在最後一局下半超前（再見）' : `第 ${regulation} 局打完已分出勝負`}。按下面填勝敗投並儲存；要延長或繼續打再按「繼續記下一局」。</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary" icon={<Flag />} onClick={onFinish}>{practice ? '結束練習' : '結束比賽：填勝敗投並儲存'}</Button>
+                  <Button variant="outline" onClick={() => setGoOn(overKey)}>繼續記下一局</Button>
+                </div>
+              </div>
+            )}
             {/* 對方投手: asked while we bat until 左投／右投／不知道 is picked (first, and after every 對方換投) */}
             {askOppHand && <OppPitcherStrip name={state.oppPitcher?.name} onHand={(hand) => act((s) => answerOppHand(s, hand))} onName={() => { setOppPitcherOpen(true); setToast(null) }} />}
             {/* who is up */}
@@ -554,7 +604,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               <div className="flex items-center gap-1.5 shrink-0">
                 {side === 'opp' && <Button variant="outline" size="sm" onClick={() => openTool('pitcher')} icon={<ArrowRightLeft />}>換投</Button>}
                 <Button variant="outline" size="sm" onClick={() => openTool('lineup')} icon={<ArrowRightLeft />}>{side === 'us' ? '代打' : '換人'}</Button>
-                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppPitcherOpen(true); setToast(null) }} title="記錯了要更正，或對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
+                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(true); setOppPitcherOpen(true); setToast(null) }} icon={<ArrowRightLeft />} title="對方換了一位投手：選左投／右投（可先填姓名）就完成">對方換投</Button>}
+                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(false); setOppPitcherOpen(true); setToast(null) }} title="記錯了要更正，或對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
                 {side === 'us' && <span className="text-[12px] text-muted tnum whitespace-nowrap" title="對方現在這位投手投給我們的球數（從他上場或上次換投算起）">對方投手 <span className="text-ink font-medium">{oppPitchCount(state)}</span> 球</span>}
                 {side === 'opp' && <Button variant="outline" size="sm" aria-expanded={phOpen} onClick={() => { setPhOpen(!phOpen); setPhName(''); setToast(null) }} title="對方換人代打時點這裡">對方代打</Button>}
               </div>
@@ -597,7 +648,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
               {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}（看不出來就按「不知道」）</p>}
-              <PitchPad onPitch={(code) => { if (inPlay || waitFor) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor} />
+              <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver} twoStrikes={c.strikes === 2} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -659,7 +710,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <button type="button" onClick={() => apply(undoPitch)} className="shrink-0 h-9 px-3 rounded-[var(--radius-sm)] text-[12px] text-ink-2 hover:text-ink hover:bg-surface/60 underline underline-offset-2 cursor-pointer">點錯了，刪掉 IP</button>
                   </div>
                 )}
-                {!due && <ResultChips onPick={(r) => { if (!waitFor) choose(r) }} only={inPlay ? BIP_RESULTS : undefined} disabled={!!waitFor} />}
+                {!due && <ResultChips onPick={(r) => { if (!waitFor && !holdOver) choose(r) }} only={inPlay ? BIP_RESULTS : undefined} disabled={!!waitFor || holdOver} />}
               </div>
             ) : (
               <div className="rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
@@ -669,12 +720,20 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 </div>
                 {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} required />}
                 <div>
-                  <div className="text-[12px] text-ink-2 mb-1">跑者去向</div>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-[12px] text-ink-2">跑者去向</span>
+                    {state.runners.length > 0 && (
+                      <span className="flex gap-1.5 ml-auto">
+                        <button type="button" onClick={() => setDests(state.runners.map((r) => [r.row, r.base >= 3 ? 'home' : ((r.base + 1) as Base)]))} className="h-9 pointer-fine:h-7 px-3 rounded-full border border-border bg-surface text-[12px] font-medium text-ink-2 hover:bg-surface-2 cursor-pointer">全部進一壘</button>
+                        <button type="button" onClick={() => setDests(state.runners.map((r) => [r.row, r.base]))} className="h-9 pointer-fine:h-7 px-3 rounded-full border border-border bg-surface text-[12px] font-medium text-ink-2 hover:bg-surface-2 cursor-pointer">全部不動</button>
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-col gap-1.5">
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
                       <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name)}
                         mistake={side === 'us' ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined}
-                        outAt={{ show: plan.runners[r.row] === 'out' && (!!plan.runningOuts?.includes(r.row) || liveBall(plan.result)), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
+                        outAt={{ show: plan.runners[r.row] === 'out' && (!!plan.runningOuts?.includes(r.row) || outAtAsked(plan.result)), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
                     ))}
                     <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
                       // (we bat) he reached and was put out on the same play: 壘上出局 by itself, 壘死 when it was his own mistake
@@ -702,7 +761,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     </div>
                   </div>
                 )}
-                {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m}，請調整跑者去向</span>)}</div>}
+                {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m.includes('規則 5.08') ? m : `${m}，請調整跑者去向`}</span>)}</div>}
+                {!problems.length && thirdWarn && <p role="status" className="text-[12px] text-warning">{thirdWarn}</p>}
                 <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={plan.note ?? ''} maxLength={200} onChange={(e) => setPlan({ ...plan, note: e.target.value })} placeholder="選填，例如強襲投手、裁判改判" className="flex-1 min-w-0" /></label>
                 <div className="flex items-center gap-4 flex-wrap">
                   {(
@@ -726,7 +786,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                       {runCalls.filter((c) => !c.earned && c.why && !c.byHand).map((c) => <span key={c.key} className="text-[11px] text-muted">{c.name} 非自責：{c.why}</span>)}
                     </div>
                   )}
-                  <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1">
+                  {/* phones: the summary and 送出 stay at the bottom of the screen while the details are filled in */}
+                  <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-3 max-sm:px-3 max-sm:py-2 max-sm:bg-surface max-sm:border-t max-sm:border-border max-sm:items-stretch">
+                    <p className="text-[12px] text-ink-2 truncate max-sm:text-left" aria-live="polite">{planSummary}</p>
                     <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needBall || needErrBy} aria-describedby={needBall || needErrBy ? 'pa-missing' : undefined} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
                     {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] text-critical">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
                   </div>
@@ -781,7 +843,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         sub={sub} setSub={setSub} onPickPos={pickSubPos} canSub={canSub} onConfirmSub={confirmSub} fieldPos={fieldPos}
         newPitcher={newPitcher} setNewPitcher={setNewPitcher} pitcherHint={pitcherHint} onConfirmPitcher={() => { if (newPitcher) { act((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }}
         extras={toolExtras} />
-      <OppPitcherSheet open={oppPitcherOpen} onClose={() => setOppPitcherOpen(false)} current={state.oppPitcher} options={oppOptions} earlierRows={halfRowsWithoutOpp}
+      <OppPitcherSheet open={oppPitcherOpen} onClose={() => setOppPitcherOpen(false)} current={state.oppPitcher} options={oppOptions} earlierRows={halfRowsWithoutOpp} quickChange={oppQuick}
         stintRows={state.oppPitcher ? state.batting.slice(oppStintStart(state.batting, state.oppPitcher, state.oppPitcherFrom)).filter(isPA).length : 0}
         onConfirm={(p) => act((s) => setOppPitcher(s, p))} onCorrect={(p) => act((s) => correctOppPitcher(s, p))} />
       {state.oppNames && <OppLineupSheet open={oppLineupOpen} onClose={() => setOppLineupOpen(false)} lineup={state.oppLineup ?? Array(9).fill('')} current={state.oppOrder} names={oppNameList} last={lastOpp} opponent={state.game.opponent}

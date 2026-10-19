@@ -37,10 +37,11 @@ export function OutAtChips({ value, onPick, name }: { value?: OutAt; onPick: (at
 }
 
 /** The five big pitch buttons. */
-export function PitchPad({ onPitch, disabled }: { onPitch: (code: string) => void; disabled?: boolean }) {
+/** With two strikes a 擦棒 button joins them: a foul tip held by the catcher is strike three (T). */
+export function PitchPad({ onPitch, disabled, twoStrikes }: { onPitch: (code: string) => void; disabled?: boolean; twoStrikes?: boolean }) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-      {PITCH_BUTTONS.map((b) => (
+      {[...PITCH_BUTTONS, ...(twoStrikes ? [{ code: 'T', label: '擦棒', hint: '被捕＝三振' }] : [])].map((b) => (
         <button key={b.code} type="button" onClick={() => onPitch(b.code)} disabled={disabled} className={cx(bigBtn, 'flex flex-col items-center justify-center leading-tight disabled:opacity-40')}>
           <span>{b.label}</span><span className="text-[10px] text-muted tnum">{b.hint}</span>
         </button>

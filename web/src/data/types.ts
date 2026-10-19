@@ -12,9 +12,14 @@ export type Hand = 'R' | 'L' | 'S'
 export type Trajectory = 'G' | 'F' | 'L' | 'P'
 export type Quality = '強' | '中' | '弱'
 
-/** Pitch codes: S 好球 · SS 揮空 · CS 未揮好球 · F 界外 · IP 擊進場內 · B 壞球 */
-export type PitchCode = 'S' | 'SS' | 'CS' | 'F' | 'IP' | 'B'
-export const PITCH_CODES: PitchCode[] = ['S', 'SS', 'CS', 'F', 'IP', 'B']
+/** Pitch codes: S 好球 · SS 揮空 · CS 未揮好球 · F 界外 · IP 擊進場內 · B 壞球 · T 擦棒（被捕手接住：一個好球，兩好球後就是
+ *  三振；算揮棒、有碰到球）· HP 觸身球 · CI 捕手妨礙. HP and CI are the
+ *  pitch that ended a 觸身／妨礙 (紀錄比賽 adds it): one more pitch thrown, counted with the balls in the 好球／壞球 totals
+ *  (as MLB's pitches-strikes), but no ball or strike in the count. */
+export type PitchCode = 'S' | 'SS' | 'CS' | 'F' | 'IP' | 'B' | 'T' | 'HP' | 'CI'
+export const PITCH_CODES: PitchCode[] = ['S', 'SS', 'CS', 'F', 'IP', 'B', 'T', 'HP', 'CI']
+/** The pitch a 觸身 / 妨礙 ended on (record/model withInPlay). */
+export const END_PITCH: Record<string, PitchCode> = { 觸身: 'HP', 妨礙: 'CI' }
 
 export const PA_RESULTS = [
   '一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',

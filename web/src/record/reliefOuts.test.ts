@@ -119,7 +119,7 @@ describe('壘死 at which base', () => {
     expect(defaultOutAt(s, { result: '三安' }, 'batter')).toBe('home')
     expect(defaultOutAt(s, { result: '一安' }, 0)).toBe(3)        // 甲 (1B) goes to 2B on a single, then is out at 3B
     expect(defaultOutAt(s, { result: '外飛' }, 0)).toBe(1)
-    expect(defaultOutAt(s, { result: '內滾' }, 0)).toBe(2)
+    expect(defaultOutAt(s, { result: '內滾' }, 0)).toBe(3)        // the ground out moves the forced runner to 2B by default: out going on to 3B
   })
   it('a single, the batter thrown out at 2B: the mark says 2B (and a pick of 本壘 is kept)', () => {
     let s = newGame({ ...game, homeAway: '客' as const }, lineup, '壬')

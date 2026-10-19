@@ -30,13 +30,15 @@ export interface SheetProps {
   /** panel classes: max width, background */
   panelClassName?: string
   contentClassName?: string
+  /** asked before the scrim, Escape or a pull closes it (false keeps it open): e.g. 修改資料 with unsaved changes */
+  confirmClose?: () => boolean
 }
 
 const rubber = (d: number) => (0.55 * d * 120) / (d + 120)
 const OPEN_SPRING = { type: 'spring', visualDuration: 0.3, bounce: 0.2 } as const
 const SETTLE_SPRING = { type: 'spring', visualDuration: 0.32, bounce: 0 } as const
 
-export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom = 'sm', header, children, className, panelClassName, contentClassName }: SheetProps) {
+export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom = 'sm', header, children, className, panelClassName, contentClassName, confirmClose }: SheetProps) {
   const reduced = usePrefersReducedMotion()
   const wide = useMediaQuery(desktopFrom === 'sm' ? '(min-width: 640px)' : '(min-width: 1024px)')
   const centered = desktopFrom !== 'never' && wide
@@ -101,7 +103,9 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
   // body scroll lock, Escape, focus — tied to opening and closing only: the caller's onClose is often a new function
   // on every render (an inline arrow), and re-running this would pull the focus back to the panel mid-typing
   const closeRef = useRef(onClose)
-  useEffect(() => { closeRef.current = onClose })
+  const askRef = useRef(confirmClose)
+  useEffect(() => { closeRef.current = onClose; askRef.current = confirmClose })
+  const mayClose = () => !askRef.current || askRef.current()
   // who had the focus before the sheet opened: read in a layout effect, before the content's own effects can move the
   // focus into the panel
   const openerRef = useRef<HTMLElement | null>(null)
@@ -118,7 +122,7 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
       if (panel && !panel.contains(document.activeElement)) panel.focus({ preventScroll: true })
     })
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { closeRef.current(); return }
+      if (e.key === 'Escape') { if (mayClose()) closeRef.current(); return }
       if (e.key !== 'Tab' || !panelRef.current) return
       const els = Array.from(panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), select, input, [tabindex="0"]'))
       if (!els.length) return
@@ -149,9 +153,9 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
     const [t0, p0] = d.samples[0], [t1, p1] = d.samples[d.samples.length - 1]
     const v = t1 > t0 ? ((p1 - p0) / (t1 - t0)) * 1000 : 0
     const cur = pos.get()
-    if (reduced) { if (cur > 0.4 * sizeRef.current) { finishClose(); onClose() } else pos.set(0); return }
+    if (reduced) { if (cur > 0.4 * sizeRef.current && mayClose()) { finishClose(); onClose() } else pos.set(0); return }
     const projected = cur + v * 0.12
-    if (projected > 0.4 * sizeRef.current || v > 800) { closing.current = true; anim.current = animate(pos, sizeRef.current, { type: 'spring', visualDuration: 0.25, bounce: 0, velocity: v, restDelta: 1, restSpeed: 20, onComplete: () => { finishClose(); onClose() } }) }
+    if ((projected > 0.4 * sizeRef.current || v > 800) && mayClose()) { closing.current = true; anim.current = animate(pos, sizeRef.current, { type: 'spring', visualDuration: 0.25, bounce: 0, velocity: v, restDelta: 1, restSpeed: 20, onComplete: () => { finishClose(); onClose() } }) }
     else anim.current = animate(pos, 0, { type: 'spring', visualDuration: 0.3, bounce: Math.abs(v) > 600 ? 0.25 : 0.1, velocity: v })
   }
   const handleProps = centered ? {} : {
@@ -195,7 +199,7 @@ export function Sheet({ open, onClose, ariaLabel, side = 'bottom', desktopFrom =
       : 'absolute inset-y-0 left-0 w-[280px] max-w-[85vw] bg-bg flex flex-col shadow-[var(--shadow-modal)]'
   return createPortal(
     <div className={cx('fixed inset-0 z-50 flex', centered ? 'items-center justify-center p-6' : 'items-end', className)} role="dialog" aria-modal="true" aria-label={ariaLabel}>
-      <motion.button type="button" data-press="none" aria-label="關閉" tabIndex={-1} onClick={() => onClose()} style={{ opacity: scrimAlpha }} className="scrim absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px] cursor-default" />
+      <motion.button type="button" data-press="none" aria-label="關閉" tabIndex={-1} onClick={() => { if (mayClose()) onClose() }} style={{ opacity: scrimAlpha }} className="scrim absolute inset-0 bg-[var(--scrim)] backdrop-blur-[3px] cursor-default" />
       <motion.div ref={panelRef} tabIndex={-1} style={{ x, y, opacity: alpha, scale, willChange: 'transform' }} className={cx(panelBase, 'outline-none', panelClassName)} {...panelDrag}>
         {!centered && axis === 'y' && (
           <div {...handleProps} className="shrink-0 pt-2 pb-1 flex justify-center cursor-grab active:cursor-grabbing touch-none select-none" aria-hidden><span className="h-[5px] w-9 rounded-full bg-border-strong" /></div>
