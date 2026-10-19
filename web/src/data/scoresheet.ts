@@ -157,7 +157,8 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
   // our errors on their batters: the 守備失誤 list, or a 失誤／妨礙 result (data/errors.ts). Blank only when neither appears
   // anywhere (an older import may have left errors out)
   const pitErrors = (r: Row) => { const x = errorsOf(r as PitchingPA); return x.positions.length + x.unknown }
-  const anyErrors = side === 'pit' && rows.some((r) => Array.isArray((r as PitchingPA).errors) || pitErrors(r) > 0)
+  // (a game recorded pitch by pitch knows its errors: none is 0; only an old import without them stays blank)
+  const anyErrors = side === 'pit' && rows.some((r) => Array.isArray((r as PitchingPA).errors) || pitErrors(r) > 0 || r.pitches.length > 0)
   for (let i = 1; i <= innings; i++) perInning[i] = { r: 0, h: 0, e: side === 'pit' && !anyErrors ? null : 0, lob: 0 }
   const totals = { r: 0, h: 0, e: side === 'pit' && !anyErrors ? null as number | null : 0, lob: 0, pa: 0, ab: 0, rbi: 0 }
 

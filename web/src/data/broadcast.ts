@@ -15,7 +15,7 @@ import { WHERE, countBefore } from './gameText'
 import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
 import { errorsOf, oppErrorList, oppErrorsOf } from './errors'
-import { ipDisplay, pitchingLines } from './stats'
+import { ipDisplay, isTriplePlay, pitchingLines } from './stats'
 import { count, lastOppName, offense, oppBatterOf, oppStintStart, type Half, type OppPitcher, type RecordState, type Runner } from '../record/model'
 import { homesIn, inferHalf, isBatterOutMark, midOf, outsIn, placedBases, stepAfter, type Half as Timeline, type Step } from '../record/timeline'
 
@@ -136,7 +136,9 @@ export function resultText(row: Row, side: FeedSide, opts: { reached?: boolean; 
   if (!r) return ''
   const fn = (RESULT_TEXT as Record<string, ResultFn>)[r]
   const reached = opts.reached ?? (r === '三振' && !!row.code && !OUT_CODES.has(row.code))
-  const base = fn ? fn({ loc: row.loc, traj: row.traj, pitches: row.pitches ?? [], reached, fielder: r === '失誤' ? errFielder(row, side) : undefined, hrNo: opts.hrNo }) : r
+  const base0 = fn ? fn({ loc: row.loc, traj: row.traj, pitches: row.pitches ?? [], reached, fielder: r === '失誤' ? errFielder(row, side) : undefined, hrNo: opts.hrNo }) : r
+  // three outs on the one play: a 三殺
+  const base = isTriplePlay(row) ? base0.replace(/雙殺打|形成雙殺/, (m) => (m === '雙殺打' ? '三殺打' : '形成三殺')) : base0
   const rbi = row.rbi ?? 0
   return rbi > 0 && !isPlaced(row) ? `${base}，${rbi} 分打點` : base
 }
@@ -514,8 +516,22 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
         const forcedFrom = (b: number) => b === 1 || (b === 2 && onBase.has(1)) || (b === 3 && onBase.has(1) && onBase.has(2))
         const grounder = (r.result === '雙殺' || r.result === '野選') && r.traj !== 'L' && r.traj !== 'F' && r.traj !== 'P'
         const outPhrase = (e?: PlayEvent) => { const at = outAtOf(e); return at ? `在${at}${e!.kind === 'out' ? '跑壘出局' : grounder && !e!.batter && typeof e!.from === 'number' && forcedFrom(e!.from) ? '被封殺' : '被刺殺'}` : '' }
+        // (one who came home on the throw or on an error says so: 「趁傳回本壘得分」「因失誤回本壘得分」)
         const scorers = mid.filter((o) => st.dest[o.row] === 'home')
-        if (scorers.length) clauses.push(`${scorers.map((o) => name(o.row)).join('、')}回本壘得分`)
+        // (each 趁傳／失誤 home is the runner the play alone would have left on its `from` base: a hit moves him its bases)
+        const extra = events.filter((x) => x.play && !x.batter && (x.kind === 'throw' || x.kind === 'err') && x.to === 'home')
+        const hitBases = HIT_BASE_COUNT[r.result as keyof typeof HIT_BASE_COUNT]
+        const howOf = new Map<number, string>()
+        for (const o of [...scorers].sort((a, b) => b.base - a.base)) {
+          const want = hitBases ? [o.base + hitBases] : [o.base + 1, o.base]
+          const k = extra.findIndex((x) => want.includes(x.from))
+          if (k >= 0) { howOf.set(o.row, extra[k].kind === 'throw' ? '趁傳' : '因失誤'); extra.splice(k, 1) }
+        }
+        const homeHow = (o: (typeof mid)[number]) => howOf.get(o.row) ?? ''
+        for (const how of ['', '趁傳', '因失誤']) {
+          const who = scorers.filter((o) => homeHow(o) === how)
+          if (who.length) clauses.push(`${who.map((o) => name(o.row)).join('、')}${how}回本壘得分`)
+        }
         // The half's last out made on the bases during the next batter's pitches (a 盜壘刺 or a 牽制 before he had a
         // row: record/model settlePending keeps only the counts) is in this step too. When the rows count a play no
         // move shows, the step's last out is that play: its own line after this plate appearance — the batter

@@ -241,7 +241,12 @@ export const oppFields = (p?: OppPitcher): Pick<BattingPA, 'oppPitcher' | 'oppHa
  * far get it too (the recorder noticed after a batter or two); earlier innings and later changes never rewrite rows.
  */
 export function setOppPitcher(s: RecordState, p: OppPitcher): RecordState {
-  const next = cleanOppPitcher(p)
+  let next = cleanOppPitcher(p)
+  // a 換投 to one who reads the same as the man he replaced (no name, the same hand): the saved rows could not tell them
+  // apart, so he gets a name by his turn — 第 2 任投手
+  if (s.oppPitcher && next && !next.name && !s.oppPitcher.name && next.hand === s.oppPitcher.hand && !!next.handUnknown === !!s.oppPitcher.handUnknown) {
+    next = { ...next, name: `第${(s.oppPitcherChanges?.length ?? 0) + 2}任投手` }
+  }
   const out: RecordState = { ...s, oppPitcher: next }
   // a pitcher already on the mound: this is a 換投 (the sheet says so), even to one with the same hand or no name
   if (s.oppPitcher && next) {
@@ -463,7 +468,7 @@ export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, 
  * Substitute (pinch hitter / defensive change) in a lineup slot, logged in `subs`. A position-only change (no name, or
  * the same one: 只改守位) is logged too, as a 守備調動 (the same player in and out, data/gameRoster isMove): errors,
  * putouts and 守備局數 are charged to whoever stood at a position in that half-inning (defenseTimeline). Changing the
- * same player's position again in the same half replaces that entry (a correction, not a second move).
+ * same player's position again in the same half, with no plate appearance in between, replaces that entry (a correction).
  */
 export function substitute(s: RecordState, slot: number, name: string, pos: string): RecordState {
   // someone new taking the current pitcher's slot at P is a pitching change: route it so `pitcher` follows
@@ -482,7 +487,8 @@ function lineupChange(s: RecordState, slot: number, name: string, pos: string): 
     if (!old?.name || !pos || pos === old.pos) return { ...s, lineup }
     const subs = s.subs ?? []
     const last = subs[subs.length - 1]
-    const again = !!last && last.kind === 'DEF' && last.in === old.name && last.out === old.name && last.inning === s.inning && last.half === s.half
+    // (a correction: nothing recorded since that move — once a plate appearance went by, it is a second move of its own)
+    const again = !!last && last.kind === 'DEF' && last.in === old.name && last.out === old.name && last.inning === s.inning && last.half === s.half && last.row === rowNow(s).row
     // (a correction keeps the row it was first made at, and what came before it)
     const move: DayRosterSub = again
       ? { ...last, pos, slot }
@@ -656,8 +662,9 @@ export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batte
 const FLY_OUTS = new Set(['內飛', '外飛', '界外飛', '犧飛'])
 /** A ball in play that put the batter on (a hit — not a home run, which nobody is out on — an error or a fielder's choice). */
 export const liveBall = (result: string): boolean => (result in HIT_BASE_COUNT && result !== '全壘打') || result === '失誤' || result === '野選'
-/** A runner put out on this result is asked where (the base says who made the putout): a ball that put the batter on, or a double play. */
-export const outAtAsked = (result: string): boolean => liveBall(result) || result === '雙殺'
+/** A runner put out on this result is asked where (the base says who made the putout): a ball that put the batter on, a
+ *  double play, or one doubled off after a catch / thrown out on a 犧飛 or a ground out (two outs on the play). */
+export const outAtAsked = (result: string): boolean => liveBall(result) || result === '雙殺' || FLY_OUTS.has(result) || result === '內滾' || result === '犧觸'
 export function defaultOutAt(s: RecordState, plan: Pick<PAPlan, 'result'> & { traj?: string }, who: number | 'batter'): OutAt {
   const base = defaultPlan(s, plan.result)
   const was = who === 'batter' ? base.batter : base.runners[who]
@@ -1112,20 +1119,35 @@ export function settlePending(s: RecordState): RecordState {
   return { ...s, pitching: s.pitching.map((q, i) => (i === last ? settled : q)), subs: settlePaSubs(s, true), plays: [], extras: { ...EXTRAS0 } }
 }
 
+/**
+ * The count in progress as a 未完成打席 row (the half or the game ended before the plate appearance did): its pitches
+ * (counted for the pitcher who threw them, no plate appearance). The batter stays up (he leads off next time). Called
+ * after settlePending, which put the plays' counts on the half's last row.
+ */
+export function unfinishedRow(s: RecordState): RecordState {
+  if (!s.pitches.length) return s
+  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: s.pitches.slice(), result: UNFINISHED }
+  if (offense(s) === 'us') {
+    const slot = s.lineup[s.slot]
+    const row: BattingPA = { ...base, order: s.slot + 1, batter: slot?.name ?? '', ...(slot?.pos ? { pos: slot.pos } : {}), sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...oppFields(s.oppPitcher) }
+    return { ...s, batting: [...s.batting, row], pitches: [] }
+  }
+  if (!s.pitcher) return s
+  const row: PitchingPA = { ...base, pitcher: s.pitcher, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}) }
+  return { ...s, pitching: [...s.pitching, row], pitches: [] }
+}
+
 /** End the half-inning: runners left on base get L, sides switch, inning advances after the bottom half. */
 export function endHalf(s: RecordState): RecordState {
-  s = settlePending(s)
+  // the count on the batter when the half ended between pitches (a 盜壘失敗 or 牽制 for the third out): those pitches were
+  // thrown — a 未完成打席 row holds them (no plate appearance), on either side
+  s = unfinishedRow(settlePending(s))
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   for (const r of s.runners) { const row = r.side === 'us' ? batting[r.row] : pitching[r.row]; if (!row.code) row.code = 'L' }
   // their half over (the third out between pitches, or 結束半局): the inning is complete now, so its runs are called
   // again the way the saved game reads them
   if (offense(s) === 'opp') recallEarned(pitching, s.inning, s.earnedByHand)
-  // the count on the batter when the half ended between pitches (a 盜壘失敗 or 牽制 for the third out): those pitches were
-  // thrown, so they are his (and the earlier pitcher's) — a 未完成打席 row holds them, no batter faced
-  if (offense(s) === 'opp' && s.pitches.length > 0 && s.pitcher) {
-    pitching.push({ gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitcher: s.pitcher, pitches: s.pitches.slice(), result: UNFINISHED, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}) })
-  }
   const { priorPitchers: _pp, ...kept } = s
   void _pp
   return { ...kept, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
@@ -1145,13 +1167,18 @@ export function dayRosterOf(s: RecordState): GameDayRoster {
   const starters: GameDayRoster['starters'] = startersOf(s).flatMap((l, i) => (l.name ? [{ name: l.name, pos: l.pos, order: i + 1 }] : []))
   const sp = startingPitcherOf(s)
   if (sp && !starters.some((x) => x.name === sp)) starters.push({ name: sp, pos: 'P' })
-  return { starters, bench: s.bench ?? [], subs: s.subs ?? [], reentry: !!s.reentry }
+  // the rules it is played by (record/tiebreak tiebreakRuleOf: drafts from before the setting use the team's default)
+  const innings = s.game.innings ?? TEAM.innings
+  const tbBases = s.tiebreak === undefined ? String(TEAM.tiebreak ?? '').replace(/[^123]/g, '') : s.tiebreak ? s.tiebreak.bases.join('') : ''
+  const tbFrom = s.tiebreak === undefined ? (tbBases ? innings + 1 : null) : s.tiebreak?.from ?? null
+  return { starters, bench: s.bench ?? [], subs: s.subs ?? [], reentry: !!s.reentry, rules: { innings, tiebreakFrom: tbFrom, tiebreakBases: tbBases } }
 }
 
 /** Package the game for saveGame (normalize derives fielding, innings and warnings). */
 export function toGameEdit(s: RecordState, extra: Partial<Game> = {}): GameEdit {
   // a game that ended in the middle of a plate appearance (a walk-off balk): what it had goes on the last row
-  if (s.finished) s = settlePending(s)
+  // (the pitches of the count it ended in: a 未完成打席 row)
+  if (s.finished) s = unfinishedRow(settlePending(s))
   // ended in the middle of a half-inning (a walk-off, time called): the runners still on are left on base, as 結束半局 does
   if (s.finished && s.runners.length) {
     const batting = s.batting.map((p) => ({ ...p })), pitching = s.pitching.map((p) => ({ ...p }))

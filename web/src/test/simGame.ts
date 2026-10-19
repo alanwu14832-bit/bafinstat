@@ -26,7 +26,7 @@ import {
   pinchRunOpp, setOppPitcher, stampTimes, substitute, needsOppBats, setOppBats,
   type Dest, type OppPitcher, type RecordState,
 } from '../record/model'
-import type { BattingPA, Game, OppBats, OppHand, Player } from '../data/types'
+import { UNFINISHED, type BattingPA, type Game, type OppBats, type OppHand, type Player } from '../data/types'
 import type { OnBase } from '../record/timeline'
 import { placeTiebreak, tiebreakDue } from '../record/tiebreak'
 
@@ -83,9 +83,10 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
       const name = raw.trim() || undefined
       const next = name || hand ? { ...(name ? { name } : {}), ...(hand ? { hand } : {}) } : undefined
       // the first entry also goes on this half's plate appearances so far
-      if (!oppNow && next) s.batting.forEach((b, i) => { if (b.inning === s.inning && !want.bat[i].oppHand && !want.bat[i].oppPitcher) want.bat[i] = fields(next) })
-      oppNow = next
+      if (!oppNow && next) s.batting.forEach((b, i) => { if (b.inning === s.inning && !want.bat[i]?.oppHand && !want.bat[i]?.oppPitcher) want.bat[i] = fields(next) })
       s = setOppPitcher(s, { name: raw, hand })
+      // (a reliever who reads the same as the man he replaced gets a name by his turn: what the model kept)
+      oppNow = next && s.oppPitcher ? { ...next, ...(s.oppPitcher.name ? { name: s.oppPitcher.name } : {}) } : next
     }
     if (names && offense(s) === 'opp' && x() < 0.05) {
       const before = lineupNow
@@ -216,6 +217,8 @@ export function playGameWith(seed: number, onPA?: (s: RecordState) => void, opts
   s = stampTimes(stamped, s, new Date((clock += 60000)).toISOString())
   // (a 未完成打席 row after the half's last plate appearance has no opponent batter or side to expect: pad the arrays to the rows)
   want.pit.length = Math.max(want.pit.length, s.pitching.length)
+  // (ours too, now: the opponent pitcher when the half ended, as the row was written)
+  s.batting.forEach((b, i) => { if (b.result === UNFINISHED && !want.bat[i]) want.bat[i] = { ...(b.oppPitcher ? { oppPitcher: b.oppPitcher } : {}), ...(b.oppHand ? { oppHand: b.oppHand } : {}) } })
   want.bats.length = Math.max(want.bats.length, s.pitching.length)
   return { ...s, finished: true, truth, start, expect: want, names }
 }

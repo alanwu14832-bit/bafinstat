@@ -38,7 +38,7 @@ import { siteUrl } from '../lib/siteUrl'
 import { gameMedia } from '../data/albums'
 import { gameShareText } from '../data/gameText'
 import { gameNotes } from '../data/gameNotes'
-import { ourBattingBox, ourPitchingBox } from '../data/boxScore'
+import { oppPitchersOf, ourBattingBox, ourPitchingBox, type BoxOppPitcher } from '../data/boxScore'
 import { hasOppName, oppBattingLines, oppTotals, type OppBattingLine } from '../data/opponent'
 import { buildScoresheet } from '../data/scoresheet'
 import { PBP_FILTER_LABEL, PBP_FILTERS, pbpFilterSets, type PbpFilter } from '../data/pbpFilter'
@@ -71,6 +71,11 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
     </section>
   )
   const none = <p className="text-[12px] text-muted">—</p>
+  // 替補上場: the people who came in (a 雙換人's new pitcher once, in the half he came in); 換守位 after them
+  const seen = new Set<string>()
+  const ins = a.subs.filter((r) => !r.move && !seen.has(`${r.name}|${halfLabel(r)}`) && !!seen.add(`${r.name}|${halfLabel(r)}`))
+  const subRows = [...ins, ...a.subs.filter((r) => r.move)]
+  const entered = new Set(ins.map((r) => r.name)).size
   return (
     <Card title="當日登錄名單" flush
       subtitle={!a.inferred ? '點球員看個人檔案' : hasRoster ? '登錄名單沒有填先發，先發與替補由紀錄推定' : '這場沒有登錄名單，先發與替補由紀錄推定'}
@@ -87,9 +92,9 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
             ))}
           </ul>
         ) : <p className="text-[12px] text-muted">打席沒有棒次，無法推定先發</p>)}
-        {group('替補上場', a.subs.length, a.subs.length ? (
+        {group('替補上場', entered, a.subs.length ? (
           <ul className="flex flex-col">
-            {a.subs.map((r, i) => (
+            {subRows.map((r, i) => (
               <li key={`${r.name}-${i}`} className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-h-9 pointer-fine:min-h-8 py-1">
                 <button type="button" className={nameBtn} onClick={() => onPlayer(r)}>{r.name}</button>
                 {r.move ? <Badge variant="outline">換守位</Badge> : r.kind ? <Badge variant={r.kind === 'P' ? 'accent' : 'neutral'}>{SUB_KIND_LABEL[r.kind]}</Badge> : r.pos && <span className={posChip}>{r.pos}</span>}
@@ -131,6 +136,12 @@ const decisionBadges = (r: PitchingLine) => (
   <span className="inline-flex gap-1">{r.w > 0 && <Badge variant="good">勝</Badge>}{r.l > 0 && <Badge variant="critical">敗</Badge>}{r.sv > 0 && <Badge variant="accent">救援</Badge>}{r.hld > 0 && <Badge>中繼</Badge>}</span>
 )
 const decisionText = (r: PitchingLine) => [r.w > 0 && '勝', r.l > 0 && '敗', r.sv > 0 && '救援', r.hld > 0 && '中繼'].filter(Boolean).join(' ')
+// 對方投手: the stints that faced us (a name or hand change starts a new one)
+const boxOppPit: Column<BoxOppPitcher>[] = [
+  { key: 'label', header: '對方投手', className: 'font-medium' },
+  { key: 'pa', header: '面對打者', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'bb', header: '四死', align: 'right' },
+  { key: 'k', header: 'K', align: 'right' }, { key: 'pc', header: '用球', align: 'right' },
+]
 const boxPit: Column<PitchingLine>[] = [
   // the name cell stays the bare name (tools/gamesim matches it); the decisions get their own column
   { key: 'name', header: '投手', className: 'font-medium' }, { key: 'w', header: '勝敗', sortable: false, format: (_, r) => decisionBadges(r), text: (_, r) => decisionText(r) }, { key: 'outs', header: 'IP', align: 'right', format: (_, r) => r.ipDisplay }, { key: 'bf', header: 'BF', align: 'right' }, { key: 'pc', header: 'PC', align: 'right' }, { key: 'strikes', header: '好球', align: 'right' }, { key: 'k', header: 'K', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'hbp', header: 'HBP', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'r', header: 'R', align: 'right' }, { key: 'er', header: 'ER', align: 'right' },
@@ -222,6 +233,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   // pitchers in the order they pitched (not by innings)
   const boxP = useMemo(() => withWinPitching(ourPitchingBox(pbpPit, [current.game]), pbpPit, win), [pbpPit, current.game, win])
   const oppLines = useMemo(() => oppBattingLines(pbpPit), [pbpPit])
+  const oppPit = useMemo(() => oppPitchersOf(pbpBat), [pbpBat])
   const oppTot = useMemo(() => oppTotals(pbpPit), [pbpPit])
   const oppNamed = useMemo(() => pbpPit.some(hasOppName), [pbpPit])
   const innings = Math.max(current.lineUs.length, current.lineOpp.length)
@@ -473,6 +485,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                 {batCard}
                 {pitCard}
                 {oppCard}
+                {oppPit.length > 0 && <Card title="對方投手" subtitle="依上場順序；沒填姓名的照左右投分開" flush><DataTable columns={boxOppPit} rows={oppPit} rowKey={(r) => r.key} dense /></Card>}
                 <GameNotesCard sections={notes} />
                 {current.game.opponent.trim() && <OpponentScoutCard ds={s.dataset} opponent={current.game.opponent} title={`歷來對 ${current.game.opponent}`} />}
               </>

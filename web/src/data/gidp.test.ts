@@ -31,3 +31,13 @@ describe('innings in the 守備 table', () => {
     expect(parseIp('')).toBeUndefined()
   })
 })
+
+describe('三殺', () => {
+  it('a 雙殺 with nobody out that made three outs: no 雙殺打, and it is called so', async () => {
+    const { resultText } = await import('./broadcast')
+    const row = bat({ traj: 'G', loc: 5, outsBefore: 0, code: 'III', basesBefore: '12' })
+    const ds = { roster: [], games: [{ id: 'G', date: '2026-10-19', tournament: '友誼賽', opponent: '測試隊', homeAway: '主' as const }], batting: [row], pitching: [], fielding: [] }
+    expect(battingLines(ds, [row])[0].gidp).toBe(0)
+    expect(resultText(row, 'us')).toContain('三殺打')
+  })
+})

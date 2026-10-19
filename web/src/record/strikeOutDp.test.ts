@@ -44,3 +44,23 @@ describe('the game ends in the middle of a half-inning', () => {
     expect(toGameEdit(s).batting[0].code).toBeUndefined()
   })
 })
+
+describe('we bat: the half ends in the middle of a plate appearance', () => {
+  it('the pitches are kept (a 未完成打席 row, their pitcher counts them), no plate appearance, the batter leads off next time', async () => {
+    const { runnerEvent, oppPitchCount, endHalf } = await import('./model')
+    const { battingLines } = await import('../data/stats')
+    let s = walk(newGame(game('客'), lineup, '壬'))
+    s = { ...s, outs: 2 }
+    s = addPitch(addPitch(s, 'B'), 'B')
+    const before = oppPitchCount(s)
+    s = runnerEvent(s, s.runners[0].row, 'us', 'cs')
+    if (s.half === 'top') s = endHalf(s)
+    expect(s.half).toBe('bottom')
+    const row = s.batting.at(-1)!
+    expect(row).toMatchObject({ result: '未完成打席', batter: '乙', order: 2, pitches: ['B', 'B'] })
+    expect(oppPitchCount({ ...s, half: 'top' })).toBeGreaterThanOrEqual(before)
+    const ds = { roster: [], games: [{ ...game('客') }], batting: s.batting, pitching: [], fielding: [] }
+    expect(battingLines(ds, s.batting).find((l) => l.name === '乙')?.pa ?? 0).toBe(0)
+    expect(s.slot).toBe(1)
+  })
+})

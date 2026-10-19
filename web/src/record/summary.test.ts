@@ -142,7 +142,8 @@ describe('壘死 vs 出局 on the play', () => {
     s = commitPA(s, plan)
     expect(s.batting[0].outOnBase).toBe(1); expect(s.batting[0].baserunningOuts).toBe(1)
     expect(s.batting[1].outOnBase).toBe(1); expect(s.batting[1].baserunningOuts).toBeUndefined()
-    expect(s.batting[2].events).toEqual([{ at: 1, kind: 'out', from: 2, to: 'out', play: true, outAt: 2 }])
+    // (乙's plain 出局 says where too: doubled off at first, the base he stood on)
+    expect(s.batting[2].events).toEqual([{ at: 1, kind: 'out', from: 2, to: 'out', play: true, outAt: 2 }, { at: 1, kind: 'tag', from: 1, to: 'out', play: true, outAt: 1 }])
     expect(describeChange(send(send(start(), '一安'), '一安'), s)).toContain('壘死（2B）')
     const rows = s.batting
     const half = inferHalf(rows, [0, 1, 2], 'bat')!

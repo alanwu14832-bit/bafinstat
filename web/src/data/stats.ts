@@ -4,7 +4,7 @@
  */
 import { balksIn } from './plays'
 import { oppErrorCount, ourErrorCount } from './errors'
-import { countTrail, isTwoStrikeBattle } from './counts'
+import { countParts, countTrail, isTwoStrikeBattle } from './counts'
 import { pitcherSituations } from './pitchingSituations'
 import { liveGameIds } from './liveGames'
 import { runnerPlays } from './baserunning'
@@ -15,6 +15,8 @@ const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 export const NON_AB_RESULTS = new Set(['保送', '故四', '觸身', '犧觸', '犧牲', '犧飛', '妨礙'])
 /** a line drive or fly ball: a 雙殺 on one is a runner doubled off, not the batter's 雙殺打 (GIDP) */
 const FLY_TRAJ = new Set(['L', 'F', 'P'])
+/** a 雙殺 with nobody out that ended the half: three outs on the play, a 三殺 (no 雙殺打) */
+export const isTriplePlay = (pa: { result: string; outsBefore?: number; code?: string }) => pa.result === '雙殺' && pa.outsBefore === 0 && pa.code === 'III'
 const SWING_CODES = new Set(['SS', 'F', 'IP', 'T'])
 const STRIKE_CODES = new Set(['S', 'SS', 'CS', 'F', 'IP'])
 
@@ -172,7 +174,8 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand | nu
   const r = pa.result
   if (!r) return
   // a tie-break runner is no plate appearance: only what he did on the bases counts (the game still counts for G)
-  if (isPlaced(pa)) { l.r += pa.run; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0; return }
+  // (a 未完成打席: no plate appearance — the half ended before it did)
+  if (isPlaced(pa) || isNoBatter(pa)) { l.r += pa.run; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0; return }
   const pt = pitchTotals(pa.pitches)
   l.pa++
   const isAB = !NON_AB_RESULTS.has(r)
@@ -181,7 +184,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand | nu
   if (hit) l.h++
   if (isSingle(r)) l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
-  if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺' && !FLY_TRAJ.has(pa.traj ?? '')) l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
+  if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺' && !FLY_TRAJ.has(pa.traj ?? '') && !isTriplePlay(pa)) l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
   l.r += pa.run; l.rbi += pa.rbi; l.sb += pa.sb; l.cs += pa.cs; l.baserunningOuts += pa.baserunningOuts ?? 0
   if (isAB && isRISP(pa.basesBefore)) { l.rispAB++; if (hit) l.rispH++ }
   const batted = isBattedBall(pa)
@@ -491,6 +494,26 @@ function addSituations(lines: (name: string) => PitchingLine | undefined, pas: P
 
 /** ctx (our runs by inning) adds the numbers that need whole games and the score: leadoff outs, 1-2-3 innings, inherited
  *  runners, blown saves… Without it they stay 0 / null (the per-game logs and trends do not need them). */
+/**
+ * A pitching change in the middle of a count (the row's priorPitchers): what the pitcher who left is charged with — the
+ * walk, that batter faced and his own run when the batter was ahead 2-0, 2-1, 3-0, 3-1 or 3-2 at the change (rule
+ * 9.16(h)), and the wild pitches, steals, pickoffs and balks before it (the plays between pitches carry their pitch).
+ */
+export function chargedToPrior(pa: PitchingPA): { name: string; walk: boolean; wp: number; sba: number; cs: number; pk: number; bk: number } | null {
+  const parts = pitchesByPitcher(pa)
+  const prev = parts.length > 1 ? parts[parts.length - 2] : undefined
+  if (!prev?.pitcher || prev.pitcher === pa.pitcher) return null
+  const before = parts.slice(0, -1).flatMap((x) => x.pitches)
+  const n = before.length
+  const [b, s] = countParts(countTrail(before).final ?? '0-0')
+  const walk = (pa.result === '保送' || pa.result === '故四') && b >= 2 && b > s
+  const ev = (pa.events ?? []).filter((e) => !e.play)
+  // (a wild pitch or balk moving several runners is one; a steal, caught stealing or pickoff is one per runner)
+  const once = (k: string, upTo: (at: number) => boolean) => new Set(ev.filter((e) => e.kind === k && upTo(e.at)).map((e) => e.at)).size
+  const each = (k: string) => ev.filter((e) => e.kind === k && e.at < n).length
+  return { name: prev.pitcher, walk, wp: Math.min(pa.wp, once('wp', (at) => at <= n)), bk: once('bk', (at) => at < n), sba: Math.min(pa.sba, each('sb')), cs: Math.min(pa.cs, each('cs')), pk: Math.min(pa.pk, each('pk')) }
+}
+
 export function pitchingLines(pas: PitchingPA[], games: Game[], params = DEFAULT_PARAMS, ctx?: GameContext): PitchingLine[] {
   const map = new Map<string, PitchingLine>()
   const gameSets = new Map<string, Set<string>>()
@@ -510,6 +533,18 @@ export function pitchingLines(pas: PitchingPA[], games: Game[], params = DEFAULT
       if (!pl) { pl = emptyPitching(part.pitcher); map.set(part.pitcher, pl); gameSets.set(part.pitcher, new Set()) }
       addPitches(pl, pitchTotals(part.pitches))
       gameSets.get(part.pitcher)!.add(pa.gameId)
+    }
+    // and what happened before the change, or the walk of a batter already ahead in the count, is the pitcher who left
+    const prior = chargedToPrior(pa)
+    const pl = prior && map.get(prior.name)
+    if (prior && pl) {
+      if (prior.walk) {
+        const ibb = pa.result === '故四' ? 1 : 0
+        l.bf--; l.bb--; l.ibb -= ibb; pl.bf++; pl.bb++; pl.ibb += ibb
+        if (pa.code === 'R' || pa.code === 'ER') { l.r--; pl.r++ }
+        if (pa.code === 'ER') { l.er--; pl.er++ }
+      }
+      for (const k of ['wp', 'sba', 'cs', 'pk', 'bk'] as const) { l[k] -= prior[k]; pl[k] += prior[k] }
     }
   }
   for (const [gid, name] of starters) { const l = map.get(name); if (l && gameSets.get(name)!.has(gid)) l.gs++ }

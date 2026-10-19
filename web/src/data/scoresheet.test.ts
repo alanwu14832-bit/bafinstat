@@ -175,7 +175,9 @@ describe('buildScoresheet: the opponent', () => {
     expect(cellsOf(sh, '第 3 棒')[0]).toMatchObject({ pitcherChange: '乙', looking: true })
     expect(cellsOf(sh, '棒次未記')[0].pitcherChange).toBeUndefined()
     expect(sh.perInning[1]).toEqual({ r: 2, h: 1, e: 1, lob: 0 })
-    expect(buildScoresheet([prow({})], 'pit', { innings: 7 }).perInning[1].e).toBeNull()
+    // (a game recorded pitch by pitch knows it had no errors: 0; an old import without pitches or errors: blank)
+    expect(buildScoresheet([prow({})], 'pit', { innings: 7 }).perInning[1].e).toBe(0)
+    expect(buildScoresheet([prow({ pitches: [] })], 'pit', { innings: 7 }).perInning[1].e).toBeNull()
     // a batter who reached on our error, recorded the usual way (result 失誤, no 守備失誤 list), and a 妨礙
     const reached = buildScoresheet([prow({ result: '失誤', loc: 6 }), prow({ oppOrder: 2, result: '妨礙' }), prow({ inning: 2, oppOrder: 3, result: '三振', code: 'I' })], 'pit', { innings: 7 })
     expect([reached.perInning[1].e, reached.perInning[2].e, reached.totals.e]).toEqual([2, 0, 2])

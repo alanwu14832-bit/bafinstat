@@ -132,6 +132,8 @@ function stintsBetween(rows: BattingPA[], from: number, to: { pitches: number; o
   }
   return sts.map((st, i) => ({ st, pc: rowsPitches(st.rows) - (i === 0 ? from : 0) + (i === sts.length - 1 ? to.pitches : 0) }))
 }
+/** 對方投手 of a finished game (the game page): one row per stint, in the order they faced us. */
+export const oppPitchersOf = (rows: BattingPA[]): BoxOppPitcher[] => stintsOf(rows).map((st, i) => oppPitcherRow(st, i, rowsPitches(st.rows), false))
 function oppPitcherRow(st: Stint, i: number, pc: number, now: boolean): BoxOppPitcher {
   const pa = st.rows.filter(isPA)
   return {
@@ -181,6 +183,7 @@ export function boxScore(src: BoxSource): BoxScore {
   const ourHalf: 'top' | 'bottom' = src.game.homeAway === '客' ? 'top' : 'bottom'
   src.dayRoster?.starters.forEach((st, i) => { if (st.order) us.add(st.order, st.name, st.pos, STARTER_AT + i) })
   src.batting.forEach((p, i) => {
+    if (isNoBatter(p)) return
     us.add(p.order, p.batter, tag(p.pos), gameAt(p.inning, ourHalf, 1, i * 2))
     if (p.runner && p.runner !== p.batter) us.add(p.order, p.runner, '代跑', gameAt(p.inning, ourHalf, 1, i * 2 + 1))
   })

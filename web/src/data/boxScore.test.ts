@@ -202,18 +202,21 @@ describe('Box Score: the plate appearance in progress', () => {
 
   it('every 換投 keeps its pitcher: two right-handers in a row stay two rows when a third pitcher comes in', () => {
     const ours = (s: RecordState, n: number) => {
-      const add = Array.from({ length: n }, (_, i) => b(1, s.batting.length + i + 1, NAMES[(s.batting.length + i) % 9], '外飛', { pitches: ['B', 'IP'], code: 'I', ...(s.oppPitcher?.hand ? { oppHand: s.oppPitcher.hand } : {}) }))
+      const add = Array.from({ length: n }, (_, i) => b(1, s.batting.length + i + 1, NAMES[(s.batting.length + i) % 9], '外飛', { pitches: ['B', 'IP'], code: 'I', ...(s.oppPitcher?.hand ? { oppHand: s.oppPitcher.hand } : {}), ...(s.oppPitcher?.name ? { oppPitcher: s.oppPitcher.name } : {}) }))
       return { ...s, batting: [...s.batting, ...add] }
     }
     let s = base({ half: 'bottom', pitches: [] })
     s = ours(setOppPitcher(s, { hand: 'R' }), 3)
     s = ours(setOppPitcher(s, { hand: 'R' }), 3)
     const rows = (x: RecordState) => liveBoxScore(x, { inPlay: true }).oppPitchers.map((p) => [p.label, p.pa, p.pc, p.now])
-    expect(rows(s)).toEqual([['右投', 3, 6, false], ['右投', 3, 6, true]])
+    // (the second right-hander, no name either, is named by his turn so the saved rows can tell them apart)
+    const second = rows(s)[1][0]
+    expect(second).toContain('第2任投手')
+    expect(rows(s)).toEqual([['右投', 3, 6, false], [second, 3, 6, true]])
     s = setOppPitcher(s, { hand: 'L' })
-    expect(rows(s)).toEqual([['右投', 3, 6, false], ['右投', 3, 6, false], ['左投', 0, 0, true]])
+    expect(rows(s)).toEqual([['右投', 3, 6, false], [second, 3, 6, false], ['左投', 0, 0, true]])
     s = ours(setOppPitcher(s, { hand: 'R' }), 1)
-    expect(rows(s)).toEqual([['右投', 3, 6, false], ['右投', 3, 6, false], ['右投', 1, 2, true]])
+    expect(rows(s)).toEqual([['右投', 3, 6, false], [second, 3, 6, false], ['右投', 1, 2, true]])
   })
 
   it('the pitches thrown before a 換投 in the middle of a plate appearance stay with the pitcher who threw them', () => {

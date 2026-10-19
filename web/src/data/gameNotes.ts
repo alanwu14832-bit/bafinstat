@@ -7,6 +7,7 @@ import { battingLines, fieldingLines, pitchingLines, teamBatting, type GameSumma
 import { pitchingNotes } from './pitchingSituations'
 import { formatDuration, durationMinutes, cleanTime } from './gameTime'
 import { balksIn } from './plays'
+import { doublePlayOn } from './normalize'
 import { isDouble, isPA, DEFAULT_PARAMS, type BattingPA, type Dataset, type PitchingPA, type StatParams } from './types'
 
 export interface NoteLine { label: string; text: string }
@@ -101,7 +102,7 @@ export function gameNotes(summary: GameSummary, ds: Dataset, clock?: { time?: st
   // 守備
   const fl = fieldingLines(fld)
   const sum = (k: 'cs' | 'pk') => pit.reduce((s, p) => s + (p[k] ?? 0), 0)
-  const dps = pit.filter((p) => p.result === '雙殺').length
+  const dps = pit.filter(doublePlayOn).length
   add('守備', [
     { label: '失誤', text: join(fl.filter((f) => f.e > 0).map((f) => withCount(f.name, f.e))) },
     dps > 0 && { label: '雙殺守備', text: `${dps} 次` },

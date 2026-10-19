@@ -493,8 +493,18 @@ export function buildWinData(ds: Dataset, rules: WinRules): WinData {
     if (s.length) trainGames++
     samples.push(...s)
   }
-  const model = buildWinModel(buildRunModel(samples), rules)
-  const perGame = games.map((g) => ({ g, ...gameEvents(g, model) }))
+  // each game by the rules it was played by (its 當日登錄名單 has them when 紀錄比賽 saved it), else the team's
+  const runModel = buildRunModel(samples)
+  const models = new Map<string, ReturnType<typeof buildWinModel>>()
+  const modelFor = (r: WinRules) => { const k = rulesKey(r); let m = models.get(k); if (!m) { m = buildWinModel(runModel, r); models.set(k, m) } return m }
+  const model = modelFor(rules)
+  const rulesOf = (g: Game): WinRules => {
+    const r = g.dayRoster?.rules
+    if (!r) return rules
+    const bases = [...new Set(r.tiebreakBases.split('').map(Number))].sort((a, z) => a - z)
+    return { innings: r.innings, tiebreakFrom: bases.length ? r.tiebreakFrom : null, tiebreakBases: bases }
+  }
+  const perGame = games.map((g) => ({ g, ...gameEvents(g, modelFor(rulesOf(g.game))) }))
   const real = perGame.filter((x) => !x.g.game.isDemo).flatMap((x) => x.liStarts)
   const pool = real.length ? real : perGame.flatMap((x) => x.liStarts)
   const mean = pool.length ? pool.reduce((a, b) => a + b, 0) / pool.length : 0

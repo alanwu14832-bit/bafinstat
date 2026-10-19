@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
-import { datasetToWorkbook, dayRosterCells, dayRosterFromCells, legacyToDataset, parseAnyDate, parseLegacyGame, parseWorkbook } from './xlsx'
+import { datasetToWorkbook, dayRosterCells, dayRosterFromCells, legacyToDataset, rulesCell, rulesFromCell, parseAnyDate, parseLegacyGame, parseWorkbook } from './xlsx'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
 import type { Dataset, GameDayRoster } from './types'
@@ -77,7 +77,12 @@ describe('當日登錄名單 columns of 比賽清單', () => {
     expect(cells.板凳).toBe('蘇柏愷、鄭羣燁、曾亭維')
     expect(cells.替補紀錄.split('；')[1]).toBe('4下 第9棒 代打 鄭羣燁 替 黃襄璟(PH)')
     expect(cells.允許再上場).toBe('是')
-    expect(dayRosterCells(undefined)).toEqual({ 先發名單: '', 板凳: '', 替補紀錄: '', 允許再上場: '' })
+    expect(dayRosterCells(undefined)).toEqual({ 先發名單: '', 板凳: '', 替補紀錄: '', 允許再上場: '', 比賽規則: '' })
+    // the rules a game was played by: written out, read back (hand-typed too)
+    expect(rulesCell({ innings: 7, tiebreakFrom: 8, tiebreakBases: '12' })).toBe('7局；第8局起突破僵局（一、二壘）')
+    expect(rulesFromCell('7局；第8局起突破僵局（一、二壘）')).toEqual({ innings: 7, tiebreakFrom: 8, tiebreakBases: '12' })
+    expect(rulesFromCell('9局；不採用突破僵局')).toEqual({ innings: 9, tiebreakFrom: null, tiebreakBases: '' })
+    expect(rulesFromCell('')).toBeUndefined()
     const typed = dayRosterFromCells({ 先發名單: '１．甲（cf），2.乙(SS); P．壬（P）', 板凳: '丙,丁；甲', 替補紀錄: '５上 代打 戊 替 甲（PH）;6下換投己替壬(P)、7局上 守備 第2棒 庚(LF)', 允許再上場: '' })
     expect(typed).toEqual({
       starters: [{ name: '甲', pos: 'CF', order: 1 }, { name: '乙', pos: 'SS', order: 2 }, { name: '壬', pos: 'P' }],

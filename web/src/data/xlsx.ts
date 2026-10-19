@@ -209,14 +209,29 @@ const SUB_LOOSE = subRe('\\s*')
 const matchSub = (t: string) => { const m = SUB_STRICT.exec(t); return m && (m[7] !== undefined || !m[6].includes('替')) ? m : SUB_LOOSE.exec(t) ?? m }
 
 /** The four 比賽清單 cells for a game's day roster (all blank when it has none). */
-export function dayRosterCells(r?: GameDayRoster): { 先發名單: string; 板凳: string; 替補紀錄: string; 允許再上場: string } {
-  if (!r) return { 先發名單: '', 板凳: '', 替補紀錄: '', 允許再上場: '' }
+export function dayRosterCells(r?: GameDayRoster): { 先發名單: string; 板凳: string; 替補紀錄: string; 允許再上場: string; 比賽規則: string } {
+  if (!r) return { 先發名單: '', 板凳: '', 替補紀錄: '', 允許再上場: '', 比賽規則: '' }
   return {
     先發名單: r.starters.map((s) => `${s.order ?? 'P'}.${s.name}(${s.pos})`).join('、'),
     板凳: r.bench.join('、'),
     替補紀錄: (r.subs ?? []).map((s) => `${s.inning}${HALF_LABEL[s.half]}${s.slot === undefined ? '' : ` 第${s.slot + 1}棒`} ${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}(${s.pos})${s.row ? ` 第${s.row}打席後` : ''}${s.before ? ` 〔換人前 ${chargesText(s.before)}〕` : ''}${s.after ? ` 〔換人後 ${chargesText(s.after)}〕` : ''}`).join('；'),
     允許再上場: r.reentry ? '是' : '',
+    比賽規則: rulesCell(r.rules),
   }
+}
+const BASE_ZH: Record<string, string> = { '1': '一', '2': '二', '3': '三' }
+/** 「7局；第8局起突破僵局（一、二壘）」 or 「9局；不採用突破僵局」: the rules a game was played by (blank: not known). */
+export function rulesCell(r?: GameDayRoster['rules']): string {
+  if (!r) return ''
+  return `${r.innings}局；${r.tiebreakFrom && r.tiebreakBases ? `第${r.tiebreakFrom}局起突破僵局（${r.tiebreakBases.split('').map((b) => BASE_ZH[b]).join('、')}壘）` : '不採用突破僵局'}`
+}
+export function rulesFromCell(v: unknown): GameDayRoster['rules'] {
+  const t = str(v)
+  const inn = /(\d+)\s*局/.exec(t)
+  if (!inn) return undefined
+  const tb = /第?\s*(\d+)\s*局起突破僵局[（(]?([一二三、,，123\s]*)/.exec(t)
+  const bases = tb ? [...new Set(tb[2].replace(/一/g, '1').replace(/二/g, '2').replace(/三/g, '3').replace(/[^123]/g, '').split(''))].sort().join('') : ''
+  return { innings: Number(inn[1]), tiebreakFrom: tb && bases ? Number(tb[1]) : null, tiebreakBases: tb ? bases : '' }
 }
 
 /** Parse the day-roster cells of a 比賽清單 row back. undefined when 先發名單 / 板凳 / 替補紀錄 are all blank (old workbooks). */
@@ -232,7 +247,7 @@ export function dayRosterFromCells(row: Row): GameDayRoster | undefined {
     const slot = m[3] ?? m[5]
     return [{ kind: KIND_BY_LABEL[m[4]], in: m[6], out: m[7] ?? '', pos: m[8] ?? '', inning: digits(m[1]), half: m[2] === '下' ? 'bottom' : 'top', ...(slot ? { slot: digits(slot) - 1 } : {}), ...(m[9] ? { row: digits(m[9]) } : {}), before: chargesFromText(m[10]), after: chargesFromText(m[11]) }]
   })
-  return parseDayRoster({ starters, bench: splitList(row['板凳']), subs, reentry: /^(是|y|yes|true|1|v|✓|○|o)$/i.test(str(row['允許再上場'])) })
+  return parseDayRoster({ starters, bench: splitList(row['板凳']), subs, reentry: /^(是|y|yes|true|1|v|✓|○|o)$/i.test(str(row['允許再上場'])), rules: rulesFromCell(row['比賽規則']) })
 }
 
 /** Read the 單場-摘要 header block (labels in B/E columns, values to the right). */
