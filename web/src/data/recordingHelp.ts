@@ -32,7 +32,7 @@ export const LOC_HELP = {
 }
 
 /** 軌跡 */
-export const TRAJ_HELP: Array<[string, string]> = [['G', '滾地'], ['F', '飛球'], ['L', '平飛'], ['P', '內野飛球（高高的小飛球，算飛球的一種）']]
+export const TRAJ_HELP: Array<[string, string]> = [['G', '滾地'], ['F', '飛球'], ['L', '平飛'], ['P', '內野飛球（高高的小飛球，算飛球的一種）'], ['B', '觸擊（算滾地的一種；觸擊安打另外數）']]
 
 /** 結果代碼 (the 代碼 column): filled in by the site on 紀錄比賽. */
 export const CODE_HELP: Array<[string, string]> = [

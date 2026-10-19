@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowRightLeft, BedDouble, CloudDownload, Flag, Maximize2, Minimize2, PenLine, RefreshCw, Save, Type, X } from 'lucide-react'
+import { ArrowRightLeft, BedDouble, CloudDownload, Delete, Flag, Maximize2, Minimize2, PenLine, RefreshCw, Save, Type, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -67,6 +67,10 @@ const TIEBREAK_BASES = ['12', '2', '123']
 const TWO_OUT_OFF = new Set(['雙殺'])
 // a sacrifice the batter is safe on: he reached on an error
 const SAC_RESULTS = new Set(['犧觸', '犧飛'])
+// results that are always grounders: their 軌跡 starts on 滾地
+const GROUND_ONLY = new Set(['內滾', '犧觸'])
+// what every save of a recorded game says (守備 worked out from the plate appearances): not shown after 結束比賽
+const ROUTINE_SAVE = [/^沒有守備紀錄，已依打席守位/, /^刺殺／助殺由投球紀錄推定[^；]*$/]
 function readTiebreakPref(): { on: boolean; bases: string } {
   const team = TEAM.tiebreak || '12'
   try {
@@ -358,13 +362,34 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerOpen(false); setErrOpen(false); setPhOpen(false); if (hasPlay) toBatter() }, [side, state.inning]) // eslint-disable-line react-hooks/exhaustive-deps
   const hasPlay = state.batting.length > 0 || state.pitching.length > 0
+  // 左右開弓: their batter's side was carried over from his last time up, against a pitcher of ours who threw with the
+  // other hand — worth a look before the first pitch
+  const roster = useDataStore((st) => st.base.roster)
+  const batsHint = (() => {
+    const now = oppBatsNow(state)
+    if (side !== 'opp' || !oppBatsOn || state.pitches.length || (now !== 'L' && now !== 'R')) return null
+    const prev = [...state.pitching].reverse().find((p) => p.oppOrder === state.oppOrder && p.oppBats && p.pitcher)
+    const hand = (n?: string) => roster.find((r) => r.name === n)?.throws
+    const a = hand(prev?.pitcher), b = hand(state.pitcher)
+    if (!prev || !a || !b || a === b || (a !== 'L' && a !== 'R') || (b !== 'L' && b !== 'R')) return null
+    return `上次${now === 'L' ? '左打' : '右打'}（對${a === 'L' ? '左投' : '右投'}），這次是${b === 'L' ? '左投' : '右投'}：左右開弓的打者可能換邊站，請確認`
+  })()
   // every play ends with one line saying what went in, and a way to take it back
   const [toast, setToast] = useState<ToastData | null>(null)
-  const act = (fn: (s: RecordState) => RecordState) => {
+  // the plate appearance just sent: 復原 right after it brings its confirm panel back, filled in (fix one thing, send again)
+  const sent = useRef<PAPlan | null>(null)
+  const undoStep = () => {
+    const back = sent.current
+    sent.current = null
+    undo()
+    if (back) { setPlan(back); setRbiTouched(true); planFrom.current = 'pick' }
+  }
+  const act = (fn: (s: RecordState) => RecordState, sentPlan?: PAPlan) => {
     const next = fn(state)
     apply(() => next)
+    sent.current = sentPlan ?? null
     const text = describeChange(state, next)
-    if (text) setToast({ id: Date.now(), text, action: { label: '復原', onClick: () => { undo(); setToast({ id: Date.now() + 1, text: '已復原上一步' }) } } })
+    if (text) setToast({ id: Date.now(), text, action: { label: '復原', onClick: () => { undoStep(); setToast({ id: Date.now() + 1, text: sentPlan ? '已復原：可以修改後再送出' : '已復原上一步' }) } } })
   }
   const openRunners = (row: number | null = null) => { setRunnerPick(row); setRunnerOpen(true); setToast(null) }
   const implied = impliedResult(state.pitches)
@@ -410,7 +435,16 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const batterSlot = state.lineup[state.slot]
   // (軌跡 is picked on every batted ball: 內滾 → 滾地 and 外飛 → 飛球 are no longer filled in for the recorder, who has seen it)
   // (強度 starts on 中 for a batted ball; tap 中 again, or another, to change it)
-  const choose = (result: string) => { const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj; setPlan(NO_BATTED_BALL.has(result) ? plan : { ...plan, quality: '中' }); setRbiTouched(false); planFrom.current = state.pitches.at(-1) === 'IP' ? 'ip' : 'pick' }
+  // 改結果 keeps the 落點／軌跡／強度 already picked for the next batted-ball result; 內滾 and 犧觸 can only be grounders
+  const lastBall = useRef<Pick<PAPlan, 'loc' | 'traj' | 'quality'> | null>(null)
+  const choose = (result: string) => {
+    const { traj: _traj, ...plan } = defaultPlan(state, result); void _traj
+    const kept = lastBall.current
+    lastBall.current = null
+    if (NO_BATTED_BALL.has(result)) setPlan(plan)
+    else setPlan({ ...plan, quality: '中', ...(GROUND_ONLY.has(result) ? { traj: 'G' } : {}), ...(kept?.loc ? { loc: kept.loc } : {}), ...(kept?.traj && !GROUND_ONLY.has(result) ? { traj: kept.traj } : {}), ...(kept?.quality ? { quality: kept.quality } : {}) })
+    setRbiTouched(false); planFrom.current = state.pitches.at(-1) === 'IP' ? 'ip' : 'pick'
+  }
   const setDest = (row: number | 'batter', d: Dest) => setDests([[row, d]])
   // several at once (全部進一壘／全部不動)
   const setDests = (moves: Array<[number | 'batter', Dest]>) => setPlan((p) => {
@@ -470,7 +504,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     }
     return <AdvChoice name={name} kind={kind} onPick={pick} erring={side === 'opp' ? 'us' : 'them'} />
   }
-  const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => { const x = baseOutsFirst(s, plan); return commitPA(x.s, x.plan) }); setPlan(null); toBatter() }
+  const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => { const x = baseOutsFirst(s, plan); return commitPA(x.s, x.plan) }, plan); setPlan(null); setErrOpen(false); lastBall.current = null; toBatter() }
   // 三振／保送 with a runner set to 出局: how (盜壘失敗 unless picked otherwise)
   const outHowChoice = (row: number) => (plan && NO_BIP_OUT.has(plan.result) && plan.runners[row] === 'out'
     ? <span role="group" aria-label="怎麼出局" className="flex gap-1 flex-wrap">{(['cs', 'pk', 'run'] as const).map((k) => (
@@ -588,7 +622,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
           <Link to="/record" className="inline-flex items-center min-h-9 pointer-fine:min-h-7 text-ink-2 hover:text-ink underline underline-offset-2">回到正式紀錄</Link>
         </div>
       )}
-      <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undo} canUndo={canUndo} focus={focus} practice={practice} />
+      <LiveBar state={state} us={sc.us} opp={sc.opp} balls={c.balls} strikes={c.strikes} side={side} who={who} onRunners={() => openRunners()} onUndo={undoStep} canUndo={canUndo} focus={focus} practice={practice} />
       <div className="record-zoom grid grid-cols-1 xl:grid-cols-12 [@media_(orientation:landscape)_and_(max-height:520px)]:grid-cols-12 gap-4 md:gap-5 items-start">
         <div className="xl:col-span-8 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-8 flex flex-col gap-4 min-w-0">
           <div ref={upRef} aria-hidden className="scroll-mt-[196px] sm:scroll-mt-[150px]" />
@@ -624,7 +658,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
                   <div className="min-w-0"><div className="text-[12px] text-muted truncate">我隊投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
                     <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
-                      {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => act((s) => setOppBats(s, b))} />}</div>
+                      {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => apply((s) => setOppBats(s, b))} />}</div>
+                    {batsHint && <p role="status" className="text-[12px] text-warning basis-full">{batsHint}</p>}
                     {state.oppNames && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
               )}
@@ -672,7 +707,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               <div className="flex items-center gap-2 min-h-8">
                 <span className="text-[12px] text-muted shrink-0">逐球</span>
                 <PitchPlays pitches={state.pitches} events={state.plays} />
-                {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
+                {state.pitches.length > 0 && <Button variant="outline" size="sm" className="ml-auto shrink-0" icon={<Delete />} onClick={() => apply(undoPitch)} aria-label="刪最後一球">刪一球</Button>}
               </div>
               {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}{askOppHand ? '（看不出來就按「不知道」）' : '（左右開弓就選他這次站的那邊）'}</p>}
               <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver || held) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver || held} twoStrikes={c.strikes === 2} />
@@ -743,7 +778,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               <div className="rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/50 p-3 md:p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-[15px] font-semibold text-ink">{plan.result}<span className="text-muted font-normal text-[12px] ml-2">{plan.result === '界外飛' ? '接殺的界外球記為 IP，落點填接球的守備員' : '確認細節後送出'}</span></div>
-                  <button type="button" onClick={() => setPlan(null)} className="h-9 text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
+                  <button type="button" onClick={() => { lastBall.current = plan.loc || plan.traj ? { loc: plan.loc, traj: plan.traj, quality: plan.quality } : null; setPlan(null) }} className="h-9 text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
                 </div>
                 {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} required />}
                 <div>
@@ -876,7 +911,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onConfirm={(p) => act((s) => setOppPitcher(s, p))} onCorrect={(p) => act((s) => correctOppPitcher(s, p))} />
       {state.oppNames && <OppLineupSheet open={oppLineupOpen} onClose={() => setOppLineupOpen(false)} lineup={state.oppLineup ?? Array(9).fill('')} current={state.oppOrder} names={oppNameList} last={lastOpp} opponent={state.game.opponent}
         onDone={(names) => act((s) => setOppLineup(s, names))} />}
-      <Toast toast={toast} onDone={() => setToast(null)} />
+      {/* (at the top: at the bottom it covered 跑者去向 and 送出) */}
+      <Toast toast={toast} onDone={() => setToast(null)} placement="top" ms={3500} />
     </div>
   )
 }
@@ -1114,7 +1150,9 @@ function RecordScreen({ practice }: { practice: boolean }) {
       // the game page shows its result at once (the shared list of games in progress is read again)
       forgetLiveGame(id); if (!cloud.configured) void liveGameEnded(id)
       navigate(`/games?game=${encodeURIComponent(id)}`)
-      if (w.length) window.alert(`已儲存。請核對：\n${w.map((x) => `・${x.message}`).join('\n')}`)
+      // (every recorded game has its 守備 worked out from the plate appearances: that is no news — the game page says so)
+      const news = w.filter((x) => !ROUTINE_SAVE.some((r) => r.test(x.message)))
+      if (news.length) window.alert(`已儲存。請核對：\n${news.map((x) => `・${x.message}`).join('\n')}`)
     } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) }
   }
 

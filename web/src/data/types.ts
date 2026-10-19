@@ -74,7 +74,7 @@ export function missingBattedBall(pa: { result: string; loc?: number; traj?: str
   if (!isBattedBall(pa)) return []
   const out: Array<'落點' | '軌跡'> = []
   if (!pa.loc) out.push('落點')
-  if (!pa.traj || !['G', 'F', 'L', 'P'].includes(pa.traj)) out.push('軌跡')
+  if (!pa.traj || !['G', 'F', 'L', 'P', 'B'].includes(pa.traj)) out.push('軌跡')
   return out
 }
 /** 「還沒選落點、軌跡」 for the line under the 送出 button ('' when nothing is missing). */
@@ -206,7 +206,7 @@ export interface PlayEvent {
   batter?: true
 }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
-  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規',
+  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規', di: '守備無視',
   // (on the play only: a runner put out trying for a base on a ball that put the batter on — 壘死 is kind 'out', his own mistake)
   tag: '被刺殺',
   // (on the play only, our batter: he reached, then was put out on that same play — record/timeline batterOutMark)

@@ -148,7 +148,7 @@ const fromPitDraft = (d: PitDraft): PitchingPA => { const { pitchesText, errorsT
 
 const CODES = ['I', 'II', 'III', 'L', 'R', 'ER'] as const
 const BASES = ['無', '1', '2', '3', '12', '13', '23', '123'] as const
-const TRAJ = ['G', 'F', 'L', 'P'] as const
+const TRAJ = ['G', 'F', 'L', 'P', 'B'] as const
 const QUAL = ['強', '中', '弱'] as const
 const LOCS = LOC_CODES.map(String)
 const locOption = (v: string) => (Number(v) > 9 ? `${v} ${locLabel(Number(v))}` : v)

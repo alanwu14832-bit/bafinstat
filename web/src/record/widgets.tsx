@@ -2,6 +2,7 @@
  * The buttons of the 紀錄比賽 screen — pitch pad, result chips, batted-ball picker — shared with the post-game
  * plate-appearance editor, so fixing a game later looks and works exactly like recording it.
  */
+import { useState } from 'react'
 import { LOC_HOLES, OUT_AT_LABEL, posNum, type OutAt } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
@@ -91,7 +92,7 @@ export function BattedBallPicker({ result, value, onChange, required }: { result
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : '內野飛球 P'}</button>)}</div></div>
+        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P', 'B'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : t === 'P' ? '內野飛球 P' : '觸擊 B'}</button>)}</div></div>
         <div><div className="text-[12px] text-ink-2 mb-1">強度{required ? <span className="text-muted">（預設中）</span> : null}</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
       </div>
     </div>
@@ -108,6 +109,11 @@ export const ADV_HINT = '趁傳：守備傳別的壘或回傳時多跑，不算�
  */
 export function AdvChoice({ kind, onPick, name, erring }: { kind: ExtraBases | null; onPick: (k: ExtraBases | null) => void; name: string; /** whose error a 失誤進壘 is: we field (us) or we bat (them) */ erring?: 'us' | 'them' }) {
   const opts: Array<{ k: ExtraBases; l: string }> = [{ k: 'throw', l: '趁傳（不算失誤）' }, { k: 'err', l: erring === 'us' ? '我隊失誤進壘' : erring === 'them' ? '對方失誤進壘' : '失誤進壘' }]
+  // (an ordinary advance — a runner from first to third on a single — needs nothing: the choice stays folded until asked)
+  const [open, setOpen] = useState(false)
+  if (!kind && !open) return (
+    <button type="button" onClick={() => setOpen(true)} aria-label={`${name} 多跑是因為傳球或失誤？`} className="h-9 pointer-fine:h-7 text-[11px] text-muted underline underline-offset-2 hover:text-ink cursor-pointer">多跑是因為傳球或失誤？</button>
+  )
   return (
     <div className="inline-flex items-center gap-1 flex-wrap" role="group" aria-label={`${name} 多跑的壘怎麼來的`}>
       {!kind && <span className="text-[11px] text-muted mr-0.5">多跑的壘：</span>}

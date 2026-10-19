@@ -40,7 +40,7 @@ export function pitchTotals(pitches: string[]): PitchTotals {
 const isRISP = (bases?: string) => !!bases && (bases.includes('2') || bases.includes('3'))
 // P = 內野飛球: a fly ball that stays in the infield (counted with the fly balls, and on its own for IFFB%)
 /** A recorded 軌跡 (G / F / L / P). BIP itself is every batted ball (types.isBattedBall), with or without one. */
-const hasTraj = (traj?: string) => traj === 'G' || traj === 'F' || traj === 'L' || traj === 'P'
+const hasTraj = (traj?: string) => traj === 'G' || traj === 'F' || traj === 'L' || traj === 'P' || traj === 'B'
 /** The 軌跡 of a batted ball: only the one recorded. A result used to stand in for a missing one (內滾 G, 外飛 F…), but a hit has
  *  no such stand-in, so GB%／FB% leaned toward outs wherever 軌跡 was left out: the rates now count the recorded ones only. */
 const trajOf = (pa: { result: string; traj?: string }): string | undefined => (hasTraj(pa.traj) ? pa.traj : undefined)
@@ -69,7 +69,7 @@ export function sprayDirection(loc: number | undefined, hand: Hand | null): 'pul
 export interface BattingLine extends BattedBallCounts, BattedBallRates {
   name: string
   g: number; pa: number; ab: number; r: number; h: number; h1: number; h2: number; h3: number; hr: number; tb: number; xbh: number; rbi: number
-  bb: number; ibb: number; hbp: number; so: number; sh: number; sf: number; gidp: number; roe: number; fc: number; sb: number; cs: number
+  bb: number; ibb: number; hbp: number; so: number; sh: number; sf: number; gidp: number; /** hits on a 觸擊 (軌跡 B) */ buntH: number; roe: number; fc: number; sb: number; cs: number
   /** 壘死: outs on the bases from his own baserunning mistakes */
   baserunningOuts: number
   /** 跑壘（打擊球上，data/baserunning.ts）: chances to take an extra base on a hit, the times he did, was put out trying, and
@@ -123,14 +123,15 @@ const emptyBattedBallRates = (): BattedBallRates => ({
 function tallyBattedBall(l: BattedBallCounts, pa: { result?: string; quality?: string }, traj: string | undefined, dir: 'pull' | 'center' | 'oppo' | null) {
   const r = pa.result
   l.bip++
-  if (traj) { l.bipTraj++; if (traj === 'G') l.gb++; if (traj === 'F' || traj === 'P') l.fb++; if (traj === 'P') l.iffb++; if (traj === 'L') l.ld++ }
+  // (a 觸擊 B is a ground ball in every rate)
+  if (traj) { l.bipTraj++; if (traj === 'G' || traj === 'B') l.gb++; if (traj === 'F' || traj === 'P') l.fb++; if (traj === 'P') l.iffb++; if (traj === 'L') l.ld++ }
   if (hasQuality(pa.quality)) { l.bipQuality++; if (pa.quality === '強') l.hard++; else if (pa.quality === '中') l.med++; else if (pa.quality === '弱') l.soft++ }
   if (dir) { l.bipSpray++; if (dir === 'pull') l.pull++; else if (dir === 'center') l.center++; else l.oppo++ }
   if (r === '全壘打' && (traj === 'F' || traj === 'P')) l.hrFb++
   // BABIP by 軌跡: balls in play without home runs and bunts (a hit, or an out / error)
   if (r !== '全壘打' && r !== '犧觸' && traj) {
     const h = r && HIT_RESULTS.has(r) ? 1 : 0
-    if (traj === 'G') { l.gbN++; l.gbH += h } else if (traj === 'L') { l.ldN++; l.ldH += h } else { l.fbN++; l.fbH += h }
+    if (traj === 'G' || traj === 'B') { l.gbN++; l.gbH += h } else if (traj === 'L') { l.ldN++; l.ldH += h } else { l.fbN++; l.fbH += h }
   }
 }
 function battedBallRates(l: BattedBallCounts & BattedBallRates) {
@@ -144,7 +145,7 @@ function battedBallRates(l: BattedBallCounts & BattedBallRates) {
 
 export function emptyBatting(name: string): BattingLine {
   return {
-    name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0, xbtOpp: 0, xbt: 0, xbtOut: 0, thrownOut: 0, xbtPct: null,
+    name, g: 0, pa: 0, ab: 0, r: 0, h: 0, h1: 0, h2: 0, h3: 0, hr: 0, tb: 0, xbh: 0, rbi: 0, bb: 0, ibb: 0, hbp: 0, so: 0, sh: 0, sf: 0, gidp: 0, buntH: 0, roe: 0, fc: 0, sb: 0, cs: 0, baserunningOuts: 0, xbtOpp: 0, xbt: 0, xbtOut: 0, thrownOut: 0, xbtPct: null,
     rispAB: 0, rispH: 0, ...emptyBattedBall(), ...emptyBattedBallRates(), pitches: 0, whiffs: 0, swings: 0, called: 0, firstPitchSwing: 0, qab: 0, paPitched: 0, twoStrikePA: 0, twoStrikeBattles: 0, longPA: 0,
     avg: null, obp: null, slg: null, ops: null, opsPlus: null, iso: null, babip: null, woba: null, wrcPlus: null, kPct: null, bbPct: null, bbK: null, sbPct: null, rispAvg: null, qabPct: null,
     pPerPA: null, whiffPct: null, contactPct: null, swingPct: null, fpsPct: null,
@@ -182,6 +183,7 @@ export function accumulateBatting(l: BattingLine, pa: BattingPA, hand: Hand | nu
   if (isAB) l.ab++
   const hit = HIT_RESULTS.has(r)
   if (hit) l.h++
+  if (hit && pa.traj === 'B') l.buntH++
   if (isSingle(r)) l.h1++; if (isDouble(r)) l.h2++; if (r === '三安') l.h3++; if (r === '全壘打') l.hr++
   if (r === '保送' || r === '故四') l.bb++; if (r === '故四') l.ibb++; if (r === '觸身') l.hbp++; if (r === '三振') l.so++
   if (r === '犧觸' || r === '犧牲') l.sh++; if (r === '犧飛') l.sf++; if (r === '雙殺' && !FLY_TRAJ.has(pa.traj ?? '') && !isTriplePlay(pa)) l.gidp++; if (r === '失誤') l.roe++; if (r === '野選') l.fc++
@@ -320,7 +322,7 @@ function emptyPitching(name: string): PitchingLine {
 export function battedOutKind(pa: { result: string; traj?: string }): 'GO' | 'AO' | null {
   if (!BATTER_OUT_BIP.has(pa.result)) return null
   const t = pa.traj || TRAJ_OF[pa.result]
-  if (t === 'G') return 'GO'
+  if (t === 'G' || t === 'B') return 'GO'
   if (t === 'F' || t === 'P' || t === 'L') return 'AO'
   return null
 }

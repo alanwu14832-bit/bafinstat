@@ -95,7 +95,7 @@ function placedMap(pas: Array<BattingPA | PitchingPA>): Record<number, number> {
 const situation = (p: BattingPA | PitchingPA) => `${p.outsBefore !== undefined ? `${p.outsBefore} 出局` : ''}${!isPlaced(p) && p.basesBefore && p.basesBefore !== '無' ? `・壘上 ${p.basesBefore}` : ''}`
 const placedResult = (base?: number) => `突破僵局${base ? `・放上${BASE_ZH[base]}` : ''}`
 const resultCls = (r: string) => (isHitResult(r) ? 'font-semibold text-ink' : r === '保送' || r === '故四' || r === '觸身' ? 'text-ink' : 'text-ink-2')
-const hitLoc = (loc?: number, traj?: string, quality?: string) => [loc ? `${loc} ${POSITION_BY_NUMBER[loc] ?? ''}` : '', traj ? ({ G: '滾地', F: '飛球', L: '平飛', P: '內野飛球' } as Record<string, string>)[traj] ?? traj : '', quality ?? ''].filter(Boolean).join('・')
+const hitLoc = (loc?: number, traj?: string, quality?: string) => [loc ? `${loc} ${POSITION_BY_NUMBER[loc] ?? ''}` : '', traj ? ({ G: '滾地', F: '飛球', L: '平飛', P: '內野飛球', B: '觸擊' } as Record<string, string>)[traj] ?? traj : '', quality ?? ''].filter(Boolean).join('・')
 /** How the 結果 column reads: the recorded code (紀錄比賽's log), or the count before it plus plain words (the game page). */
 export type PbpWording = 'code' | 'phrase'
 function ResultText({ p, wording }: { p: BattingPA | PitchingPA; wording: PbpWording }) {

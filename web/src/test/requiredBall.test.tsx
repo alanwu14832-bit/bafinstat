@@ -62,18 +62,26 @@ describe.each([['we bat', '客'], ['they bat', '主']] as const)('紀錄比賽 (
 
   it('every batted-ball result offers 落點 and 軌跡 and asks for them; the others never ask', () => {
     start(newGame(game(homeAway), lineup, '甲'))
+    // (改結果 keeps the 落點 and 軌跡 picked for the next batted-ball result; a result without a batted ball drops them)
+    let kept = false
     for (const r of ALL) {
       fireEvent.click(screen.getByRole('button', { name: r }))
       if (NO_BATTED_BALL.has(r)) {
         expect(screen.queryByRole('group', { name: '落點' }), r).toBeNull()
         expect(missingLine(), r).toBeNull()
+        kept = false
+      } else if (kept) {
+        expect(screen.getByRole('group', { name: '落點' }), r).toBeTruthy()
+        expect(missingLine(), r).toBeNull()
       } else {
-        // the result no longer fills the 軌跡 in (內滾 → G, 外飛 → F …): every batted ball asks for both
-        expect(missingLine()?.textContent, r).toBe('還沒選落點、軌跡')
+        // only 內滾 and 犧觸 (always grounders) start on 滾地; every other batted ball asks for both
+        expect(missingLine()?.textContent, r).toBe(r === '內滾' || r === '犧觸' ? '還沒選落點' : '還沒選落點、軌跡')
         expect(send().disabled, r).toBe(true)
         fireEvent.click(within(screen.getByRole('group', { name: '落點' })).getAllByRole('button', { name: /^6 SS/ })[0])
-        fireEvent.click(within(screen.getByRole('group', { name: '軌跡' })).getByRole('button', { name: '滾地 G' }))
+        const g = within(screen.getByRole('group', { name: '軌跡' })).getByRole('button', { name: '滾地 G' })
+        if (g.getAttribute('aria-pressed') !== 'true') fireEvent.click(g)
         expect(missingLine(), r).toBeNull()
+        kept = true
       }
       fireEvent.click(screen.getByRole('button', { name: /改結果/ }))
     }

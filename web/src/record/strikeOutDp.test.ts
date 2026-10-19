@@ -64,3 +64,17 @@ describe('we bat: the half ends in the middle of a plate appearance', () => {
     expect(s.slot).toBe(1)
   })
 })
+
+describe('守備無視', () => {
+  it('moves the runner up a base with no stolen base, and the play says so', async () => {
+    const { runnerEvent } = await import('./model')
+    const { PLAY_EVENT_LABELS } = await import('../data/types')
+    let s = walk(newGame(game('客'), lineup, '壬'))
+    s = addPitch(s, 'B')
+    s = runnerEvent(s, s.runners[0].row, 'us', 'di')
+    expect(s.runners[0].base).toBe(2)
+    expect(s.batting[0].sb).toBe(0)
+    expect(s.plays?.at(-1)).toMatchObject({ kind: 'di', from: 1, to: 2 })
+    expect(PLAY_EVENT_LABELS.di).toBe('守備無視')
+  })
+})
