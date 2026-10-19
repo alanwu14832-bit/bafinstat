@@ -1,6 +1,7 @@
 import { cx } from '../../lib/format'
 import { LIVE_TEXT, type SummaryResult } from '../../data/stats'
 import { Badge } from './Badge'
+import { isSuspendedGame } from '../../data/liveGames'
 
 /** The small pulsing dot of 即時比分 (still when the viewer asked for less motion). */
 export function LiveDot({ className }: { className?: string }) {
@@ -13,7 +14,8 @@ export function LiveDot({ className }: { className?: string }) {
 }
 
 /** 「比賽進行中」: a game still being recorded, where its 勝／敗 would be. */
-export function LiveBadge({ className }: { className?: string }) {
+export function LiveBadge({ className, id }: { className?: string; /** the game: 保留中 when it was suspended (保留比賽) */ id?: string }) {
+  if (id && isSuspendedGame(id)) return <Badge className={className}>保留中</Badge>
   return <Badge variant="accent" icon={<LiveDot />} className={className}>{LIVE_TEXT}</Badge>
 }
 
@@ -24,4 +26,4 @@ export function PendingBadge({ className }: { className?: string }) {
 }
 
 /** 勝 / 敗 / 和 as a badge, or 比賽進行中 while the game is being recorded. */
-export const resultBadge = (r: SummaryResult) => (r === 'live' ? <LiveBadge /> : r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)
+export const resultBadge = (r: SummaryResult, id?: string) => (r === 'live' ? <LiveBadge id={id} /> : r === 'W' ? <Badge variant="good">勝</Badge> : r === 'L' ? <Badge variant="critical">敗</Badge> : <Badge>和</Badge>)

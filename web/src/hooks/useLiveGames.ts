@@ -15,7 +15,7 @@ import { useLayoutEffect, useSyncExternalStore } from 'react'
 import { cloudConfigured, listCloudDraftHeads, listCloudDrafts } from '../data/supabase'
 import { DRAFT_KEY, readDraft } from '../record/draft'
 import type { RecordState } from '../record/model'
-import { forgetLiveGame, LIVE_STALE_MS, liveDraftsOf, liveGameIds, setLiveGameIds, subscribeLiveGameIds, type LiveDraft } from '../data/liveGames'
+import { forgetLiveGame, LIVE_STALE_MS, liveDraftsOf, liveGameIds, setLiveGameIds, setSuspendedGameIds, subscribeLiveGameIds, type LiveDraft } from '../data/liveGames'
 
 export const LIVE_POLL_MS = 30_000
 export const DRAFTS_MISSING = '雲端尚未建立 record_drafts 表，無法顯示即時比分'
@@ -70,6 +70,7 @@ subscribeLiveGameIds(() => {
 /** A read came back: `full` = with the recording states (else only the heads: the ids change, the states stay). */
 function apply(all: LiveDraft[], error: string | null, full: boolean) {
   const live = liveDraftsOf(all)
+  setSuspendedGameIds(live.filter((d) => d.state.suspended).map((d) => d.state.game.id))
   setLiveGameIds(live.map((d) => d.state.game.id))
   const ids = liveGameIds()
   if (cloudConfigured) writeCache(ids)
@@ -107,7 +108,7 @@ export function refreshLiveGames(): Promise<void> {
           } else {
             const d = await listCloudDraftHeads()
             if (d === null) apply([], DRAFTS_MISSING, false)
-            else apply(d.map((x) => ({ state: { game: { id: x.game_id }, finished: x.finished === true, practice: x.practice === true }, updatedAt: x.updated_at })), null, false)
+            else apply(d.map((x) => ({ state: { game: { id: x.game_id }, finished: x.finished === true, practice: x.practice === true, ...(x.suspended ? { suspended: String(x.suspended) } : {}) }, updatedAt: x.updated_at })), null, false)
           }
           lastFull = full
         } catch (e) {

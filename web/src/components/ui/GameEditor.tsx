@@ -27,6 +27,7 @@ import type { ExtraBases } from '../../record/widgets'
 import { applyEarned, earnedAll, type EarnedCall } from '../../record/earned'
 import { addPlacedRows, extraInnings, removePlacedRows } from '../../record/tiebreak'
 import { missingBattedBall, outAtAsked, type Base } from '../../record/model'
+import { ipDisplay } from '../../data/stats'
 import { changeCount, hashOf, readEditDraft, writeEditDraft, type EditSnap } from './editDraft'
 import { setUnsaved } from '../../lib/unsaved'
 
@@ -42,7 +43,17 @@ function shiftCalls(m: Map<number, EarnedCall>, at: number, k: number): Map<numb
 const runsOfHalf = (h: Half | null | undefined) => (h ? h.steps.reduce((a, st) => a + homesIn(st) + st.moves.filter((m) => m.to === 'home').length, 0) : 0)
 
 /* ------------------------------------------------------------------ generic editable table */
-type Kind = 'text' | 'int' | 'select' | 'name'
+type Kind = 'text' | 'int' | 'select' | 'name' | 'ip'
+/** innings written the baseball way: 8.1 = 8⅓, 8.2 = 8⅔ (stored as 8.333…); another decimal is taken as it is */
+export const ipText = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? ipDisplay(Math.round(v * 3)) : '')
+export function parseIp(raw: string): number | undefined {
+  const t = raw.trim()
+  if (!t) return undefined
+  const m = /^(\d+)(?:\.([0-2]))?$/.exec(t)
+  if (m) return Number(m[1]) + Number(m[2] ?? 0) / 3
+  const n = Number(t)
+  return Number.isFinite(n) ? n : undefined
+}
 interface Col<T> { key: keyof T & string; label: string; kind: Kind; options?: readonly string[]; optionLabel?: (v: string) => string; w?: number; list?: string }
 
 const cell = cx(inputCls('sm'), 'h-7 px-1.5 text-[12px] rounded-[6px] w-full')
@@ -52,6 +63,7 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
     const next = rows.slice()
     let v: unknown = raw
     if (kind === 'int') v = raw.trim() === '' ? undefined : Number(raw)
+    if (kind === 'ip') v = parseIp(raw)
     next[i] = { ...next[i], [key]: v }
     onChange(next)
   }
@@ -94,6 +106,13 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
                     </td>
                   )
                 }
+                // (innings: typed freely, read when the cell is left — 8.1 stays 8.1 while typing)
+                if (c.kind === 'ip') return (
+                  <td key={c.key} className="px-1 py-1">
+                    <input key={`${i}:${str}`} defaultValue={ipText(v)} inputMode="decimal" aria-label={c.label} title="局數：8.1＝8⅓ 局、8.2＝8⅔ 局"
+                      onBlur={(e) => { if (e.target.value !== ipText(v)) update(i, c.key, e.target.value, c.kind) }} className={cx(cell, 'tnum text-right')} style={{ width: c.w ?? 64 }} />
+                  </td>
+                )
                 return (
                   <td key={c.key} className="px-1 py-1">
                     <input value={str} inputMode={c.kind === 'int' ? 'numeric' : undefined}
@@ -169,7 +188,7 @@ const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === '
 const numericLines = (fld: FieldingLine[]): FieldingLine[] => fld.filter((f) => f.player.trim()).map((f) => ({ ...f, po: +f.po || 0, a: +f.a || 0, e: +f.e || 0, dp: +f.dp || 0, pb: +f.pb || 0, sb: +f.sb || 0, cs: +f.cs || 0 }))
 
 const fldCols: Col<FieldingLine>[] = [
-  { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'innings', label: '局數', kind: 'int', w: 48 },
+  { key: 'player', label: '球員', kind: 'name', w: 96 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'innings', label: '局數', kind: 'ip', w: 48 },
   { key: 'po', label: 'PO', kind: 'int', w: 44 }, { key: 'a', label: 'A', kind: 'int', w: 44 }, { key: 'e', label: 'E', kind: 'int', w: 44 }, { key: 'dp', label: 'DP', kind: 'int', w: 44 },
   { key: 'pb', label: 'PB', kind: 'int', w: 44 }, { key: 'sb', label: 'SB', kind: 'int', w: 44 }, { key: 'cs', label: 'CS', kind: 'int', w: 44 }, { key: 'note', label: '備註', kind: 'text', w: 140 },
 ]

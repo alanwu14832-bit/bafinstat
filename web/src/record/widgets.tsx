@@ -51,13 +51,13 @@ export function PitchPad({ onPitch, disabled, twoStrikes }: { onPitch: (code: st
 }
 
 /** 安打／上壘／出局 result chips; `value` is shown selected. With `only`, the other results are greyed out (after IP: a ball in play). */
-export function ResultChips({ value, onPick, only, disabled }: { value?: string; onPick: (result: string) => void; only?: Set<string>; /** all greyed out (a question to answer first) */ disabled?: boolean }) {
+export function ResultChips({ value, onPick, only, disabled, off }: { value?: string; onPick: (result: string) => void; only?: Set<string>; /** all greyed out (a question to answer first) */ disabled?: boolean; /** these greyed out (雙殺 with two out) */ off?: Set<string> }) {
   return (
     <div className="flex flex-col gap-2.5">
       {RESULT_GROUPS.map((g) => (
         <div key={g.label} className="flex items-start gap-2">
           <span className="text-[12px] text-muted w-8 shrink-0 h-9 inline-flex items-center">{g.label}</span>
-          <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" aria-pressed={value === r} disabled={disabled || (!!only && !only.has(r))} onClick={() => onPick(r)} className={cx(chipBtn(value === r), 'disabled:opacity-30 disabled:cursor-default')}>{r}</button>)}</div>
+          <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" aria-pressed={value === r} disabled={disabled || (!!only && !only.has(r)) || !!off?.has(r)} onClick={() => onPick(r)} className={cx(chipBtn(value === r), 'disabled:opacity-30 disabled:cursor-default')}>{r}</button>)}</div>
         </div>
       ))}
     </div>

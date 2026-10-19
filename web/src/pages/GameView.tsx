@@ -340,7 +340,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
             <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
               <span>{TEAM_NAME} <span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
-              <span className="inline-flex items-center gap-1.5">{unsure ? <PendingBadge /> : resultBadge(current.result)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
+              <span className="inline-flex items-center gap-1.5">{unsure ? <PendingBadge /> : resultBadge(current.result, current.game.id)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
               {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent underline underline-offset-2">看即時比分</Link>}
             </h2>
             {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
