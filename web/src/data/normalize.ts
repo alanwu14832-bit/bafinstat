@@ -292,6 +292,10 @@ export function deriveFielding(game: Game, batting: BattingPA[], pitching: Pitch
 
 const GROUND = new Set(['內滾', '犧觸'])
 const FLY = new Set(['內飛', '外飛', '界外飛', '犧飛'])
+/** The batter was put out by the batted ball itself (a fly caught, a ground out) — an out code on his row. */
+const batterOutOnPlay = (p: PitchingPA) => (GROUND.has(p.result) || FLY.has(p.result)) && (p.code ?? '') in OUT_CODES
+/** Two (or three) outs on one batted ball: a 雙殺, or the batter out and a runner put out on the same play. */
+export const doublePlayOn = (p: PitchingPA) => p.result === '雙殺' || (batterOutOnPlay(p) && (p.events ?? []).some((e) => e.play && !e.batter && e.to === 'out'))
 
 /**
  * Credit PO / A / DP to fielding lines from the opponent's plate appearances. Fielders are looked up by the
@@ -379,11 +383,17 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
       const f = at(p.loc, p.pitcher)
       if (p.code && p.code in OUT_CODES) { if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++ }
     }
-    if (r !== '雙殺') for (const e of marked) {
+    if (r !== '雙殺') {
       const f = at(p.loc, p.pitcher)
-      const covering = byPos.get(coverOf(e.outAt!))
-      if (f && f !== covering) a(f)
-      po(covering)
+      const involved: Array<FieldingLine | undefined> = []
+      for (const e of marked) {
+        const covering = byPos.get(coverOf(e.outAt!))
+        if (f && f !== covering) a(f)
+        po(covering)
+        involved.push(covering)
+      }
+      // the batter out too (a fly caught, the runner doubled off; a ground out and the runner thrown out): a double play
+      if (marked.some((e) => !e.batter) && batterOutOnPlay(p)) dp(...new Set([f, ...involved, ...(GROUND.has(r) ? [first] : [])]))
     }
     // (a 盜壘阻殺 / 牽制出局 by whoever stood there then: a change in the middle of the plate appearance, rowCharges)
     for (const c of charges?.[i].catching ?? [{ cs: p.cs, pk: p.pk, at: undefined }]) {

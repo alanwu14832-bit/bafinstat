@@ -680,8 +680,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       setError(`第 ${inn} 局（${side === 'bat' ? '我隊打擊' : '我隊投球'}）插入或刪除打席後，壘上的跑者接不起來：請在這局的打席按「依打擊結果重建這局的跑者」（盜壘、暴投會保留），再儲存`)
       return
     }
-    // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster
-    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry })
+    // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster (the rules the
+    // game was played by stay)
+    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules: initial.game.dayRoster?.rules })
     try {
       const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
       const pitching = pit.map(fromPitDraft).filter((p) => p.pitcher.trim())

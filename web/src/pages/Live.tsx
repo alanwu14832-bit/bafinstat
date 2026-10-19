@@ -177,7 +177,9 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const errorsOpp = oppErrorCount(s.batting) + (side === 'us' ? s.extras.oppErrors?.length ?? 0 : 0)
   // innings not reached yet stay dark instead of showing 0
   const played = (i: number, half: 'top' | 'bottom') => i + 1 < s.inning || (i + 1 === s.inning && (half === 'top' || s.half === 'bottom'))
-  const lineOf = (line: number[], half: 'top' | 'bottom'): BoardTeam['line'] => line.map((v, i) => (!inPlay && half === 'bottom' && s.half === 'bottom' && i + 1 === s.inning ? 'X' : played(i, half) ? v : null))
+  // the game is over and the record page already went on to a new inning (結束比賽 not tapped yet): no column for it
+  const ended = !inPlay && s.half === 'top' && s.inning > 1
+  const lineOf = (line: number[], half: 'top' | 'bottom'): BoardTeam['line'] => (ended ? line.slice(0, s.inning - 1) : line).map((v, i) => (!inPlay && half === 'bottom' && s.half === 'bottom' && i + 1 === s.inning ? 'X' : played(i, half) ? v : null))
   const usHalf: 'top' | 'bottom' = weTop ? 'top' : 'bottom', oppHalf: 'top' | 'bottom' = weTop ? 'bottom' : 'top'
   const markUs = (size: number) => <TeamLogo size={size} />, markOpp = (size: number) => <OppMark name={s.game.opponent} size={size} />
   const usTeam: BoardTeam = { name: TEAM_NAME, line: lineOf(sc.lineUs, usHalf), r: sc.us, h: hitsUs, e: errorsUs, us: true, mark: markUs(18) }
@@ -295,7 +297,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
           <span className="relative inline-flex size-2"><span className={cx('absolute inset-0 rounded-full', !reduced && 'animate-ping')} style={{ background: BOARD.out, opacity: 0.6 }} /><span className="relative size-2 rounded-full" style={{ background: BOARD.out }} /></span>LIVE
         </span>
         <span className={cx('figure font-bold whitespace-nowrap tabular-nums', big ? 'text-[26px]' : 'text-[15px]')} aria-label={`第 ${s.inning} 局${s.half === 'top' ? '上' : '下'}`}>
-          <span style={{ color: BOARD.strike }}>{s.half === 'top' ? '▲' : '▼'}</span>{boardInning(s.inning, s.half)}
+          {ended || !inPlay ? '比賽結束' : <><span style={{ color: BOARD.strike }}>{s.half === 'top' ? '▲' : '▼'}</span>{boardInning(s.inning, s.half)}</>}
         </span>
         <span className="ml-auto figure text-[12px] tabular-nums whitespace-nowrap" style={{ color: BOARD.muted }}>{error ? '重新連線中…' : `${hhmm(live.updatedAt)} 更新`}</span>
         <button type="button" onClick={big ? closeBig : openBig} aria-label={big ? '離開大螢幕' : '大螢幕'} title={big ? '離開大螢幕（Esc）' : '全螢幕投影在球場'}
@@ -334,7 +336,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
         </AnimatePresence>
       </div>
       {/* C: the line score — marks instead of names, R H E always on screen */}
-      <LineScoreBoard bare compact className="relative border-t" innings={n} current={{ inning: s.inning, half: s.half }} top={top} bottom={bottom} />
+      <LineScoreBoard bare compact className="relative border-t" innings={ended ? Math.max(s.inning - 1, s.game.innings ?? 0) : n} current={ended ? undefined : { inning: s.inning, half: s.half }} top={top} bottom={bottom} />
       {/* D: the matchup */}
       <div className="relative border-t" style={{ borderColor: line }}>
         {!inPlay ? (

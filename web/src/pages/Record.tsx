@@ -674,7 +674,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <button type="button" onClick={() => apply(undoPitch)} className="ml-auto shrink-0 h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">刪最後一球</button>}
               </div>
-              {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}（看不出來就按「不知道」）</p>}
+              {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}{askOppHand ? '（看不出來就按「不知道」）' : '（左右開弓就選他這次站的那邊）'}</p>}
               <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver || held) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver || held} twoStrikes={c.strikes === 2} />
             </div>
 

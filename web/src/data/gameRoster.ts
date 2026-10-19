@@ -91,8 +91,11 @@ export function parseDayRoster(v: unknown): GameDayRoster | undefined {
     if (after) subs[subs.length - 1].after = after
   }
   if (!starters.length && !bench.length && !subs.length) return undefined
+  const r = isObj(v.rules) ? v.rules : undefined
+  const innings = r ? intOf(r.innings, 1) : undefined
+  const rules = r && innings ? { innings, tiebreakFrom: intOf(r.tiebreakFrom, 1) ?? null, tiebreakBases: String(r.tiebreakBases ?? '').replace(/[^123]/g, '') } : undefined
   // subs is left out when empty so a roster without substitutions looks the same before and after a save
-  return { starters, bench, ...(subs.length ? { subs } : {}), reentry: v.reentry === true || v.reentry === 1 || v.reentry === 'true' }
+  return { starters, bench, ...(subs.length ? { subs } : {}), reentry: v.reentry === true || v.reentry === 1 || v.reentry === 'true', ...(rules ? { rules } : {}) }
 }
 
 /** Every name a day roster mentions (starters, bench, substitutions in and out). */

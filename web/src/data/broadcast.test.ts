@@ -309,7 +309,7 @@ describe('runner clauses on the batted ball', () => {
     s = pa(s, ['IP'], '一安', (p) => { p.loc = 9; p.traj = 'G'; p.runners[runner(s, '林昱丞')] = 3; p.throws = [runner(s, '林昱丞')] })
     expect(texts(feed(s)).at(-1)).toBe('陳威任 擊出右外野滾地球，一壘安打；林昱丞趁傳上三壘。')
     s = pa(s, ['IP'], '一安', (p) => { p.loc = 8; p.traj = 'L'; p.batter = 2; p.errAdv = ['batter']; p.runners[runner(s, '林昱丞')] = 'home'; p.runners[runner(s, '陳威任')] = 'home'; p.errAdv = ['batter', runner(s, '陳威任')]; p.rbi = 1 })
-    expect(texts(feed(s)).at(-1)).toBe('劉哲宏 擊出中外野平飛球，一壘安打，1 分打點；林昱丞、陳威任回本壘得分，打者因失誤上二壘。')
+    expect(texts(feed(s)).at(-1)).toBe('劉哲宏 擊出中外野平飛球，一壘安打，1 分打點；林昱丞回本壘得分，陳威任因失誤回本壘得分，打者因失誤上二壘。')
   })
   it('a pinch runner is named after his line, the batter before it', () => {
     let s = start()

@@ -176,7 +176,8 @@ export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out
 /** Part of one opponent row's errors (positions) and catcher plays, charged by another alignment (DayRosterSub before / after). */
 export interface SubCharges { errors?: string[]; sba?: number; cs?: number; pb?: number; pk?: number }
 /** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
-export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean }
+export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean; /** the rules the game was played by (紀錄比賽 saves them): its scheduled innings, and the tie-break from that inning on those bases ('12'; null = none) — the saved 局數 is the innings it went */ rules?: GameRules }
+export interface GameRules { innings: number; tiebreakFrom: number | null; tiebreakBases: string }
 
 /** The migration that creates the albums table (photo albums and 比賽影片 links); named in the 開通 sentence. Each
  *  repo's own file, so it lives in config/teamDefaults.ts and this file stays the same in both sites. */
