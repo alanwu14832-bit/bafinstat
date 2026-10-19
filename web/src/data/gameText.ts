@@ -36,7 +36,7 @@ export function resultPhrase(result: string, loc?: number, traj?: string, pitche
     case '失誤': return `${W}失誤上壘`
     case '三振': {
       const last = pitches?.[pitches.length - 1]
-      return last === 'SS' ? '揮棒落空三振' : last === 'CS' || last === 'S' ? '看好球三振' : '三振'
+      return last === 'SS' ? '揮棒落空三振' : last === 'CS' || last === 'S' ? '看好球三振' : last === 'T' ? '擦棒被捕三振' : '三振'
     }
     case '保送': return '四壞球保送'
     case '故四': return '故意四壞'
@@ -55,7 +55,7 @@ export function resultPhrase(result: string, loc?: number, traj?: string, pitche
 export function countBefore(pitches: string[], result: string): { balls: number; strikes: number } | null {
   if (!pitches.length || result === '突破僵局') return null
   const head = pitches.slice(0, -1)
-  if (pitches[pitches.length - 1] === 'IP') return count(head)
+  if (pitches[pitches.length - 1] === 'IP' || pitches[pitches.length - 1] === 'HP' || pitches[pitches.length - 1] === 'CI') return count(head)
   if (impliedResult(pitches) && !impliedResult(head)) return count(head)
   return count(pitches)
 }

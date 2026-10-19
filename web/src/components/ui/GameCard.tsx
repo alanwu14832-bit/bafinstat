@@ -2,7 +2,7 @@ import { cx } from '../../lib/format'
 import { Badge } from './Badge'
 import { HeroGlow } from './HeroGlow'
 import { TeamLogo } from './TeamLogo'
-import { battingLines, resultText, shownLine, type BattingLine, type GameSummary } from '../../data/stats'
+import { battingLines, boardLine, resultText, type BattingLine, type GameSummary } from '../../data/stats'
 import { LiveBadge } from './ResultBadge'
 import type { Dataset } from '../../data/types'
 
@@ -51,8 +51,8 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
   const live = s.result === 'live'
   const n = Math.max(g.innings ?? 0, s.lineUs.length, s.lineOpp.length, 1)
   const teams = [
-    { key: 'us', name: teamName, mark: <TeamLogo size={22} />, runs: s.runsUs, line: shownLine(s, 'us'), h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
-    { key: 'opp', name: g.opponent, mark: <OppMark name={g.opponent} />, runs: s.runsOpp, line: shownLine(s, 'opp'), h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
+    { key: 'us', name: teamName, mark: <TeamLogo size={22} />, runs: s.runsUs, line: boardLine(s, 'us'), h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
+    { key: 'opp', name: g.opponent, mark: <OppMark name={g.opponent} />, runs: s.runsOpp, line: boardLine(s, 'opp'), h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
   ]
   // innings at a fixed width (a 5-inning game does not stretch), R / H / E pinned right behind a divider
   const cols = `repeat(${n}, minmax(0, 1.5rem)) minmax(0.25rem, 1fr) 1.6rem 1.6rem 1.6rem`
@@ -88,7 +88,7 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
             {Array.from({ length: n }, (_, i) => {
               // (a game being recorded: the innings not reached yet stay blank)
               const v = t.line[i]
-              return <span key={i} className={v ? 'font-semibold' : 'text-muted'}>{v === undefined && live ? '' : v ?? 0}</span>
+              return <span key={i} className={typeof v === 'number' && v ? 'font-semibold' : 'text-muted'}>{v === undefined || v === null ? '' : v}</span>
             })}
             <span /><span className="font-bold border-l border-border">{t.runs}</span><span>{t.h}</span><span>{t.e}</span>
           </div>

@@ -51,7 +51,7 @@ export function CheatSheetPage() {
         </Block>
         <Block n={2} title="逐球按鈕">
           {PITCH_BUTTONS.map((b) => <Term key={b.code} k={<span className="tnum">{b.hint}</span>}>{b.label}</Term>)}
-          <p>界外球在兩好球後也照按「界外」，不會變成三振。</p>
+          <p>界外球在兩好球後也照按「界外」，不會變成三振。兩好球時多一顆「擦棒」：擦棒被捕手接住＝三振。觸身球、捕手妨礙那一球會自動算進用球數。</p>
         </Block>
         <Block n={3} title="打擊結果">
           {RESULT_GROUPS.map((g) => <Term key={g.label} k={g.label}>{g.items.join('・')}</Term>)}

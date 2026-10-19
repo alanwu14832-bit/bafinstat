@@ -66,7 +66,7 @@ export function LineScoreBoard({ top, bottom, innings, current, showErrors = tru
       {Array.from({ length: n }, (_, i) => {
         const live = current && current.inning === i + 1 && current.half === half
         const v = t.line[i]
-        return <td key={i} className={cx(cell, 'figure font-semibold text-[14px]')} style={{ color: live ? BOARD.strike : v === null || v === undefined ? BOARD.muted : undefined }}>{v === null || v === undefined ? (i + 1 < (current?.inning ?? 0) || (!current && i < t.line.length) ? 0 : '') : v}</td>
+        return <td key={i} className={cx(cell, 'figure font-semibold text-[14px]')} style={{ color: live ? BOARD.strike : v === null || v === undefined ? BOARD.muted : undefined }}>{v === null || v === undefined ? (i + 1 < (current?.inning ?? 0) ? 0 : '') : v}</td>
       })}
       <td {...rhe(0, 'figure font-semibold text-[15px]', { color: BOARD.ink, borderLeft: `1px solid ${BOARD.line}` })}>{t.r}</td>
       <td {...rhe(1, 'figure font-semibold text-[14px]')}>{t.h}</td>

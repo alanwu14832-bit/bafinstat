@@ -141,7 +141,7 @@ await opp({ steps: K, result: '三振' })
 await p.screenshot({ path: `${S}/game4-live.png`, fullPage: true })
 
 // ---------------------------------------------------------------- finish and read what the site shows
-await main.getByRole('button', { name: '結束比賽' }).click(); await p.waitForTimeout(300)
+await main.getByRole('button', { name: '結束比賽', exact: true }).click(); await p.waitForTimeout(300)
 await p.getByLabel('勝投').selectOption(S9)
 await p.getByRole('button', { name: '儲存並結束' }).click(); await p.waitForTimeout(1200)
 log('url', p.url())

@@ -40,8 +40,8 @@ export const countText = (c: { balls: number; strikes: number }): string => `${c
 /* ------------------------------------------------------------------ pitches */
 
 /** The word of each pitch in the expanded rows (CPBL 「好球沒揮棒」「揮棒落空」), and its one-character token. */
-export const PITCH_WORD: Record<string, string> = { B: '壞球', CS: '好球沒揮棒', S: '好球', SS: '揮棒落空', F: '擊出界外球', IP: '擊出' }
-export const PITCH_TOKEN: Record<string, string> = { B: '壞', CS: '好', S: '好', SS: '空', F: '界', IP: '擊' }
+export const PITCH_WORD: Record<string, string> = { B: '壞球', CS: '好球沒揮棒', S: '好球', SS: '揮棒落空', F: '擊出界外球', IP: '擊出', T: '擦棒', HP: '觸身球', CI: '捕手妨礙' }
+export const PITCH_TOKEN: Record<string, string> = { B: '壞', CS: '好', S: '好', SS: '空', F: '界', IP: '擊', T: '擦', HP: '觸', CI: '妨' }
 export const pitchToken = (p: string): string => PITCH_TOKEN[p] ?? p
 /** 「壞 好 界」 */
 export const pitchTokens = (pitches: string[]): string => pitches.map(pitchToken).join(' ')
@@ -506,7 +506,11 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
         // an out on the play that says which base: 「在本壘被刺殺」 (a 壘死 is 「在三壘跑壘出局」)
         const outAtOf = (e?: PlayEvent) => (e?.outAt ? (e.outAt === 'home' ? '本壘' : BASE_ZH[e.outAt]) : '')
         const outMarkOf = (base: number | null) => events.find((e) => e.play && e.to === 'out' && (base === null ? !!e.batter : !e.batter && e.from === base))
-        const outPhrase = (e?: PlayEvent) => { const at = outAtOf(e); return at ? `在${at}${e!.kind === 'out' ? '跑壘出局' : '被刺殺'}` : '' }
+        // a runner the batter forced off his base on a grounder (a 雙殺, a 野選) is 封殺, not 刺殺
+        const onBase = new Set(String(r.basesBefore ?? '').split('').map(Number))
+        const forcedFrom = (b: number) => b === 1 || (b === 2 && onBase.has(1)) || (b === 3 && onBase.has(1) && onBase.has(2))
+        const grounder = (r.result === '雙殺' || r.result === '野選') && r.traj !== 'L' && r.traj !== 'F' && r.traj !== 'P'
+        const outPhrase = (e?: PlayEvent) => { const at = outAtOf(e); return at ? `在${at}${e!.kind === 'out' ? '跑壘出局' : grounder && !e!.batter && typeof e!.from === 'number' && forcedFrom(e!.from) ? '被封殺' : '被刺殺'}` : '' }
         const scorers = mid.filter((o) => st.dest[o.row] === 'home')
         if (scorers.length) clauses.push(`${scorers.map((o) => name(o.row)).join('、')}回本壘得分`)
         // The half's last out made on the bases during the next batter's pitches (a 盜壘刺 or a 牽制 before he had a

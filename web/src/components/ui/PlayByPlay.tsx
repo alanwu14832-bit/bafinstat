@@ -20,6 +20,9 @@ const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }>
   S: { label: 'S', cls: 'bg-[color-mix(in_srgb,var(--series-7)_18%,transparent)] text-ink', title: '好球' },
   F: { label: 'F', cls: 'bg-[color-mix(in_srgb,var(--warning)_22%,transparent)] text-ink', title: '界外' },
   IP: { label: 'IP', cls: 'bg-[color-mix(in_srgb,var(--series-3)_20%,transparent)] text-ink', title: '擊進場內' },
+  T: { label: 'T', cls: 'bg-[color-mix(in_srgb,var(--series-7)_18%,transparent)] text-ink', title: '擦棒被捕（好球）' },
+  HP: { label: 'HP', cls: 'bg-surface-2 text-ink', title: '觸身球（算一球，不算好壞球數）' },
+  CI: { label: 'CI', cls: 'bg-surface-2 text-ink', title: '捕手妨礙（算一球，不算好壞球數）' },
   B: { label: 'B', cls: 'bg-surface-3 text-ink-2', title: '壞球' },
 }
 

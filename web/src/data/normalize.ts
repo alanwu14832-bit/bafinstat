@@ -331,32 +331,57 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
       else if (p.loc) { a(f); po(first) }
       else unplaced++
     } else if (FLY.has(r)) po(at(p.loc, p.pitcher))
-    else if (r === '雙殺') {
+    // the runners put out on the play with the base they were put out at (被刺殺／封殺／壘死 marks, 打者出局 after reaching):
+    // the one who handled the ball gets the assist, whoever covers that base the putout
+    const marked = (p.events ?? []).filter((e) => e.play && e.to === 'out' && e.outAt)
+    // (second base: the middle infielder away from the ball — 2B on a ball to the left side of the infield, SS on one to the
+    // right side or the middle; from the outfield SS takes throws from left and center, 2B from right)
+    const loc = p.loc ?? 0
+    const second = loc === 5 || loc === 6 || loc === 56 || loc === 9 || loc === 89 ? '2B' : 'SS'
+    const coverOf = (b: NonNullable<(typeof marked)[number]['outAt']>) => (b === 1 ? '1B' : b === 3 ? '3B' : b === 'home' ? 'C' : second)
+    const fly = p.traj === 'L' || p.traj === 'F' || p.traj === 'P'
+    if (r === '雙殺') {
       const two = (p.outsBefore ?? 0) <= 1
       const f = at(p.loc, p.pitcher)
-      const pivot = byPos.get(p.loc === 4 ? 'SS' : '2B')
       if (!p.loc) { unplaced += two ? 2 : 1; continue }
-      if (two) {
-        if (p.loc === 3) { a(first); po(pivot); a(pivot); po(first); dp(first, pivot) }
-        else { a(f); po(pivot); a(pivot); po(first); dp(f, pivot, first) }
-      } else if (p.loc === 3) po(first)
-      else { a(f); po(first) }
-    } else if (r === '野選') {
-      const f = at(p.loc, p.pitcher)
-      if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++
-    }
-    // a runner or the batter put out on a ball that put the batter on (a hit, an error: the 被刺殺／壘死／打者出局 marks say which
-    // base): the one who handled the ball gets the assist, whoever covers that base the putout (at 2B: SS for balls to the
-    // left side and the middle, 2B for balls to the right). 野選 has its own credit above.
-    if (r !== '野選') {
-      for (const e of p.events ?? []) {
-        if (!e.play || e.to !== 'out' || !e.outAt) continue
-        const f = at(p.loc, p.pitcher)
-        const cover = e.outAt === 1 ? '1B' : e.outAt === 3 ? '3B' : e.outAt === 'home' ? 'C' : (p.loc ?? 0) >= 7 || p.loc === 5 || p.loc === 6 || p.loc === 56 ? 'SS' : '2B'
-        const covering = byPos.get(cover)
-        if (f && f !== covering) a(f)
-        po(covering)
+      const runnerOuts = marked.filter((e) => !e.batter)
+      if (runnerOuts.length) {
+        // where the recorder said: a caught line drive / fly (the catch is the batter's out, then the runner doubled off), or
+        // a grounder (the lead runner forced, then the relay to first for the batter while there are outs to make)
+        const involved: Array<FieldingLine | undefined> = [f]
+        let relay = f
+        if (fly && two) po(f)
+        for (const e of runnerOuts) {
+          const covering = byPos.get(coverOf(e.outAt!))
+          if (relay && relay !== covering) a(relay)
+          po(covering)
+          involved.push(covering)
+          relay = covering
+        }
+        if (!fly && two && runnerOuts.length === 1) { if (relay && relay !== first) a(relay); po(first); involved.push(first) }
+        if (two) dp(...new Set(involved))
+      } else if (fly) {
+        // (saved before the base was asked) a caught line drive or fly, the runner most likely doubled off first
+        po(f)
+        if (two) { if (f !== first) a(f); po(first); dp(...new Set([f, first])) }
+      } else {
+        const pivot = byPos.get(p.loc === 4 ? 'SS' : '2B')
+        if (two) {
+          if (p.loc === 3) { a(first); po(pivot); a(pivot); po(first); dp(first, pivot) }
+          else { a(f); po(pivot); a(pivot); po(first); dp(f, pivot, first) }
+        } else if (p.loc === 3) po(first)
+        else { a(f); po(first) }
       }
+    } else if (r === '野選' && !marked.length) {
+      // (saved before the base was asked) one out on the play: the fielder throws to the base ahead; nobody out = no credit
+      const f = at(p.loc, p.pitcher)
+      if (p.code && p.code in OUT_CODES) { if (p.loc) { a(f); po(byPos.get(p.loc === 3 || p.loc === 4 ? 'SS' : '2B')) } else unplaced++ }
+    }
+    if (r !== '雙殺') for (const e of marked) {
+      const f = at(p.loc, p.pitcher)
+      const covering = byPos.get(coverOf(e.outAt!))
+      if (f && f !== covering) a(f)
+      po(covering)
     }
     // (a 盜壘阻殺 / 牽制出局 by whoever stood there then: a change in the middle of the plate appearance, rowCharges)
     for (const c of charges?.[i].catching ?? [{ cs: p.cs, pk: p.pk, at: undefined }]) {

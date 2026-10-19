@@ -26,7 +26,7 @@
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
-import { HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
+import { END_PITCH, HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -136,7 +136,7 @@ export function count(pitches: string[]): { balls: number; strikes: number } {
   let balls = 0, strikes = 0
   for (const p of pitches) {
     if (p === 'B') balls++
-    else if (p === 'S' || p === 'SS' || p === 'CS') strikes++
+    else if (p === 'S' || p === 'SS' || p === 'CS' || p === 'T') strikes++
     else if (p === 'F' && strikes < 2) strikes++
   }
   return { balls, strikes }
@@ -152,6 +152,9 @@ export function impliedResult(pitches: string[]): '保送' | '三振' | null {
 
 /** Pitch list with the ball-in-play pitch guaranteed for a BIP result (a caught foul is IP, not F). */
 export function withInPlay(pitches: string[], result: string): string[] {
+  // a 觸身／妨礙 ends on a pitch too: HP / CI (one pitch more, no ball or strike in the count)
+  const end = END_PITCH[result]
+  if (end) return pitches[pitches.length - 1] === end ? pitches : [...pitches, end]
   if (!BIP_RESULTS.has(result)) return pitches
   const last = pitches[pitches.length - 1]
   if (last === 'IP') return pitches
@@ -463,6 +466,13 @@ export function substitute(s: RecordState, slot: number, name: string, pos: stri
   // someone new taking the current pitcher's slot at P is a pitching change: route it so `pitcher` follows
   const cur = s.lineup[slot]
   if (cur && name && name !== cur.name && cur.name === s.pitcher && (pos || cur.pos) === 'P') return changePitcher(s, name)
+  const next = lineupChange(s, slot, name, pos)
+  // anyone else put at P (a new pitcher in the slot of the one who pinch-hit for the pitcher, a fielder moved to the mound
+  // once the DH is gone) is the pitcher from now on: the pitching change goes with it, so his pitches are his
+  const atP = next.lineup[slot]
+  return atP?.pos === 'P' && atP.name && atP.name !== next.pitcher ? changePitcher(next, atP.name) : next
+}
+function lineupChange(s: RecordState, slot: number, name: string, pos: string): RecordState {
   const lineup = s.lineup.map((l, i) => (i === slot ? { name: name || l.name, pos: pos || l.pos } : l))
   const old = s.lineup[slot]
   if (!old || !name || name === old.name) {
@@ -621,12 +631,14 @@ export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batte
 const FLY_OUTS = new Set(['內飛', '外飛', '界外飛', '犧飛'])
 /** A ball in play that put the batter on (a hit — not a home run, which nobody is out on — an error or a fielder's choice). */
 export const liveBall = (result: string): boolean => (result in HIT_BASE_COUNT && result !== '全壘打') || result === '失誤' || result === '野選'
-export function defaultOutAt(s: RecordState, plan: Pick<PAPlan, 'result'>, who: number | 'batter'): OutAt {
+/** A runner put out on this result is asked where (the base says who made the putout): a ball that put the batter on, or a double play. */
+export const outAtAsked = (result: string): boolean => liveBall(result) || result === '雙殺'
+export function defaultOutAt(s: RecordState, plan: Pick<PAPlan, 'result'> & { traj?: string }, who: number | 'batter'): OutAt {
   const base = defaultPlan(s, plan.result)
   const was = who === 'batter' ? base.batter : base.runners[who]
   const stood = s.runners.find((r) => r.row === who)?.base ?? 1
-  // a fly ball caught with him off the bag: he is doubled off where he stands (the base he was going back to)
-  if (typeof who === 'number' && FLY_OUTS.has(plan.result)) return stood
+  // a fly ball (or a line-drive double play) caught with him off the bag: he is doubled off where he stands
+  if (typeof who === 'number' && (FLY_OUTS.has(plan.result) || (plan.result === '雙殺' && (plan.traj === 'L' || plan.traj === 'F' || plan.traj === 'P')))) return stood
   const n = was === 'home' ? 4 : typeof was === 'number' ? was : stood
   return n >= 3 ? 'home' : ((n + 1) as 1 | 2 | 3)
 }
@@ -650,9 +662,16 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
       runners[r.row] = forced ? adv(r, 1) : r.base
     }
   } else if (result === '失誤' || result === '野選') {
+    // the batter on, the runners he forces one base on, the others where they are (a 野選: the runner from first is the
+    // out, or the lead runner); the recorder sends anyone further
     batter = 1
-    for (const r of s.runners) runners[r.row] = result === '野選' && r.base === 1 ? 'out' : adv(r, 1)
+    const forced = forcedRows(s)
+    for (const r of s.runners) runners[r.row] = result === '野選' && r.base === 1 ? 'out' : forced.has(r.row) ? adv(r, 1) : r.base
     if (result === '野選' && !s.runners.some((r) => r.base === 1) && s.runners.length) runners[s.runners[0].row] = 'out'
+  } else if (result === '內滾') {
+    // a ground out: the runners he forced take the base (nearly always), the others hold
+    const forced = forcedRows(s)
+    for (const r of s.runners) runners[r.row] = forced.has(r.row) ? adv(r, 1) : r.base
   } else if (result === '犧飛') {
     for (const r of s.runners) runners[r.row] = r.base === 3 ? 'home' : r.base
   } else if (result === '犧觸') {
@@ -666,8 +685,36 @@ export function defaultPlan(s: RecordState, result: string): PAPlan {
   // the trajectory the result already tells: grounders G, fly balls F (a hit or an error can be any of them)
   const traj = TRAJ_OF[result]
   const plan: PAPlan = { result, batter, runners, rbi: 0, ...(traj ? { traj } : {}) }
+  // the play ends the half-inning: nobody scores by default (rule 5.08(a); a tag out after the run crossed is the
+  // recorder's call), the runners not put out stay where they were (left on base)
+  if (s.outs + outsOnPlay(s, plan) >= 3) for (const r of s.runners) if (plan.runners[r.row] !== 'out') plan.runners[r.row] = r.base
   plan.rbi = defaultRbi(plan)
   return plan
+}
+
+/** The outs a plan makes: the batter and the runners it puts out. */
+export function outsOnPlay(s: RecordState, plan: Pick<PAPlan, 'batter' | 'runners'>): number {
+  return (plan.batter === 'out' ? 1 : 0) + s.runners.filter((r) => plan.runners[r.row] === 'out').length
+}
+/** The runners the batter forces once he runs (every base behind them taken). */
+function forcedRows(s: RecordState): Set<number> {
+  const on = new Set(s.runners.map((r) => r.base))
+  return new Set(s.runners.filter((r) => r.base === 1 || (r.base === 2 && on.has(1)) || (r.base === 3 && on.has(1) && on.has(2))).map((r) => r.row))
+}
+/**
+ * Rule 5.08(a): no run scores on a play whose third out is the batter put out (a strikeout, a ground out, a caught fly —
+ * before he reaches first base) or a runner forced out. When the third out is a tag on a runner, a run that crossed the
+ * plate before it counts — a reminder, not a block (`warn`).
+ */
+export function thirdOutRule(s: RecordState, plan: Pick<PAPlan, 'batter' | 'runners'>): { block?: string; warn?: string } {
+  const outs = outsOnPlay(s, plan)
+  const scores = s.runners.some((r) => plan.runners[r.row] === 'home') || plan.batter === 'home'
+  if (!outs || !scores || s.outs + outs < 3) return {}
+  if (plan.batter === 'out') return { block: '第三個出局是打者出局（三振、在一壘前出局、被接殺），這一分不算（規則 5.08）：請把得分的跑者改回壘上' }
+  const forced = forcedRows(s)
+  const outRows = s.runners.filter((r) => plan.runners[r.row] === 'out').map((r) => r.row)
+  if (outRows.length === 1 && forced.has(outRows[0])) return { block: '第三個出局是封殺，這一分不算（規則 5.08）：請把得分的跑者改回壘上' }
+  return { warn: '這球形成第三個出局：只有跑者在出局之前就踩到本壘，這一分才算；不是的話請把他改回壘上' }
 }
 
 /** What is impossible about where the plan sends everyone: two runners on one base, or a runner passing the one ahead. */
@@ -681,6 +728,8 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
   const out: string[] = []
   let ahead: { name: string; to: number } | null = null
   const label = (b: number) => (b === 4 ? '本壘' : `${b}B`)
+  // nobody goes back to a base behind the one he stands on now (a steal or a wild pitch while the result was open)
+  for (const p of people) if (p.from > 0 && typeof p.to === 'number' && p.to < p.from) out.push(`${p.name} 已經在 ${label(p.from)}，不能退回 ${label(p.to)}`)
   for (const p of people) {
     // someone put out is off the bases and blocks nobody; scoring counts as base 4, which several runners may reach
     if (p.to === 'out') continue
@@ -689,7 +738,25 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
     else if (ahead && to > ahead.to) out.push(`${p.name} 跑到${label(to)}，超過了前面的 ${ahead.name}（${label(ahead.to)}）`)
     ahead = { name: p.name, to }
   }
+  const third = thirdOutRule(s, plan).block
+  if (third) out.push(third)
   return out
+}
+
+/**
+ * The plan after the runners moved while it was open (a steal, a wild pitch, a balk recorded after the result came up —
+ * ball four, strike three): a destination behind where the runner stands now takes the result's default from his new
+ * base; a runner who is no longer on (scored, out) drops out of the plan. The rest of what the recorder picked stays.
+ */
+export function refreshPlan(s: RecordState, plan: PAPlan, rbiTouched = false): PAPlan {
+  const base = defaultPlan(s, plan.result)
+  const runners: Record<number, Dest> = {}
+  for (const r of s.runners) {
+    const d = plan.runners[r.row]
+    runners[r.row] = d === 'out' || d === 'home' || (typeof d === 'number' && d >= r.base) ? d : base.runners[r.row]
+  }
+  const next = { ...plan, runners }
+  return rbiTouched ? next : { ...next, rbi: defaultRbi(next) }
 }
 
 /** Runs scored on the play, minus the cases that never earn an RBI (error, double play). */
@@ -745,10 +812,10 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   }
   const errAdv = new Set(plan.errAdv ?? [])
   // runners put out on the play: a 壘死 (his own baserunning mistake) is kind 'out'; on a ball that put the batter on
-  // (a hit, an error) any other runner out is a 'tag' (被刺殺 trying for the base): both say where, either side
+  // (a hit, an error, a 野選) or a double play any other runner out is a 'tag' (被刺殺／封殺): both say where, either side
   const mistakes = new Set(plan.runningOuts ?? [])
   const runningOut = s.runners.flatMap((r) => {
-    if (plan.runners[r.row] !== 'out' || !(mistakes.has(r.row) || liveBall(plan.result))) return []
+    if (plan.runners[r.row] !== 'out' || !(mistakes.has(r.row) || outAtAsked(plan.result))) return []
     return [{ at: base.pitches.length, kind: mistakes.has(r.row) ? 'out' : 'tag', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[r.row] ?? defaultOutAt(s, plan, r.row) }]
   })
   // the batter who reached and was put out on the same play (a triple, then thrown out at home; a single stretched):

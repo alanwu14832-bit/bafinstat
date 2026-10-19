@@ -461,7 +461,8 @@ export interface PaPanelProps {
   onNav: (index: number) => void
   onClose: () => void
   onDelete: () => void
-  onInsert: (at: number) => void
+  /** `inning`: the inning of the row it goes next to */
+  onInsert: (at: number, inning?: number) => void
   onMove: (d: -1 | 1) => void
   /** our half-inning: the rows before this one whose runners may still be on base, editable from here */
   others?: Array<{ index: number; pa: BattingPA }>
@@ -737,7 +738,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         </div>
         {!timeline && onRebuild && (
           <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[12px] text-ink flex flex-col gap-2">
-            <span>這局記下的壘上狀況前後對不起來（舊的匯入資料，或之前的錯誤留下的），所以沒辦法顯示壘包圖。</span>
+            <span>這局記下的壘上狀況前後對不起來（剛插入或刪除了打席、舊的匯入資料，或之前的錯誤留下的），所以沒辦法顯示壘包圖。按下面的按鈕依打擊結果重建（盜壘、暴投等投球之間的跑壘會保留），再逐一修正。</span>
             <Button size="sm" variant="outline" className="self-start" onClick={onRebuild}>依打擊結果重建這局的跑者</Button>
           </div>
         )}
@@ -782,7 +783,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         </div>
         {/* why the last change to the runners did not go through, right where it was tried */}
         {timeline?.notice && <p role="alert" className="text-[12px] text-critical">{timeline.notice}</p>}
-        <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code] }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} />
+        <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code] }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} twoStrikes={count(pa.pitches).strikes === 2} />
         {timeline && <PlayBuilder side={side} pitches={pa.pitches.length} tl={timeline} />}
       </Section>
 
@@ -880,8 +881,8 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       )}
 
       <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-border">
-        <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index)}>在前面插入</Button>
-        <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index + 1)}>在後面插入</Button>
+        <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index, pa.inning)}>在前面插入</Button>
+        <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index + 1, pa.inning)}>在後面插入</Button>
         <Button size="sm" variant="ghost" icon={<ArrowUp />} aria-label="往前移" title="往前移" onClick={() => onMove(-1)} disabled={index === 0} />
         <Button size="sm" variant="ghost" icon={<ArrowDown />} aria-label="往後移" title="往後移" onClick={() => onMove(1)} disabled={index >= total - 1} />
         <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
