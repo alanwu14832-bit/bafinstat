@@ -193,8 +193,8 @@ function CountButton({ label, value, onChange, sub }: { label: string; value: nu
 
 /** Runner plays between pitches, as 紀錄比賽 offers them (a wild pitch while we bat is the other team's). */
 const PLAY_KINDS: Record<PaSide, string[]> = {
-  bat: ['sb', 'wp', 'pb', 'bk', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
-  pit: ['sb', 'wp', 'pb', 'bk', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
+  bat: ['sb', 'di', 'wp', 'pb', 'bk', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
+  pit: ['sb', 'di', 'wp', 'pb', 'bk', 'err', 'throw', 'advance', 'cs', 'pk', 'out'],
 }
 export interface TimelineProps {
   step: Step

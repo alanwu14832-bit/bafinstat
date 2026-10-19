@@ -11,7 +11,7 @@ export interface Share { n: number; d: number }
 export interface CompletenessRow { key: string; label: string; /** which numbers get a smaller sample without it */ affects: string; bat?: Share; pit?: Share }
 export interface Completeness { rows: CompletenessRow[]; /** batters whose 打擊慣用 is not in the 球員名單, with their batted balls */ noBats: Array<{ name: string; bip: number }> }
 
-const TRAJ = new Set(['G', 'F', 'L', 'P'])
+const TRAJ = new Set(['G', 'F', 'L', 'P', 'B'])
 const share = <T,>(rows: T[], has: (r: T) => boolean): Share => ({ n: rows.filter(has).length, d: rows.length })
 
 export function completeness(ds: Pick<Dataset, 'batting' | 'pitching' | 'roster'>): Completeness {

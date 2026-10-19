@@ -402,9 +402,12 @@ export function changePitcher(s: RecordState, name: string): RecordState {
   if (!name || name === s.pitcher) return { ...s, pitcher: name }
   const old = s.lineup.findIndex((l) => l.name === s.pitcher)
   let lineup = s.lineup
+  const fielder = s.lineup.findIndex((l) => l.name === name)
   if (old >= 0 && s.lineup[old].pos === 'P') {
-    const fielder = s.lineup.findIndex((l) => l.name === name)
     lineup = s.lineup.map((l, i) => (fielder >= 0 ? (i === fielder ? { ...l, pos: 'P' } : l) : i === old ? { name, pos: 'P' } : l))
+  } else if (old < 0 && fielder >= 0 && s.lineup[fielder].pos !== 'P') {
+    // (a DH game: one who bats and fields goes to the mound — he pitches from now on; the 指定打擊 is over)
+    lineup = s.lineup.map((l, i) => (i === fielder ? { ...l, pos: 'P' } : l))
   }
   const sub = withBefore(s, { kind: 'P', in: name, out: s.pitcher, pos: 'P', inning: s.inning, half: s.half, ...(old >= 0 ? { slot: old } : {}), ...rowNow(s) })
   // a change with a count on the batter: the pitches so far are the pitcher who leaves's, the rest the new one's
@@ -592,7 +595,16 @@ export function subCandidates(s: RecordState, pool: string[], mode: 'batter' | '
   const mound = mode === 'batter' && s.pitcher && !s.lineup.some((l) => l.name === s.pitcher) ? [s.pitcher] : []
   const names = [...new Set([...bench, ...pool.filter((n) => !seen.has(n)), ...mound, ...fielders, ...left])]
   const benchSet = new Set(bench), leftSet = new Set(left)
-  return { names, disabled: s.reentry ? new Set() : leftSet, tag: (n) => (benchSet.has(n) ? '（板凳）' : leftSet.has(n) ? '（已下場）' : mound.includes(n) ? '（投手）' : undefined) }
+  // 允許再上場 (the college rule): a starter, once, back into his own slot — the others are marked, still pickable
+  const startSlot = new Map(startersOf(s).flatMap((l, i) => (l.name ? [[l.name, i + 1] as const] : [])))
+  const leftTag = (n: string) => {
+    if (!s.reentry) return '（已下場）'
+    const slot = startSlot.get(n)
+    if (!slot) return '（已下場・不是先發，依大專規則不能再上場）'
+    if ((s.subs ?? []).some((x) => x.in === n && !(x.out === n && x.kind === 'DEF'))) return '（已下場・已經再上場過一次）'
+    return `（先發・可再上場，回第 ${slot} 棒）`
+  }
+  return { names, disabled: s.reentry ? new Set() : leftSet, tag: (n) => (benchSet.has(n) ? '（板凳）' : leftSet.has(n) ? leftTag(n) : mound.includes(n) ? '（投手）' : undefined) }
 }
 
 export interface PAPlan {
@@ -648,10 +660,18 @@ export function baseOutsFirst(s: RecordState, plan: PAPlan): { s: RecordState; p
 const destNum = (d: Dest | undefined) => (d === 'home' ? 4 : typeof d === 'number' ? d : 0)
 /** Whether `who` goes further than the result alone sends him (so the extra bases can be marked 趁傳進壘). */
 export function beyondDefault(s: RecordState, plan: PAPlan, who: number | 'batter'): boolean {
-  const base = defaultPlan(s, plan.result)
-  const was = who === 'batter' ? base.batter : base.runners[who]
+  const was = expectedBase(s, plan.result, who)
   const now = who === 'batter' ? plan.batter : plan.runners[who]
-  return typeof was === 'number' && destNum(now) > was
+  return was !== null && was < 4 && destNum(now) > was
+}
+/** Where the result alone leaves `who`, as a base (本壘 4); a 野選's runner, out by default, who was safe: the base he ran to. */
+function expectedBase(s: RecordState, result: string, who: number | 'batter'): number | null {
+  const base = defaultPlan(s, result)
+  const was = who === 'batter' ? base.batter : base.runners[who]
+  if (typeof was === 'number') return was
+  if (was === 'home') return 4
+  const r = typeof who === 'number' ? s.runners.find((x) => x.row === who) : undefined
+  return was === 'out' && result === '野選' && r ? Math.min(4, r.base + 1) : null
 }
 
 /**
@@ -808,6 +828,8 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
   if (outs > 3) out.push(`這個打席加起來會有 ${outs} 個出局，一個半局只有 3 個：請把多的出局改回壘上${plan.result === '雙殺' ? '（兩出局時不會有雙殺，請改記內滾或野選）' : ''}`)
   const third = thirdOutRule(s, plan).block
   if (third) out.push(third)
+  // 不死三振: the batter may run only with first base open, or with two out (rule 5.05(a)(2))
+  if (plan.result === '三振' && plan.batter !== 'out' && s.outs < 2 && s.runners.some((r) => r.base === 1)) out.push('一壘有人、未滿兩出局時不能不死三振（規則 5.05(a)(2)）：打者請設成出局')
   const walk = walkOffRunner(s, plan)
   if (walk && walk.credit < 4 && scoredOn(plan) > scoredOn(walkOffPlan(s, plan) ?? plan)) out.push('再見：比賽在致勝的那一分回來時就結束，之後的跑者不算得分（規則 9.06(f)）')
   return out
@@ -873,12 +895,13 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   // the plays between pitches, then 趁傳進壘／失誤進壘 on the batted ball (from where the hit alone put him)
   const def = plan.throws?.length || plan.errAdv?.length ? defaultPlan(s, plan.result) : null
   const onPlay = (who: number | 'batter', kind: 'throw' | 'err'): PlayEvent[] => {
-    const was = who === 'batter' ? def!.batter : def!.runners[who]
+    void def
+    const was = expectedBase(s, plan.result, who)
     const now = who === 'batter' ? plan.batter : plan.runners[who]
-    if (typeof was !== 'number' || now === undefined || now === 'out' || destNum(now) <= was) return []
+    if (was === null || was >= 4 || now === undefined || now === 'out' || destNum(now) <= was) return []
     // 失誤進壘 while we bat: one per base on the runner's own row
     if (kind === 'err' && side === 'us') batting[who === 'batter' ? rowIndex : who].advOnError += destNum(now) - was
-    return [{ at: base.pitches.length, kind, from: was, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
+    return [{ at: base.pitches.length, kind, from: was as Base, to: now, play: true as const, ...(who === 'batter' ? { batter: true as const } : {}) }]
   }
   const errAdv = new Set(plan.errAdv ?? [])
   // runners put out on the play: a 壘死 (his own baserunning mistake) is kind 'out'; on a ball that put the batter on
@@ -982,7 +1005,7 @@ function withReliefRow(s: RecordState): RecordState {
 
 /** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances.
  *  bk = 投手犯規 (balk): every runner moves up one (see balk); no column, BK is counted from the plays. */
-export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk'
+export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk' | 'di'
 
 /** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
  *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
@@ -993,10 +1016,10 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   if (side === 'opp' && (ev === 'cs' || ev === 'pk' || ev === 'out')) s = withReliefRow(s)
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
   // error just moves him along (counted once), so two runners never share a base
-  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'bk' || ev === 'err' || ev === 'throw' || ev === 'advance') {
+  if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'bk' || ev === 'err' || ev === 'throw' || ev === 'advance' || ev === 'di') {
     const ahead = runner.base < 3 ? s.runners.find((x) => x.side === side && x.base === runner!.base + 1) : undefined
     if (ahead) {
-      s = runnerEvent(s, ahead.row, side, ev === 'sb' ? 'sb' : 'advance', ev === 'wp' || ev === 'pb' || ev === 'bk' ? ev : undefined)
+      s = runnerEvent(s, ahead.row, side, ev === 'sb' || ev === 'di' ? ev : 'advance', ev === 'wp' || ev === 'pb' || ev === 'bk' ? ev : undefined)
       if (s.outs >= 3 || offense(s) !== side) return s
       runner = s.runners.find((r) => r.row === row && r.side === side)
       if (!runner) return s
@@ -1023,7 +1046,8 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
       break
     case 'pk': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; else extras.pk += 1; break
     case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
-    case 'throw': case 'advance': dest = advance(1); break
+    // 守備無視: the defence let him go — no stolen base
+    case 'throw': case 'advance': case 'di': dest = advance(1); break
     case 'score': dest = 'home'; break
     case 'out': dest = 'out'; if (side === 'us') { const b = r as BattingPA; b.outOnBase += 1; b.baserunningOuts = (b.baserunningOuts ?? 0) + 1 } break
   }

@@ -313,7 +313,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const batCard = boxView === 'grid'
     ? <Card title="打擊" subtitle="逐局表：每一格是那一局的打席；點球員看個人檔案" action={boxToggle} flush><InningGrid sheet={sheetUs} side="bat" stat={statUs} onName={(n) => openPlayer({ name: n })} /></Card>
     : <Card title="打擊" subtitle="點球員看個人檔案" action={boxToggle} flush><DataTable columns={boxBat} rows={boxBatRows} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
-  const pitCard = <Card title="投球" subtitle="依上場順序" flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
+  const pitCard = <Card title="投球" subtitle={canEdit && !current.game.isDemo ? '依上場順序；刺殺／助殺依打席推定，可到「修改資料 → 守備」修正' : '依上場順序'} flush><DataTable columns={boxPit} rows={boxP} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
   const oppCard = (
     <Card title="對方打擊" subtitle={oppNamed ? '有記姓名的打者分開列' : '這場沒有記對方姓名，以棒次代替（同一棒的代打會合在一起）'} action={boxToggle} flush>
       {boxView === 'grid'

@@ -161,7 +161,7 @@ describe('3.3 runner plays and 3.5 substitutions', () => {
     const want: Record<string, Partial<Record<'2' | 'home' | 'out', string>>> = {
       sb: { 2: '盜壘上二壘', home: '盜壘回本壘得分' }, cs: { out: '盜壘刺出局' }, wp: { 2: '投手暴投上二壘', home: '投手暴投回本壘得分' },
       pb: { 2: '捕手捕逸上二壘', home: '捕手捕逸回本壘得分' }, bk: { 2: '投手犯規上二壘', home: '投手犯規回本壘得分' }, err: { 2: '因失誤上二壘', home: '因失誤回本壘得分' },
-      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, tag: { out: '被刺殺出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' }, outPlay: { out: '出局' },
+      throw: { 2: '趁傳上二壘', home: '趁傳回本壘得分' }, pk: { out: '遭牽制出局' }, tag: { out: '被刺殺出局' }, advance: { 2: '上二壘', home: '回本壘得分' }, di: { 2: '在守備無視下上二壘', home: '在守備無視下回本壘得分' }, score: { 2: '上二壘', home: '回本壘得分' }, out: { out: '跑壘出局' }, outPlay: { out: '出局' },
     }
     for (const kind of Object.keys(PLAY_EVENT_LABELS).filter((k) => k !== 'pkSafe')) {
       expect(want[kind], kind).toBeTruthy()

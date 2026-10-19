@@ -111,8 +111,8 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
             <span className="truncate" style={{ color: BOARD.muted }}>{who}</span>
           </div>
           <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="復原上一步" title="復原上一步"
-            className="shrink-0 size-10 max-[380px]:size-9 inline-flex items-center justify-center rounded-full ring-1 ring-white/15 enabled:hover:bg-white/10 enabled:cursor-pointer disabled:opacity-35 transition-colors">
-            <Undo2 className="size-[18px]" />
+            className="shrink-0 size-11 max-[380px]:size-10 inline-flex items-center justify-center rounded-full ring-1 ring-white/15 enabled:hover:bg-white/10 enabled:cursor-pointer disabled:opacity-35 transition-colors">
+            <Undo2 className="size-5" />
           </button>
         </div>
         <div className="relative sm:hidden flex items-center gap-2 px-3 py-1.5 border-t text-[12px] min-w-0" style={{ borderColor: BOARD.line }}>
@@ -130,7 +130,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
 
 /* ------------------------------------------------------------------ runner sheet */
 export const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: Side; out?: boolean }> = [
-  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' },
+  { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' }, { ev: 'di', label: '守備無視' },
   { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'out', label: '壘死', out: true },
 ]
 // (pressed: the ink colours replace the surface ones — added after them, bg-surface would still win in the stylesheet)

@@ -55,7 +55,7 @@ export function pitchList(pitches: string[]): Array<{ n: number; word: string; c
 const OUTFIELD = new Set([7, 8, 9, 78, 89])
 /** Where the ball went: outfield and its gaps as is (「左外野」「右中間」), the infield with 方向 (「游擊方向」「三游間方向」). */
 export const dirWord = (loc?: number): string => (!loc || !WHERE[loc] ? '' : OUTFIELD.has(loc) ? WHERE[loc] : `${WHERE[loc]}方向`)
-const TRAJ_WORD: Record<string, string> = { G: '滾地球', L: '平飛球', F: '高飛球', P: '內野高飛球' }
+const TRAJ_WORD: Record<string, string> = { G: '滾地球', L: '平飛球', F: '高飛球', P: '內野高飛球', B: '觸擊' }
 const FIELDER: Record<string, string> = { P: '投手', C: '捕手', '1B': '一壘手', '2B': '二壘手', '3B': '三壘手', SS: '游擊手', LF: '左外野手', CF: '中外野手', RF: '右外野手' }
 /** 「游擊手」; '?' or anything unknown is 「野手」. */
 export const fielderWord = (pos?: string): string => (pos && FIELDER[pos]) || '野手'
@@ -175,6 +175,7 @@ const PLAY_PHRASE: Record<string, { base?: string; home?: string; out?: string }
   throw: { base: '趁傳上', home: '趁傳回本壘得分' },
   pk: { out: '遭牽制出局' },
   advance: { base: '上', home: '回本壘得分' },
+  di: { base: '在守備無視下上', home: '在守備無視下回本壘得分' },
   score: { base: '上', home: '回本壘得分' },
   out: { out: '跑壘出局' },
   tag: { out: '被刺殺出局' },

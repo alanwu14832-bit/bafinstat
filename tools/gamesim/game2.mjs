@@ -82,6 +82,9 @@ async function pa(side, spec) {
   if (spec.batter !== undefined) await setDest('打者 ', spec.batter)
   for (const [who, kind] of Object.entries(spec.adv ?? {})) {
     const row = destRow(who === 'batter' ? '打者 ' : `${who}B `)
+    // (folded until asked: 「多跑是因為傳球或失誤？」)
+    const unfold = row.getByRole('button', { name: /多跑是因為傳球或失誤？$/ })
+    if (await unfold.count()) { await unfold.first().click(); await p.waitForTimeout(40) }
     const btn = row.getByRole('button', { name: new RegExp(kind + '$') })
     if (!(await btn.count())) { notes.push(`#${paNo} ${spec.result}: 沒有出現「${kind}」可以點`); continue }
     await btn.first().click(); await p.waitForTimeout(60)

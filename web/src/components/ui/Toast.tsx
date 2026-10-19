@@ -10,7 +10,7 @@ export interface ToastData { id: number; text: string; action?: { label: string;
  * One line at the bottom of the screen saying what just happened, with an optional action (復原). A new toast
  * replaces the old one; it leaves by itself after a few seconds.
  */
-export function Toast({ toast, onDone, ms = 4500 }: { toast: ToastData | null; onDone: () => void; ms?: number }) {
+export function Toast({ toast, onDone, ms = 4500, placement = 'bottom' }: { toast: ToastData | null; onDone: () => void; ms?: number; placement?: 'top' | 'bottom' }) {
   const reduced = usePrefersReducedMotion()
   useEffect(() => {
     if (!toast) return
@@ -18,10 +18,10 @@ export function Toast({ toast, onDone, ms = 4500 }: { toast: ToastData | null; o
     return () => window.clearTimeout(t)
   }, [toast, ms, onDone])
   return createPortal(
-    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(16px+env(safe-area-inset-bottom))] z-[80] flex justify-center px-4" aria-live="polite" role="status">
+    <div className={`pointer-events-none fixed inset-x-0 z-[80] flex justify-center px-4 ${placement === 'top' ? 'top-[calc(8px+env(safe-area-inset-top))]' : 'bottom-[calc(16px+env(safe-area-inset-bottom))]'}`} aria-live="polite" role="status">
       <AnimatePresence mode="popLayout">
         {toast && (
-          <motion.div key={toast.id} layout initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduced ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
+          <motion.div key={toast.id} layout initial={reduced ? { opacity: 0 } : { opacity: 0, y: placement === "top" ? -16 : 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduced ? { opacity: 0 } : { opacity: 0, y: placement === "top" ? -8 : 8, scale: 0.98 }}
             transition={{ type: 'spring', visualDuration: 0.28, bounce: 0.15 }}
             className="pointer-events-auto max-w-[min(560px,100%)] flex items-center gap-3 rounded-full bg-[#141517] text-[#f3efe7] pl-4 pr-1.5 py-1.5 shadow-[0_12px_32px_-8px_rgba(0,0,0,0.45)] ring-1 ring-white/10">
             <CheckCircle2 className="size-4 shrink-0 text-[var(--accent-board,var(--accent))]" aria-hidden />

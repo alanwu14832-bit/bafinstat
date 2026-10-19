@@ -48,6 +48,7 @@ describe('紀錄比賽: their side as complete as ours', () => {
     fireEvent.click(screen.getByRole('button', { name: '平飛 L' })) // 軌跡 is required for a batted ball (batch 14)
     // the batter takes second: how
     fireEvent.click(screen.getAllByRole('button', { name: '2B' }).at(-1)!)
+    fireEvent.click(screen.getByRole('button', { name: /打者 多跑是因為傳球或失誤？/ }))
     expect(screen.getByRole('button', { name: /打者 趁傳（不算失誤）/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /打者 對方失誤進壘/ }))
     expect(screen.getByText(/趁傳：守備傳別的壘/)).toBeTruthy()
