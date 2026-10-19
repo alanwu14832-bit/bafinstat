@@ -329,6 +329,8 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
     const first = byPos.get('1B')
     // 三振：捕手刺殺，但不死三振而打者上壘（代碼不是 I/II/III）時沒有出局，不記刺殺
     if (r === '三振') { if (!p.code || p.code in OUT_CODES) po(byPos.get('C')) }
+    // 其他出局 (batting out of order, the batter's interference): the catcher's putout
+    else if (r === '其他出局') po(byPos.get('C'))
     // a 犧觸／犧飛 the batter reached on (an error on the row, no out code): nobody put him out
     else if ((r === '犧觸' || r === '犧飛') && !((p.code ?? '') in OUT_CODES) && !!p.errors?.length) { /* no putout */ }
     else if (GROUND.has(r)) {
@@ -387,6 +389,8 @@ export function creditPlays(lines: FieldingLine[], pitching: PitchingPA[], game?
       const f = at(p.loc, p.pitcher)
       const involved: Array<FieldingLine | undefined> = []
       for (const e of marked) {
+        // hit by the batted ball: the fielder nearest the ball makes the putout, nobody an assist
+        if (e.kind === 'hbb') { po(f); continue }
         const covering = byPos.get(coverOf(e.outAt!))
         if (f && f !== covering) a(f)
         po(covering)

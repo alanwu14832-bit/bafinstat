@@ -14,7 +14,7 @@ export const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }>
 export const RESULT_GROUPS: Array<{ label: string; items: string[] }> = [
   { label: '安打', items: ['一安', '內安', '二安', '場地二安', '三安', '全壘打'] },
   { label: '上壘', items: ['保送', '故四', '觸身', '失誤', '野選', '妨礙'] },
-  { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'] },
+  { label: '出局', items: ['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '其他出局'] },
 ]
 /** Gap codes for a ball nobody touched (三游穿越安打 → 56), shown under the nine fielder buttons. */
 const LOC_HOLE_KEYS = [56, 46, 34, 78, 89]

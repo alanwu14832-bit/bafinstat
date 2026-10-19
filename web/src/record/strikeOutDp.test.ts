@@ -78,3 +78,32 @@ describe('守備無視', () => {
     expect(PLAY_EVENT_LABELS.di).toBe('守備無視')
   })
 })
+
+describe('rule 9.15(b): a pinch hitter with two strikes', () => {
+  it('strikes out: the strikeout is the batter he replaced’s; a walk would be his own', async () => {
+    const { substitute, count: c } = await import('./model')
+    let s = addPitch(addPitch(newGame(game('客'), lineup, '壬'), 'SS'), 'SS')
+    expect(c(s.pitches).strikes).toBe(2)
+    s = substitute(s, 0, '子', 'PH')
+    s = addPitch(s, 'SS')
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect(s.batting[0].batter).toBe('甲')
+    expect(s.phTwoStrikes).toBeUndefined()
+    let w = addPitch(addPitch(newGame(game('客'), lineup, '壬'), 'SS'), 'SS')
+    w = substitute(w, 0, '子', 'PH')
+    for (let i = 0; i < 4; i++) w = addPitch(w, 'B')
+    w = commitPA(w, defaultPlan(w, '保送'))
+    expect(w.batting[0].batter).toBe('子')
+  })
+})
+
+describe('臨時代跑', () => {
+  it('changes only the name on base and notes it; no substitution', async () => {
+    const { courtesyRunner } = await import('./model')
+    let s = walk(newGame(game('客'), lineup, '壬'))
+    s = courtesyRunner(s, s.runners[0].row, '子')
+    expect(s.runners[0].name).toBe('子')
+    expect(s.batting[0]).toMatchObject({ batter: '甲', note: '臨時代跑 子' })
+    expect(s.subs ?? []).toHaveLength(0)
+  })
+})

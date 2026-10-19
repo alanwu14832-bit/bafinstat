@@ -98,6 +98,8 @@ export const RESULT_TEXT: Record<PAResult | '突破僵局', ResultFn> = {
   外飛: play(flyOr('高飛球'), '接殺出局', (T) => `擊出外野${T}，接殺出局`),
   界外飛: play(() => '界外飛球', '接殺出局', () => '擊出界外飛球，接殺出局'),
   // a line drive or fly caught with a runner doubled off is a double play, not the batter's 雙殺打 (GIDP)
+  // batting out of order, the batter's interference, …: no ball to describe
+  其他出局: () => '出局（打序錯誤、打者妨礙等）',
   雙殺: (a) => (a.traj === 'L' || a.traj === 'F' || a.traj === 'P'
     ? play(tw('G'), '被接殺，跑者回不去形成雙殺', (T) => `擊出${inField(T)}，被接殺，跑者回不去形成雙殺`)(a)
     : play(tw('G'), '雙殺打', (T) => `擊出${inField(T)}，雙殺打`)(a)),
@@ -119,7 +121,7 @@ export const RESULT_TEXT: Record<PAResult | '突破僵局', ResultFn> = {
 }
 
 const OUT_CODES = new Set(['I', 'II', 'III'])
-const BATTER_OUTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧牲', '犧飛', '雙殺'])
+const BATTER_OUTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧牲', '犧飛', '雙殺', '其他出局'])
 /** Who erred on a 失誤 result: the fielder at its 落點, else the first one the row lists (ours or theirs). */
 export function errFielder(row: Row, side: FeedSide): string | undefined {
   const own = row.loc ? POSITION_BY_NUMBER[row.loc] : undefined
@@ -174,6 +176,8 @@ const PLAY_PHRASE: Record<string, { base?: string; home?: string; out?: string }
   err: { base: '因失誤上', home: '因失誤回本壘得分' },
   throw: { base: '趁傳上', home: '趁傳回本壘得分' },
   pk: { out: '遭牽制出局' },
+  pocs: { out: '遭牽制後盜壘失敗出局' },
+  hbb: { out: '被擊出的球打到出局' },
   advance: { base: '上', home: '回本壘得分' },
   di: { base: '在守備無視下上', home: '在守備無視下回本壘得分' },
   score: { base: '上', home: '回本壘得分' },

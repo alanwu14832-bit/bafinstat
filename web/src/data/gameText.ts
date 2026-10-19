@@ -30,6 +30,7 @@ export function resultPhrase(result: string, loc?: number, traj?: string, pitche
     case '內飛': return `${W || '內野'}飛球出局`
     case '外飛': return traj === 'L' ? `${W}平飛球出局` : `${W || '外野'}飛球出局`
     case '界外飛': return `${W}界外飛球出局`
+    case '其他出局': return '出局（打序錯誤、打者妨礙等）'
     case '犧觸': case '犧牲': return `${W}犧牲觸擊`
     case '犧飛': return `${W}犧牲飛球`
     case '野選': return `${W}野手選擇`
