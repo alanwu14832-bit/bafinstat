@@ -351,7 +351,7 @@ export function setEnd(half: Half, at: number, who: number | 'batter', end: End)
 }
 
 /** Plays that put the runner out, and the ones that send him home from wherever he is. */
-export const OUT_PLAYS = new Set(['cs', 'pk', 'out'])
+export const OUT_PLAYS = new Set(['cs', 'pk', 'out', 'pocs'])
 /**
  * Runner play(s) during plate appearance `at`, after `pitch` of its pitches: each runner in `rows` (lead runner first)
  * moves up one base (from third: scores) or is put out. Moving into a base someone still holds pushes him on first —
@@ -548,7 +548,7 @@ export function inferAll(rows: Row[], side: Side): Map<number, Half | null> {
   return m
 }
 
-const OUT_AT_PLATE = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+const OUT_AT_PLATE = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '其他出局'])
 /** His result put the batter on base (a hit, walk, 觸身, 失誤, 野選, 妨礙): an out of his after it is an out on the bases. */
 export const reachedOn = (result: string): boolean => !!result && result !== TIEBREAK && batterEndFor(result) !== 'out'
 /** The mark on the play that our batter, after reaching, was put out on that same play (a triple, then thrown out at
@@ -679,11 +679,12 @@ export function playCounts(half: Half | null | undefined, side: Side): Map<numbe
   for (const st of half.steps) {
     if (side === 'bat') {
       for (const m of st.moves) {
-        if (m.kind === 'sb') add(m.row, 'sb'); if (m.kind === 'cs') add(m.row, 'cs'); if (m.kind === 'err') add(m.row, 'advOnError')
+        // (牽制後盜壘失敗: a 盜壘失敗 of the runner's, a 牽制出局 of their pitcher's)
+        if (m.kind === 'sb') add(m.row, 'sb'); if (m.kind === 'cs' || m.kind === 'pocs') add(m.row, 'cs'); if (m.kind === 'err') add(m.row, 'advOnError')
         if (m.kind === 'pk' || m.kind === 'out') add(m.row, 'outOnBase'); if (m.kind === 'out') add(m.row, 'baserunningOuts')
       }
     } else {
-      for (const m of st.moves) { if (m.kind === 'sb') add(st.index, 'sba'); if (m.kind === 'cs') add(st.index, 'cs'); if (m.kind === 'pk') add(st.index, 'pk') }
+      for (const m of st.moves) { if (m.kind === 'sb') add(st.index, 'sba'); if (m.kind === 'cs') add(st.index, 'cs'); if (m.kind === 'pk' || m.kind === 'pocs') add(st.index, 'pk') }
       for (const k of ['wp', 'pb']) add(st.index, k, new Set(st.moves.filter((m) => m.kind === k).map((m) => m.at)).size)
     }
   }

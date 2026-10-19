@@ -22,7 +22,7 @@ export const PITCH_CODES: PitchCode[] = ['S', 'SS', 'CS', 'F', 'IP', 'B', 'T', '
 export const END_PITCH: Record<string, PitchCode> = { 觸身: 'HP', 妨礙: 'CI' }
 
 export const PA_RESULTS = [
-  '一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '妨礙',
+  '一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '三振', '內滾', '內飛', '外飛', '界外飛', '野選', '失誤', '犧觸', '犧飛', '雙殺', '其他出局', '妨礙',
 ] as const
 export type PAResult = (typeof PA_RESULTS)[number] | '犧牲'
 /**
@@ -64,7 +64,8 @@ export const isSingle = (r: string) => r === '一安' || r === '內安'
 /** 軌跡 a result implies when none was recorded (G 滾地 · P 內野飛球 · F 飛球). */
 export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 /** Results without a batted ball: no 落點／軌跡／強度 (every other result put the ball in play, 全壘打 included). */
-export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙'])
+// (其他出局: batting out of order, the batter's interference — no ball to place)
+export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙', '其他出局'])
 /** A batted ball (BIP): a real plate appearance whose result put the ball in play, whether or not its 落點／軌跡／強度 were recorded. */
 export const isBattedBall = (r: { result: string }) => isPA(r) && !NO_BATTED_BALL.has(r.result)
 /** The details a batted ball still needs: 落點 and 軌跡 are required for every batted ball (not 三振／保送／故四／觸身／
@@ -206,7 +207,7 @@ export interface PlayEvent {
   batter?: true
 }
 export const PLAY_EVENT_LABELS: Record<string, string> = {
-  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規', di: '守備無視',
+  sb: '盜壘', cs: '盜壘失敗', wp: '暴投', pb: '捕逸', err: '失誤進壘', throw: '趁傳進壘', pk: '牽制出局', pkSafe: '牽制', advance: '進壘', score: '得分', out: '壘死', bk: '投手犯規', di: '守備無視', pocs: '牽制後盜壘失敗', hbb: '被打擊球擊中',
   // (on the play only: a runner put out trying for a base on a ball that put the batter on — 壘死 is kind 'out', his own mistake)
   tag: '被刺殺',
   // (on the play only, our batter: he reached, then was put out on that same play — record/timeline batterOutMark)

@@ -8,7 +8,7 @@ import { hasRunnerPlays } from '../record/timeline'
 
 export interface Issue { side: 'bat' | 'pit'; index: number; message: string }
 
-const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '其他出局'])
 const HIT_RESULTS = new Set(Object.keys(HIT_BASE_COUNT))
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const BALL_RESULTS = new Set(['保送', '故四'])

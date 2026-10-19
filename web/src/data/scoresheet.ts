@@ -80,6 +80,7 @@ export function scoreMark(result: string, loc?: number, traj?: string, pitches: 
     case '外飛': return { mark: `${traj === 'L' ? 'L' : 'F'}${l}` }
     case '界外飛': return { mark: `FF${l}` }
     case '雙殺': return { mark: `DP${l}` }
+    case '其他出局': return { mark: 'OUT' }
     case '野選': return { mark: `FC${l}` }
     case '失誤': return { mark: `E${l}` }
     case '犧觸': case '犧牲': return { mark: `SAC${l}` }

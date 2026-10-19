@@ -45,6 +45,8 @@ export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: n
 
 export interface RecordState {
   game: Game
+  /** a pinch hitter came in with two strikes on the batter (rule 9.15(b)): a strikeout goes to `out` */
+  phTwoStrikes?: { in: string; out: string }
   /** 保留比賽: when the game was suspended (to be resumed another day); cleared by 恢復比賽 */
   suspended?: string
   lineup: LineupSlot[]
@@ -118,7 +120,7 @@ export interface TiebreakRule { from: number; bases: Base[] }
 /** handUnknown: 「不知道」 was picked for his hand (he still counts as asked: needsOppHand). Never set with `hand`. */
 export interface OppPitcher { name?: string; hand?: OppHand; handUnknown?: true }
 
-export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺'])
+export const OUT_RESULTS = new Set(['三振', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '其他出局'])
 /** Results where the ball was put in play (the PA's last pitch is IP). */
 export const BIP_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '內滾', '內飛', '外飛', '界外飛', '犧觸', '犧飛', '雙殺', '野選', '失誤'])
 export const REACH_RESULTS = new Set(['一安', '內安', '二安', '場地二安', '三安', '全壘打', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
@@ -477,7 +479,10 @@ export function substitute(s: RecordState, slot: number, name: string, pos: stri
   // someone new taking the current pitcher's slot at P is a pitching change: route it so `pitcher` follows
   const cur = s.lineup[slot]
   if (cur && name && name !== cur.name && cur.name === s.pitcher && (pos || cur.pos) === 'P') return changePitcher(s, name)
-  const next = lineupChange(s, slot, name, pos)
+  let next = lineupChange(s, slot, name, pos)
+  // a pinch hitter with two strikes on the batter: if he strikes out, it is the first batter's (rule 9.15(b))
+  const cur0 = s.lineup[slot]
+  if (pos === 'PH' && name && cur0?.name && cur0.name !== name && offense(s) === 'us' && slot === s.slot && count(s.pitches).strikes >= 2) next = { ...next, phTwoStrikes: { in: name, out: cur0.name } }
   // anyone else put at P (a new pitcher in the slot of the one who pinch-hit for the pitcher, a fielder moved to the mound
   // once the DH is gone) is the pitcher from now on: the pitching change goes with it, so his pitches are his
   const atP = next.lineup[slot]
@@ -521,6 +526,16 @@ export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s,
  * the row's batting slot known, that slot of their order becomes the pinch runner (rows already sent keep their names),
  * so his next plate appearance shows him.
  */
+/**
+ * 臨時代跑 (the amateur courtesy runner, e.g. for the catcher): someone runs for our runner without a substitution — the
+ * one on base only changes his name while he is out there; the row (and its run, steals) stays the batter's, with a note.
+ */
+export function courtesyRunner(s: RecordState, row: number, name: string): RecordState {
+  const r = s.runners.find((x) => x.row === row && x.side === 'us')
+  if (!r || !name) return s
+  const batting = s.batting.map((p, i) => (i === row ? { ...p, note: [p.note, `臨時代跑 ${name}`].filter(Boolean).join('；') } : p))
+  return { ...s, batting, runners: s.runners.map((x) => (x === r ? { ...x, name } : x)) }
+}
 export function pinchRunOpp(s: RecordState, row: number, name: string): RecordState {
   const runner = s.runners.find((r) => r.side === 'opp' && r.row === row)
   const pa = s.pitching[row]
@@ -635,6 +650,8 @@ export interface PAPlan {
   note?: string
   /** (三振, 保送…) how a runner set to 出局 on that pitch was put out: 盜壘失敗 (default), 牽制出局, 跑壘出局 */
   outHow?: Record<number, OutHow>
+  /** runner rows put out by the batted ball itself hitting them (rule 5.09(b)(7)): the nearest fielder's putout, no assist */
+  hitByBall?: number[]
 }
 export type OutHow = 'cs' | 'pk' | 'run'
 export const OUT_HOW_LABEL: Record<OutHow, string> = { cs: '盜壘失敗', pk: '牽制出局', run: '跑壘出局' }
@@ -862,6 +879,9 @@ export function defaultRbi(plan: PAPlan): number {
 
 /** Commit the plate appearance in progress. Returns the new state (half-inning ends automatically at 3 outs). */
 export function commitPA(s: RecordState, plan: PAPlan): RecordState {
+  // a pinch hitter who came in with two strikes and struck out: the strikeout (and the at-bat) is the batter he replaced's (rule 9.15(b))
+  const ph2 = s.phTwoStrikes
+  if (ph2) { const { phTwoStrikes: _p, ...rest } = s; void _p; s = rest }
   const side = offense(s)
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
@@ -876,7 +896,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     // 不知道; on a 失誤 result the extra bases came on that same error unless another fielder is named
     const onPlay = plan.errAdv?.length ? (plan.errBy?.length ? plan.errBy : plan.result === '失誤' ? [] : [UNKNOWN_FIELDER]) : []
     const oppErrors = [...(s.extras.oppErrors ?? []), ...onPlay]
-    batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note, ...(oppErrors.length ? { errors: oppErrors } : {}), ...oppFields(s.oppPitcher) })
+    batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: ph2 && plan.result === '三振' && ph2.in === slot?.name ? ph2.out : slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note, ...(oppErrors.length ? { errors: oppErrors } : {}), ...oppFields(s.oppPitcher) })
     rowIndex = batting.length - 1
   } else {
     // our errors: the ones pressed between pitches, then whose error the 失誤進壘 on the play was. On a 失誤 result the
@@ -909,7 +929,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const mistakes = new Set(plan.runningOuts ?? [])
   const runningOut = s.runners.flatMap((r) => {
     if (plan.runners[r.row] !== 'out' || !(mistakes.has(r.row) || outAtAsked(plan.result))) return []
-    return [{ at: base.pitches.length, kind: mistakes.has(r.row) ? 'out' : 'tag', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[r.row] ?? defaultOutAt(s, plan, r.row) }]
+    return [{ at: base.pitches.length, kind: mistakes.has(r.row) ? 'out' : plan.hitByBall?.includes(r.row) ? 'hbb' : 'tag', from: r.base, to: 'out' as const, play: true as const, outAt: plan.outAt?.[r.row] ?? defaultOutAt(s, plan, r.row) }]
   })
   // the batter who reached and was put out on the same play (a triple, then thrown out at home; a single stretched):
   // an out on the bases, marked as made on the play (record/timeline batterOutMark) — theirs too, so the box can say where
@@ -1005,7 +1025,7 @@ function withReliefRow(s: RecordState): RecordState {
 
 /** throw = 趁傳進壘: moved up on a throw (to another base, or back to the pitcher); no stat, the runner just advances.
  *  bk = 投手犯規 (balk): every runner moves up one (see balk); no column, BK is counted from the plays. */
-export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk' | 'di'
+export type RunnerEvent = 'sb' | 'cs' | 'wp' | 'pb' | 'err' | 'throw' | 'pk' | 'pkSafe' | 'advance' | 'score' | 'out' | 'bk' | 'di' | 'pocs'
 
 /** Something happened to a runner between pitches. `logAs` names the move in the play log when it differs from what
  *  is counted (the other runners moving on one wild pitch advance on that wild pitch, counted once). */
@@ -1013,7 +1033,7 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
   let runner = s.runners.find((r) => r.row === row && r.side === side)
   if (!runner) return s
   // an out on the bases by a reliever who has no row yet gets him one first (withReliefRow)
-  if (side === 'opp' && (ev === 'cs' || ev === 'pk' || ev === 'out')) s = withReliefRow(s)
+  if (side === 'opp' && (ev === 'cs' || ev === 'pk' || ev === 'out' || ev === 'pocs')) s = withReliefRow(s)
   // moving up into an occupied base pushes the runner ahead first: a double steal credits both, a wild pitch or an
   // error just moves him along (counted once), so two runners never share a base
   if (ev === 'sb' || ev === 'wp' || ev === 'pb' || ev === 'bk' || ev === 'err' || ev === 'throw' || ev === 'advance' || ev === 'di') {
@@ -1045,6 +1065,9 @@ export function runnerEvent(s: RecordState, row: number, side: Side, ev: RunnerE
       else if (errBy) extras.errors = [...(extras.errors ?? []), errBy]
       break
     case 'pk': dest = 'out'; if (side === 'us') (r as BattingPA).outOnBase += 1; else extras.pk += 1; break
+    // 牽制後盜壘失敗 (picked off, then caught going to the next base): the runner's 盜壘失敗, the pitcher's 牽制出局 —
+    // the pitcher and the first baseman make the play, not the catcher
+    case 'pocs': dest = 'out'; if (side === 'us') (r as BattingPA).cs += 1; else extras.pk += 1; break
     case 'pkSafe': extras.pka = (extras.pka ?? 0) + 1; break
     // 守備無視: the defence let him go — no stolen base
     case 'throw': case 'advance': case 'di': dest = advance(1); break

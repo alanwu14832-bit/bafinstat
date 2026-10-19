@@ -34,7 +34,7 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
@@ -505,6 +505,13 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     return <AdvChoice name={name} kind={kind} onPick={pick} erring={side === 'opp' ? 'us' : 'them'} />
   }
   const confirm = () => { if (!plan || problems.length || needBall || needErrBy) return; act((s) => { const x = baseOutsFirst(s, plan); return commitPA(x.s, x.plan) }, plan); setPlan(null); setErrOpen(false); lastBall.current = null; toBatter() }
+  // a runner out on a hit: was he hit by the batted ball? (rule 5.09(b)(7): the batter gets a single, the nearest fielder the putout)
+  const hitByChoice = (row: number) => {
+    if (!plan || plan.runners[row] !== 'out' || !liveBall(plan.result)) return undefined
+    const on = !!plan.hitByBall?.includes(row)
+    return <button type="button" aria-pressed={on} onClick={() => setPlan((p) => (p ? { ...p, hitByBall: on ? (p.hitByBall ?? []).filter((w) => w !== row) : [...(p.hitByBall ?? []), row] } : p))}
+      className={cx('h-9 pointer-fine:h-7 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer', on ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink-2 hover:bg-surface-2')}>被打擊球打到</button>
+  }
   // 三振／保送 with a runner set to 出局: how (盜壘失敗 unless picked otherwise)
   const outHowChoice = (row: number) => (plan && NO_BIP_OUT.has(plan.result) && plan.runners[row] === 'out'
     ? <span role="group" aria-label="怎麼出局" className="flex gap-1 flex-wrap">{(['cs', 'pk', 'run'] as const).map((k) => (
@@ -602,7 +609,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         {save.button && <Button variant={save.tone === 'failed' ? 'outline' : 'ghost'} size="sm" icon={<Save />} onClick={save.onSave} disabled={save.saving}>{save.saving ? '儲存中…' : save.button}</Button>}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? '離開全螢幕' : '全螢幕'}</Button>
+        <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? <><span className="max-[400px]:hidden">離開全螢幕</span><span className="min-[401px]:hidden">離開</span></> : '全螢幕'}</Button>
         <Button variant="ghost" size="sm" icon={<Type />} onClick={onToggleLarge} aria-pressed={large} title="按鈕和字放大一級，大太陽下比較好看（這台裝置會記住）">{large ? '一般字' : '大字'}</Button>
         <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
         {!practice && <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>}
@@ -793,7 +800,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {[...state.runners].sort((a, b) => b.base - a.base).map((r) => (
-                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name) ?? outHowChoice(r.row)}
+                      <DestRow key={r.row} label={`${r.base}B ${r.name}`} value={plan.runners[r.row] ?? r.base} onChange={(d) => setDest(r.row, d)} min={r.base} extra={throwToggle(r.row, r.name) ?? outHowChoice(r.row) ?? hitByChoice(r.row)}
                         mistake={side === 'us' && !NO_BIP_OUT.has(plan.result) ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined}
                         outAt={{ show: plan.runners[r.row] === 'out' && (!!plan.runningOuts?.includes(r.row) || outAtAsked(plan.result)), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
                     ))}
@@ -900,7 +907,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onEvent={(r, ev, errBy, outAt) => { act((s) => runnerEvent(s, r.row, r.side, ev, undefined, errBy, outAt)); setRunnerOpen(false) }}
         onAll={allUp}
         oppPinch={side === 'opp' ? { names: oppPinchNames, onPinch: (r, name) => { act((s) => pinchRunOpp(s, r.row, name)); setRunnerOpen(false) } } : undefined}
-        pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) } } : undefined} />
+        pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) }, onCourtesy: (r, name) => { act((s) => courtesyRunner(s, r.row, name)); setRunnerOpen(false) } } : undefined} />
       <SubSheet open={tool !== 'none'} onClose={() => setTool('none')} mode={tool === 'pitcher' ? 'pitcher' : 'lineup'} onMode={(m) => openTool(m)} state={state} side={side}
         batters={batterCands} pitchers={pitcherCands} pitchCount={pitchCount} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')} restNote={(n) => restNotes.get(n)}
         sub={sub} setSub={setSub} onPickPos={pickSubPos} canSub={canSub} onConfirmSub={confirmSub} fieldPos={fieldPos}
@@ -1212,7 +1219,8 @@ function RecordScreen({ practice }: { practice: boolean }) {
           {focus ? createPortal(
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
-                <div className="flex items-center gap-3 text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink truncate">{state.game.date}・vs {state.game.opponent}</span><span className={cx('truncate', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
+                {/* (two lines on a narrow phone: the game, then the sync state — neither cut short) */}
+                <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink">{state.game.date}・vs {state.game.opponent}</span><span className={cx(save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
                 <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} oppBatsOn={oppBatsOn} practice={practice} />
               </div>
             </div>, document.body)

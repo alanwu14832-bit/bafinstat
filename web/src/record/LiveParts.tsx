@@ -84,7 +84,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
             {rows.map((r) => (
               <div key={r.name} className="flex items-center gap-2 min-w-0">
                 <span className={cx('size-1.5 rounded-full shrink-0', r.bat ? 'bg-[var(--accent-board,var(--accent))]' : 'bg-transparent')} aria-hidden />
-                <span className="text-[13px] font-medium truncate min-w-0 flex-1" style={{ color: r.bat ? BOARD.ink : BOARD.muted }}>{r.name}</span>
+                <span className="text-[13px] max-[380px]:text-[11px] max-[380px]:tracking-tight font-medium truncate min-w-0 flex-1" style={{ color: r.bat ? BOARD.ink : BOARD.muted }}>{r.name}</span>
                 <Num value={r.score} className="figure text-[24px] font-bold leading-[1.05] tabular-nums min-w-5 text-right" />
               </div>
             ))}
@@ -131,7 +131,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
 /* ------------------------------------------------------------------ runner sheet */
 export const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: Side; out?: boolean }> = [
   { ev: 'sb', label: '盜壘' }, { ev: 'wp', label: '暴投進壘' }, { ev: 'pb', label: '捕逸進壘' }, { ev: 'err', label: '失誤進壘' }, { ev: 'throw', label: '趁傳進壘' }, { ev: 'advance', label: '進一個壘' }, { ev: 'di', label: '守備無視' },
-  { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'out', label: '壘死', out: true },
+  { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'pocs', label: '牽制後盜壘失敗', out: true }, { ev: 'out', label: '壘死', out: true },
 ]
 // (pressed: the ink colours replace the surface ones — added after them, bg-surface would still win in the stylesheet)
 const bigBtn = (out?: boolean, on?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border text-[14px] font-medium cursor-pointer transition-colors', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2 active:bg-surface-3', out && 'text-critical'))
@@ -150,7 +150,7 @@ export interface RunnerSheetProps {
   /** 暴投 / 捕逸 / 投手犯規 with everyone moving up */
   onAll: (kind: 'wp' | 'pb' | 'bk') => void
   /** 代跑 for our runner: the names that can come in, and whether that runner has a batting slot to take over */
-  pinch?: { names: string[]; disabled: Set<string>; tag: (n: string) => string | undefined; can: (r: Runner) => boolean; onPinch: (r: Runner, name: string) => void }
+  pinch?: { names: string[]; disabled: Set<string>; tag: (n: string) => string | undefined; can: (r: Runner) => boolean; onPinch: (r: Runner, name: string) => void; /** 臨時代跑: no substitution */ onCourtesy?: (r: Runner, name: string) => void }
   /** 對方代跑 for their runner: names seen against this opponent (datalist) */
   oppPinch?: { names: string[]; onPinch: (r: Runner, name: string) => void }
   /** where the plate appearance stands, e.g. 「1 出局・第 3 球後」 */
@@ -183,6 +183,7 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
   const [errFor, setErrFor] = useState<number | null>(null)
   // 壘死 asks which base he was put out at (one tap), like 失誤進壘 asks whose error
   const [outFor, setOutFor] = useState<number | null>(null)
+  const [courtesy, setCourtesy] = useState(false)
   useEffect(() => { if (!open) { setErrFor(null); setOutFor(null) } }, [open])
   const asking = r && errFor === r.row
   const askingOut = r && outFor === r.row
@@ -230,10 +231,16 @@ export function RunnerSheet({ open, onClose, runners, side, picked, onPick, onEv
             {pinch && r.side === 'us' && pinch.can(r) && (
               <div className="flex flex-col gap-2 pt-3 border-t border-border">
                 <span className="text-[12px] text-ink-2">代跑：點一位換上 {r.name}</span>
+                {pinch.onCourtesy && (
+                  <label className="flex items-center gap-2 text-[12px] text-ink-2 cursor-pointer w-fit">
+                    <input type="checkbox" checked={courtesy} onChange={(e) => setCourtesy(e.target.checked)} className="size-4 accent-[var(--ink)]" />
+                    臨時代跑（不算換人，例如替捕手跑；得分、盜壘仍記在 {r.name}）
+                  </label>
+                )}
                 {pinch.names.length ? (
                   <div className="flex flex-wrap gap-1.5">
                     {pinch.names.filter((n) => n !== r.name).map((n) => (
-                      <button key={n} type="button" disabled={pinch.disabled.has(n)} onClick={() => pinch.onPinch(r, n)} className="h-10 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer disabled:opacity-40 disabled:cursor-default">
+                      <button key={n} type="button" disabled={!courtesy && pinch.disabled.has(n)} onClick={() => (courtesy && pinch.onCourtesy ? pinch.onCourtesy(r, n) : pinch.onPinch(r, n))} className="h-10 px-3 rounded-[var(--radius-sm)] border border-border bg-surface text-[13px] font-medium hover:bg-surface-2 cursor-pointer disabled:opacity-40 disabled:cursor-default">
                         {n}{pinch.tag(n) && <span className="text-[11px] text-muted ml-0.5">{pinch.tag(n)}</span>}
                       </button>
                     ))}
