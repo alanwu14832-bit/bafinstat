@@ -65,6 +65,12 @@ export const isSingle = (r: string) => r === '一安' || r === '內安'
 export const TRAJ_OF: Record<string, string> = { 內滾: 'G', 雙殺: 'G', 犧觸: 'G', 野選: 'G', 內飛: 'P', 外飛: 'F', 界外飛: 'F', 犧飛: 'F' }
 /** Results without a batted ball: no 落點／軌跡／強度 (every other result put the ball in play, 全壘打 included). */
 // (其他出局: batting out of order, the batter's interference — no ball to place)
+/** 「代跑 12號（第 2 球後換上）」 on the plate appearance their 代跑 came in during (what 文字轉播 places him by). */
+export const oppPrMark = (label: string, at: number) => `代跑 ${label === OPP_PR_UNNAMED ? '對方代跑' : label}（第 ${at} 球後換上）`
+/** The 代跑 marks of a row's note: who (as stored on the runner's row) and after how many pitches. */
+export function oppPrMarks(note?: string): Array<{ label: string; at: number }> {
+  return [...(note ?? '').matchAll(/代跑 (.+?)（第 (\d+) 球後換上）/g)].map((m) => ({ label: m[1] === '對方代跑' ? OPP_PR_UNNAMED : m[1], at: Number(m[2]) }))
+}
 export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙', '其他出局'])
 /** A batted ball (BIP): a real plate appearance whose result put the ball in play, whether or not its 落點／軌跡／強度 were recorded. */
 export const isBattedBall = (r: { result: string }) => isPA(r) && !NO_BATTED_BALL.has(r.result)

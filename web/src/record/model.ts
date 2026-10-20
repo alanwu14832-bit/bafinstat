@@ -26,7 +26,7 @@
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
-import { END_PITCH, HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
+import { END_PITCH, HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, oppPrMark, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
 import { batterOutMark, inferHalf, leftMarks, reachedOn } from './timeline'
 import { earnedCalls } from './earned'
@@ -45,6 +45,10 @@ export interface Extras { sba: number; cs: number; wp: number; pb: number; pk: n
 
 export interface RecordState {
   game: Game
+  /** their pinch hitter came in with two strikes (rule 9.15(b)): a strikeout is `was`'s (the name the row would have had; '' = by slot) */
+  oppPh2?: { was: string }
+  /** their 代跑 put in during the plate appearance in progress: who, after how many pitches (noted on that row) */
+  oppPrAt?: Array<{ label: string; at: number }>
   /** a pinch hitter came in with two strikes on the batter (rule 9.15(b)): a strikeout goes to `out` */
   phTwoStrikes?: { in: string; out: string }
   /** 保留比賽: when the game was suspended (to be resumed another day); cleared by 恢復比賽 */
@@ -392,6 +396,8 @@ export const setOppBatter = (s: RecordState, name: string): RecordState => ({ ..
 export function pinchHitOpp(s: RecordState, name: string): RecordState {
   const typed = name.trim().slice(0, 40)
   const next: RecordState = { ...clearOppBats(s, s.oppOrder), oppBatter: oppPinchHitter(typed) }
+  // with two strikes on the batter: a strikeout is still the batter he replaced's (rule 9.15(b))
+  if (offense(s) === 'opp' && count(s.pitches).strikes >= 2 && !s.oppPh2) next.oppPh2 = { was: oppBatterOf(s) }
   if (s.oppNames && typed) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === s.oppOrder - 1 ? typed : n))
   return next
 }
@@ -546,6 +552,10 @@ export function pinchRunOpp(s: RecordState, row: number, name: string): RecordSt
     ...(pa.oppOrder ? clearOppBats(s, pa.oppOrder) : s),
     runners: s.runners.map((r) => (r === runner ? { ...r, name: label } : r)),
     pitching: s.pitching.map((p, i) => (i === row ? { ...p, runner: label } : p)),
+    // when he came in: written on the plate appearance in progress once it is sent
+    // (only when it matters: during a count, or not right after his own plate appearance — else the 文字轉播 places him
+    // before the next batter anyway)
+    ...(offense(s) === 'opp' && (s.pitches.length > 0 || s.pitching.length > row + 1) ? { oppPrAt: [...(s.oppPrAt ?? []), { label, at: s.pitches.length }] } : {}),
   }
   const slot = pa.oppOrder
   if (s.oppNames && slot && slot >= 1 && slot <= 9) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === slot - 1 ? typed : n))
@@ -887,7 +897,9 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const pitching = s.pitching.map((p) => ({ ...p }))
   let outs = s.outs
   const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: withInPlay(s.pitches, plan.result), result: plan.result, loc: plan.loc, traj: plan.traj, quality: plan.quality }
-  const note = [s.extras.pka ? `牽制 ${s.extras.pka} 次` : '', plan.note?.trim() ?? ''].filter(Boolean).join('；') || undefined
+  // (their 代跑 put in during this plate appearance: when, for the 文字轉播 — data/broadcast.ts oppPrMarks)
+  const prs = side === 'opp' ? (s.oppPrAt ?? []).map((x) => oppPrMark(x.label, x.at)) : []
+  const note = [s.extras.pka ? `牽制 ${s.extras.pka} 次` : '', ...prs, plan.note?.trim() ?? ''].filter(Boolean).join('；') || undefined
   const extras = { sba: s.extras.sba, cs: s.extras.cs, wp: s.extras.wp, pb: s.extras.pb, pk: s.extras.pk }
   let rowIndex: number
   if (side === 'us') {
@@ -909,7 +921,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
       errors.push(pos)
     }
     const bats = oppBatsNow(s)
-    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: oppBatterOf(s) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}), note })
+    pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: (s.oppPh2 && plan.result === '三振' ? s.oppPh2.was : oppBatterOf(s)) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}), note })
     rowIndex = pitching.length - 1
   }
   // the plays between pitches, then 趁傳進壘／失誤進壘 on the batted ball (from where the hit alone put him)
@@ -982,6 +994,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   next.runners = runners.sort((a, b) => b.base - a.base)
   next.pitches = []
   delete next.priorPitchers
+  if (side === 'opp') { delete next.oppPrAt; delete next.oppPh2 }
   next.extras = { ...EXTRAS0 }
   next.plays = []
   if (side === 'us') next.slot = (s.slot + 1) % s.lineup.length
@@ -1195,8 +1208,8 @@ export function endHalf(s: RecordState): RecordState {
   // their half over (the third out between pitches, or 結束半局): the inning is complete now, so its runs are called
   // again the way the saved game reads them
   if (offense(s) === 'opp') recallEarned(pitching, s.inning, s.earnedByHand)
-  const { priorPitchers: _pp, ...kept } = s
-  void _pp
+  const { priorPitchers: _pp, oppPrAt: _pr, oppPh2: _ph, ...kept } = s
+  void _pp; void _pr; void _ph
   return { ...kept, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
 }
 

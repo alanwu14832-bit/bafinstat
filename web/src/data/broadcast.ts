@@ -10,7 +10,7 @@
  * The board's numbers live here too, one format each: the inning 「5局上」 (feed headers in Chinese numerals 「三局上」),
  * the count 「1-2」 (balls first), 「45 球」, a pitcher's line today 「2.1 局 5 安 2 失分 1 四死 3 三振」.
  */
-import { HIT_BASE_COUNT, isOppPinchHit, isNoBatter, isPA, isPlaced, pitchesByPitcher, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PriorPitch, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isOppPinchHit, isNoBatter, isPA, isPlaced, oppPrMarks, pitchesByPitcher, OPP_BATS_LABEL, OPP_HAND_LABEL, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type DayRosterSub, type Game, type OppHand, type PAResult, type PitchingPA, type PriorPitch, type PlayEvent } from './types'
 import { WHERE, countBefore } from './gameText'
 import { SEASON_START, seasonOfDate } from './seasons'
 import { playWhen } from './plays'
@@ -335,6 +335,16 @@ interface Anchors { before: Map<string, FeedItem[]>; start: Map<string, FeedItem
 const push = (m: Map<string, FeedItem[]>, k: string, it: FeedItem) => { const l = m.get(k); if (l) l.push(it); else m.set(k, [it]) }
 const hkey = (inning: number, half: Half) => `${inning}${half}`
 
+/** Their 代跑 by runner row: the plate appearance he came in during (k) and after how many of its pitches (n), from its note. */
+function oppPrFrom(pitching: PitchingPA[]): Map<number, { k: number; n: number }> {
+  const out = new Map<number, { k: number; n: number }>()
+  pitching.forEach((p, k) => {
+    for (const m of oppPrMarks(p.note)) {
+      for (let j = k - 1; j >= 0 && pitching[j].inning === p.inning; j--) if (pitching[j].runner === m.label && !out.has(j)) { out.set(j, { k, n: m.at }); break }
+    }
+  })
+  return out
+}
 /** Where each substitution goes (none is stored with its plate appearance, so it is inferred; see the header). */
 function placeSubs(src: FeedSource, weTop: boolean): Anchors {
   const a: Anchors = { before: new Map(), start: new Map(), live: new Map(), end: new Map() }
@@ -387,7 +397,10 @@ function placeSubs(src: FeedSource, weTop: boolean): Anchors {
     if (isPA(p) && isOppPinchHit(p.oppBatter)) push(a.before, `opp:${i}`, { kind: 'sub', key: `oppPH:${i}`, side: 'opp', text: oppPinchHitSub(from(p.oppOrder), oppBatterName(p.oppBatter)) })
     if (p.runner) {
       const it: FeedItem = { kind: 'sub', key: `oppPR:${i}`, side: 'opp', text: oppPinchRunSub(oppBatterName(p.oppBatter) || `第 ${p.oppOrder ?? '?'} 棒`, p.runner) }
-      const k = nextPA(pitching, i, p.inning)
+      // noted with the plate appearance he came in during: before it (no pitch yet), else after it
+      const when = oppPrFrom(pitching).get(i)
+      const after = when && when.n > 0 ? nextPA(pitching, when.k, p.inning) : -1
+      const k = when ? (when.n > 0 ? after : when.k) : nextPA(pitching, i, p.inning)
       const h = hkey(p.inning, halfOf('opp', weTop))
       if (k >= 0) push(a.before, `opp:${k}`, it)
       else if (live && liveSide === 'opp' && liveHalf === h) push(a.live, liveHalf, it)
@@ -458,6 +471,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
   const scoreNow = (): Score2 => (weTop ? { away: total.us, home: total.opp } : { away: total.opp, home: total.us })
   // our home runs so far this season, by name (only for batters with an earlier game this season)
   const hrSeen = new Map<string, number>()
+  const prFrom = oppPrFrom(src.pitching)
 
   return order.map(({ inning, half }) => {
     const side = sideOf(half)
@@ -480,6 +494,8 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
     // (the half's last plate appearance, when nothing follows it: on /live the one in progress does)
     const lastStep = isLive ? undefined : timeline?.steps.at(-1)
     const name = (row: number) => runnerLabel(rows[row], side)
+    // (their 代跑, noted with the plate appearance he came in during: the plays before that are still the batter's)
+    const nameAt = (row: number, at: number, pitch: number) => { const p = side === 'opp' ? prFrom.get(row) : undefined; return p && (at < p.k || (at === p.k && pitch <= p.n)) ? batterLabel(rows[row], side) : name(row) }
     const pitcherOf = (r: Row) => (side === 'opp' ? (r as PitchingPA).pitcher : oppPitcherName({ name: (r as BattingPA).oppPitcher, hand: (r as BattingPA).oppHand }) || '對方投手')
     let outs = 0
     // the half's runs, by the line score's rule (our 得分 flags, their R/ER codes)
@@ -507,7 +523,7 @@ export function buildFeed(src: FeedSource): FeedHalf[] {
       const later: FeedItem[] = []
       let reached: boolean | undefined
       if (st) {
-        moves = groupMoves(st.moves.map((m) => ({ at: m.at, kind: m.kind, name: name(m.row), to: m.to })))
+        moves = groupMoves(st.moves.map((m) => ({ at: m.at, kind: m.kind, name: nameAt(m.row, i, m.at), to: m.to })))
         runs = moves.reduce((a, m) => a + m.runs, 0) + homesIn(st)
         madeOuts = outsIn(st)
         const mid = midOf(st)

@@ -10,7 +10,7 @@ import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
 import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
 import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type GameRules, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, isMove, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -180,7 +180,7 @@ const pitCols: Col<PitDraft>[] = [
 ]
 type StarterDraft = GameDayRoster['starters'][number]
 /** what 修改資料 keeps on this device until it is saved (editDraft.ts) */
-interface EditDraft { game: Game; bat: BatDraft[]; pit: PitDraft[]; fld: FieldingLine[]; starters: StarterDraft[]; bench: string[]; subs: DayRosterSub[]; reentry: boolean; basis: { game: Game; batting: BattingPA[]; pitching: PitchingPA[] }; touched: string[] }
+interface EditDraft { rules?: GameRules; game: Game; bat: BatDraft[]; pit: PitDraft[]; fld: FieldingLine[]; starters: StarterDraft[]; bench: string[]; subs: DayRosterSub[]; reentry: boolean; basis: { game: Game; batting: BattingPA[]; pitching: PitchingPA[] }; touched: string[] }
 const starterCols: Col<StarterDraft>[] = [{ key: 'order', label: '棒次', kind: 'int', w: 44 }, { key: 'pos', label: '守位', kind: 'select', options: POSITIONS, optionLabel: posNum, w: 64 }, { key: 'name', label: '球員', kind: 'name', w: 110 }]
 const chip = (active: boolean) => cx('h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border text-[13px] font-medium cursor-pointer transition-colors motion-reduce:transition-none', active ? 'border-ink bg-ink text-bg' : 'border-border bg-surface text-ink hover:bg-surface-2')
 const subText = (s: DayRosterSub) => `${s.inning ? `${s.inning}局${s.half === 'bottom' ? '下' : '上'} ` : ''}${isMove(s) ? `換守位 ${s.in} 改守 ${s.pos}` : `${SUB_KIND_LABEL[s.kind]} ${s.in}${s.out ? ` 替 ${s.out}` : ''}${s.pos ? `（${s.pos}）` : ''}`}`
@@ -214,6 +214,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [bench, setBench] = useState<string[]>(() => initial.game.dayRoster?.bench ?? [])
   const [subs, setSubs] = useState<DayRosterSub[]>(() => initial.game.dayRoster?.subs ?? [])
   const [reentry, setReentry] = useState(!!initial.game.dayRoster?.reentry)
+  // the rules it was played by (紀錄比賽 saves them; an older game's can be set here): 獲勝機率 reads them
+  const [rules, setRules] = useState<GameRules | undefined>(initial.game.dayRoster?.rules)
   const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>('bat')
   // plate appearances: tap one to edit it with the recording buttons (default), or the whole table at once
   const [paView, setPaView] = useState<'tap' | 'table'>('tap')
@@ -688,15 +690,15 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     batting: x.batting.map((p) => JSON.stringify(p)), pitching: x.pitching.map((p) => JSON.stringify(p)),
   })
   const [pristine] = useState(() => snap({ game: { ...initial.game }, batting: initial.batting.map((p) => fromBatDraft(toBatDraft(p))), pitching: initial.pitching.map((p) => fromPitDraft(toPitDraft(p))), fielding: initial.fielding.map((f) => ({ ...f })),
-    roster: { starters: initial.game.dayRoster?.starters ?? [], bench: initial.game.dayRoster?.bench ?? [], subs: initial.game.dayRoster?.subs ?? [], reentry: !!initial.game.dayRoster?.reentry } }))
+    roster: { starters: initial.game.dayRoster?.starters ?? [], bench: initial.game.dayRoster?.bench ?? [], subs: initial.game.dayRoster?.subs ?? [], reentry: !!initial.game.dayRoster?.reentry, rules: initial.game.dayRoster?.rules } }))
   const [baseKey] = useState(() => hashOf(initial))
-  const changes = useMemo(() => changeCount(pristine, snap({ game, batting: batRows, pitching: pitRows, fielding: fld, roster: { starters, bench, subs, reentry } })), [pristine, game, batRows, pitRows, fld, starters, bench, subs, reentry])
+  const changes = useMemo(() => changeCount(pristine, snap({ game, batting: batRows, pitching: pitRows, fielding: fld, roster: { starters, bench, subs, reentry, rules } })), [pristine, game, batRows, pitRows, fld, starters, bench, subs, reentry, rules])
   // a draft left on this device: shown (instead of the editor) until 接著改 or 丟掉 is picked
   const [stored, setStored] = useState(() => readEditDraft<EditDraft>(initial.game.id))
   useEffect(() => {
     if (stored) return
-    writeEditDraft<EditDraft>(game.id, changes ? { savedAt: new Date().toISOString(), base: baseKey, changes, game, bat, pit, fld, starters, bench, subs, reentry, basis, touched: [...touched] } : null)
-  }, [stored, changes, baseKey, game, bat, pit, fld, starters, bench, subs, reentry, basis, touched])
+    writeEditDraft<EditDraft>(game.id, changes ? { savedAt: new Date().toISOString(), base: baseKey, changes, game, bat, pit, fld, starters, bench, subs, reentry, rules, basis, touched: [...touched] } : null)
+  }, [stored, changes, baseKey, game, bat, pit, fld, starters, bench, subs, reentry, rules, basis, touched])
   const changesRef = useRef(changes)
   useEffect(() => { changesRef.current = changes }, [changes])
   useEffect(() => { setUnsaved(() => changesRef.current); return () => setUnsaved(null) }, [])
@@ -708,7 +710,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     return () => window.removeEventListener('beforeunload', warn)
   }, [changes])
   const resume = (d: EditDraft) => {
-    setGame(d.game); setBat(d.bat); setPit(d.pit); setFld(d.fld); setStarters(d.starters); setBench(d.bench); setSubs(d.subs); setReentry(d.reentry)
+    setGame(d.game); setBat(d.bat); setPit(d.pit); setFld(d.fld); setStarters(d.starters); setBench(d.bench); setSubs(d.subs); setReentry(d.reentry); setRules(d.rules)
     setBasis(d.basis); setTouched(new Set(d.touched)); setSel(null); setStored(null)
   }
   const cancel = () => {
@@ -742,7 +744,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     }
     // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster (the rules the
     // game was played by stay)
-    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules: initial.game.dayRoster?.rules })
+    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules })
     try {
       const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
       const pitching = pit.map(fromPitDraft).filter((p) => p.pitcher.trim())
@@ -808,6 +810,11 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
             {holdHints.length > 0 && <span className="text-[12px] text-muted">建議：救援情境上場、拿到至少 1 個出局、退場時仍領先（勝投、救援不算）</span>}
           </div>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
+          {/* (stored with the 當日登錄名單: a game without one keeps the team's rules) */}
+          {(starters.length > 0 || bench.length > 0 || subs.length > 0) && <>
+            <Field label="預定局數" hint="算獲勝機率用"><Input type="number" min={1} max={12} value={rules?.innings ?? ''} onChange={(e) => { const n = Number(e.target.value); setRules(n ? { innings: n, tiebreakFrom: rules?.tiebreakBases ? n + 1 : null, tiebreakBases: rules?.tiebreakBases ?? '' } : undefined) }} className="tnum" /></Field>
+            <Field label="突破僵局"><Select value={rules?.tiebreakBases ?? ''} disabled={!rules} onChange={(e) => rules && setRules({ ...rules, tiebreakBases: e.target.value, tiebreakFrom: e.target.value ? rules.innings + 1 : null })} options={[{ value: '', label: '不採用' }, { value: '12', label: '下一局起一、二壘' }, { value: '2', label: '下一局起二壘' }, { value: '123', label: '下一局起滿壘' }]} className="w-full" /></Field>
+          </>}
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>
         </div>}
       </section>
