@@ -107,3 +107,14 @@ describe('臨時代跑', () => {
     expect(s.subs ?? []).toHaveLength(0)
   })
 })
+
+describe('rule 9.15(b), their side', () => {
+  it('their pinch hitter with two strikes strikes out: the row is the batter he replaced’s', async () => {
+    const { pinchHitOpp } = await import('./model')
+    let s = addPitch(addPitch(newGame(game('主'), lineup, '壬', { oppNames: true, oppLineup: ['王', '林'] } as never), 'SS'), 'SS')
+    s = pinchHitOpp(s, '12號')
+    s = addPitch(s, 'SS')
+    s = commitPA(s, defaultPlan(s, '三振'))
+    expect(s.pitching[0].oppBatter).toBe('王')
+  })
+})

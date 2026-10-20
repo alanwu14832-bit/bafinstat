@@ -115,6 +115,22 @@ export function buildScoresheet(rows: Row[], side: Side, opts: { innings: number
         for (let n = have('SB'); n < (b.sb ?? 0); n++) notes[k].push('SB')
         for (let n = have('CS'); n < (b.cs ?? 0); n++) notes[k].push('CS')
       }
+      // theirs: a runner put out on the bases for the half's last out before the next batter's plate appearance ended (a
+      // 盜壘失敗 or 牽制 then: record/model settlePending keeps only the count, on the half's last row) — no play shows it,
+      // so the count left over marks the runner whose out nothing else explains
+      if (side === 'pit') {
+        const moves = half.steps.flatMap((st) => st.moves)
+        let cs = idx.reduce((a, k) => a + ((rows[k] as PitchingPA).cs || 0), 0) - moves.filter((m) => m.kind === 'cs').length
+        let pk = idx.reduce((a, k) => a + ((rows[k] as PitchingPA).pk || 0), 0) - moves.filter((m) => m.kind === 'pk' || m.kind === 'pocs').length
+        for (const k of idx) {
+          if (cs <= 0 && pk <= 0) break
+          if (!OUT_NO[rows[k].code ?? '']) continue
+          // (his own out at the plate, or a play that shows it; a batter who reached is out later on the bases)
+          const shown = half.steps.some((st) => (st.index === k && st.batter === 'out' && batterEndFor(rows[k].result) === 'out') || st.dest[k] === 'out' || st.moves.some((m) => m.row === k && m.to === 'out'))
+          if (shown) continue
+          if (cs > 0) { notes[k].push('CS'); cs-- } else { notes[k].push('PK'); pk-- }
+        }
+      }
       half.steps.forEach((st, j) => {
         const k = st.index
         const r = rows[k]
