@@ -1,9 +1,14 @@
 import { summarizeGame, type GameSummary } from './stats'
 import type { BattingPA, Dataset, Filters, Game } from './types'
+import { isIntra } from './intrasquad'
 
 export interface FilteredData {
+  /** every game counted (a 隊內賽's two sides too, when the 隊內賽 filter counts them) */
   games: Game[]
+  /** the team's games (勝敗, 得失分, 走勢): never a 隊內賽 */
   summaries: GameSummary[]
+  /** every game counted, 隊內賽 sides included (a player's game log, the score by inning his pitching needs) */
+  allSummaries: GameSummary[]
   batting: BattingPA[]
   pitching: Dataset['pitching']
   fielding: Dataset['fielding']
@@ -42,7 +47,7 @@ export function applyFilters(ds: Dataset, f: Filters): FilteredData {
   const gameIds = new Set(games.map((g) => g.id))
   const pos = f.position
   return {
-    games, summaries, gameIds,
+    games, summaries: summaries.filter((s) => !isIntra(s.game)), allSummaries: summaries, gameIds,
     batting: ds.batting.filter((p) => gameIds.has(p.gameId) && (pos === 'all' || (p.pos ?? '') === pos)),
     pitching: ds.pitching.filter((p) => gameIds.has(p.gameId)),
     fielding: ds.fielding.filter((p) => gameIds.has(p.gameId) && (pos === 'all' || p.pos === pos)),

@@ -23,6 +23,7 @@ import { hhmm } from '../lib/dates'
 import { useLiveGames } from '../hooks/useLiveGames'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
+import { withSideNames } from '../data/intrasquad'
 import { HIT_BASE_COUNT, OPP_BATS_LABEL, oppBatterName } from '../data/types'
 import { cx } from '../lib/format'
 import { NON_AB_RESULTS } from '../data/stats'
@@ -181,8 +182,10 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const ended = !inPlay && s.half === 'top' && s.inning > 1
   const lineOf = (line: number[], half: 'top' | 'bottom'): BoardTeam['line'] => (ended ? line.slice(0, s.inning - 1) : line).map((v, i) => (!inPlay && half === 'bottom' && s.half === 'bottom' && i + 1 === s.inning ? 'X' : played(i, half) ? v : null))
   const usHalf: 'top' | 'bottom' = weTop ? 'top' : 'bottom', oppHalf: 'top' | 'bottom' = weTop ? 'bottom' : 'top'
-  const markUs = (size: number) => <TeamLogo size={size} />, markOpp = (size: number) => <OppMark name={s.game.opponent} size={size} />
-  const usTeam: BoardTeam = { name: TEAM_NAME, line: lineOf(sc.lineUs, usHalf), r: sc.us, h: hitsUs, e: errorsUs, us: true, mark: markUs(18) }
+  // 隊內賽: both sides are ours (「我隊」「對方」 read as their names)
+  const names = { us: s.intra?.team ?? TEAM_NAME, opp: s.game.opponent }
+  const markUs = (size: number) => <TeamLogo size={size} />, markOpp = (size: number) => (s.intra ? <TeamLogo size={size} /> : <OppMark name={s.game.opponent} size={size} />)
+  const usTeam: BoardTeam = { name: names.us, line: lineOf(sc.lineUs, usHalf), r: sc.us, h: hitsUs, e: errorsUs, us: true, mark: markUs(18) }
   const oppTeam: BoardTeam = { name: s.game.opponent, line: lineOf(sc.lineOpp, oppHalf), r: sc.opp, h: hitsOpp, e: errorsOpp, us: false, mark: markOpp(18) }
   const top = weTop ? usTeam : oppTeam, bottom = weTop ? oppTeam : usTeam
 
@@ -210,7 +213,10 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const fresh = s.outs === 0 && !s.pitches.length && !s.plays?.length && !(side === 'us' ? s.batting : s.pitching).some((r) => r.inning === s.inning)
   const leadoff = fresh && inPlay ? upList(side === 'us' ? ourFrom(s, s.slot, 3) : oppFrom(s, s.oppOrder, 3), { opp: side === 'opp' }) : ''
   const priorHr = useMemo(() => hrCounts([...ctx.battingBy.values()].flat()), [ctx])
-  const feed = useMemo(() => buildFeed({ homeAway: s.game.homeAway, opponent: s.game.opponent, batting: s.batting, pitching: s.pitching, subs: s.subs, priorHr, ...(inPlay ? { live: liveSourceOf(s, leadoff) } : {}) }),
+  const feed = useMemo(() => {
+    const f = buildFeed({ homeAway: s.game.homeAway, opponent: s.game.opponent, batting: s.batting, pitching: s.pitching, subs: s.subs, priorHr: s.intra ? undefined : priorHr, ...(inPlay ? { live: liveSourceOf(s, leadoff) } : {}) })
+    return s.intra ? withSideNames(f, { us: s.intra.team, opp: s.game.opponent }) : f
+  },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [live.updatedAt, s.batting.length, s.pitching.length, s.pitches.length, s.plays?.length, s.subs?.length, s.inning, s.half, inPlay, leadoff, priorHr])
   const latest = latestItem(feed)
@@ -242,12 +248,12 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
 
   // the matchup: the pitcher defending, then the batter
   const ourP = pitcherToday(s.pitching, s.pitcher, side === 'opp' ? liveSplit(s).current : 0, side === 'opp' ? s.priorPitchers : undefined)
-  const pitcherName = side === 'opp' ? s.pitcher || '投手' : oppPitcherText(s.oppPitcher) || '對方投手'
+  const pitcherName = side === 'opp' ? s.pitcher || '投手' : oppPitcherText(s.oppPitcher) || (s.intra ? `${names.opp}投手` : '對方投手')
   const pitchCount = side === 'opp' ? ourP.pc : oppPitchCount(s)
   const pitcherLine = side === 'opp' ? ourP.line : oppPitcherToday(oppStintRows(s.batting, s.oppPitcher, s.oppPitcherFrom))
   const mine = batterRowsToday(s)
   const ab = mine.filter((p) => !NON_AB_RESULTS.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length
-  const batterName = side === 'us' ? slot?.name ?? '' : oppBatterName(oppBatterOf(s)) || `對方第 ${s.oppOrder} 棒`
+  const batterName = side === 'us' ? slot?.name ?? '' : oppBatterName(oppBatterOf(s)) || (s.intra ? `${names.opp}第 ${s.oppOrder} 棒` : `對方第 ${s.oppOrder} 棒`)
   // 對方打者左打／右打 (when the recorder picked one for him)
   const oppSide = side === 'opp' ? s.oppBatsBySlot?.[s.oppOrder] : undefined
   const batsTag = oppSide === 'L' || oppSide === 'R' ? OPP_BATS_LABEL[oppSide] : ''
@@ -265,7 +271,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
     if (!p) return
     // (the newest play of either side: in the bottom half that is theirs, also when we are the away team)
     const hr = rows > p.rows && latest?.kind === 'pa' && latest.hr
-    const text = hr ? '全壘打！' : sc.us > p.us ? `得分！${TEAM_NAME}` : sc.opp > p.opp ? `${s.game.opponent} 得分` : null
+    const text = hr ? '全壘打！' : sc.us > p.us ? `得分！${names.us}` : sc.opp > p.opp ? `${s.game.opponent} 得分` : null
     if (!text) return
     setFlash({ text, us: hr ? latest?.side === 'us' : sc.us > p.us, key: Date.now() })
     const id = window.setTimeout(() => setFlash(null), 3600)

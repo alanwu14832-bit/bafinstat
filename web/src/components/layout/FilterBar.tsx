@@ -38,6 +38,7 @@ export function activeFilterCount(f: Filters): number {
   if (f.opponent !== DEFAULT_FILTERS.opponent) n++
   if (f.homeAway !== DEFAULT_FILTERS.homeAway) n++
   if (f.result !== DEFAULT_FILTERS.result) n++
+  if (f.intra !== DEFAULT_FILTERS.intra) n++
   return n
 }
 
@@ -84,6 +85,8 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
       options={[{ value: 'all', label: '全部' }, { value: '主', label: '主場' }, { value: '客', label: '客場' }]} />,
     <Select key="r" id={`filter-result${stack ? "-sheet" : ""}`} label="勝敗" size={size} value={filters.result} onChange={(e) => setFilters({ result: e.target.value as Filters['result'] })} className={stack ? 'w-full' : undefined}
       options={[{ value: 'all', label: '全部' }, { value: 'W', label: '勝' }, { value: 'L', label: '敗' }, { value: 'T', label: '和' }]} />,
+    <Select key="i" id={`filter-intra${stack ? "-sheet" : ""}`} label="隊內賽" size={size} value={filters.intra} onChange={(e) => setFilters({ intra: e.target.value as Filters['intra'] })} className={stack ? 'w-full' : undefined}
+      options={[{ value: 'exclude', label: '不含' }, { value: 'include', label: '含隊內賽' }, { value: 'only', label: '只看隊內賽' }]} />,
   ]
 
   if (stack) {

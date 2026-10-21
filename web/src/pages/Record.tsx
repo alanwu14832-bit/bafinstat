@@ -38,12 +38,14 @@ import {
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
+  intraPitcher, intraSub, otherSide, appeared,
   type Base, type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppBatsChips, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
 import { describeChange } from '../record/summary'
 import { reachedOn } from '../record/timeline'
 import { earnedAll } from '../record/earned'
+import { sideText } from '../data/intrasquad'
 import { LiveBar, PracticeTag, RunnerSheet, SubSheet } from '../record/LiveParts'
 
 import { DRAFT_KEY, PRACTICE_KEY, readDraft, writeDraft } from '../record/draft'
@@ -162,6 +164,18 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   const benchTag = (n: string) => (bench.includes(n) && !starting.has(n) ? '（板凳）' : undefined)
   const [error, setError] = useState<string | null>(null)
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
+  // 隊內賽: both sides are our players — the first side is the lineup above (its name `teamA`), the second one is the
+  // opponent (game.opponent) with its own lineup and pitcher; both may bring players back (data/intrasquad.ts)
+  const [intraOn, setIntraOn] = useState(false)
+  const [teamA, setTeamA] = useState('紅隊')
+  const [themLineup, setThemLineup] = useState<LineupSlot[]>(() => Array.from({ length: 9 }, () => ({ name: '', pos: '' })))
+  const [themPitcher, setThemPitcher] = useState('')
+  const theirNames = useMemo(() => new Set([...themLineup.map((l) => l.name), themPitcher].filter(Boolean)), [themLineup, themPitcher])
+  const ourNames = useMemo(() => new Set([...starting, ...bench].filter(Boolean)), [starting, bench])
+  const pickIntra = (on: boolean) => {
+    setIntraOn(on)
+    setGame((x) => (on ? { ...x, opponent: x.opponent.trim() && x.opponent !== '練習對手' ? x.opponent : '白隊', tournament: '隊內賽' } : { ...x, opponent: x.opponent === '白隊' ? '' : x.opponent, tournament: x.tournament === '隊內賽' ? last?.tournament ?? '友誼賽' : x.tournament }))
+  }
   // 投手休息表: is the starter rested enough on this game's date (a scheduled game ahead is right too); a reminder only
   const starterRest = (
     <div className="flex flex-col gap-1 sm:self-center">
@@ -169,8 +183,18 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
       <Link to="/pitching/rest" className="self-start inline-flex items-center min-h-9 pointer-fine:min-h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2">看投手休息表</Link>
     </div>
   )
+  // (隊內賽: each side offers only the players the other one has not picked)
+  const ourPick = intraOn ? names.filter((n) => !theirNames.has(n)) : names
+  const theirPick = names.filter((n) => !ourNames.has(n))
   const start = () => {
-    if (!game.opponent.trim()) { setError('請填對手'); setInfoOpen(true); return }
+    if (!game.opponent.trim()) { setError(intraOn ? '請填第二隊的隊名' : '請填對手'); setInfoOpen(true); return }
+    if (intraOn) {
+      if (!teamA.trim() || teamA.trim() === game.opponent.trim()) { setError('兩隊要有不同的隊名'); setInfoOpen(true); return }
+      if (!themLineup.some((l) => l.name.trim())) { setError(`請至少填一位${game.opponent.trim()}的先發打者`); return }
+      if (!themPitcher.trim()) { setError(`請填${game.opponent.trim()}的先發投手`); return }
+      const both = [...theirNames].find((n) => ourNames.has(n))
+      if (both) { setError(`${both} 兩隊都有，一個人只能在一隊`); return }
+    }
     if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); setLineupOpen(true); return }
     if (!pitcher.trim()) { setError('請填先發投手'); setLineupOpen(true); return }
     // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
@@ -178,18 +202,36 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
     const slots = lineup.filter((l) => l.name.trim()).map((l) => ({ name: l.name.trim(), pos: l.pos }))
     // Setup may have promoted a bench player: the bench is whoever is left over
     const sp = pitcher.trim()
-    const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule })
+    // (隊內賽: every player's 左右打 / 左右投 from the roster, so the recorder is asked only about the unknown ones)
+    const bats = Object.fromEntries(base.roster.flatMap((x) => (x.bats === 'L' || x.bats === 'R' ? [[x.name, x.bats]] : [])))
+    const throws = Object.fromEntries(base.roster.flatMap((x) => (x.throws === 'L' || x.throws === 'R' ? [[x.name, x.throws]] : [])))
+    const intra = intraOn ? { intra: { team: teamA.trim(), lineup: themLineup.map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher: themPitcher.trim(), bats, throws } } : {}
+    const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames && !intraOn ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule, ...intra })
     onStart(practice ? { ...s, practice: true } : s)
   }
+  const startRow = (
+    <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
+      {error && <span className="text-[13px] text-critical">{error}</span>}
+      <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">{practice ? '開始練習' : '開始紀錄'}</Button>
+    </div>
+  )
   return (
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5 items-start">
       <Card className="xl:col-span-2" title="比賽資訊" subtitle={infoOpen ? '比賽ID 會依日期自動編號' : '已從賽程帶入'}>
+        {!practice && (
+          <div className="inline-flex self-start rounded-[var(--radius-sm)] bg-surface-2 p-0.5 mb-3" role="tablist" aria-label="比賽類型">
+            {([[false, '一般比賽'], [true, '隊內賽']] as const).map(([on, label]) => (
+              <button key={label} role="tab" type="button" aria-selected={intraOn === on} onClick={() => pickIntra(on)} className={cx('h-9 px-4 rounded-[6px] text-[13px] font-medium cursor-pointer', intraOn === on ? 'bg-surface text-ink shadow-[var(--shadow-card)]' : 'text-ink-2 hover:text-ink')}>{label}</button>
+            ))}
+          </div>
+        )}
+        {intraOn && <p className="text-[12px] text-muted -mt-1 mb-3">兩隊都是自己人：每個打席同時算給打者和投手。隊內賽不算進球隊戰績，打擊、投球頁預設也不算，篩選選「含隊內賽」才會算進去。</p>}
         <datalist id="rec-tournaments">{opts.tournamentNames.map((t) => <option key={t} value={t} />)}</datalist>
         <datalist id="rec-opponents">{opts.opponents.map((t) => <option key={t} value={t} />)}</datalist>
         {!infoOpen ? (
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1 flex flex-col gap-1">
-              <div className="text-[16px] font-semibold text-ink tnum">{game.date}{game.time ? ` ${game.time}` : ''}・vs {game.opponent || '（未填對手）'}</div>
+              <div className="text-[16px] font-semibold text-ink tnum">{game.date}{game.time ? ` ${game.time}` : ''}・{intraOn ? `隊內賽 ${teamA} vs ${game.opponent || '（未填）'}` : `vs ${game.opponent || '（未填對手）'}`}</div>
               <div className="text-[13px] text-ink-2">{[game.tournament, game.homeAway === '主' ? '主場（對方先攻）' : '客場（我隊先攻）', game.venue, `${game.innings ?? TEAM.innings} 局`, tiebreakRule ? `延長第 ${tiebreakRule.from} 局起突破僵局（${basesLabel(tiebreakRule.bases)}）` : ''].filter(Boolean).join('・')}</div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setInfoOpen(true)} className="shrink-0 -mt-1">修改</Button>
@@ -200,16 +242,22 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="時間"><Input type="time" value={game.time ?? ''} onChange={(e) => g('time', e.target.value || undefined)} className="tnum" /></Field>
           <Field label="杯賽"><Input list="rec-tournaments" value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
+          {intraOn ? <>
+            <Field label="第一隊隊名"><Input value={teamA} onChange={(e) => setTeamA(e.target.value)} maxLength={20} placeholder="必填" /></Field>
+            <Field label="第二隊隊名"><Input value={game.opponent} onChange={(e) => g('opponent', e.target.value)} maxLength={20} placeholder="必填" /></Field>
+            <Field label="先後攻"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '客', label: `${teamA || '第一隊'}先攻` }, { value: '主', label: `${game.opponent || '第二隊'}先攻` }]} className="w-full" /></Field>
+          </> : <>
           <Field label="對手"><Input list="rec-opponents" value={game.opponent} onChange={(e) => g('opponent', e.target.value)} placeholder="必填" /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} className="w-full" /></Field>
+          </>}
           <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? TEAM.innings} onChange={(e) => g('innings', Number(e.target.value) || TEAM.innings)} className="tnum" /></Field>
           <TiebreakSelects idPrefix="setup" innings={innings} from={tiebreakRule?.from ?? null} bases={tbBases} onChange={setTiebreak} />
           <Field label="場地"><Input value={game.venue ?? ''} onChange={(e) => g('venue', e.target.value)} /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
         </>}
-        {/* 記對方打者姓名: shown folded or open */}
-        <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2">
+        {/* 記對方打者姓名: shown folded or open (隊內賽: the second side's lineup has its own card) */}
+        {!intraOn && <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2">
           <Checkbox className="min-h-9 pointer-fine:min-h-7" label="記對方打者姓名（選填）" checked={oppNames} onChange={toggleOppNames} />
           <p className="text-[12px] text-muted -mt-1">不勾就只記對方第幾棒，和現在一樣；勾了可以先填對方打序，也可以比賽中再填</p>
           {oppNames && <>
@@ -217,9 +265,9 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
             <OppLineupFields value={oppLineup} onChange={setOppLineupNames} names={oppNameList} idPrefix="setup-opp" cols="sm:grid-cols-3 xl:grid-cols-2" />
             <p className="text-[12px] text-muted">現在不填也可以</p>
           </>}
-        </div>
+        </div>}
       </Card>
-      <Card className="xl:col-span-3" title="先發打序與守位" action={<RosterSortToggle />} subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
+      <Card className="xl:col-span-3" title={intraOn ? `${teamA || '第一隊'}先發打序與守位` : '先發打序與守位'} action={<RosterSortToggle />} subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
 >
         {/* also decides who the bench chips offer, so it stays when the lineup is folded */}
         {listed && <RegistrationHint reg={reg!} everyone={everyone} onToggle={() => setEveryone(!everyone)} className="mb-3" />}
@@ -245,13 +293,13 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
               <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
-              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={names} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
+              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={ourPick} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
               <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={names} tag={benchTag} placeholder="必填" className="w-full" /></Field>
+          <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={ourPick} tag={benchTag} placeholder="必填" className="w-full" /></Field>
           {starterRest}
         </div>
         </>}
@@ -262,14 +310,29 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
             <div className="ml-auto flex items-center gap-1"><Button variant="ghost" size="sm" onClick={() => setBench((b) => [...new Set([...b, ...benchNames])])}>全選</Button><Button variant="ghost" size="sm" onClick={() => setBench([])}>清除</Button></div>
           </div>
           <p className="text-[12px] text-muted mb-2">先發以外、今天到場可以上場的人；換人時會優先列出</p>
-          <PlayerChips names={benchNames} selected={bench} onToggle={(n) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))} empty="先發以外沒有其他現役球員" />
-          <Checkbox className="mt-3 min-h-9 pointer-fine:min-h-7" label="允許被換下的球員再上場" checked={reentry} onChange={setAllowReentry} />
+          <PlayerChips names={intraOn ? benchNames.filter((n) => !theirNames.has(n)) : benchNames} selected={bench} onToggle={(n) => setBench((b) => (b.includes(n) ? b.filter((x) => x !== n) : [...b, n]))} empty="先發以外沒有其他現役球員" />
+          {intraOn ? <p className="mt-3 text-[12px] text-muted">隊內賽兩隊都可以自由替換，被換下的人也可以再上場</p>
+            : <Checkbox className="mt-3 min-h-9 pointer-fine:min-h-7" label="允許被換下的球員再上場" checked={reentry} onChange={setAllowReentry} />}
         </div>
-        <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
-          {error && <span className="text-[13px] text-critical">{error}</span>}
-          <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">{practice ? '開始練習' : '開始紀錄'}</Button>
-        </div>
+        {!intraOn && startRow}
       </Card>
+      {intraOn && (
+        <Card className="xl:col-span-3 xl:col-start-3" title={`${game.opponent || '第二隊'}先發打序與守位`} subtitle={`和${teamA || '第一隊'}一樣選九位先發與先發投手；同一個人只能在一隊`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
+            {themLineup.map((l, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
+                <PlayerSelect aria-label={`${game.opponent || '第二隊'}第 ${i + 1} 棒`} value={l.name} onChange={(v) => setThemLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={theirPick} taken={theirNames} placeholder="球員" className="flex-1 min-w-0" />
+                <Select aria-label={`${game.opponent || '第二隊'}第 ${i + 1} 棒守位`} value={l.pos} onChange={(e) => setThemLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <Field label={`${game.opponent || '第二隊'}先發投手`}><PlayerSelect value={themPitcher} onChange={setThemPitcher} names={theirPick} placeholder="必填" className="w-full" /></Field>
+          </div>
+          {startRow}
+        </Card>
+      )}
     </div>
   )
 }
@@ -313,9 +376,19 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [everyone, setEveryone] = useState(false)
   const sortMode = useRosterSort()
   const pool = useMemo(() => candidateNames(base.roster, everyone ? undefined : reg, sortMode), [base.roster, reg, everyone, sortMode])
+  // 隊內賽: the other side as a lineup of its own (its 換人／換投 sheet); nobody plays for both sides
+  const intra = state.intra
+  const other = useMemo(() => (state.intra ? otherSide(state) : null), [state])
+  const ours = useMemo(() => appeared(state), [state])
+  const theirs = useMemo(() => (other ? appeared(other) : new Set<string>()), [other])
+  const ownPool = useMemo(() => (other ? pool.filter((n) => !theirs.has(n)) : pool), [other, pool, theirs])
+  const theirPool = useMemo(() => pool.filter((n) => !ours.has(n)), [pool, ours])
+  // (「我隊」「對方」 read as the two sides' names)
+  const names = { us: intra?.team ?? TEAM_NAME, opp: state.game.opponent || '對手' }
+  const t = (text: string) => (intra ? sideText(text, names) : text)
   // today's bench first, players already substituted out last (greyed out unless re-entry is allowed)
-  const pitcherCands = useMemo(() => subCandidates(state, pool, 'pitcher'), [state, pool])
-  const batterCands = useMemo(() => subCandidates(state, pool, 'batter'), [state, pool])
+  const pitcherCands = useMemo(() => subCandidates(state, ownPool, 'pitcher'), [state, ownPool])
+  const batterCands = useMemo(() => subCandidates(state, ownPool, 'batter'), [state, ownPool])
   const [newPitcher, setNewPitcher] = useState('')
   const [sub, setSub] = useState<{ slot: number; name: string; pos: string }>({ slot: 0, name: '', pos: 'PH' })
   const side = offense(state)
@@ -338,6 +411,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [runnerOpen, setRunnerOpen] = useState(false)
   const [runnerPick, setRunnerPick] = useState<number | null>(null)
   const [tool, setTool] = useState<'none' | 'pitcher' | 'lineup'>('none')
+  // 隊內賽: the other side's sheet
+  const [theirTool, setTheirTool] = useState<'none' | 'pitcher' | 'lineup'>('none')
+  const [theirSub, setTheirSub] = useState<{ slot: number; name: string; pos: string }>({ slot: 0, name: '', pos: 'PH' })
+  const [theirNewPitcher, setTheirNewPitcher] = useState('')
   const [errOpen, setErrOpen] = useState(false)
   // 對方代打 (their batter up now is a pinch hitter): a name or number, optional
   const [phOpen, setPhOpen] = useState(false)
@@ -356,7 +433,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // 對方投手左右投 (we bat) and 對方打者左右打 (they bat) are required: the pitch pad and the results wait for them
   const askOppHand = needsOppHand(state, oppHandOn)
   const askOppBats = needsOppBats(state, oppBatsOn)
-  const waitFor = askOppHand ? '先選對方投手左投或右投' : askOppBats ? '先選對方打者左打或右打' : null
+  const waitFor = askOppHand ? t('先選對方投手左投或右投') : askOppBats ? t('先選對方打者左打或右打') : null
   // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
   const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && isPA(b) && !b.oppHand && !b.oppPitcher).length : 0
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
@@ -526,7 +603,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     const row = state.pitching.length
     const who = [
       ...state.runners.filter((r) => r.side === 'opp' && plan.runners[r.row] === 'home').map((r) => ({ key: String(r.row), row: r.row, name: r.name })),
-      ...(plan.batter === 'home' ? [{ key: 'batter', row, name: oppName || `對方第 ${state.oppOrder} 棒` }] : []),
+      ...(plan.batter === 'home' ? [{ key: 'batter', row, name: oppName || t(`對方第 ${state.oppOrder} 棒`) }] : []),
     ]
     if (!who.length) return []
     const pre = baseOutsFirst(state, { ...plan, earnedBy: undefined })
@@ -540,7 +617,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const planSummary = (() => {
     if (!plan) return ''
     const where = (d: Dest) => (d === 'home' ? '得分' : d === 'out' ? '出局' : `上${d}B`)
-    const who = side === 'us' ? batterSlot?.name ?? '打者' : oppName || `對方第 ${state.oppOrder} 棒`
+    const who = side === 'us' ? batterSlot?.name ?? '打者' : oppName || t(`對方第 ${state.oppOrder} 棒`)
     const moves = [...state.runners].sort((a, b) => b.base - a.base).flatMap((r) => { const d = plan.runners[r.row] ?? r.base; return d === r.base ? [] : [`${r.name} ${where(d)}`] })
     const batter = plan.batter === 'out' ? (reachedOn(plan.result) ? '打者出局' : '') : plan.batter === 'home' ? '' : plan.batter !== 1 ? `打者${where(plan.batter)}` : ''
     return [`${who} ${plan.result}`, ...moves, batter, plan.rbi ? `打點 ${plan.rbi}` : ''].filter(Boolean).join('・')
@@ -576,6 +653,32 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // a position-only change is allowed, but a bare PH / PR with nobody picked is not (it would restamp the batter's position)
   const canSub = !!subSlot && (!!sub.name || (!!sub.pos && sub.pos !== subSlot.pos && sub.pos !== 'PH' && sub.pos !== 'PR'))
   const confirmSub = () => { if (!canSub) return; act((s) => substitute(s, sub.slot, sub.name, sub.pos)); setSub({ slot: state.slot, name: '', pos: 'PH' }); setTool('none') }
+  // 隊內賽: the other side's 換人／代打／代跑／換投, the same sheet (model intraSub / intraPitcher)
+  const theyBat = side === 'opp'
+  const theirFieldPos = (i: number) => { const l = other?.lineup[i]; return !l || (l.pos === 'P' && l.name !== other?.pitcher) ? '' : l.pos }
+  const openTheirs = (t2: 'pitcher' | 'lineup') => {
+    if (theirTool === t2) { setTheirTool('none'); return }
+    if (t2 === 'lineup') setTheirSub({ slot: state.oppOrder - 1, name: '', pos: theyBat ? 'PH' : theirFieldPos(state.oppOrder - 1) })
+    setTheirTool(t2); setTool('none'); setToast(null)
+  }
+  const theirSlotOfRunner = (r: { row: number }) => (state.pitching[r.row]?.oppOrder ?? 0) - 1
+  const pickTheirPos = (pos: string) => setTheirSub((x) => {
+    const lead = state.runners.filter((r) => r.side === 'opp').sort((a, b) => b.base - a.base).map(theirSlotOfRunner).find((i) => i >= 0)
+    const onBase = state.runners.some((r) => r.side === 'opp' && theirSlotOfRunner(r) === x.slot)
+    return { ...x, pos, slot: pos === 'PR' && !onBase && lead !== undefined ? lead : x.slot }
+  })
+  const theirSlot = other?.lineup[theirSub.slot]
+  const canTheirSub = !!theirSlot && (!!theirSub.name || (!!theirSub.pos && theirSub.pos !== theirSlot.pos && theirSub.pos !== 'PH' && theirSub.pos !== 'PR'))
+  const theirBatters = useMemo(() => (other ? subCandidates(other, theirPool, 'batter') : null), [other, theirPool])
+  const theirPitchers = useMemo(() => (other ? subCandidates(other, theirPool, 'pitcher') : null), [other, theirPool])
+  // their pitchers' 用球 so far (our plate appearances against each, the one in progress too)
+  const theirCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of state.batting) if (p.oppPitcher) m.set(p.oppPitcher, (m.get(p.oppPitcher) ?? 0) + p.pitches.length)
+    const now = state.oppPitcher?.name
+    if (now && side === 'us') m.set(now, (m.get(now) ?? 0) + state.pitches.length)
+    return m
+  }, [state.batting, state.oppPitcher, state.pitches, side])
   // without a DH the old pitcher bats as P: say what 換投 does to the lineup
   const pSlot = state.lineup.findIndex((l) => l.name === state.pitcher && l.pos === 'P')
   const pitcherHint = !newPitcher || pSlot < 0 ? null
@@ -591,7 +694,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const offRunners = state.runners.filter((r) => r.side === side)
   const who = side === 'us'
     ? <>第 {state.slot + 1} 棒 <span style={{ color: BOARD.ink }} className="font-medium">{batterSlot?.name ?? '—'}</span> {batterSlot?.pos}</>
-    : <>對方第 {state.oppOrder} 棒{oppName ? ` ${oppName}` : ''}・投手 <span style={{ color: BOARD.ink }} className="font-medium">{state.pitcher}</span> <span className={cx('tnum', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : '')}>{currentCount} 球</span></>
+    : <>{t('對方')}第 {state.oppOrder} 棒{oppName ? ` ${oppName}` : ''}・投手 <span style={{ color: BOARD.ink }} className="font-medium">{state.pitcher}</span> <span className={cx('tnum', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : '')}>{currentCount} 球</span></>
   // 暴投／捕逸 from the pitch row: one tap, everyone moves up (復原 if only some did, then use the runner sheet)
   const allUp = (kind: 'wp' | 'pb' | 'bk') => { act((s) => (kind === 'bk' ? balk(s) : wildPitch(s, kind))); setRunnerOpen(false) }
   // 延長賽突破僵局: the runners go on first (the pitch pad waits; 換投／換人 still work)
@@ -637,14 +740,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
           <Card still bodyClassName="p-4 md:p-5 flex flex-col gap-4">
             {held && (
               <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border-strong bg-surface-2 p-3">
-                <div className="text-[15px] font-semibold text-ink">這場比賽保留中：{TEAM_NAME} {sc.us} : {sc.opp} {state.game.opponent || '對手'}・第 {state.inning} 局{state.half === 'top' ? '上' : '下'}</div>
+                <div className="text-[15px] font-semibold text-ink">這場比賽保留中：{names.us} {sc.us} : {sc.opp} {names.opp}・第 {state.inning} 局{state.half === 'top' ? '上' : '下'}</div>
                 <p className="text-[12px] text-ink-2">比賽頁寫「保留中」，不算進戰績。續賽時（在任何一台裝置的「紀錄比賽」按「接續」）按下面的按鈕，從現在的局數、出局和壘上狀況接著記。</p>
                 <Button variant="primary" className="self-start" onClick={() => apply((s) => { const { suspended: _s, ...rest } = s; void _s; return rest })}>恢復比賽</Button>
               </div>
             )}
             {holdOver && !held && (
               <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft p-3">
-                <div className="text-[15px] font-semibold text-ink">比賽結束：{TEAM_NAME} {sc.us} : {sc.opp} {state.game.opponent || '對手'}</div>
+                <div className="text-[15px] font-semibold text-ink">比賽結束：{names.us} {sc.us} : {sc.opp} {names.opp}</div>
                 <p className="text-[12px] text-ink-2">{state.half === 'bottom' && state.inning >= regulation && (state.game.homeAway === '主' ? sc.us > sc.opp : sc.opp > sc.us) ? '主隊在最後一局下半超前（再見）' : `第 ${regulation} 局打完已分出勝負`}。按下面填勝敗投並儲存；要延長或繼續打再按「繼續記下一局」。</p>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="primary" icon={<Flag />} onClick={onFinish}>{practice ? '結束練習' : '結束比賽：填勝敗投並儲存'}</Button>
@@ -659,29 +762,30 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               {side === 'us' ? (
                 <div className="flex items-center gap-3 min-w-0">
                   <PlateBadge size={44}>{state.slot + 1}</PlateBadge>
-                  <div className="min-w-0"><div className="text-[12px] text-muted">我隊打者・第 {state.slot + 1} 棒</div><div className="font-display text-[22px] font-bold text-ink leading-7 truncate">{batterSlot?.name ?? '—'} <span className="font-sans text-muted font-normal text-[13px]">{batterSlot?.pos}</span></div></div>
+                  <div className="min-w-0"><div className="text-[12px] text-muted">{t('我隊')}打者・第 {state.slot + 1} 棒</div><div className="font-display text-[22px] font-bold text-ink leading-7 truncate">{batterSlot?.name ?? '—'} <span className="font-sans text-muted font-normal text-[13px]">{batterSlot?.pos}</span></div></div>
                 </div>
               ) : (
                 <div className="flex items-center gap-3 min-w-0">
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
-                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">我隊投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
-                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">對方第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
+                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">{t('我隊')}投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
+                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">{t('對方')}第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
                       {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => apply((s) => setOppBats(s, b))} />}</div>
                     {batsHint && <p role="status" className="text-[12px] text-warning basis-full">{batsHint}</p>}
-                    {state.oppNames && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
+                    {state.oppNames && !intra && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
               )}
               <div className="flex items-center gap-1.5 shrink-0">
-                {side === 'opp' && <Button variant="outline" size="sm" onClick={() => openTool('pitcher')} icon={<ArrowRightLeft />}>換投</Button>}
-                <Button variant="outline" size="sm" onClick={() => openTool('lineup')} icon={<ArrowRightLeft />}>{side === 'us' ? '代打' : '換人'}</Button>
-                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(true); setOppPitcherOpen(true); setToast(null) }} icon={<ArrowRightLeft />} title="對方換了一位投手：選左投／右投（可先填姓名）就完成">對方換投</Button>}
-                {side === 'us' && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(false); setOppPitcherOpen(true); setToast(null) }} title="記錯了要更正，或對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
-                {side === 'us' && <span className="text-[12px] text-muted tnum whitespace-nowrap" title="對方現在這位投手投給我們的球數（從他上場或上次換投算起）">對方投手 <span className="text-ink font-medium">{oppPitchCount(state)}</span> 球</span>}
-                {side === 'opp' && <Button variant="outline" size="sm" aria-expanded={phOpen} onClick={() => { setPhOpen(!phOpen); setPhName(''); setToast(null) }} title="對方換人代打時點這裡">對方代打</Button>}
+                {side === 'opp' && <Button variant="outline" size="sm" onClick={() => openTool('pitcher')} icon={<ArrowRightLeft />}>{intra ? names.us : ''}換投</Button>}
+                <Button variant="outline" size="sm" onClick={() => openTool('lineup')} icon={<ArrowRightLeft />}>{intra ? names.us : ''}{side === 'us' ? '代打' : '換人'}</Button>
+                {intra && <Button variant="outline" size="sm" onClick={() => openTheirs(theyBat ? 'lineup' : 'pitcher')} icon={<ArrowRightLeft />} title={`${names.opp}換人、代打、代跑或換投`}>{names.opp}{theyBat ? '代打／換人' : '換投／換人'}</Button>}
+                {side === 'us' && !intra && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(true); setOppPitcherOpen(true); setToast(null) }} icon={<ArrowRightLeft />} title="對方換了一位投手：選左投／右投（可先填姓名）就完成">對方換投</Button>}
+                {side === 'us' && !intra && oppHandOn && !askOppHand && <Button variant="outline" size="sm" onClick={() => { setOppQuick(false); setOppPitcherOpen(true); setToast(null) }} title="記錯了要更正，或對方換投時點這裡">{oppPitcherLabel(state.oppPitcher)}</Button>}
+                {side === 'us' && <span className="text-[12px] text-muted tnum whitespace-nowrap" title="對方現在這位投手投給我們的球數（從他上場或上次換投算起）">{intra ? `${names.opp}投手 ${state.oppPitcher?.name ?? ''}` : '對方投手'} <span className="text-ink font-medium">{oppPitchCount(state)}</span> 球</span>}
+                {side === 'opp' && !intra && <Button variant="outline" size="sm" aria-expanded={phOpen} onClick={() => { setPhOpen(!phOpen); setPhName(''); setToast(null) }} title="對方換人代打時點這裡">對方代打</Button>}
               </div>
             </div>
 
-            {side === 'opp' && phOpen && (
+            {side === 'opp' && !intra && phOpen && (
               <form className="flex items-center gap-2 flex-wrap -mt-1" onSubmit={(e) => { e.preventDefault(); act((s) => pinchHitOpp(s, phName)); setPhOpen(false) }}>
                 <span className="text-[12px] text-ink-2">對方第 {state.oppOrder} 棒代打</span>
                 <Input aria-label="對方代打的姓名或背號" value={phName} onChange={(e) => setPhName(e.target.value)} maxLength={40} list="opp-ph-names" placeholder="姓名或背號（選填）" className="w-[180px] max-w-full" />
@@ -693,7 +797,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
 
             {earlier.length > 0 && (
               <p className="text-[12px] text-muted leading-relaxed -mt-2">
-                {side === 'us' ? '今天' : `對方第 ${state.oppOrder} 棒今天`}{earlier.map((e) => `　第${e.n}打席 ${e.text}${e.vs ? `（投手 ${e.vs}）` : ''}`).join('')}
+                {side === 'us' ? '今天' : t(`對方第 ${state.oppOrder} 棒今天`)}{earlier.map((e) => `　第${e.n}打席 ${e.text}${e.vs ? `（投手 ${e.vs}）` : ''}`).join('')}
               </p>
             )}
 
@@ -733,15 +837,15 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {offRunners.length > 0 && <button type="button" onClick={() => allUp('pb')} className={quick} title="壘上跑者各進一壘">捕逸{side === 'opp' && state.extras.pb > 0 && <span className="tnum ml-1">×{state.extras.pb}</span>}</button>}
                 {side === 'opp' && offRunners.length === 0 && (['wp', 'pb'] as const).map((k) => <button key={k} type="button" onClick={() => apply((s) => addExtra(s, k))} className={quick}>{k === 'wp' ? '暴投' : '捕逸'}{state.extras[k] > 0 && <span className="tnum ml-1">×{state.extras[k]}</span>}</button>)}
                 {side === 'opp' && (
-                  <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={quickOn(errOpen)}>我隊失誤{state.extras.errors?.length ? <span className="tnum ml-1">×{state.extras.errors.length}</span> : null}</button>
+                  <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={quickOn(errOpen)}>{t('我隊失誤')}{state.extras.errors?.length ? <span className="tnum ml-1">×{state.extras.errors.length}</span> : null}</button>
                 )}
                 {side === 'us' && (
-                  <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={quickOn(errOpen)}>對方失誤{state.extras.oppErrors?.length ? <span className="tnum ml-1">×{state.extras.oppErrors.length}</span> : null}</button>
+                  <button type="button" aria-expanded={errOpen} onClick={() => setErrOpen(!errOpen)} className={quickOn(errOpen)}>{t('對方失誤')}{state.extras.oppErrors?.length ? <span className="tnum ml-1">×{state.extras.oppErrors.length}</span> : null}</button>
                 )}
                 {state.extras.pka > 0 && <span className="inline-flex items-center text-[12px] text-ink-2 h-9 px-2 rounded-[6px] bg-surface-2">牽制 <span className="tnum text-ink font-medium ml-1">×{state.extras.pka}</span></span>}
                 {side === 'us' && errOpen && (
                   <div className="basis-full flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[11px] text-muted basis-full">對方誰失誤（例如捕手漏接界外飛球點 C；打擊結果是「失誤」的那次不用再點；跑者因失誤多跑壘，在「壘上跑者」記失誤進壘）</span>
+                    <span className="text-[11px] text-muted basis-full">{t('對方誰失誤')}（例如捕手漏接界外飛球點 C；打擊結果是「失誤」的那次不用再點；跑者因失誤多跑壘，在「壘上跑者」記失誤進壘）</span>
                     {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => {
                       const n = (state.extras.oppErrors ?? []).filter((x) => x === pos).length
                       const label = pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)
@@ -805,7 +909,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                         mistake={side === 'us' && !NO_BIP_OUT.has(plan.result) ? { on: !!plan.runningOuts?.includes(r.row), set: (on) => { setDest(r.row, 'out'); setPlan((p) => (p ? { ...p, runningOuts: [...(p.runningOuts ?? []).filter((w) => w !== r.row), ...(on ? [r.row] : [])] } : p)) } } : undefined}
                         outAt={{ show: plan.runners[r.row] === 'out' && (!!plan.runningOuts?.includes(r.row) || outAtAsked(plan.result)), value: plan.outAt?.[r.row] ?? defaultOutAt(state, plan, r.row), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, [r.row]: a } } : p)), name: r.name }} />
                     ))}
-                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || `對方第 ${state.oppOrder} 棒`}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
+                    <DestRow label={`打者 ${side === 'us' ? batterSlot?.name ?? '' : oppName || t(`對方第 ${state.oppOrder} 棒`)}`} value={plan.batter} onChange={(d) => setDest('batter', d)} min={1} batter extra={throwToggle('batter', '打者')}
                       // (we bat) he reached and was put out on the same play: 壘上出局 by itself, 壘死 when it was his own mistake
                       mistake={side === 'us' && reachedOn(plan.result) ? { on: !!plan.batterRunningOut, set: (on) => { setDest('batter', 'out'); setPlan((p) => (p ? { ...p, batterRunningOut: on } : p)) } } : undefined}
                       outAt={{ show: reachedOn(plan.result) && plan.batter === 'out', value: plan.outAt?.batter ?? defaultOutAt(state, plan, 'batter'), set: (a) => setPlan((p) => (p ? { ...p, outAt: { ...p.outAt, batter: a } } : p)), name: '打者' }} />
@@ -815,14 +919,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {side === 'us' && !!plan.errAdv?.length && (
                   // 失誤進壘 while we bat: their error; who, if the recorder saw it (else it counts as 不知道)
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[12px] text-ink-2">對方誰失誤<span className="text-muted ml-1.5">算對方失誤；沒看清楚可以不點{plan.result === '失誤' ? '（和打擊結果是同一次失誤就不用點）' : ''}</span></div>
-                    <ErrorByChips value={plan.errBy ?? []} onChange={(v) => setPlan({ ...plan, errBy: v })} unknown label="對方誰失誤" />
+                    <div className="text-[12px] text-ink-2">{t('對方誰失誤')}<span className="text-muted ml-1.5">算對方失誤；沒看清楚可以不點{plan.result === '失誤' ? '（和打擊結果是同一次失誤就不用點）' : ''}</span></div>
+                    <ErrorByChips value={plan.errBy ?? []} onChange={(v) => setPlan({ ...plan, errBy: v })} unknown label={t('對方誰失誤')} />
                   </div>
                 )}
                 {side === 'opp' && !!plan.errAdv?.length && (
                   // 失誤進壘 while we field: whose error it was (counted as our error on this plate appearance)
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[12px] text-ink-2">誰失誤<span className="text-muted ml-1.5">算我隊守備失誤；兩人都有就都點</span></div>
+                    <div className="text-[12px] text-ink-2">誰失誤<span className="text-muted ml-1.5">{t('算我隊守備失誤')}；兩人都有就都點</span></div>
                     <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                       {FIELD_POSITIONS.map((pos) => {
                         const on = !!plan.errBy?.includes(pos)
@@ -838,7 +942,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={plan.note ?? ''} maxLength={200} onChange={(e) => setPlan({ ...plan, note: e.target.value })} placeholder="選填，例如強襲投手、裁判改判" className="flex-1 min-w-0" /></label>
                 <div className="flex items-center gap-4 flex-wrap">
                   {(
-                    <div className="inline-flex items-center gap-2 text-[13px]"><span className="text-ink-2">{side === 'us' ? '打點' : '對方打點'}</span>
+                    <div className="inline-flex items-center gap-2 text-[13px]"><span className="text-ink-2">{side === 'us' ? '打點' : t('對方打點')}</span>
                       <button type="button" onClick={() => { setRbiTouched(true); setPlan({ ...plan, rbi: Math.max(0, plan.rbi - 1) }) }} className="size-9 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer">−</button>
                       <span className="tnum font-semibold w-4 text-center">{plan.rbi}</span>
                       <button type="button" onClick={() => { setRbiTouched(true); setPlan({ ...plan, rbi: plan.rbi + 1 }) }} className="size-9 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer">＋</button>
@@ -872,7 +976,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         </div>
 
         <div className="xl:col-span-4 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
-          <Card still title="打線" subtitle="點棒次可跳到該打者" flush>
+          <Card still title={intra ? `${names.us}打線` : '打線'} subtitle="點棒次可跳到該打者" flush>
             <ul className="divide-y divide-[var(--border)]">
               {state.lineup.map((l, i) => (
                 <li key={i}>
@@ -890,6 +994,20 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               {side === 'opp' && <button type="button" onClick={() => apply((s) => setOppOrder(s, s.oppOrder + 1))} className="h-9 pointer-fine:h-7 underline underline-offset-2 hover:text-ink cursor-pointer">跳過對方這棒</button>}
             </div>
           </Card>
+          {other && (
+            <Card still title={`${names.opp}打線`} subtitle={`換人在「${names.opp}${theyBat ? '代打／換人' : '換投／換人'}」`} flush>
+              <ul className="divide-y divide-[var(--border)]">
+                {other.lineup.map((l, i) => l.name ? (
+                  <li key={i} className={cx('flex items-center gap-3 px-4 py-2', i === state.oppOrder - 1 && theyBat && 'bg-surface-2')}>
+                    <PlateBadge size={28} active={i === state.oppOrder - 1}>{i + 1}</PlateBadge>
+                    <span className="text-[13px] font-medium text-ink flex-1 truncate">{l.name}</span>
+                    <span className="text-[12px] text-muted tnum shrink-0">{l.pos}</span>
+                  </li>
+                ) : null)}
+              </ul>
+              <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2">投手 <span className="font-medium text-ink">{other.pitcher}</span></div>
+            </Card>
+          )}
           <Card still title="逐打席" action={<Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} />} flush>
             <div className="max-h-[420px] overflow-y-auto">
               {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onRbi={(i, rbi) => apply((s) => setRbi(s, i, rbi))} /> : <PitchingPlayByPlay pas={state.pitching} onRbi={(i, rbi) => apply((s) => setOppRbi(s, i, rbi))} />}
@@ -908,13 +1026,22 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         context={`${state.outs} 出局・${state.pitches.length ? `第 ${state.pitches.length} 球後` : '第一球前'}`}
         onEvent={(r, ev, errBy, outAt) => { act((s) => runnerEvent(s, r.row, r.side, ev, undefined, errBy, outAt)); setRunnerOpen(false) }}
         onAll={allUp}
-        oppPinch={side === 'opp' ? { names: oppPinchNames, onPinch: (r, name) => { act((s) => pinchRunOpp(s, r.row, name)); setRunnerOpen(false) } } : undefined}
+        oppPinch={side === 'opp' ? { names: theirBatters ? theirBatters.names : oppPinchNames, onPinch: (r, name) => { act((s) => (s.intra ? intraSub(s, theirSlotOfRunner(r), name, 'PR') : pinchRunOpp(s, r.row, name))); setRunnerOpen(false) } } : undefined}
         pinch={side === 'us' ? { names: batterCands.names, disabled: batterCands.disabled, tag: batterCands.tag, can: (r) => slotOfRunner(r) >= 0, onPinch: (r, name) => { act((s) => substitute(s, slotOfRunner(r), name, 'PR')); setRunnerOpen(false) }, onCourtesy: (r, name) => { act((s) => courtesyRunner(s, r.row, name)); setRunnerOpen(false) } } : undefined} />
       <SubSheet open={tool !== 'none'} onClose={() => setTool('none')} mode={tool === 'pitcher' ? 'pitcher' : 'lineup'} onMode={(m) => openTool(m)} state={state} side={side}
         batters={batterCands} pitchers={pitcherCands} pitchCount={pitchCount} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')} restNote={(n) => restNotes.get(n)}
         sub={sub} setSub={setSub} onPickPos={pickSubPos} canSub={canSub} onConfirmSub={confirmSub} fieldPos={fieldPos}
         newPitcher={newPitcher} setNewPitcher={setNewPitcher} pitcherHint={pitcherHint} onConfirmPitcher={() => { if (newPitcher) { act((s) => changePitcher(s, newPitcher)); setNewPitcher(''); setTool('none') } }}
         extras={toolExtras} />
+      {other && theirBatters && theirPitchers && (
+        <SubSheet open={theirTool !== 'none'} onClose={() => setTheirTool('none')} mode={theirTool === 'pitcher' ? 'pitcher' : 'lineup'} onMode={(m) => openTheirs(m)} state={other} side={theyBat ? 'us' : 'opp'} title={names.opp}
+          batters={theirBatters} pitchers={theirPitchers} pitchCount={theirCounts} pitchTone={(n) => (n >= params.pitchMax ? 'critical' : n >= params.pitchWarn ? 'warning' : 'ok')}
+          sub={theirSub} setSub={setTheirSub} onPickPos={pickTheirPos} canSub={canTheirSub} fieldPos={theirFieldPos}
+          onConfirmSub={() => { if (!canTheirSub) return; act((s) => intraSub(s, theirSub.slot, theirSub.name, theirSub.pos)); setTheirTool('none') }}
+          newPitcher={theirNewPitcher} setNewPitcher={setTheirNewPitcher} pitcherHint={null}
+          onConfirmPitcher={() => { if (theirNewPitcher) { act((s) => intraPitcher(s, theirNewPitcher)); setTheirNewPitcher(''); setTheirTool('none') } }}
+          extras={<span>{names.opp}的球員可以自由替換、再上場；{names.us}的人不會出現在這裡</span>} />
+      )}
       <OppPitcherSheet open={oppPitcherOpen} onClose={() => setOppPitcherOpen(false)} current={state.oppPitcher} options={oppOptions} earlierRows={halfRowsWithoutOpp} quickChange={oppQuick}
         stintRows={state.oppPitcher ? state.batting.slice(oppStintStart(state.batting, state.oppPitcher, state.oppPitcherFrom)).filter(isPA).length : 0}
         onConfirm={(p) => act((s) => setOppPitcher(s, p))} onCorrect={(p) => act((s) => correctOppPitcher(s, p))} />
@@ -1082,8 +1209,10 @@ function RecordScreen({ practice }: { practice: boolean }) {
   const newerCloud = !practice && state && cloudDrafts ? cloudDrafts.find((d) => d.game_id === state.game.id && (!state.updatedAt || d.updated_at > state.updatedAt) && d.state.updatedAt !== state.updatedAt) ?? null : null
   const resume = (d: CloudDraft<RecordState>) => { trustedFor.current = null; setStale(null); setState(d.state); setHistory([]); setMsg(`已載入 ${d.game_id} 的進度（${new Date(d.updated_at).toLocaleString('zh-TW')}）`) }
   const undo = () => setHistory((h) => { const prev = h[h.length - 1]; if (prev) setState(prev); return h.slice(0, -1) })
-  const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher)])].filter(Boolean) : []), [state])
-  const relievers = useMemo(() => (state ? reliefPitchers(state) : []), [state])
+  // (隊內賽: the other side's pitchers too — the 勝投 may be theirs, and so may a 救援 or 中繼)
+  const theirPitchers = useMemo(() => (state?.intra ? [...new Set([state.intra.startingPitcher, ...state.batting.map((p) => p.oppPitcher ?? ''), state.oppPitcher?.name ?? ''])].filter(Boolean) : []), [state])
+  const usedPitchers = useMemo(() => (state ? [...new Set([state.pitcher, ...state.pitching.map((p) => p.pitcher), ...theirPitchers])].filter(Boolean) : []), [state, theirPitchers])
+  const relievers = useMemo(() => (state ? [...reliefPitchers(state), ...theirPitchers.slice(1)] : []), [state, theirPitchers])
   // 中繼 the score suggests (MLB's hold: came in with a save situation, got an out, left still ahead); never picked for him
   const reliefs = useMemo(() => (state ? reliefEntries(state.pitching, { homeAway: state.game.homeAway, ourLine: runsByInning(state.batting) }) : []), [state])
   const openFinish = () => { if (state) setFinish({ w: '', l: '', sv: '', holds: [], ...finishTimes(state) }) }

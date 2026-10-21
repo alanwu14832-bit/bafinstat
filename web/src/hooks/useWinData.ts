@@ -3,6 +3,7 @@ import { TEAM } from '../config/team'
 import { defaultWinRules, type WinRules } from '../data/winModel'
 import { buildWinData, type WinData } from '../data/winTimeline'
 import { effectiveDataset, useDataStore } from '../store/data'
+import { intraView } from '../data/intrasquad'
 import { useLiveIds } from './useLiveGames'
 
 /**
@@ -21,5 +22,6 @@ export function useWinData(): WinData {
   const demo = useDataStore((s) => s.demo)
   // (a game being recorded has no end point yet: rebuilt when one starts or stops being live)
   const live = useLiveIds()
-  return useMemo(() => buildWinData(effectiveDataset(base, demo), teamWinRules()), [base, demo, live]) // eslint-disable-line react-hooks/exhaustive-deps
+  // (隊內賽 neither train the model nor count: both sides are ours)
+  return useMemo(() => buildWinData(intraView(effectiveDataset(base, demo), 'exclude'), teamWinRules()), [base, demo, live]) // eslint-disable-line react-hooks/exhaustive-deps
 }

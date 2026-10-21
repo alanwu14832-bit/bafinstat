@@ -2,6 +2,7 @@ import { buildHistory, type HistoryIndex } from '../data/history'
 import { resolveParams } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
+import { intraView } from '../data/intrasquad'
 import { liveGameIds } from '../data/liveGames'
 import { useLiveIds } from './useLiveGames'
 
@@ -21,5 +22,6 @@ export function useHistory(): HistoryIndex {
   const demo = useDataStore((s) => s.demo)
   const raw = useDataStore((s) => s.params)
   useLiveIds()
-  return historyFor(effectiveDataset(base, demo), raw)
+  // (紀錄簿, 生涯, 里程碑 are the team's: 隊內賽 stay out)
+  return historyFor(intraView(effectiveDataset(base, demo), 'exclude'), raw)
 }

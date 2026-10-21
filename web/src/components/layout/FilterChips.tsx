@@ -4,11 +4,12 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDataStore, effectiveDataset } from '../../store/data'
 import { useLiveIds } from '../../hooks/useLiveGames'
 import { filterGames } from '../../data/filters'
-import { DEFAULT_FILTERS, type Filters } from '../../data/types'
+import { intraView, isMirror, withMirrors } from '../../data/intrasquad'
+import { DEFAULT_FILTERS, type Filters, type Game } from '../../data/types'
 import { POSITION_LABEL } from '../../lib/fmt'
 
 /** Filters in the address (?cup=新生盃&opp=經濟…), so a copied link opens the same data. Short keys, never the page's own. */
-const URL_KEYS: Record<keyof Filters, string> = { tournament: 'cup', from: 'from', to: 'to', position: 'pos', opponent: 'opp', homeAway: 'ha', result: 'res' }
+const URL_KEYS: Record<keyof Filters, string> = { tournament: 'cup', from: 'from', to: 'to', position: 'pos', opponent: 'opp', homeAway: 'ha', result: 'res', intra: 'intra' }
 
 /** location.state flag set by useNavigateWithFilters: this address's filters are to be applied (the rest reset). */
 const APPLY_FILTERS = 'applyFilters'
@@ -76,9 +77,13 @@ export function useNavigateWithFilters() {
 }
 
 const RESULT: Record<string, string> = { W: '勝', L: '敗', T: '和' }
+/** The 隊內賽 filter's chip (the default, 不含, has none). */
+export const INTRA_LABEL: Record<Filters['intra'], string> = { exclude: '不含隊內賽', include: '含隊內賽', only: '只看隊內賽' }
 
 /** One line saying what the numbers cover, for exports and share images: the filters, the games, the last date. */
-export function scopeText(filters: Filters, games: Array<{ date: string }>): string {
+export function scopeText(filters: Filters, all: Array<Pick<Game, 'date' | 'dayRoster'>>): string {
+  // (a 隊內賽 is one game, both sides' views counted once)
+  const games = all.filter((g) => !isMirror(g))
   const parts = [
     filters.tournament !== 'all' && filters.tournament,
     (filters.from || filters.to) && `${filters.from || '開始'} – ${filters.to || '至今'}`,
@@ -86,6 +91,7 @@ export function scopeText(filters: Filters, games: Array<{ date: string }>): str
     filters.homeAway !== 'all' && (filters.homeAway === '主' ? '主場' : '客場'),
     filters.result !== 'all' && `${RESULT[filters.result]}場`,
     filters.position !== 'all' && `守位 ${filters.position}`,
+    filters.intra !== 'exclude' && INTRA_LABEL[filters.intra],
   ].filter(Boolean)
   const last = games.reduce((m, g) => (g.date > m ? g.date : m), '')
   return `${parts.length ? `篩選：${parts.join('・')}` : '全部比賽'}・${games.length} 場${last ? `・資料截至 ${last}` : ''}`
@@ -103,13 +109,15 @@ export function FilterChips() {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
   const live = useLiveIds()   // (勝／敗 filter: a game being recorded is neither)
-  const games = useMemo(() => filterGames(effectiveDataset(base, demo), filters).games, [base, demo, filters, live]) // eslint-disable-line react-hooks/exhaustive-deps
+  // (a 隊內賽 is one game, both sides' views counted once)
+  const games = useMemo(() => filterGames(intraView(withMirrors(effectiveDataset(base, demo)), filters.intra), filters).games.filter((g) => !isMirror(g)), [base, demo, filters, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const chips: Array<{ key: string; label: string; clear: Partial<Filters> }> = []
   if (filters.tournament !== 'all') chips.push({ key: 't', label: filters.tournament, clear: { tournament: 'all' } })
   if (filters.from || filters.to) chips.push({ key: 'd', label: `${filters.from ? md(filters.from) : '開始'} – ${filters.to ? md(filters.to) : '至今'}`, clear: { from: '', to: '' } })
   if (filters.opponent !== 'all') chips.push({ key: 'o', label: `對手：${filters.opponent}`, clear: { opponent: 'all' } })
   if (filters.homeAway !== 'all') chips.push({ key: 'h', label: filters.homeAway === '主' ? '主場' : '客場', clear: { homeAway: 'all' } })
   if (filters.result !== 'all') chips.push({ key: 'r', label: `${RESULT[filters.result]}場`, clear: { result: 'all' } })
+  if (filters.intra !== 'exclude') chips.push({ key: 'i', label: INTRA_LABEL[filters.intra], clear: { intra: 'exclude' } })
   if (filters.position !== 'all') chips.push({ key: 'p', label: `守位：${filters.position} ${POSITION_LABEL[filters.position] ?? ''}`.trim(), clear: { position: 'all' } })
   const last = games.reduce((m, g) => (g.date > m ? g.date : m), '')
   return (

@@ -5,6 +5,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
 import { GameView, type GameTab } from './GameView'
 import { useStats } from '../hooks/useStats'
+import { storedId } from '../data/intrasquad'
 import { summarizeGame } from '../data/stats'
 import { useLiveIds } from '../hooks/useLiveGames'
 
@@ -19,13 +20,14 @@ export function GamePage() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const s = useStats()
-  const game = s.dataset.games.find((g) => g.id === id)
+  // (whatever the filter says; a 隊內賽 side's id opens the game it was made from)
+  const game = s.full.games.find((g) => g.id === storedId(id))
   // (and again when the game starts or stops being recorded: 比賽進行中 instead of 勝／敗)
   const live = useLiveIds()
-  const summary = useMemo(() => (game ? summarizeGame(s.dataset, game, live) : null), [game, s.dataset, live])
+  const summary = useMemo(() => (game ? summarizeGame(s.full, game, live) : null), [game, s.full, live])
   const tab = params.get('tab') as GameTab | null
   const inning = Number(params.get('inning')) || undefined
   const back = () => (window.history.length > 1 ? navigate(-1) : navigate('/games?view=results'))
   if (!summary) return <Card><EmptyState title="找不到這場比賽" description={`比賽 ID ${id} 不在目前的資料裡。`} action={<Button size="sm" variant="outline" to="/games?view=results">回比賽列表</Button>} /></Card>
-  return <GameView key={id} summary={summary} mode="page" onClose={back} initialTab={tab && TABS.includes(tab) ? tab : inning ? 'bat' : 'summary'} inning={inning} />
+  return <GameView key={game!.id} summary={summary} mode="page" onClose={back} initialTab={tab && TABS.includes(tab) ? tab : inning ? 'bat' : 'summary'} inning={inning} />
 }

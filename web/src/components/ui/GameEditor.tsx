@@ -780,7 +780,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     }
     // parseDayRoster trims, drops bench names that are starters and returns undefined for a roster with no names and no
     // rules (a game with only 預定局數／突破僵局 set keeps them)
-    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules })
+    // (a 隊內賽 keeps its other side: its lineup and substitutions are not edited here)
+    const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules, intra: initial.game.dayRoster?.intra })
     try {
       const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
       const pitching = pit.map(fromPitDraft).filter((p) => p.pitcher.trim())

@@ -5,6 +5,7 @@ import { TeamLogo } from './TeamLogo'
 import { battingLines, boardLine, resultText, type BattingLine, type GameSummary } from '../../data/stats'
 import { LiveBadge } from './ResultBadge'
 import type { Dataset } from '../../data/types'
+import { isIntra, sideNames, storedId } from '../../data/intrasquad'
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六']
 const dayLabel = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return Number.isNaN(d.getTime()) ? iso : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）` }
@@ -34,7 +35,8 @@ export interface GameStar { name: string; text: string }
 
 /** A game's 本場焦點: the batter with the most hits + RBI + runs (home runs count double); none when nobody hit. */
 export function gameStar(ds: Dataset, gameId: string): GameStar | undefined {
-  const lines = battingLines(ds, ds.batting.filter((p) => p.gameId === gameId))
+  // (a 隊內賽: both sides' batters)
+  const lines = battingLines(ds, ds.batting.filter((p) => storedId(p.gameId) === gameId))
   let best: BattingLine | undefined, score = 0
   for (const l of lines) { const v = l.h * 2 + l.hr * 2 + l.rbi * 1.5 + l.r; if (v > score) { score = v; best = l } }
   if (!best || best.h + best.rbi <= 0) return undefined
@@ -47,27 +49,30 @@ export function gameStar(ds: Dataset, gameId: string): GameStar | undefined {
  */
 export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: { s: GameSummary; teamName: string; star?: GameStar; onOpen: () => void; className?: string; issues?: number }) {
   const g = s.game
-  const win = s.result === 'W'
+  // 隊內賽: both sides are ours, the score is all there is (no 勝／敗 for the team)
+  const intra = isIntra(g)
+  const names = sideNames(g, teamName)
+  const win = s.result === 'W' && !intra
   const live = s.result === 'live'
   const n = Math.max(g.innings ?? 0, s.lineUs.length, s.lineOpp.length, 1)
   const teams = [
-    { key: 'us', name: teamName, mark: <TeamLogo size={22} />, runs: s.runsUs, line: boardLine(s, 'us'), h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
-    { key: 'opp', name: g.opponent, mark: <OppMark name={g.opponent} />, runs: s.runsOpp, line: boardLine(s, 'opp'), h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
+    { key: 'us', name: names.us, mark: <TeamLogo size={22} />, runs: s.runsUs, line: boardLine(s, 'us'), h: s.hitsUs, e: s.errorsUs, won: s.runsUs > s.runsOpp },
+    { key: 'opp', name: g.opponent, mark: intra ? <TeamLogo size={22} /> : <OppMark name={g.opponent} />, runs: s.runsOpp, line: boardLine(s, 'opp'), h: s.hitsOpp, e: s.errorsOpp, won: s.runsOpp > s.runsUs },
   ]
   // innings at a fixed width (a 5-inning game does not stretch), R / H / E pinned right behind a divider
   const cols = `repeat(${n}, minmax(0, 1.5rem)) minmax(0.25rem, 1fr) 1.6rem 1.6rem 1.6rem`
   const decided = [g.winningPitcher && `勝投 ${g.winningPitcher}`, g.losingPitcher && `敗投 ${g.losingPitcher}`, g.savePitcher && `救援 ${g.savePitcher}`].filter(Boolean).join('・')
   return (
-    <button type="button" onClick={onOpen} aria-label={`${g.date} ${teamName} ${s.runsUs} 比 ${s.runsOpp} ${g.opponent}，${live ? '比賽進行中，目前比分' : resultText(s.result)}，看這場`}
+    <button type="button" onClick={onOpen} aria-label={`${g.date} ${intra ? '隊內賽 ' : ''}${names.us} ${s.runsUs} 比 ${s.runsOpp} ${g.opponent}，${live ? '比賽進行中，目前比分' : intra ? '比賽結束' : resultText(s.result)}，看這場`}
       className={cx('lift group relative overflow-hidden text-left rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-4 md:p-5 flex flex-col gap-3.5 cursor-pointer min-w-0', className)}>
       {win && <HeroGlow size="sm" strength={0.75} />}
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[12px] text-ink-2 tnum">{dayLabel(g.date)}</div>
-          <div className="text-[11px] text-muted mt-0.5 truncate">{[g.tournament, g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・')}</div>
+          <div className="text-[11px] text-muted mt-0.5 truncate">{[g.tournament, intra ? `${names.us}${g.homeAway === '主' ? '後攻' : '先攻'}` : g.homeAway === '主' ? '主場' : '客場', g.venue].filter(Boolean).join('・')}</div>
         </div>
         {/* (a game being recorded: its wider 比賽進行中 plate goes under the other badges, so the date line keeps its width) */}
-        <span className={cx('inline-flex gap-1.5 shrink-0', live ? 'flex-col items-end' : 'items-center')}>{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}<ResultPlate result={s.result} id={g.id} /></span>
+        <span className={cx('inline-flex gap-1.5 shrink-0', live ? 'flex-col items-end' : 'items-center')}>{issues > 0 && <Badge variant="warning">{issues} 項待核對</Badge>}{g.isDemo && <Badge variant="outline">示範</Badge>}{intra && !live ? <Badge>隊內賽</Badge> : <ResultPlate result={s.result} id={g.id} />}</span>
       </div>
       <div className="relative flex flex-col gap-1.5">
         {teams.map((t) => (
