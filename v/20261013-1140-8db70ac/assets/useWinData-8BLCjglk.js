@@ -1,0 +1,1 @@
+import{a as t,r as o,bn as i,c as n}from"./index-CKKHbOfP.js";import{f as r,g as u}from"./winTimeline-DJwY4TQS.js";const m=()=>u(n.innings,n.tiebreak);function b(){const e=t(a=>a.base),s=t(a=>a.demo);return o.useMemo(()=>r(i(e,s),m()),[e,s])}export{b as u};
