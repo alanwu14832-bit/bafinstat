@@ -95,8 +95,14 @@ export function parseDayRoster(v: unknown): GameDayRoster | undefined {
   const rules = r && innings ? { innings, tiebreakFrom: intOf(r.tiebreakFrom, 1) ?? null, tiebreakBases: String(r.tiebreakBases ?? '').replace(/[^123]/g, '') } : undefined
   // an older game with no names can still carry the rules it was played by (set in 修改資料)
   if (!starters.length && !bench.length && !subs.length && !rules) return undefined
+  // 隊內賽: the other side's name and its own lineup, bench and substitutions (parsed the same way)
+  const x = isObj(v.intra) ? v.intra : undefined
+  const team = x ? nameOf(x.team) : ''
+  const opp = x && team ? parseDayRoster(x.opp) : undefined
+  const mirrorOf = x && typeof x.mirrorOf === 'string' && x.mirrorOf ? { mirrorOf: x.mirrorOf } : {}
+  const intra = team ? { intra: { team, opp: { starters: opp?.starters ?? [], bench: opp?.bench ?? [], ...(opp?.subs ? { subs: opp.subs } : {}) }, ...mirrorOf } } : {}
   // subs is left out when empty so a roster without substitutions looks the same before and after a save
-  return { starters, bench, ...(subs.length ? { subs } : {}), reentry: v.reentry === true || v.reentry === 1 || v.reentry === 'true', ...(rules ? { rules } : {}) }
+  return { starters, bench, ...(subs.length ? { subs } : {}), reentry: v.reentry === true || v.reentry === 1 || v.reentry === 'true', ...(rules ? { rules } : {}), ...intra }
 }
 
 /** Every name a day roster mentions (starters, bench, substitutions in and out). */
@@ -109,6 +115,10 @@ export function dayRosterNames(r?: GameDayRoster): string[] {
   for (const s of r.starters) out.add(s.name)
   for (const n of r.bench) out.add(n)
   for (const s of r.subs ?? []) { out.add(s.in); out.add(s.out) }
+  // (隊內賽: the other side is our players too)
+  for (const s of r.intra?.opp.starters ?? []) out.add(s.name)
+  for (const n of r.intra?.opp.bench ?? []) out.add(n)
+  for (const s of r.intra?.opp.subs ?? []) { out.add(s.in); out.add(s.out) }
   out.delete('')
   return [...out]
 }
@@ -119,7 +129,8 @@ export function renameInDayRoster<T extends GameDayRoster | undefined>(r: T, ren
   const map = new Map(renames)
   if (!dayRosterNames(r).some((n) => map.has(n))) return r
   const rn = (n: string) => map.get(n) ?? n
-  const next: GameDayRoster = { ...r, starters: r.starters.map((s) => ({ ...s, name: rn(s.name) })), bench: r.bench.map(rn), ...(r.subs ? { subs: r.subs.map((s) => ({ ...s, in: rn(s.in), out: rn(s.out) })) } : {}) }
+  const side = <T extends Pick<GameDayRoster, 'starters' | 'bench' | 'subs'>>(x: T): T => ({ ...x, starters: x.starters.map((s) => ({ ...s, name: rn(s.name) })), bench: x.bench.map(rn), ...(x.subs ? { subs: x.subs.map((s) => ({ ...s, in: rn(s.in), out: rn(s.out) })) } : {}) })
+  const next: GameDayRoster = { ...side(r), ...(r.intra ? { intra: { ...r.intra, opp: side(r.intra.opp) } } : {}) }
   // a rename onto a name already listed would duplicate it; parsing again dedupes
   return (parseDayRoster(next) ?? next) as T
 }

@@ -2,7 +2,8 @@
  * Roster edits: add / update / rename / remove players. Pure helpers; the store persists the result.
  * Renaming a player also renames every record that carries the old name, so stats stay attached.
  */
-import type { Dataset, Player } from './types'
+import { oppBatterName, type Dataset, type Player } from './types'
+import { isIntra } from './intrasquad'
 import { dayRosterNames, renameInDayRoster } from './gameRoster'
 
 export interface RosterChange {
@@ -37,12 +38,23 @@ export function applyRosterChange(base: Dataset, change: RosterChange): Dataset 
   const removed = new Set(change.removed)
   const edited = new Map(change.players.filter((c) => c.original).map((c) => [c.original, c.player]))
   const roster: Player[] = base.roster.filter((p) => !removed.has(p.name)).map((p) => edited.get(p.name) ?? p)
+  const intra = new Set(base.games.filter(isIntra).map((g) => g.id))
   for (const c of change.players) if (!c.original && c.player.name.trim() && !roster.some((p) => p.name === c.player.name)) roster.push(c.player)
   return {
     roster,
     games: base.games.map((g) => ({ ...g, winningPitcher: rn(g.winningPitcher), losingPitcher: rn(g.losingPitcher), savePitcher: rn(g.savePitcher), holds: g.holds?.map((h) => rn(h)!), ...(g.dayRoster ? { dayRoster: renameInDayRoster(g.dayRoster, pairs) } : {}) })),
-    batting: base.batting.map((p) => (renames[p.batter] || (p.runner && renames[p.runner]) ? { ...p, batter: renames[p.batter] ?? p.batter, ...(p.runner ? { runner: renames[p.runner] ?? p.runner } : {}) } : p)),
-    pitching: base.pitching.map((p) => (renames[p.pitcher] ? { ...p, pitcher: renames[p.pitcher] } : p)),
+    batting: base.batting.map((p) => {
+      const opp = intra.has(p.gameId) && p.oppPitcher && renames[p.oppPitcher]
+      return renames[p.batter] || (p.runner && renames[p.runner]) || opp ? { ...p, batter: renames[p.batter] ?? p.batter, ...(p.runner ? { runner: renames[p.runner] ?? p.runner } : {}), ...(opp ? { oppPitcher: opp } : {}) } : p
+    }),
+    pitching: base.pitching.map((p) => {
+      // (隊內賽: the other side's batters and 代跑 are our players too — 「代打 X」 keeps its mark)
+      if (!intra.has(p.gameId)) return renames[p.pitcher] ? { ...p, pitcher: renames[p.pitcher] } : p
+      const name = oppBatterName(p.oppBatter)
+      const batter = name && renames[name] ? p.oppBatter!.replace(name, renames[name]) : p.oppBatter
+      const runner = p.runner && renames[p.runner] ? renames[p.runner] : p.runner
+      return renames[p.pitcher] || batter !== p.oppBatter || runner !== p.runner ? { ...p, pitcher: renames[p.pitcher] ?? p.pitcher, ...(batter ? { oppBatter: batter } : {}), ...(runner ? { runner } : {}) } : p
+    }),
     fielding: base.fielding.map((f) => (renames[f.player] ? { ...f, player: renames[f.player] } : f)),
   }
 }

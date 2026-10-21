@@ -32,6 +32,7 @@ import { WinModelNote, winRulesText } from '../components/ui/WinModelNote'
 import { useWinData } from '../hooks/useWinData'
 import { keyPlays, keyRowSets, rowWins, withWinBatting, withWinPitching, WPA_DISCLAIMER, type GameEvent } from '../data/winTimeline'
 import { TEAM_NAME } from '../data/seed'
+import { intraView, isIntra, mirrorId, sideNames, withSideNames } from '../data/intrasquad'
 import { cx } from '../lib/format'
 import { downloadGameImage } from '../lib/shareImage'
 import { siteUrl } from '../lib/siteUrl'
@@ -113,16 +114,16 @@ function DayRosterCard({ a, hasRoster, reentry, onPlayer }: { a: GameAppearances
   )
 }
 
-function LineScore({ s }: { s: GameSummary }) {
+function LineScore({ s, usName = TEAM_NAME }: { s: GameSummary; /** our side's name (a 隊內賽's stored side) */ usName?: string }) {
   // (every inning a column; a game being recorded leaves the innings not reached yet blank)
   const n = Math.max(s.game.innings ?? 0, s.lineUs.length, s.lineOpp.length)
   // each team's E is the errors that team made (ours from our fielding lines, theirs from our batters reaching on 失誤)
-  const opp = { name: s.game.opponent, line: boardLine(s, 'opp'), r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp }
-  const us = { name: TEAM_NAME, line: boardLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs }
+  const opp = { name: s.game.opponent, line: boardLine(s, 'opp'), r: s.runsOpp, h: s.hitsOpp, e: s.errorsOpp, us: false }
+  const us = { name: usName, line: boardLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs, us: true }
   const top = s.game.homeAway === '主' ? opp : us
   const bottom = s.game.homeAway === '主' ? us : opp
   return (
-    <LineScoreBoard innings={n} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.name === TEAM_NAME }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.name === TEAM_NAME }} />
+    <LineScoreBoard innings={n} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.us }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.us }} />
   )
 }
 
@@ -217,11 +218,24 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const pickBoxView = (v: BoxView) => { setBoxView(v); writeBoxView(v) }
   const [filter, setFilter] = useState<PbpFilter>('all')
   const editable = !current.game.isDemo ? extractGame(base, id) : null
+  // this game's rows from every game (whatever the filter; a 隊內賽's other side too); season counts from the team's games
+  const ds = s.full
+  const official = useMemo(() => intraView(s.full, 'exclude'), [s.full])
+  const intra = isIntra(current.game)
+  const names = sideNames(current.game, TEAM_NAME)
+  // (隊內賽) the other side: its batters' and its pitchers' box, from its view of the game (data/intrasquad.ts)
+  const other = useMemo(() => {
+    if (!intra) return null
+    const mid = mirrorId(id)
+    const game = ds.games.find((g) => g.id === mid)
+    const bat = ds.batting.filter((p) => p.gameId === mid), pit = ds.pitching.filter((p) => p.gameId === mid)
+    return game ? { bat: ourBattingBox(ds, bat, undefined, game.dayRoster?.starters), pit: ourPitchingBox(pit, [game]) } : null
+  }, [intra, id, ds])
   // batting-order slot (a 代跑 who never batted sits in the slot he ran for), then first appearance (data/boxScore.ts:
   // the lines 即時比分's Box Score shows too)
-  const boxB = useMemo(() => ourBattingBox(s.dataset, s.dataset.batting.filter((p) => p.gameId === id), undefined, current.game.dayRoster?.starters), [id, s.dataset, current.game.dayRoster])
-  const pbpBat = useMemo(() => s.dataset.batting.filter((p) => p.gameId === id), [id, s.dataset])
-  const pbpPit = useMemo(() => s.dataset.pitching.filter((p) => p.gameId === id), [id, s.dataset])
+  const boxB = useMemo(() => ourBattingBox(ds, ds.batting.filter((p) => p.gameId === id), undefined, current.game.dayRoster?.starters), [id, ds, current.game.dayRoster])
+  const pbpBat = useMemo(() => ds.batting.filter((p) => p.gameId === id), [id, ds])
+  const pbpPit = useMemo(() => ds.pitching.filter((p) => p.gameId === id), [id, ds])
   // 獲勝機率: this game's events, its key plays, and WPA on the box score and the 逐球 rows
   const win = useWinData()
   const winEvents = useMemo(() => win.events.get(id) ?? [], [win, id])
@@ -241,14 +255,19 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const sheetOpp = useMemo(() => buildScoresheet(pbpPit, 'pit', { innings }), [pbpPit, innings])
   const statUs = useMemo(() => { const m = new Map(boxB.map((l) => [l.name, l])); return (n: string) => m.get(n) }, [boxB])
   const statOpp = useMemo(() => { const m = new Map(oppLines.map((l) => [l.label, { ab: l.ab, h: l.h, rbi: l.rbi }])); return (n: string) => m.get(n) }, [oppLines])
-  const notes = useMemo(() => gameNotes(current, s.dataset), [current, s.dataset])
+  const notes = useMemo(() => gameNotes(current, ds), [current, ds])
   const sets = useMemo(() => ({ bat: pbpFilterSets(pbpBat, 'bat', keyRows.bat), pit: pbpFilterSets(pbpPit, 'pit', keyRows.pit) }), [pbpBat, pbpPit, keyRows])
   const issues = useMemo(() => auditGame(pbpBat, pbpPit), [pbpBat, pbpPit])
   // 文字轉播: both sides in one story, with who ran where (the 逐球 tables stay the detailed view)
-  const feed = useMemo(() => (tab === 'feed' ? buildFeed({ homeAway: current.game.homeAway, opponent: current.game.opponent, batting: pbpBat, pitching: pbpPit, subs: current.game.dayRoster?.subs, priorHr: seasonHrBefore(s.dataset, current.game) }) : []), [tab, current.game, pbpBat, pbpPit, s.dataset])
+  // (隊內賽: 「我隊」「對方」 read as the two sides' names; no 本季第幾支 for a game the season does not count)
+  const feed = useMemo(() => {
+    if (tab !== 'feed') return []
+    const f = buildFeed({ homeAway: current.game.homeAway, opponent: current.game.opponent, batting: pbpBat, pitching: pbpPit, subs: current.game.dayRoster?.subs, priorHr: intra ? undefined : seasonHrBefore(official, current.game) })
+    return intra ? withSideNames(f, names) : f
+  }, [tab, current.game, pbpBat, pbpPit, official, intra, names])
   // from the unfiltered dataset: the 守位 filter would hide substitutes
-  const appearances = useMemo(() => gameAppearances(s.dataset, current.game), [current.game, s.dataset])
-  const recap = useMemo(() => gameRecap(current, s.dataset, TEAM_NAME), [current, s.dataset])
+  const appearances = useMemo(() => gameAppearances(ds, current.game), [current.game, ds])
+  const recap = useMemo(() => gameRecap(current, intra ? ds : official, names.us), [current, intra, ds, official, names.us])
   // 盜壘 counts higher than the runner plays show (left by an older editor): one confirmed click lowers them
   const repairs = useMemo(() => stealRepairs(pbpBat, pbpPit), [pbpBat, pbpPit])
   const repairSteals = async () => {
@@ -358,10 +377,10 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
       <div className={cx('sticky z-[3] bg-surface border-b border-border px-5 md:px-6 pt-3 sm:pt-5 pb-3 flex flex-col gap-3', page ? 'top-[var(--topbar-h)] -mx-4 md:-mx-10 md:px-10 rounded-none' : 'top-0')}>
         <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
           <div className="min-w-0">
-            <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
+            <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{intra ? `${names.us}${current.game.homeAway === '主' ? '後攻' : '先攻'}` : current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
             <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
-              <span>{TEAM_NAME} <span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
-              <span className="inline-flex items-center gap-1.5">{unsure ? <PendingBadge /> : resultBadge(current.result, current.game.id)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
+              <span>{intra ? `${names.us} ` : `${TEAM_NAME} `}<span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
+              <span className="inline-flex items-center gap-1.5">{intra && !live ? <Badge>隊內賽</Badge> : unsure ? <PendingBadge /> : resultBadge(current.result, current.game.id)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
               {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent underline underline-offset-2">看即時比分</Link>}
             </h2>
             {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
@@ -444,7 +463,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                 </span>
               </div>
             )}
-            <LineScore s={current} />
+            <LineScore s={current} usName={names.us} />
             {tab === 'summary' && (
               <Card title="戰報摘要" subtitle={issues.length ? `這場有 ${issues.length} 項待核對，摘要依目前紀錄產生，僅供參考` : '依這場的紀錄產生；點局數看那半局的逐球、點球員看個人檔案'}>
                 {recap.length === 0 ? <p className="text-[13px] text-muted">這場的紀錄還不足以寫摘要。</p> : (
@@ -463,7 +482,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                 )}
               </Card>
             )}
-            {tab === 'summary' && (
+            {tab === 'summary' && !intra && (
               <>
                 <Card title="獲勝機率走勢" subtitle={`${TEAM_NAME}每個打席後的獲勝機率。描述這場發生了什麼，不代表預測能力。`}
                   action={<Button variant="ghost" size="sm" icon={<Info />} aria-expanded={modelNote} onClick={() => setModelNote((v) => !v)}>模型說明</Button>}>
@@ -486,24 +505,35 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             )}
             {tab === 'summary' && (
               <>
+                {other && <p className="text-[13px] font-semibold text-ink -mb-2">{names.us}</p>}
                 {batCard}
                 {pitCard}
+                {other && <>
+                  <p className="text-[13px] font-semibold text-ink -mb-2">{names.opp}</p>
+                  <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={other.bat} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                  <Card title="投球" subtitle="依上場順序" flush><DataTable columns={boxPit} rows={other.pit} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
+                </>}
                 <GameNotesCard sections={notes} />
                 <GameMediaCard gameId={id} canEdit={canEdit} />
               </>
             )}
             {tab === 'box' && (
               <>
+                {other && <p className="text-[13px] font-semibold text-ink -mb-2">{names.us}</p>}
                 {batCard}
                 {pitCard}
-                {oppCard}
-                {oppPit.length > 0 && <Card title="對方投手" subtitle="依上場順序；沒填姓名的照左右投分開" flush><DataTable columns={boxOppPit} rows={oppPit} rowKey={(r) => r.key} dense /></Card>}
+                {other ? <>
+                  <p className="text-[13px] font-semibold text-ink -mb-2">{names.opp}</p>
+                  <Card title="打擊" subtitle="點球員看個人檔案" flush><DataTable columns={boxBat} rows={other.bat} rowKey={(r) => r.name} onRowClick={openPlayer} dense /></Card>
+                  <Card title="投球" subtitle="依上場順序" flush><DataTable columns={boxPit} rows={other.pit} rowKey={(r) => r.name} onRowClick={openPitcher} dense /></Card>
+                </> : oppCard}
+                {!other && oppPit.length > 0 && <Card title="對方投手" subtitle="依上場順序；沒填姓名的照左右投分開" flush><DataTable columns={boxOppPit} rows={oppPit} rowKey={(r) => r.key} dense /></Card>}
                 <GameNotesCard sections={notes} />
-                {current.game.opponent.trim() && <OpponentScoutCard ds={s.dataset} opponent={current.game.opponent} title={`歷來對 ${current.game.opponent}`} />}
+                {!intra && current.game.opponent.trim() && <OpponentScoutCard ds={official} opponent={current.game.opponent} title={`歷來對 ${current.game.opponent}`} />}
               </>
             )}
-            {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
-            {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={pbpSubtitle(`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
+            {tab === 'bat' && <Card title={`${intra ? names.us : '我隊'}打擊・逐球紀錄`} subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
+            {tab === 'pit' && <Card title={`${intra ? names.us : '我隊'}投手・逐球紀錄`} subtitle={pbpSubtitle(`${intra ? names.opp : '對方'}每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
             {tab === 'feed' && <Broadcast halves={feed} weTop={current.game.homeAway === '客'} opponent={current.game.opponent} allOpen />}
             {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={hasRosterNames(current.game.dayRoster)} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}

@@ -7,6 +7,7 @@ import { SEASON_START, seasonHeader } from '../data/seasons'
 import { useHistory } from '../hooks/useHistory'
 import { PlayerCareer } from '../components/ui/PlayerCareer'
 import { filterGames } from '../data/filters'
+import { opponentLabel } from '../data/intrasquad'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { activeFilterCount } from '../components/layout/FilterBar'
@@ -187,12 +188,13 @@ export function PlayersPage() {
   const cmpPit = compare ? pitchByName.get(compare) : undefined
   const cmpPlayer = compare ? roster.find((p) => p.name === compare) : undefined
 
-  const gameLog: GameLogRow[] = useMemo(() => s.summaries.map((g) => {
+  // (a 隊內賽 too when the filter counts them: his side's view of it)
+  const gameLog: GameLogRow[] = useMemo(() => s.allSummaries.map((g) => {
     const pas = s.batting.filter((p) => p.gameId === g.game.id && ranOrBatted(p, selected))
     const l = battingLines(s.dataset, pas).find((x) => x.name === selected)
     if (!l) return null
-    return { id: g.game.id, date: g.game.date, opponent: g.game.opponent, pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
-  }).filter((r): r is GameLogRow => r !== null).reverse(), [s.summaries, s.batting, s.dataset, selected])
+    return { id: g.game.id, date: g.game.date, opponent: opponentLabel(g.game), pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
+  }).filter((r): r is GameLogRow => r !== null).reverse(), [s.allSummaries, s.batting, s.dataset, selected])
 
   // Radar: this player's team percentile on six axes. The second shape is someone or something to compare
   // with — never a flat 50; the median is the dashed ring. Every shape sits on the same ruler: PR against the
@@ -304,7 +306,7 @@ export function PlayersPage() {
     const mine = s.pitching.filter((p) => p.pitcher === selected)
     const out: PitchLogRow[] = []
     const upTo: string[] = []
-    for (const g of s.summaries) {
+    for (const g of s.allSummaries) {
       const pas = mine.filter((p) => p.gameId === g.game.id)
       if (!pas.length) continue
       upTo.push(g.game.id)
@@ -313,10 +315,10 @@ export function PlayersPage() {
       const season = pitchingLines(mine.filter((p) => upTo.includes(p.gameId)), [], statParams).find((x) => x.name === selected)
       if (!l) continue
       const dec = l.w ? '勝' : l.l ? '敗' : l.sv ? '救援' : l.hld ? '中繼' : ''
-      out.push({ id: g.game.id, date: g.game.date, opponent: g.game.opponent, dec, outs: l.outs, ip: l.ipDisplay, bf: l.bf, h: l.h, r: l.r, er: l.er, bb: l.bb, k: l.k, pc: l.pc, era: f2(season?.era ?? null), isDemo: !!g.game.isDemo })
+      out.push({ id: g.game.id, date: g.game.date, opponent: opponentLabel(g.game), dec, outs: l.outs, ip: l.ipDisplay, bf: l.bf, h: l.h, r: l.r, er: l.er, bb: l.bb, k: l.k, pc: l.pc, era: f2(season?.era ?? null), isDemo: !!g.game.isDemo })
     }
     return out.reverse()
-  }, [s.pitching, s.summaries, selected, statParams])
+  }, [s.pitching, s.allSummaries, selected, statParams])
   const pitchTrend = useMemo(() => {
     const mine = s.pitching.filter((p) => p.pitcher === selected)
     const rows = [...pitchLog].reverse()

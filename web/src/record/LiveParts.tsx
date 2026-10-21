@@ -67,7 +67,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
   const top = state.half === 'top'
   const weTop = state.game.homeAway === '客'
   const rows = [
-    { name: TEAM.short, score: us, bat: side === 'us' },
+    { name: state.intra?.team ?? TEAM.short, score: us, bat: side === 'us' },
     { name: state.game.opponent, score: opp, bat: side === 'opp' },
   ]
   if (!weTop) rows.reverse()
@@ -104,7 +104,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
             <span className="inline-flex items-center gap-1.5 self-start">
             <span className={cx('inline-flex self-start items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold', side === 'us' ? 'bg-[var(--accent-board,var(--accent))] text-[var(--accent-board-ink,var(--accent-ink))]' : 'ring-1 ring-white/30')}>
               {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
-              {side === 'us' ? '我隊打擊' : '我隊守備'}
+              {state.intra ? `${side === 'us' ? state.intra.team : state.game.opponent}進攻` : side === 'us' ? '我隊打擊' : '我隊守備'}
             </span>
             {practice && <PracticeTag />}
             </span>
@@ -118,7 +118,7 @@ export function LiveBar({ state, us, opp, balls, strikes, side, who, onRunners, 
         <div className="relative sm:hidden flex items-center gap-2 px-3 py-1.5 border-t text-[12px] min-w-0" style={{ borderColor: BOARD.line }}>
           <span role="status" aria-live="polite" className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-full font-semibold shrink-0', side === 'us' ? 'bg-[var(--accent-board,var(--accent))] text-[var(--accent-board-ink,var(--accent-ink))]' : 'ring-1 ring-white/30')}>
             {side === 'us' ? <Target className="size-3.5" /> : <Flame className="size-3.5" style={{ color: BOARD.strike }} />}
-            {side === 'us' ? '我隊打擊' : '我隊守備'}
+            {state.intra ? `${side === 'us' ? state.intra.team : state.game.opponent}進攻` : side === 'us' ? '我隊打擊' : '我隊守備'}
           </span>
           {practice && <PracticeTag />}
           <span className="truncate min-w-0" style={{ color: BOARD.muted }}>{who}</span>
@@ -284,6 +284,8 @@ export interface SubSheetProps {
   /** 投手休息表 reminder after a pitcher's 「N 球」 (休息中・10/12 起 / 10/08 投 20 球 / 今天另一場 35 球); never disables him */
   restNote?: (name: string) => { text: string; tone: 'muted' | 'warning' } | undefined
   fieldPos: (slot: number) => string
+  /** whose sheet it is (隊內賽: the other side's name; ours has none) */
+  title?: string
 }
 
 /** 換人 / 換投 as three rows of chips: which slot, who comes in, which position; then one confirm. */
@@ -295,9 +297,10 @@ export function SubSheet(p: SubSheetProps) {
     ? (p.newPitcher ? `${p.newPitcher} 接替 ${state.pitcher}` : '選一位投手')
     : !slot ? '' : sub.name ? `${sub.name} ${sub.pos === 'PH' ? '代打' : sub.pos === 'PR' ? '代跑' : `換上，守 ${sub.pos || slot.pos}`}（換下第 ${sub.slot + 1} 棒 ${slot.name}）` : sub.pos && sub.pos !== slot.pos ? `第 ${sub.slot + 1} 棒 ${slot.name} 改守 ${sub.pos}` : '選換上的人，或只改守位'
   return (
-    <Sheet open={p.open} onClose={p.onClose} ariaLabel={p.mode === 'pitcher' ? '換投' : '換人'} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-xl" contentClassName="record-zoom max-h-[86vh] overflow-y-auto">
+    <Sheet open={p.open} onClose={p.onClose} ariaLabel={`${p.title ?? ''}${p.mode === 'pitcher' ? '換投' : '換人'}`} side="bottom" desktopFrom="sm" panelClassName="sm:max-w-xl" contentClassName="record-zoom max-h-[86vh] overflow-y-auto">
       <div className="p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
+          {p.title && <span className="text-[15px] font-semibold text-ink">{p.title}</span>}
           <div className="inline-flex self-start rounded-[var(--radius-sm)] bg-surface-2 p-0.5" role="tablist" aria-label="換人或換投">
             {(['lineup', 'pitcher'] as const).map((m) => (
               <button key={m} role="tab" type="button" aria-selected={p.mode === m} onClick={() => p.onMode(m)} className={cx('h-9 px-4 rounded-[6px] text-[13px] font-medium cursor-pointer', p.mode === m ? 'bg-surface text-ink shadow-[var(--shadow-card)]' : 'text-ink-2 hover:text-ink')}>{m === 'lineup' ? (p.side === 'us' ? '代打／換人' : '換人') : '換投'}</button>

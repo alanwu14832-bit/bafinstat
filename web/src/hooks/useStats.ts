@@ -3,10 +3,14 @@ import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
 import { battingLines, errorsByPosition, fieldingLines, ourRunsOf, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
 import { effectiveDataset, useDataStore } from '../store/data'
+import { intraView, isIntra, withMirrors } from '../data/intrasquad'
 import { useLiveIds } from './useLiveGames'
 
 export interface Computed extends FilteredData {
+  /** the games the numbers count (the 隊內賽 filter applied) */
   dataset: Dataset
+  /** every game, each 隊內賽 with both sides' view (the game list and the game page show them whatever the filter) */
+  full: Dataset
   batters: BattingLine[]
   team: BattingLine
   pitchers: PitchingLine[]
@@ -42,13 +46,14 @@ export function useStats(): Computed {
 
 type State = ReturnType<typeof useDataStore.getState>
 function compute(base: State['base'], demo: State['demo'], filters: State['filters'], rawParams: State['params']): Computed {
-  const dataset = effectiveDataset(base, demo)
+  const full = withMirrors(effectiveDataset(base, demo))
+  const dataset = intraView(full, filters.intra)
   const params = resolveParams(rawParams, dataset.pitching)
   const fd = applyFilters(dataset, filters)
-  // the score by inning: inherited runners, blown saves… need it
-  const ctx = { ourRuns: ourRunsOf(fd.summaries) }
+  // the score by inning: inherited runners, blown saves… need it (a 隊內賽's too)
+  const ctx = { ourRuns: ourRunsOf(fd.allSummaries) }
   return {
-    ...fd, dataset,
+    ...fd, dataset, full,
     batters: battingLines(dataset, fd.batting, params),
     team: teamBatting(dataset, fd.batting, params),
     pitchers: pitchingLines(fd.pitching, fd.games, params, ctx),
@@ -74,7 +79,7 @@ export function useFilterOptions() {
     return {
       tournaments: uniqueSorted(ds.games.map((g) => g.tournament)),
       tournamentNames: uniqueSorted([...ds.games.map((g) => g.tournament), ...registrations.map((r) => r.tournament)]),
-      opponents: uniqueSorted(ds.games.map((g) => g.opponent)),
+      opponents: uniqueSorted(ds.games.filter((g) => !isIntra(g)).map((g) => g.opponent)),
       positions: uniqueSorted([...ds.batting.map((p) => p.pos), ...ds.fielding.map((f) => f.pos)]),
       minDate: ds.games.reduce<string>((m, g) => (m && m < g.date ? m : g.date), ''),
       maxDate: ds.games.reduce<string>((m, g) => (m > g.date ? m : g.date), ''),

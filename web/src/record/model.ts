@@ -111,6 +111,8 @@ export interface RecordState {
   oppNames?: boolean
   /** their batting order, 9 names ('' = not typed); a change in the middle of the game is a pinch hitter */
   oppLineup?: string[]
+  /** 隊內賽: the other side (game.opponent) is our players too — see IntraState */
+  intra?: IntraState
   // 延長賽突破僵局. Optional: drafts without it use the team's default rule (record/tiebreak.ts tiebreakRuleOf).
   /** the rule for this game; null = 不採用 */
   tiebreak?: TiebreakRule | null
@@ -118,6 +120,24 @@ export interface RecordState {
   tiebreakSkip?: string[]
   /** 練習紀錄: a practice game, kept only on this device (record/draft.ts PRACTICE_KEY); never saved or synced */
   practice?: boolean
+}
+/**
+ * 隊內賽 (data/intrasquad.ts): the other side's batting order is `oppLineup` (names, 記對方打者姓名 on) and its pitcher
+ * `oppPitcher`; this keeps the rest of it, the way our own lineup is kept: its positions by slot, how it started, its
+ * bench and every substitution (logged by intraSub / intraPitcher, saved as dayRoster.intra), and the players' 左右打 /
+ * 左右投 from the roster (so the recorder is asked only about the ones it does not know).
+ */
+export interface IntraState {
+  /** our side's name (the rows' 我隊); the other side's is game.opponent */
+  team: string
+  /** the other side's positions now, by batting-order slot */
+  pos: string[]
+  starters: LineupSlot[]
+  startingPitcher: string
+  bench: string[]
+  subs: DayRosterSub[]
+  bats?: Record<string, OppBats>
+  throws?: Record<string, OppHand>
 }
 /** 突破僵局: from which inning on, and the bases the runners are put on. */
 export interface TiebreakRule { from: number; bases: Base[] }
@@ -171,7 +191,9 @@ export function withInPlay(pitches: string[], result: string): string[] {
   return [...pitches, 'IP']
 }
 
-export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null } = {}): RecordState {
+export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null
+  /** 隊內賽: our side's name and the other side's lineup, pitcher and bench (with the players' 左右打 / 左右投 known) */
+  intra?: { team: string; lineup: LineupSlot[]; pitcher: string; bench?: string[]; bats?: Record<string, OppBats>; throws?: Record<string, OppHand> } } = {}): RecordState {
   // the bench never repeats a starter (Setup may have promoted a bench player into the lineup)
   const starting = new Set([...lineup.map((l) => l.name), pitcher])
   const bench = [...new Set((opts.bench ?? []).filter((n) => n && !starting.has(n)))]
@@ -180,6 +202,18 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
     starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry, subs: [],
     ...(opts.oppNames !== undefined ? { oppNames: opts.oppNames } : {}), ...(opts.oppLineup ? { oppLineup: lineupOf(opts.oppLineup) } : {}),
     ...(opts.tiebreak !== undefined ? { tiebreak: opts.tiebreak } : {}),
+    ...(opts.intra ? intraStart(opts.intra) : {}),
+  }
+}
+/** A 隊內賽's other side at the first pitch: its order (oppLineup) and pitcher, both sides free to bring players back. */
+function intraStart(x: NonNullable<Parameters<typeof newGame>[3]>['intra'] & object): Partial<RecordState> {
+  const lineup = Array.from({ length: 9 }, (_, i) => ({ name: x.lineup[i]?.name.trim() ?? '', pos: x.lineup[i]?.pos ?? '' }))
+  const hand = x.throws?.[x.pitcher]
+  const starting = new Set([...lineup.map((l) => l.name), x.pitcher])
+  return {
+    reentry: true, oppNames: true, oppLineup: lineup.map((l) => l.name),
+    oppPitcher: hand ? { name: x.pitcher, hand } : { name: x.pitcher, handUnknown: true },
+    intra: { team: x.team, pos: lineup.map((l) => l.pos), starters: lineup, startingPitcher: x.pitcher, bench: [...new Set((x.bench ?? []).filter((n) => n && !starting.has(n)))], subs: [], ...(x.bats ? { bats: x.bats } : {}), ...(x.throws ? { throws: x.throws } : {}) },
   }
 }
 
@@ -331,7 +365,7 @@ export function answerOppHand(s: RecordState, hand: OppHand | null): RecordState
 
 /* ------------------------------------------------ 對方打者左右打 */
 /** Their batter up now: the side picked for his slot this game, '?' = 不知道, undefined = not asked yet. */
-export const oppBatsNow = (s: RecordState): OppBats | '?' | undefined => s.oppBatsBySlot?.[s.oppOrder]
+export const oppBatsNow = (s: RecordState): OppBats | '?' | undefined => s.oppBatsBySlot?.[s.oppOrder] ?? (s.intra ? s.intra.bats?.[oppBatterName(oppBatterOf(s))] : undefined)
 /** While they bat (when the cloud can store it: `on`), the pitch pad and the results wait for 左打／右打. */
 export const needsOppBats = (s: RecordState, on: boolean): boolean => on && !s.finished && offense(s) === 'opp' && (!oppBatsNow(s) || oppBatsNow(s) === '?')
 /** 左打 / 右打 for their batter up now (no 不知道: a draft saved with one is asked again); his later plate appearances this game start from it. */
@@ -532,6 +566,78 @@ export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s,
  * the row's batting slot known, that slot of their order becomes the pinch runner (rows already sent keep their names),
  * so his next plate appearance shows him.
  */
+/* ------------------------------------------------ 隊內賽: the other side's changes */
+/** Where a change of theirs was made while they field (we bat): after this many of the half's rows (as rowNow for ours). */
+function intraRowNow(s: RecordState): { row?: number } {
+  if (offense(s) !== 'us') return {}
+  const n = s.batting.filter((p) => p.inning === s.inning).length
+  return n ? { row: n } : {}
+}
+/**
+ * 隊內賽: the other side's batting-order slot (0-based) gets `name` at `pos`, logged as its substitution the way ours
+ * are: a 代跑 for the man on base (pinchRunOpp), a 代打 for the batter up now (pinchHitOpp), else a 守備 change; the man
+ * already there with another position is a 守備調動. Put at P, he is their pitcher from now on (intraPitcher).
+ * Everyone may come back (自由替換).
+ */
+export function intraSub(s: RecordState, slot: number, name: string, pos: string): RecordState {
+  const x = s.intra
+  if (!x || slot < 0 || slot > 8) return s
+  const lineup = lineupOf(s.oppLineup ?? [])
+  const old = lineup[slot]
+  const oldPos = x.pos[slot] ?? ''
+  const at = { inning: s.inning, half: s.half, slot, ...intraRowNow(s) }
+  const withSub = (st: RecordState, sub: DayRosterSub, newPos: string): RecordState => ({ ...st, intra: { ...x, pos: x.pos.map((p, i) => (i === slot ? newPos : p)), subs: [...x.subs, sub] } })
+  if (!name || name === old) {
+    if (!pos || pos === oldPos || !old) return s
+    const next = withSub(s, { kind: 'DEF', in: old, out: old, pos, ...at }, pos)
+    return pos === 'P' && old !== s.oppPitcher?.name ? intraPitcher(next, old, { logged: true }) : next
+  }
+  const theyBat = offense(s) === 'opp'
+  // the man in that slot is on base: his 代跑 (whatever the position box says)
+  const onBase = theyBat ? s.runners.find((r) => r.side === 'opp' && s.pitching[r.row]?.oppOrder === slot + 1) : undefined
+  if (onBase) return withSub(pinchRunOpp(s, onBase.row, name), { kind: 'PR', in: name, out: old, pos: 'PR', ...at }, 'PR')
+  if (theyBat && pos === 'PH' && slot === s.oppOrder - 1) return withSub(pinchHitOpp(s, name), { kind: 'PH', in: name, out: old, pos: 'PH', ...at }, 'PH')
+  const newPos = pos === 'PR' ? oldPos : pos || oldPos
+  const next = withSub({ ...clearOppBats(s, slot + 1), oppLineup: lineup.map((n, i) => (i === slot ? name : n)) }, { kind: 'DEF', in: name, out: old, pos: newPos, ...at }, newPos)
+  return newPos === 'P' && name !== s.oppPitcher?.name ? intraPitcher(next, name, { logged: true }) : next
+}
+/**
+ * 隊內賽: the other side's new pitcher (their 換投, setOppPitcher; his 左右投 from the roster). Without a DH the pitcher
+ * bats: one from outside their order takes the old pitcher's slot, a fielder who moves to the mound keeps his own (now
+ * P). `logged`: the change is already in their substitutions (a 守備 change to P).
+ */
+export function intraPitcher(s: RecordState, name: string, opts: { logged?: boolean } = {}): RecordState {
+  const x = s.intra
+  const was = s.oppPitcher?.name ?? ''
+  if (!x || !name || name === was) return s
+  const hand = x.throws?.[name]
+  const next = setOppPitcher(s, hand ? { name, hand } : { name, handUnknown: true })
+  const lineup = lineupOf(next.oppLineup ?? [])
+  const pos = x.pos.slice()
+  let slot = lineup.indexOf(name)
+  if (slot >= 0) pos[slot] = 'P'
+  else {
+    slot = lineup.findIndex((n, i) => n && n === was && pos[i] === 'P')
+    if (slot >= 0) lineup[slot] = name
+  }
+  const sub: DayRosterSub = { kind: 'P', in: name, out: was, pos: 'P', inning: s.inning, half: s.half, ...(slot >= 0 ? { slot } : {}), ...intraRowNow(s) }
+  return { ...next, oppLineup: lineup, intra: { ...x, pos, subs: opts.logged ? x.subs : [...x.subs, sub] } }
+}
+/**
+ * 隊內賽: the other side as a lineup of its own, read-only (the 換人／換投 sheet and its candidates): its order with
+ * positions, the batter up, its pitcher, how it started, its bench and substitutions; its runners are 'us'.
+ */
+export function otherSide(s: RecordState): RecordState {
+  const x = s.intra!
+  const names = lineupOf(s.oppLineup ?? [])
+  return {
+    ...s, game: { ...s.game, homeAway: s.game.homeAway === '主' ? '客' : '主' },
+    lineup: names.map((name, i) => ({ name, pos: x.pos[i] ?? '' })), slot: s.oppOrder - 1, pitcher: s.oppPitcher?.name ?? '',
+    starters: x.starters, startingPitcher: x.startingPitcher, bench: x.bench, subs: x.subs, reentry: true,
+    runners: s.runners.map((r) => ({ ...r, side: r.side === 'us' ? 'opp' : 'us' })),
+    batting: [], pitching: [], intra: undefined,
+  }
+}
 /**
  * 臨時代跑 (the amateur courtesy runner, e.g. for the catcher): someone runs for our runner without a substitution — the
  * one on base only changes his name while he is out there; the row (and its run, steals) stays the batter's, with a note.
@@ -1239,7 +1345,13 @@ export function dayRosterOf(s: RecordState): GameDayRoster {
   const innings = s.game.innings ?? TEAM.innings
   const tbBases = s.tiebreak === undefined ? String(TEAM.tiebreak ?? '').replace(/[^123]/g, '') : s.tiebreak ? s.tiebreak.bases.join('') : ''
   const tbFrom = s.tiebreak === undefined ? (tbBases ? innings + 1 : null) : s.tiebreak?.from ?? null
-  return { starters, bench: s.bench ?? [], subs: s.subs ?? [], reentry: !!s.reentry, rules: { innings, tiebreakFrom: tbFrom, tiebreakBases: tbBases } }
+  return { starters, bench: s.bench ?? [], subs: s.subs ?? [], reentry: !!s.reentry, rules: { innings, tiebreakFrom: tbFrom, tiebreakBases: tbBases }, ...(s.intra ? { intra: intraRosterOf(s.intra) } : {}) }
+}
+/** A 隊內賽's other side as saved (dayRoster.intra): its starters with their order (its pitcher without one under a DH). */
+function intraRosterOf(x: IntraState): NonNullable<GameDayRoster['intra']> {
+  const starters: GameDayRoster['starters'] = x.starters.flatMap((l, i) => (l.name ? [{ name: l.name, pos: l.pos, order: i + 1 }] : []))
+  if (x.startingPitcher && !starters.some((l) => l.name === x.startingPitcher)) starters.push({ name: x.startingPitcher, pos: 'P' })
+  return { team: x.team, opp: { starters, bench: x.bench, ...(x.subs.length ? { subs: x.subs } : {}) } }
 }
 
 /** Package the game for saveGame (normalize derives fielding, innings and warnings). */

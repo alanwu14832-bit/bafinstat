@@ -188,8 +188,23 @@ export interface DayRosterSub { kind: 'PH' | 'PR' | 'DEF' | 'P'; in: string; out
 /** Part of one opponent row's errors (positions) and catcher plays, charged by another alignment (DayRosterSub before / after). */
 export interface SubCharges { errors?: string[]; sba?: number; cs?: number; pb?: number; pk?: number }
 /** Who was available for one game: starters (with batting order; the non-batting pitcher under a DH has no order), bench (到場未先發), substitutions, re-entry rule. */
-export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean; /** the rules the game was played by (紀錄比賽 saves them): its scheduled innings, and the tie-break from that inning on those bases ('12'; null = none) — the saved 局數 is the innings it went */ rules?: GameRules }
+export interface GameDayRoster { starters: Array<{ name: string; pos: string; order?: number }>; bench: string[]; subs?: DayRosterSub[]; reentry: boolean; /** the rules the game was played by (紀錄比賽 saves them): its scheduled innings, and the tie-break from that inning on those bases ('12'; null = none) — the saved 局數 is the innings it went */ rules?: GameRules
+  /** 隊內賽: the other side (see IntraSquad) */
+  intra?: IntraSquad }
 export interface GameRules { innings: number; tiebreakFrom: number | null; tiebreakBases: string }
+/**
+ * 隊內賽 (intra-squad game): both sides are our players. The game's rows are written from one side (`team`, the rows'
+ * 我隊); the other side is game.opponent, with its lineup, bench and substitutions here, its batters and pitchers named
+ * on the rows (PitchingPA.oppBatter, BattingPA.oppPitcher). data/intrasquad.ts makes the other side's view of the game.
+ */
+export interface IntraSquad {
+  /** the side the rows are written from */
+  team: string
+  /** the other side: who started where (batting order, position), the bench and its substitutions, as for ours */
+  opp: { starters: GameDayRoster['starters']; bench: string[]; subs?: DayRosterSub[] }
+  /** (the other side's view, made when the data is read; never saved) the stored game it was made from */
+  mirrorOf?: string
+}
 
 /** The migration that creates the albums table (photo albums and 比賽影片 links); named in the 開通 sentence. Each
  *  repo's own file, so it lives in config/teamDefaults.ts and this file stays the same in both sites. */
@@ -382,10 +397,12 @@ export interface Filters {
   opponent: string
   homeAway: 'all' | HomeAway
   result: 'all' | GameResult
+  /** 隊內賽: left out of every number (the default), counted with the rest, or the only games counted */
+  intra: 'exclude' | 'include' | 'only'
 }
 
 export const DEFAULT_FILTERS: Filters = {
-  tournament: 'all', from: '', to: '', position: 'all', opponent: 'all', homeAway: 'all', result: 'all',
+  tournament: 'all', from: '', to: '', position: 'all', opponent: 'all', homeAway: 'all', result: 'all', intra: 'exclude',
 }
 
 /** Tunable constants (same defaults as the workbook's 設定 sheet). */

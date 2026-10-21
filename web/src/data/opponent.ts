@@ -64,7 +64,8 @@ export function oppRunning(pas: PitchingPA[]): Map<PitchingPA, OppRunning> {
         for (const m of st.moves) {
           const c = get(m.row)
           if (m.kind === 'sb') c.sb++
-          else if (m.kind === 'cs') c.cs++
+          // (牽制後盜壘失敗 is a 盜壘失敗 of the runner's)
+          else if (m.kind === 'cs' || m.kind === 'pocs') c.cs++
           else if (m.kind === 'err') c.advOnError += (m.to === 'home' ? 4 : m.to === 'out' ? m.from : m.to) - m.from
           else if (m.kind === 'pk' || m.kind === 'out') { c.outOnBase++; if (m.kind === 'out') c.baserunningOuts++ }
         }
