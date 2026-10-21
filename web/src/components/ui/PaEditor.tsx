@@ -218,6 +218,8 @@ export interface TimelineProps {
   runnerOf?: (row: number) => string | undefined
   /** 對方代跑: typed (a name or jersey number) instead of picked from our players */
   pinchText?: boolean
+  /** (their runners) after how many of this plate appearance's pitches his 代跑 came in (undefined: not said) */
+  prAt?: { of: (row: number) => number | undefined; set: (row: number, at: number | undefined) => void }
   /** a new result moves the batter (and forces runners) through the timeline */
   onResult: (result: string) => void
   nameOf: (row: number) => string
@@ -425,7 +427,14 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
               </div>
               {tl.step.dest[o.row] === 'home' && <EarnedNote tl={tl} row={o.row} />}
               {tl.onPinchRunner && (tl.pinchText
-                ? <OppRunnerField label={`${name} 的代跑`} value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} />
+                ? <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+                  <OppRunnerField label={`${name} 的代跑`} value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} />
+                  {/* when he came in, for the 文字轉播 (紀錄比賽 notes it itself) */}
+                  {tl.prAt && tl.runnerOf?.(o.row) && <label className="flex items-center gap-2 text-[12px] text-ink-2"><span className="shrink-0">換上時機</span>
+                    <Select aria-label={`${tl.runnerOf(o.row)} 換上時機`} size="sm" value={tl.prAt.of(o.row) === undefined ? '' : String(tl.prAt.of(o.row))} onChange={(e) => tl.prAt!.set(o.row, e.target.value === '' ? undefined : Number(e.target.value))}
+                      options={[{ value: '', label: '沒填' }, { value: '0', label: '這位打者上場前' }, ...pa.pitches.map((_, n) => ({ value: String(n + 1), label: `第 ${n + 1} 球後` }))]} />
+                  </label>}
+                </div>
                 : <label className="flex items-center gap-2 text-[12px] text-ink-2">代跑<PlayerSelect aria-label={`${name} 的代跑`} size="sm" value={tl.runnerOf?.(o.row) ?? ''} onChange={(v) => tl.onPinchRunner!(o.row, v)} names={tl.pinchNames ?? []} placeholder="沒有代跑" className="w-[150px]" /></label>)}
             </li>
           )
@@ -476,6 +485,8 @@ export interface PaPanelProps {
   nextMissing?: number
   onClose: () => void
   onDelete: () => void
+  /** what deleting it changes (runs of the inning, its 打點), for the confirmation */
+  deleteNote?: () => string
   /** `inning`: the inning of the row it goes next to */
   onInsert: (at: number, inning?: number) => void
   onMove: (d: -1 | 1) => void
@@ -701,7 +712,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
 
 // the pitches 修改資料 inserts or changes to (the result's own last pitch — 擊進場內, 觸身 — comes from the result)
 const PITCH_EDIT: Array<[string, string]> = [['B', '壞球'], ['CS', '好球・未揮'], ['SS', '揮空'], ['F', '界外'], ['T', '擦棒']]
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, deleteNote, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
   const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
@@ -923,7 +934,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index + 1, pa.inning)}>在後面插入</Button>
         <Button size="sm" variant="ghost" icon={<ArrowUp />} aria-label="往前移" title="往前移" onClick={() => onMove(-1)} disabled={index === 0} />
         <Button size="sm" variant="ghost" icon={<ArrowDown />} aria-label="往後移" title="往後移" onClick={() => onMove(1)} disabled={index >= total - 1} />
-        <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
+        <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？${deleteNote ? `\n${deleteNote()}` : ''}\n（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
       </div>
     </div>
   )

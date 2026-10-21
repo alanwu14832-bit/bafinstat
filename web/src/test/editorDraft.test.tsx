@@ -114,6 +114,16 @@ describe('修改資料: unsaved changes', () => {
     expect(screen.getByRole('alert').textContent).toContain('插入或刪除打席後，壘上的跑者接不起來')
   })
 
+  it('deleting a plate appearance says what it takes with it: the inning\'s runs and its 打點', () => {
+    const rows = [bat({ result: '一安', code: undefined, pitches: ['IP'] }), bat({ order: 2, batter: '乙', basesBefore: '1', result: '二安', code: undefined, run: 0, rbi: 1 })]
+    open({ initial: { ...initial, batting: rows } })
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    fireEvent.click(screen.getByRole('button', { name: /^修改第 2 個打席/ }))
+    fireEvent.click(screen.getByRole('button', { name: '刪除這個打席' }))
+    expect(ask.mock.calls[0][0]).toMatch(/第 1 局.*分/)
+    expect(ask.mock.calls[0][0]).toContain('這個打席的 1 分打點會一起拿掉')
+  })
+
   it('a sheet with confirmClose stays open on Escape and the scrim when the answer is no', () => {
     const onClose = vi.fn(); let answer = false
     render(<Sheet open onClose={onClose} confirmClose={() => answer} ariaLabel="測試">內容</Sheet>)

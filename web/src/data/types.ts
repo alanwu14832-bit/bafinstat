@@ -71,6 +71,11 @@ export const oppPrMark = (label: string, at: number) => `代跑 ${label === OPP_
 export function oppPrMarks(note?: string): Array<{ label: string; at: number }> {
   return [...(note ?? '').matchAll(/代跑 (.+?)（第 (\d+) 球後換上）/g)].map((m) => ({ label: m[1] === '對方代跑' ? OPP_PR_UNNAMED : m[1], at: Number(m[2]) }))
 }
+/** `note` with `label`'s 代跑 mark after `at` pitches (undefined: taken off); the rest of the note stays. */
+export function withOppPrMark(note: string | undefined, label: string, at?: number): string | undefined {
+  const rest = (note ?? '').split('；').filter((x) => x && !oppPrMarks(x).some((m) => m.label === label))
+  return [...(at === undefined ? [] : [oppPrMark(label, at)]), ...rest].join('；') || undefined
+}
 export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙', '其他出局'])
 /** A batted ball (BIP): a real plate appearance whose result put the ball in play, whether or not its 落點／軌跡／強度 were recorded. */
 export const isBattedBall = (r: { result: string }) => isPA(r) && !NO_BATTED_BALL.has(r.result)

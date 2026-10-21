@@ -83,6 +83,8 @@ describe('當日登錄名單 columns of 比賽清單', () => {
     expect(rulesFromCell('7局；第8局起突破僵局（一、二壘）')).toEqual({ innings: 7, tiebreakFrom: 8, tiebreakBases: '12' })
     expect(rulesFromCell('9局；不採用突破僵局')).toEqual({ innings: 9, tiebreakFrom: null, tiebreakBases: '' })
     expect(rulesFromCell('')).toBeUndefined()
+    // an older game with only its rules set (no names) keeps them through the workbook
+    expect(dayRosterFromCells(dayRosterCells({ starters: [], bench: [], reentry: false, rules: { innings: 9, tiebreakFrom: null, tiebreakBases: '' } }))).toEqual({ starters: [], bench: [], reentry: false, rules: { innings: 9, tiebreakFrom: null, tiebreakBases: '' } })
     const typed = dayRosterFromCells({ 先發名單: '１．甲（cf），2.乙(SS); P．壬（P）', 板凳: '丙,丁；甲', 替補紀錄: '５上 代打 戊 替 甲（PH）;6下換投己替壬(P)、7局上 守備 第2棒 庚(LF)', 允許再上場: '' })
     expect(typed).toEqual({
       starters: [{ name: '甲', pos: 'CF', order: 1 }, { name: '乙', pos: 'SS', order: 2 }, { name: '壬', pos: 'P' }],
