@@ -830,6 +830,16 @@ export function thirdOutRule(s: RecordState, plan: Pick<PAPlan, 'batter' | 'runn
 }
 
 /** What is impossible about where the plan sends everyone: two runners on one base, or a runner passing the one ahead. */
+/**
+ * What the plan does that the rule book does not allow but an umpire may still have let stand: warned, not blocked
+ * (the record keeps what happened on the field).
+ */
+export function planWarnings(s: RecordState, plan: PAPlan): string[] {
+  const out: string[] = []
+  // 不死三振: the batter may run only with first base open, or with two out (rule 5.05(a)(2))
+  if (plan.result === '三振' && plan.batter !== 'out' && s.outs < 2 && s.runners.some((r) => r.base === 1)) out.push('一壘有人、未滿兩出局時打者不能不死三振（規則 5.05(a)(2)），通常要設成出局；裁判真的判他上壘的話照實際送出')
+  return out
+}
 export function planProblems(s: RecordState, plan: PAPlan): string[] {
   const side = offense(s)
   const batterName = side === 'us' ? s.lineup[s.slot]?.name ?? '打者' : '打者'
@@ -855,8 +865,6 @@ export function planProblems(s: RecordState, plan: PAPlan): string[] {
   if (outs > 3) out.push(`這個打席加起來會有 ${outs} 個出局，一個半局只有 3 個：請把多的出局改回壘上${plan.result === '雙殺' ? '（兩出局時不會有雙殺，請改記內滾或野選）' : ''}`)
   const third = thirdOutRule(s, plan).block
   if (third) out.push(third)
-  // 不死三振: the batter may run only with first base open, or with two out (rule 5.05(a)(2))
-  if (plan.result === '三振' && plan.batter !== 'out' && s.outs < 2 && s.runners.some((r) => r.base === 1)) out.push('一壘有人、未滿兩出局時不能不死三振（規則 5.05(a)(2)）：打者請設成出局')
   const walk = walkOffRunner(s, plan)
   if (walk && walk.credit < 4 && scoredOn(plan) > scoredOn(walkOffPlan(s, plan) ?? plan)) out.push('再見：比賽在致勝的那一分回來時就結束，之後的跑者不算得分（規則 9.06(f)）')
   return out

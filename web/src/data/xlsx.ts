@@ -234,9 +234,9 @@ export function rulesFromCell(v: unknown): GameDayRoster['rules'] {
   return { innings: Number(inn[1]), tiebreakFrom: tb && bases ? Number(tb[1]) : null, tiebreakBases: tb ? bases : '' }
 }
 
-/** Parse the day-roster cells of a 比賽清單 row back. undefined when 先發名單 / 板凳 / 替補紀錄 are all blank (old workbooks). */
+/** Parse the day-roster cells of a 比賽清單 row back. undefined when 先發名單 / 板凳 / 替補紀錄 / 比賽規則 are all blank (old workbooks). */
 export function dayRosterFromCells(row: Row): GameDayRoster | undefined {
-  if (!str(row['先發名單']) && !str(row['板凳']) && !str(row['替補紀錄'])) return undefined
+  if (!str(row['先發名單']) && !str(row['板凳']) && !str(row['替補紀錄']) && !str(row['比賽規則'])) return undefined
   const starters = splitList(row['先發名單']).map((t) => {
     const m = STARTER_RE.exec(t)!
     return { name: m[3], pos: m[4] ?? '', ...(m[1] ? { order: digits(m[1]) } : {}) }

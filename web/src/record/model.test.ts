@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addError, addPitch, appeared, changePitcher, removeError, commitPA, count, defaultPlan, endHalf, impliedResult, leftGame, newGame, nextGameId, offense, onField, runnerEvent, score, setReentry, startersOf, startingPitcherOf, subCandidates,
-  setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, type RecordState,
+  setRbi, substitute, toGameEdit, unusedBench, wildPitch, withInPlay, planProblems, planWarnings, type RecordState,
   finishTimes, oppBatterOf, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, pinchHitOpp, pinchRunOpp, setOppBats, setOppOrder,
   correctOppPitcher, oppPitchCount, oppStintStart,
@@ -307,6 +307,13 @@ describe('runners never share a base', () => {
     expect(planProblems(s, plan)).toEqual([])
     expect(planProblems(s, { ...plan, batter: 2 }).join()).toContain('都停在 2B')
     expect(planProblems(s, { ...plan, runners: { ...plan.runners, 1: 'home', 0: 3 } }).join()).toContain('超過了前面的')
+  })
+  it('an uncaught third strike with first base taken and fewer than two out is warned about, not refused (rule 5.05(a)(2))', () => {
+    const s = commitPA(start(), defaultPlan(start(), '保送'))
+    const plan = { ...defaultPlan(s, '三振'), batter: 1 as const, runners: { 0: 2 as const } }
+    expect(planProblems(s, plan)).toEqual([])
+    expect(planWarnings(s, plan).join()).toContain('5.05(a)(2)')
+    expect(planWarnings(s, defaultPlan(s, '三振'))).toEqual([])
   })
 })
 

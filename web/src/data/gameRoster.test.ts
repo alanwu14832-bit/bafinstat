@@ -41,6 +41,8 @@ describe('parseDayRoster', () => {
     expect(parseDayRoster({ ...roster, reentry: true })!.reentry).toBe(true)
     // a roster with only a bench is still a roster; empty subs are left out
     expect(parseDayRoster({ starters: [], bench: ['丙'], subs: [], reentry: false })).toEqual({ starters: [], bench: ['丙'], reentry: false })
+    // a game with no names keeps the rules it was played by
+    expect(parseDayRoster({ starters: [], bench: [], rules: { innings: 9, tiebreakFrom: 10, tiebreakBases: '12' } })).toEqual({ starters: [], bench: [], reentry: false, rules: { innings: 9, tiebreakFrom: 10, tiebreakBases: '12' } })
   })
   it('survives normalize (and normalize stays idempotent)', () => {
     const ds = { ...SEED_DATASET, games: SEED_DATASET.games.map((g) => (g.id === ID ? { ...g, dayRoster: roster } : g)) }

@@ -10,7 +10,7 @@ import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
 import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
 import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type GameRules, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, oppPrMarks, withOppPrMark, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type GameRules, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, isMove, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -324,6 +324,22 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     else setPit(withEarned(deriveHalf(applyPlayCounts(rows as PitchingPA[], before, half, 'pit'), half, 'pit'), shift).map(toPitDraft))
     return null
   }
+  // what deleting plate appearance i takes with it: the runs of its inning (as they are, and once its runners are laid
+  // out again from the results, which the save asks for) and its 打點, which no other row picks up
+  const deleteNote = (side: PaSide, i: number): string => {
+    const rows: Array<BattingPA | PitchingPA> = side === 'bat' ? batRows : pitRows
+    const inning = rows[i].inning
+    const rest = rows.filter((_, k) => k !== i)
+    const idx = inningsOf(rest).get(inning) ?? []
+    const now = runsOfHalf(halves[side].get(inning))
+    let after = 0
+    try { after = idx.length ? runsOfHalf(rebuildHalf(rest, idx, side)) : 0 } catch { after = now }
+    const rbi = rows[i].rbi ?? 0
+    return [
+      now === after ? `第 ${inning} 局仍是 ${now} 分。` : `第 ${inning} 局原本 ${now} 分，刪掉後依打擊結果重建跑者是 ${after} 分。`,
+      rbi ? `這個打席的 ${rbi} 分打點會一起拿掉，其他打席的打點不會自動改，請自己核對。` : '',
+    ].join('')
+  }
   // 突破僵局 runners added in front of an extra inning, or taken off it: rows in or out, the inning carried through
   const addPlaced = (side: PaSide, inning: number, bases: Base[]) => {
     const rows = side === 'bat' ? batRows : pitRows
@@ -550,11 +566,30 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       pinchNames: names,
       runnerOf: (row: number) => batRows[row]?.runner,
     } : {
-      // 對方代跑: typed (a name or jersey number), on the row where that runner reached
-      onPinchRunner: (row: number, name: string) => setPit((p) => p.map((x, k) => { if (k !== row) return x; const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n })),
+      // 對方代跑: typed (a name or jersey number), on the row where that runner reached; when he came in is noted on the
+      // plate appearance it happened during (data/types oppPrMark), so a renamed or removed 代跑 carries it along
+      onPinchRunner: (row: number, name: string) => setPit((p) => p.map((x, k) => {
+        if (k === row) { const n = { ...x, runner: name || undefined }; if (!name) delete n.runner; return n }
+        const was = p[row].runner
+        const mark = was && k > row && x.inning === p[row].inning ? oppPrMarks(x.note).find((m) => m.label === was) : undefined
+        if (!mark) return x
+        const note = withOppPrMark(withOppPrMark(x.note, was!), name, name ? mark.at : undefined)
+        const n = { ...x, note }; if (!note) delete n.note; return n
+      })),
       pinchNames: oppNames,
       pinchText: true,
       runnerOf: (row: number) => pitRows[row]?.runner,
+      prAt: {
+        of: (row: number) => { const r = pitRows[row]?.runner; return r ? oppPrMarks(pitRows[i].note).find((m) => m.label === r)?.at : undefined },
+        // one plate appearance holds it: taken off the others of the inning
+        set: (row: number, at: number | undefined) => setPit((p) => p.map((x, k) => {
+          const r = p[row].runner
+          if (!r || k <= row || x.inning !== p[row].inning) return x
+          const note = withOppPrMark(x.note, r, k === i ? at : undefined)
+          if (note === x.note) return x
+          const n = { ...x, note }; if (!note) delete n.note; return n
+        })),
+      },
     }
     // our batter put out on his own play after he reached (記成壘上出局 by the timeline): 跑壘失誤（壘死） or not
     const me = side === 'bat' ? (rows[i] as BattingPA) : null
@@ -628,6 +663,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           else setPit((p) => { const rows2 = p.filter((_, k) => k !== i).map(fromPitDraft); return (shift ? shiftOrders(rows2, i, -1) : rows2).map(toPitDraft) })
           setSel(rows.length > 1 ? { side, index: Math.min(i, rows.length - 2) } : null)
         }}
+        deleteNote={() => deleteNote(side, i)}
         onInsert={(at, inning) => insertPa(side, at, inning)}
         onMove={(d) => { const j = i + d; if (j < 0 || j >= rows.length) return; setRows(side, (r) => { const n = r.slice(); [n[i], n[j]] = [n[j], n[i]]; return n }); setSel({ side, index: j }) }}
         // runners of this inning who reached before this plate appearance and are still out there
@@ -742,8 +778,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       setError(`第 ${inn} 局（${side === 'bat' ? '我隊打擊' : '我隊投球'}）插入或刪除打席後，壘上的跑者接不起來：請在這局的打席按「依打擊結果重建這局的跑者」（盜壘、暴投會保留），再儲存`)
       return
     }
-    // parseDayRoster trims, drops bench names that are starters and returns undefined for an empty roster (the rules the
-    // game was played by stay)
+    // parseDayRoster trims, drops bench names that are starters and returns undefined for a roster with no names and no
+    // rules (a game with only 預定局數／突破僵局 set keeps them)
     const dayRoster = parseDayRoster({ starters: listed, bench, subs, reentry, rules })
     try {
       const batting = bat.map(fromBatDraft).filter((p) => p.batter.trim())
@@ -810,11 +846,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
             {holdHints.length > 0 && <span className="text-[12px] text-muted">建議：救援情境上場、拿到至少 1 個出局、退場時仍領先（勝投、救援不算）</span>}
           </div>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={text('recorder')} /></Field>
-          {/* (stored with the 當日登錄名單: a game without one keeps the team's rules) */}
-          {(starters.length > 0 || bench.length > 0 || subs.length > 0) && <>
-            <Field label="預定局數" hint="算獲勝機率用"><Input type="number" min={1} max={12} value={rules?.innings ?? ''} onChange={(e) => { const n = Number(e.target.value); setRules(n ? { innings: n, tiebreakFrom: rules?.tiebreakBases ? n + 1 : null, tiebreakBases: rules?.tiebreakBases ?? '' } : undefined) }} className="tnum" /></Field>
-            <Field label="突破僵局"><Select value={rules?.tiebreakBases ?? ''} disabled={!rules} onChange={(e) => rules && setRules({ ...rules, tiebreakBases: e.target.value, tiebreakFrom: e.target.value ? rules.innings + 1 : null })} options={[{ value: '', label: '不採用' }, { value: '12', label: '下一局起一、二壘' }, { value: '2', label: '下一局起二壘' }, { value: '123', label: '下一局起滿壘' }]} className="w-full" /></Field>
-          </>}
+          {/* (stored with the 當日登錄名單; blank: the team's rules) */}
+          <Field label="預定局數" hint="算獲勝機率用"><Input type="number" min={1} max={12} value={rules?.innings ?? ''} onChange={(e) => { const n = Number(e.target.value); setRules(n ? { innings: n, tiebreakFrom: rules?.tiebreakBases ? n + 1 : null, tiebreakBases: rules?.tiebreakBases ?? '' } : undefined) }} className="tnum" /></Field>
+          <Field label="突破僵局"><Select value={rules?.tiebreakBases ?? ''} disabled={!rules} onChange={(e) => rules && setRules({ ...rules, tiebreakBases: e.target.value, tiebreakFrom: e.target.value ? rules.innings + 1 : null })} options={[{ value: '', label: '不採用' }, { value: '12', label: '下一局起一、二壘' }, { value: '2', label: '下一局起二壘' }, { value: '123', label: '下一局起滿壘' }]} className="w-full" /></Field>
           <Field label="備註" className="col-span-2 md:col-span-4"><Input value={game.note ?? ''} onChange={text('note')} /></Field>
         </div>}
       </section>

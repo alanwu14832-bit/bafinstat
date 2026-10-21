@@ -90,15 +90,19 @@ export function parseDayRoster(v: unknown): GameDayRoster | undefined {
     if (before) subs[subs.length - 1].before = before
     if (after) subs[subs.length - 1].after = after
   }
-  if (!starters.length && !bench.length && !subs.length) return undefined
   const r = isObj(v.rules) ? v.rules : undefined
   const innings = r ? intOf(r.innings, 1) : undefined
   const rules = r && innings ? { innings, tiebreakFrom: intOf(r.tiebreakFrom, 1) ?? null, tiebreakBases: String(r.tiebreakBases ?? '').replace(/[^123]/g, '') } : undefined
+  // an older game with no names can still carry the rules it was played by (set in 修改資料)
+  if (!starters.length && !bench.length && !subs.length && !rules) return undefined
   // subs is left out when empty so a roster without substitutions looks the same before and after a save
   return { starters, bench, ...(subs.length ? { subs } : {}), reentry: v.reentry === true || v.reentry === 1 || v.reentry === 'true', ...(rules ? { rules } : {}) }
 }
 
 /** Every name a day roster mentions (starters, bench, substitutions in and out). */
+/** Whether the roster lists anyone (a roster saved only for its rules does not). */
+export const hasRosterNames = (r?: GameDayRoster) => !!r && (r.starters.length > 0 || r.bench.length > 0 || (r.subs?.length ?? 0) > 0)
+
 export function dayRosterNames(r?: GameDayRoster): string[] {
   if (!r) return []
   const out = new Set<string>()

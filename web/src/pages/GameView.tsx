@@ -17,7 +17,7 @@ import { extractGame, reconcileFielding } from '../data/edit'
 import { applyStealRepairs, stealRepairs } from '../data/stealRepair'
 import { applyEarnedRepairs, EARNED_BY_HAND_NOTE, earnedRepairs } from '../record/earned'
 import { auditGame } from '../data/audit'
-import { gameAppearances, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
+import { gameAppearances, hasRosterNames, SUB_KIND_LABEL, type AppearanceRow, type GameAppearances } from '../data/gameRoster'
 import { gameRecap } from '../data/recap'
 import { gameTimeText } from '../data/gameTime'
 import { useStats } from '../hooks/useStats'
@@ -505,7 +505,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             {tab === 'bat' && <Card title="我隊打擊・逐球紀錄" subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
             {tab === 'pit' && <Card title="我隊投手・逐球紀錄" subtitle={pbpSubtitle(`對方每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
             {tab === 'feed' && <Broadcast halves={feed} weTop={current.game.homeAway === '客'} opponent={current.game.opponent} allOpen />}
-            {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={!!current.game.dayRoster} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
+            {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={hasRosterNames(current.game.dayRoster)} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}
           </>
         )}

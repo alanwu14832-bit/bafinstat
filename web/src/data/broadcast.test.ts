@@ -4,7 +4,7 @@ import {
   oppPitchSub, oppStintRows, paSentence, pitcherToday, pitchList, pitchTokens, playPhrase, playsSentence, resultText, subText, upList, zhInning,
   type FeedHalf, type FeedItem, type FeedSource,
 } from './broadcast'
-import { PA_RESULTS, PLAY_EVENT_LABELS, isPA, type BattingPA, type Game, type PitchingPA } from './types'
+import { PA_RESULTS, PLAY_EVENT_LABELS, isPA, withOppPrMark, type BattingPA, type Game, type PitchingPA } from './types'
 import {
   addPitch, changePitcher, commitPA, defaultPlan, newGame, oppPitchCount, pinchHitOpp, pinchRunOpp, runnerEvent, score, setOppBats, setOppPitcher, substitute, correctOppPitcher,
   type PAPlan, type RecordState,
@@ -348,6 +348,12 @@ describe('runner clauses on the batted ball', () => {
     const plays = JSON.stringify(all(feed(s)))
     expect(plays).toMatch(/第 1 棒上二壘/)
     expect(plays).not.toMatch(/12號上二壘/)
+  })
+  it('修改資料 notes when an older game\'s 代跑 came in (withOppPrMark) and keeps the rest of the note', () => {
+    expect(withOppPrMark('牽制 1 次', '12號', 2)).toBe('代跑 12號（第 2 球後換上）；牽制 1 次')
+    expect(withOppPrMark('代跑 12號（第 2 球後換上）；牽制 1 次', '12號', 0)).toBe('代跑 12號（第 0 球後換上）；牽制 1 次')
+    expect(withOppPrMark('代跑 12號（第 2 球後換上）；代跑 5號（第 1 球後換上）', '12號')).toBe('代跑 5號（第 1 球後換上）')
+    expect(withOppPrMark('代跑 12號（第 2 球後換上）', '12號')).toBeUndefined()
   })
   it('a runner put out after the batter: the third out on the bases is its own line', () => {
     let s = start()

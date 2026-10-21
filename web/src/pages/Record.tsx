@@ -34,7 +34,7 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, setRbi, wildPitch, score, setOppOrder, setReentry, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
@@ -471,6 +471,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const runnerKey = state.runners.map((r) => `${r.row}:${r.base}`).join(',')
   useEffect(() => { setPlan((p) => (p ? refreshPlan(state, p, rbiTouched) : p)) }, [runnerKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const thirdWarn = plan ? thirdOutRule(state, plan).warn : undefined
+  const ruleWarns = plan ? planWarnings(state, plan) : []
   // 再見: the winning run scores on this play (only the runs up to it count, rule 9.06(f))
   const walkOff = !!plan && !!walkOffRunner(state, plan)
   // after 擊進場內 the plate appearance must end on a ball-in-play result, and every batted ball needs its 落點 and 軌跡
@@ -832,6 +833,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 )}
                 {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m.includes('規則 5.08') ? m : `${m}，請調整跑者去向`}</span>)}</div>}
                 {!problems.length && thirdWarn && <p role="status" className="text-[12px] text-warning">{thirdWarn}</p>}
+                {!problems.length && ruleWarns.map((m) => <p key={m} role="status" className="text-[12px] text-warning">{m}</p>)}
                 {walkOff && <p role="status" className="text-[13px] font-semibold text-ink">再見！比賽在致勝的那一分回來時結束：只算到這一分，安打照致勝跑者推進的壘數記（規則 9.06(f)）</p>}
                 <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={plan.note ?? ''} maxLength={200} onChange={(e) => setPlan({ ...plan, note: e.target.value })} placeholder="選填，例如強襲投手、裁判改判" className="flex-1 min-w-0" /></label>
                 <div className="flex items-center gap-4 flex-wrap">
