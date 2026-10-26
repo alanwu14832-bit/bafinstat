@@ -3,7 +3,7 @@
  * consistent the way live recording would have written it (IP pitch for a ball in play, out code, R code),
  * but never overwrites what the recorder set by hand on purpose (L, R, ER stay).
  */
-import { END_PITCH, isDouble, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
+import { END_PITCH, isDouble, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, orderCycle, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../data/types'
 import { oppKey } from '../data/opponent'
 import { BIP_RESULTS, OUT_RESULTS, withInPlay } from './model'
 import { NO_BATTED_BALL } from './widgets'
@@ -82,7 +82,7 @@ export function toggleBase(bases: string | undefined, base: 1 | 2 | 3): string {
  *  slot by then (the last batter there, or his 代跑, who took the slot over). */
 export function blankBattingAt(rows: BattingPA[], at: number, gameId: string, inning?: number): BattingPA {
   const prev = rows[at - 1]
-  const order = prev?.order ? (prev.order % 9) + 1 : prev ? undefined : 1
+  const order = prev?.order ? (prev.order % orderCycle(rows.map((r) => r.order))) + 1 : prev ? undefined : 1
   // earlier in the game: that slot's last batter, or his 代跑 who took the slot over; otherwise its next batter
   const before = order ? [...rows.slice(0, at)].reverse().find((p) => p.order === order) : undefined
   const after = order && !before ? rows.slice(at).find((p) => p.order === order) : undefined
@@ -103,11 +103,13 @@ export function shiftOrders<T extends BattingPA | PitchingPA>(rows: T[], from: n
   const slotOf = (r: T) => (ours(r) ? r.order : (r as PitchingPA).oppOrder)
   const nameOf = (r: T) => (ours(r) ? r.batter : (r as PitchingPA).oppBatter)
   const holder = new Map<number, string | undefined>()
+  // (the game's own lineup size: a 友誼賽 order of 8 turns over after the 8th)
+  const n = orderCycle(rows.map(slotOf))
   rows.slice(0, from).forEach((r) => { const k = slotOf(r); if (k && !isPlaced(r) && !isNoBatter(r)) holder.set(k, ours(r) ? r.runner || r.batter : nameOf(r)) })
   return rows.map((r, i) => {
     const k = slotOf(r)
     if (i < from || !k || isPlaced(r) || isNoBatter(r)) return r
-    const next = ((k - 1 + delta + 9) % 9) + 1
+    const next = ((k - 1 + delta + n) % n) + 1
     const name = holder.has(next) ? holder.get(next) : nameOf(r)
     const moved = ours(r) ? { ...r, order: next, ...(name ? { batter: name } : {}) } : { ...r, oppOrder: next, ...(name ? { oppBatter: name } : {}) }
     holder.set(next, ours(r) ? (moved as BattingPA).runner || (moved as BattingPA).batter : nameOf(moved as T))
@@ -119,7 +121,7 @@ export function shiftOrders<T extends BattingPA | PitchingPA>(rows: T[], from: n
 export function blankPitchingAt(rows: PitchingPA[], at: number, gameId: string, inning?: number): PitchingPA {
   const prev = rows[at - 1]
   const near = prev ?? rows[at]
-  const oppOrder = prev?.oppOrder ? (prev.oppOrder % 9) + 1 : prev ? undefined : 1
+  const oppOrder = prev?.oppOrder ? (prev.oppOrder % orderCycle(rows.map((r) => r.oppOrder))) + 1 : prev ? undefined : 1
   // that slot's batter the last time it came up (the names are only there when the recorder kept them)
   const oppBatter = oppOrder ? [...rows.slice(0, at)].reverse().find((p) => p.oppOrder === oppOrder)?.oppBatter : undefined
   // (that slot's 左打／右打 this game comes along)

@@ -111,6 +111,8 @@ export interface RecordState {
   oppNames?: boolean
   /** their batting order, 9 names ('' = not typed); a change in the middle of the game is a pinch hitter */
   oppLineup?: string[]
+  /** how many batters their order has (7 or 8 in a 友誼賽 with players short; absent = 9): oppOrder turns over after it */
+  oppSlots?: number
   /** 隊內賽: the other side (game.opponent) is our players too — see IntraState */
   intra?: IntraState
   // 延長賽突破僵局. Optional: drafts without it use the team's default rule (record/tiebreak.ts tiebreakRuleOf).
@@ -192,6 +194,8 @@ export function withInPlay(pitches: string[], result: string): string[] {
 }
 
 export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null
+  /** their order's length when it is not 9 (a 友誼賽 with players short) */
+  oppSlots?: number
   /** 隊內賽: our side's name and the other side's lineup, pitcher and bench (with the players' 左右打 / 左右投 known) */
   intra?: { team: string; lineup: LineupSlot[]; pitcher: string; bench?: string[]; bats?: Record<string, OppBats>; throws?: Record<string, OppHand> } } = {}): RecordState {
   // the bench never repeats a starter (Setup may have promoted a bench player into the lineup)
@@ -202,6 +206,7 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
     starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry, subs: [],
     ...(opts.oppNames !== undefined ? { oppNames: opts.oppNames } : {}), ...(opts.oppLineup ? { oppLineup: lineupOf(opts.oppLineup) } : {}),
     ...(opts.tiebreak !== undefined ? { tiebreak: opts.tiebreak } : {}),
+    ...(opts.oppSlots && opts.oppSlots < 9 ? { oppSlots: opts.oppSlots } : {}),
     ...(opts.intra ? intraStart(opts.intra) : {}),
   }
 }
@@ -210,7 +215,10 @@ function intraStart(x: NonNullable<Parameters<typeof newGame>[3]>['intra'] & obj
   const lineup = Array.from({ length: 9 }, (_, i) => ({ name: x.lineup[i]?.name.trim() ?? '', pos: x.lineup[i]?.pos ?? '' }))
   const hand = x.throws?.[x.pitcher]
   const starting = new Set([...lineup.map((l) => l.name), x.pitcher])
+  // (their order is as long as the lineup picked: 7 or 8 when players are short)
+  const filled = lineup.filter((l) => l.name).length
   return {
+    ...(filled >= 1 && filled < 9 ? { oppSlots: filled } : {}),
     reentry: true, oppNames: true, oppLineup: lineup.map((l) => l.name),
     oppPitcher: hand ? { name: x.pitcher, hand } : { name: x.pitcher, handUnknown: true },
     intra: { team: x.team, pos: lineup.map((l) => l.pos), starters: lineup, startingPitcher: x.pitcher, bench: [...new Set((x.bench ?? []).filter((n) => n && !starting.has(n)))], subs: [], ...(x.bats ? { bats: x.bats } : {}), ...(x.throws ? { throws: x.throws } : {}) },
@@ -508,7 +516,16 @@ function settlePaSubs(s: RecordState, folded: boolean): DayRosterSub[] | undefin
   return subs
 }
 export const setSlot = (s: RecordState, slot: number): RecordState => ({ ...s, slot: ((slot % s.lineup.length) + s.lineup.length) % s.lineup.length })
-export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + 9) % 9) + 1 })
+/** How many batters their order turns over in (oppSlots; 9 when not set). */
+export const oppCycle = (s: Pick<RecordState, 'oppSlots'>): number => s.oppSlots ?? 9
+export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + oppCycle(s)) % oppCycle(s)) + 1 })
+/** Their order has `n` batters (7–9) from now on; the batter up stays unless his slot is gone. */
+export const setOppSlots = (s: RecordState, n: number): RecordState => {
+  const k = Math.min(9, Math.max(1, Math.round(n)))
+  const { oppSlots: _o, ...rest } = s
+  void _o
+  return { ...(k === 9 ? rest : { ...rest, oppSlots: k }), oppOrder: s.oppOrder > k ? 1 : s.oppOrder }
+}
 /**
  * Substitute (pinch hitter / defensive change) in a lineup slot, logged in `subs`. A position-only change (no name, or
  * the same one: 只改守位) is logged too, as a 守備調動 (the same player in and out, data/gameRoster isMove): errors,
@@ -1112,7 +1129,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   next.extras = { ...EXTRAS0 }
   next.plays = []
   if (side === 'us') next.slot = (s.slot + 1) % s.lineup.length
-  else { next.oppOrder = (s.oppOrder % 9) + 1; next.oppBatter = '' }
+  else { next.oppOrder = (s.oppOrder % oppCycle(s)) + 1; next.oppBatter = '' }
   return outs >= 3 ? endHalf(next) : next
 }
 

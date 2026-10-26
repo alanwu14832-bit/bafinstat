@@ -22,6 +22,7 @@ Box Score、局分表拿去和手算的正確答案逐項比對——就像賽�
   先跑 game4 再跑 excel 的話，X7 也會拿這場的總表和網站比對，並把這場匯出再匯入、資料要完全一樣。
 - `practice.mjs`：練習紀錄（`/record?practice=1`）記 3 個打席（batch 18：每位對方打者先選左打、右打、不知道，沒選前投球按鈕按不下去）再「結束練習」：這台裝置的正式進度、資料集都不能變，比賽頁不能出現 PRACTICE- 的比賽。
 - `intra.mjs`：隊內賽。選「隊內賽」、選兩隊先發（白隊 6 人），記兩個半局：紅隊打擊時白隊換投、白隊打擊時白隊代打（用白隊的換人畫面），結束比賽後檢查：比賽列表標「隊內賽」寫兩隊隊名、比賽頁有白隊的打擊與投球表、打擊頁預設不算隊內賽而 `?intra=include` 會算。
+- `short8.mjs`：友誼賽人數不夠（兩隊都 8 棒）。開始紀錄時前六棒空一棒會被擋下、第 9 棒顯示「選填」；三局全部三振後，我方和對方的棒次都是 8 棒打完回到第 1 棒。
 - `live.mjs`：即時比分（batch 12）。同一個瀏覽器開兩個分頁：一個在紀錄比賽記一場 2 局的客場比賽（一安中外野平飛、盜壘、
   二安 2 分打點、揮空三振、看好球三振、牽制出局、暴投得分、代打、代跑、一出局犧飛、換投），另一個每一步重新開 /live 檢查：
   文字轉播的句子、得分打席的比分、1 上的半局小結（2 分・2 安打・0 失誤・1 殘壘）、下半局「最新」是對方的動作、投手用球數
@@ -46,6 +47,7 @@ node tools/gamesim/game4.mjs /tmp/out && node tools/gamesim/check4.mjs /tmp/out/
 node tools/gamesim/edit1.mjs /tmp/out && LANG=C.UTF-8 node tools/gamesim/excel.mjs /tmp/out   # excel 的 X3、X7、X8 要有 soffice（X8：失誤守位用 6、游擊、「/」「；」填，總表和網站算的一樣）
 node tools/gamesim/practice.mjs
 node tools/gamesim/intra.mjs /tmp/out
+node tools/gamesim/short8.mjs /tmp/out
 node tools/gamesim/live.mjs /tmp/out
 ```
 其他腳本遇到這兩個問題一律按「不知道」（`answer.mjs`），不影響答案。
