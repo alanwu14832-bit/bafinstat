@@ -10,7 +10,7 @@ import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
 import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
 import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
 import { cleanErrors, cleanOppErrors, errorsText, oppErrorList, oppErrorsForResult, UNKNOWN_FIELDER } from '../../data/errors'
-import { HIT_BASE_COUNT, LOC_CODES, locLabel, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, oppPrMarks, withOppPrMark, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type GameRules, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
+import { HIT_BASE_COUNT, LOC_CODES, locLabel, orderCycle, MISSING_BALL_TAGS, missingBattedBallCounts, OPP_PR_UNNAMED, oppBatterName, oppPrMarks, withOppPrMark, PA_RESULTS, POSITIONS, posNum, RELIEF, TIEBREAK, type BattingPA, type DayRosterSub, type FieldingLine, type Game, type GameDayRoster, type GameRules, type OutAt, type PitchingPA, type PlayEvent } from '../../data/types'
 import { dayRosterNames, isMove, parseDayRoster, SUB_KIND_LABEL } from '../../data/gameRoster'
 import { PlayerSelect } from './PlayerSelect'
 import { RosterSortToggle } from './RosterSortToggle'
@@ -793,8 +793,8 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       writeEditDraft(game.id, null)
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
   }
-  const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', errorsText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % 9) + 1 : undefined })
-  const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', errorsText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % 9) + 1 : undefined })
+  const blankBat = (prev?: BatDraft): BatDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, batter: '', pitchesText: '', errorsText: '', result: '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, order: prev?.order ? (prev.order % orderCycle(bat.map((x) => x.order))) + 1 : undefined })
+  const blankPit = (prev?: PitDraft): PitDraft => ({ gameId: game.id, inning: prev?.inning ?? 1, pitcher: prev?.pitcher ?? '', pitchesText: '', errorsText: '', result: '', sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, oppOrder: prev?.oppOrder ? (prev.oppOrder % orderCycle(pit.map((x) => x.oppOrder))) + 1 : undefined })
   const blankStarter = (prev?: StarterDraft): StarterDraft => ({ order: prev ? (prev.order && prev.order < 9 ? prev.order + 1 : undefined) : 1, pos: '', name: '' })
   const blankFld = (): FieldingLine => ({ gameId: game.id, player: '', pos: '', innings: game.innings, po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 })
 

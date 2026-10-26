@@ -2,7 +2,7 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, isRelief, isUnfinished, LOC_HOLES, type BattingPA, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, isRelief, isUnfinished, LOC_HOLES, orderCycle, type BattingPA, type PitchingPA, type PlayEvent } from './types'
 import { pitchTotals } from './stats'
 import { hasRunnerPlays } from '../record/timeline'
 
@@ -162,10 +162,13 @@ function checkRunsAndSteals(batting: BattingPA[], pitching: PitchingPA[], out: I
 /** Each plate appearance is the slot after the last one (a 未完成打席's batter leads off again). */
 function checkOrder(rows: Array<BattingPA | PitchingPA>, side: 'bat' | 'pit', out: Issue[]) {
   let prev: { k: number; again: boolean } | null = null
+  const slotOf = (r: BattingPA | PitchingPA) => (side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder)
+  // (a lineup of 8 in a 友誼賽 turns over after the 8th)
+  const n = orderCycle(rows.map(slotOf))
   rows.forEach((r, i) => {
-    const k = side === 'bat' ? (r as BattingPA).order : (r as PitchingPA).oppOrder
+    const k = slotOf(r)
     if (!k || isPlaced(r) || isRelief(r)) return
-    const want = prev ? (prev.again ? prev.k : (prev.k % 9) + 1) : k
+    const want = prev ? (prev.again ? prev.k : (prev.k % n) + 1) : k
     if (k !== want) out.push({ side, index: i, message: `第 ${r.inning} 局：棒次接不上（前一個打席第 ${prev!.k} 棒，這裡第 ${k} 棒）：是不是漏記或多記了一個打席？` })
     prev = { k, again: isUnfinished(r) }
   })

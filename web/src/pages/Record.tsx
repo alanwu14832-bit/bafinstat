@@ -38,7 +38,7 @@ import {
   addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
-  intraPitcher, intraSub, otherSide, appeared,
+  intraPitcher, intraSub, otherSide, appeared, oppCycle, setOppSlots,
   type Base, type Dest, type LineupSlot, type PAPlan, type RecordState,
 } from '../record/model'
 import { LastOppLineupButton, OppBatsChips, OppLineupFields, OppLineupSheet, oppPitcherLabel, OppPitcherSheet, OppPitcherStrip } from '../record/OppParts'
@@ -166,6 +166,8 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   const g = <K extends keyof Game>(k: K, v: Game[K]) => setGame((s) => ({ ...s, [k]: v }))
   // 隊內賽: both sides are our players — the first side is the lineup above (its name `teamA`), the second one is the
   // opponent (game.opponent) with its own lineup and pitcher; both may bring players back (data/intrasquad.ts)
+  // 對方打序: 9 batters, or 7–8 in a 友誼賽 with players short (their order then turns over sooner)
+  const [oppSlots, setOppSlotsN] = useState(9)
   const [intraOn, setIntraOn] = useState(false)
   const [teamA, setTeamA] = useState('紅隊')
   const [themLineup, setThemLineup] = useState<LineupSlot[]>(() => Array.from({ length: 9 }, () => ({ name: '', pos: '' })))
@@ -186,16 +188,26 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   // (隊內賽: each side offers only the players the other one has not picked)
   const ourPick = intraOn ? names.filter((n) => !theirNames.has(n)) : names
   const theirPick = names.filter((n) => !ourNames.has(n))
+  // 前六棒要填，第 7 棒以後選填（友誼賽人數不夠時先發可以只有 7、8 棒），中間不能空
+  const orderProblem = (ls: LineupSlot[], who = '') => {
+    const named = ls.map((l) => !!l.name.trim())
+    const missing = named.slice(0, 6).findIndex((x) => !x)
+    if (missing >= 0) return `${who}第 ${missing + 1} 棒還沒填：前六棒要填，第 7 棒以後可以不填`
+    const gap = named.findIndex((x, i) => !x && named.slice(i + 1).some(Boolean))
+    return gap >= 0 ? `${who}第 ${gap + 1} 棒空著，後面還有人：請把後面的棒次往前排` : null
+  }
   const start = () => {
     if (!game.opponent.trim()) { setError(intraOn ? '請填第二隊的隊名' : '請填對手'); setInfoOpen(true); return }
     if (intraOn) {
       if (!teamA.trim() || teamA.trim() === game.opponent.trim()) { setError('兩隊要有不同的隊名'); setInfoOpen(true); return }
-      if (!themLineup.some((l) => l.name.trim())) { setError(`請至少填一位${game.opponent.trim()}的先發打者`); return }
+      const theirs = orderProblem(themLineup, game.opponent.trim())
+      if (theirs) { setError(theirs); return }
       if (!themPitcher.trim()) { setError(`請填${game.opponent.trim()}的先發投手`); return }
       const both = [...theirNames].find((n) => ourNames.has(n))
       if (both) { setError(`${both} 兩隊都有，一個人只能在一隊`); return }
     }
-    if (!lineup.some((l) => l.name.trim())) { setError('請至少填一位先發打者'); setLineupOpen(true); return }
+    const ours = orderProblem(lineup, intraOn ? teamA.trim() : '')
+    if (ours) { setError(ours); setLineupOpen(true); return }
     if (!pitcher.trim()) { setError('請填先發投手'); setLineupOpen(true); return }
     // a scheduled game keeps its id (the schedule entry turns into the record); otherwise a new id
     const id = practice ? `${PRACTICE_PREFIX}${game.date.replace(/-/g, '')}` : fromSchedule && game.id === fromSchedule ? game.id : nextGameId(game.date, base.games.map((x) => x.id))
@@ -206,7 +218,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
     const bats = Object.fromEntries(base.roster.flatMap((x) => (x.bats === 'L' || x.bats === 'R' ? [[x.name, x.bats]] : [])))
     const throws = Object.fromEntries(base.roster.flatMap((x) => (x.throws === 'L' || x.throws === 'R' ? [[x.name, x.throws]] : [])))
     const intra = intraOn ? { intra: { team: teamA.trim(), lineup: themLineup.map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher: themPitcher.trim(), bats, throws } } : {}
-    const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames && !intraOn ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule, ...intra })
+    const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry, ...(oppNames && !intraOn ? { oppNames: true, oppLineup } : {}), tiebreak: tiebreakRule, ...(!intraOn && oppSlots < 9 ? { oppSlots } : {}), ...intra })
     onStart(practice ? { ...s, practice: true } : s)
   }
   const startRow = (
@@ -249,6 +261,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           </> : <>
           <Field label="對手"><Input list="rec-opponents" value={game.opponent} onChange={(e) => g('opponent', e.target.value)} placeholder="必填" /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} className="w-full" /></Field>
+          <Field label="對方打序"><Select value={String(oppSlots)} onChange={(e) => setOppSlotsN(Number(e.target.value))} options={[{ value: '9', label: '9 棒' }, { value: '8', label: '8 棒' }, { value: '7', label: '7 棒' }]} className="w-full" /></Field>
           </>}
           <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? TEAM.innings} onChange={(e) => g('innings', Number(e.target.value) || TEAM.innings)} className="tnum" /></Field>
           <TiebreakSelects idPrefix="setup" innings={innings} from={tiebreakRule?.from ?? null} bases={tbBases} onChange={setTiebreak} />
@@ -267,7 +280,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           </>}
         </div>}
       </Card>
-      <Card className="xl:col-span-3" title={intraOn ? `${teamA || '第一隊'}先發打序與守位` : '先發打序與守位'} action={<RosterSortToggle />} subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選九位先發'].filter(Boolean).join('；')}
+      <Card className="xl:col-span-3" title={intraOn ? `${teamA || '第一隊'}先發打序與守位` : '先發打序與守位'} action={<RosterSortToggle />} subtitle={[lineupNote, saved ? (lineupOpen ? '已帶入「先發陣容」頁排好的陣容，可直接修改' : '已帶入「先發陣容」頁排好的陣容') : last ? `已帶入上一場（${last.date} vs ${last.opponent}）的打序，可直接修改` : '選先發打序（第 7 棒以後選填）'].filter(Boolean).join('；')}
 >
         {/* also decides who the bench chips offer, so it stays when the lineup is folded */}
         {listed && <RegistrationHint reg={reg!} everyone={everyone} onToggle={() => setEveryone(!everyone)} className="mb-3" />}
@@ -293,11 +306,12 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           {lineup.map((l, i) => (
             <div key={i} className="flex items-center gap-2">
               <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
-              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={ourPick} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
+              <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={ourPick} taken={inLineup} tag={benchTag} placeholder={i >= 6 ? '選填' : '球員'} className="flex-1 min-w-0" />
               <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
+        <p className="mt-2 text-[12px] text-muted">第 7 棒以後可以不填（友誼賽人數不夠時），打序就照填的人數輪</p>
         <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <Field label="先發投手"><PlayerSelect value={pitcher} onChange={setPitcher} names={ourPick} tag={benchTag} placeholder="必填" className="w-full" /></Field>
           {starterRest}
@@ -317,12 +331,12 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
         {!intraOn && startRow}
       </Card>
       {intraOn && (
-        <Card className="xl:col-span-3 xl:col-start-3" title={`${game.opponent || '第二隊'}先發打序與守位`} subtitle={`和${teamA || '第一隊'}一樣選九位先發與先發投手；同一個人只能在一隊`}>
+        <Card className="xl:col-span-3 xl:col-start-3" title={`${game.opponent || '第二隊'}先發打序與守位`} subtitle={`和${teamA || '第一隊'}一樣選先發（第 7 棒以後選填）與先發投手；同一個人只能在一隊`}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
             {themLineup.map((l, i) => (
               <div key={i} className="flex items-center gap-2">
                 <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
-                <PlayerSelect aria-label={`${game.opponent || '第二隊'}第 ${i + 1} 棒`} value={l.name} onChange={(v) => setThemLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={theirPick} taken={theirNames} placeholder="球員" className="flex-1 min-w-0" />
+                <PlayerSelect aria-label={`${game.opponent || '第二隊'}第 ${i + 1} 棒`} value={l.name} onChange={(v) => setThemLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={theirPick} taken={theirNames} placeholder={i >= 6 ? '選填' : '球員'} className="flex-1 min-w-0" />
                 <Select aria-label={`${game.opponent || '第二隊'}第 ${i + 1} 棒守位`} value={l.pos} onChange={(e) => setThemLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
               </div>
             ))}
@@ -687,6 +701,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     <div className="basis-full flex items-center gap-x-4 gap-y-1 flex-wrap">
       <Checkbox label="允許再上場" className="min-h-9 pointer-fine:min-h-7" checked={!!state.reentry} onChange={() => apply((s) => setReentry(s, !s.reentry))} />
       <Checkbox label="記對方打者姓名" className="min-h-9 pointer-fine:min-h-7" checked={!!state.oppNames} onChange={(on) => apply((s) => setOppNames(s, on))} />
+      {!intra && <label className="inline-flex items-center gap-2 text-[12px] text-ink-2">對方打序<Select aria-label="對方打序幾棒" size="sm" value={String(oppCycle(state))} onChange={(e) => apply((s) => setOppSlots(s, Number(e.target.value)))} options={[{ value: '9', label: '9 棒' }, { value: '8', label: '8 棒' }, { value: '7', label: '7 棒' }]} /></label>}
       {!!reg?.players.length && <RegistrationHint reg={reg} everyone={everyone} onToggle={() => setEveryone(!everyone)} />}
     </div>
   )

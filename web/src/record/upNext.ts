@@ -4,7 +4,7 @@
  * The opponent is usually known by batting order only (第 5 棒); a name is added when the recorder typed one
  * (記對方打者姓名, or the name on an earlier row in that slot).
  */
-import { lastOppName, offense, oppBatterOf, weBatTop, type RecordState, type Score } from './model'
+import { lastOppName, offense, oppBatterOf, oppCycle, weBatTop, type RecordState, type Score } from './model'
 
 export interface UpBatter { us: boolean; order: number; name: string }
 
@@ -20,10 +20,11 @@ export function ourFrom(s: RecordState, slot: number, n: number): UpBatter[] {
   return out
 }
 
-/** Their batters from batting order `order` (1–9) on, n of them. */
+/** Their batters from batting order `order` on, n of them (their order turns over at oppCycle: 9, or 7–8 in a 友誼賽). */
 export function oppFrom(s: RecordState, order: number, n: number): UpBatter[] {
+  const len = oppCycle(s)
   return Array.from({ length: n }, (_, k) => {
-    const o = ((((order - 1 + k) % 9) + 9) % 9) + 1
+    const o = ((((order - 1 + k) % len) + len) % len) + 1
     return { us: false, order: o, name: oppNameAt(s, o) }
   })
 }
@@ -43,7 +44,7 @@ export function oppNameAt(s: RecordState, order: number): string {
 export function onDeckOf(s: RecordState): { onDeck: UpBatter | null; inHole: UpBatter | null } {
   const next = offense(s) === 'us'
     ? ourFrom(s, s.slot + 1, 2).filter((b) => b.order - 1 !== s.slot)
-    : oppFrom(s, (s.oppOrder % 9) + 1, 2).filter((b) => b.order !== s.oppOrder)
+    : oppFrom(s, (s.oppOrder % oppCycle(s)) + 1, 2).filter((b) => b.order !== s.oppOrder)
   return { onDeck: next[0] ?? null, inHole: next[1] ?? null }
 }
 
