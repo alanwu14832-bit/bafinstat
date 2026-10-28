@@ -87,6 +87,9 @@ export interface RecordState {
   bench?: string[]
   /** 允許再上場: players substituted out may come back */
   reentry?: boolean
+  /** (with reentry) 自由替換 (友誼賽, 隊內賽): anyone substituted out comes back into any slot, any number of times, with no
+   *  college-rule tags; without it the college rule is shown (a starter, once, back into his own slot) */
+  freeReentry?: boolean
   /** every substitution, in the order it happened */
   subs?: DayRosterSub[]
   /** opponent runs called by hand (earned or not), by pitching row; every other run follows the rules (record/earned.ts) */
@@ -111,7 +114,7 @@ export interface RecordState {
   oppNames?: boolean
   /** their batting order, 9 names ('' = not typed); a change in the middle of the game is a pinch hitter */
   oppLineup?: string[]
-  /** how many batters their order has (7 or 8 in a 友誼賽 with players short; absent = 9): oppOrder turns over after it */
+  /** how many batters their order has (7–12 in a 友誼賽; absent = 9): oppOrder turns over after it */
   oppSlots?: number
   /** 隊內賽: the other side (game.opponent) is our players too — see IntraState */
   intra?: IntraState
@@ -193,8 +196,8 @@ export function withInPlay(pitches: string[], result: string): string[] {
   return [...pitches, 'IP']
 }
 
-export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null
-  /** their order's length when it is not 9 (a 友誼賽 with players short) */
+export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts: { bench?: string[]; reentry?: boolean; freeReentry?: boolean; oppNames?: boolean; oppLineup?: string[]; tiebreak?: TiebreakRule | null
+  /** their order's length when it is not 9 (a 友誼賽: 7–12) */
   oppSlots?: number
   /** 隊內賽: our side's name and the other side's lineup, pitcher and bench (with the players' 左右打 / 左右投 known) */
   intra?: { team: string; lineup: LineupSlot[]; pitcher: string; bench?: string[]; bats?: Record<string, OppBats>; throws?: Record<string, OppHand> } } = {}): RecordState {
@@ -203,23 +206,23 @@ export function newGame(game: Game, lineup: LineupSlot[], pitcher: string, opts:
   const bench = [...new Set((opts.bench ?? []).filter((n) => n && !starting.has(n)))]
   return {
     game, lineup, slot: 0, pitcher, oppOrder: 1, oppBatter: '', inning: 1, half: 'top', outs: 0, runners: [], batting: [], pitching: [], pitches: [], extras: { ...EXTRAS0 }, finished: false, startedAt: new Date().toISOString(),
-    starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry, subs: [],
+    starters: lineup.map((l) => ({ ...l })), startingPitcher: pitcher, bench, reentry: !!opts.reentry || !!opts.freeReentry, ...(opts.freeReentry ? { freeReentry: true } : {}), subs: [],
     ...(opts.oppNames !== undefined ? { oppNames: opts.oppNames } : {}), ...(opts.oppLineup ? { oppLineup: lineupOf(opts.oppLineup) } : {}),
     ...(opts.tiebreak !== undefined ? { tiebreak: opts.tiebreak } : {}),
-    ...(opts.oppSlots && opts.oppSlots < 9 ? { oppSlots: opts.oppSlots } : {}),
+    ...(opts.oppSlots && opts.oppSlots !== 9 ? { oppSlots: opts.oppSlots } : {}),
     ...(opts.intra ? intraStart(opts.intra) : {}),
   }
 }
 /** A 隊內賽's other side at the first pitch: its order (oppLineup) and pitcher, both sides free to bring players back. */
 function intraStart(x: NonNullable<Parameters<typeof newGame>[3]>['intra'] & object): Partial<RecordState> {
-  const lineup = Array.from({ length: 9 }, (_, i) => ({ name: x.lineup[i]?.name.trim() ?? '', pos: x.lineup[i]?.pos ?? '' }))
+  const lineup = Array.from({ length: Math.min(12, Math.max(9, x.lineup.length)) }, (_, i) => ({ name: x.lineup[i]?.name.trim() ?? '', pos: x.lineup[i]?.pos ?? '' }))
   const hand = x.throws?.[x.pitcher]
   const starting = new Set([...lineup.map((l) => l.name), x.pitcher])
   // (their order is as long as the lineup picked: 7 or 8 when players are short)
   const filled = lineup.filter((l) => l.name).length
   return {
-    ...(filled >= 1 && filled < 9 ? { oppSlots: filled } : {}),
-    reentry: true, oppNames: true, oppLineup: lineup.map((l) => l.name),
+    ...(filled >= 1 && filled !== 9 ? { oppSlots: filled } : {}),
+    reentry: true, freeReentry: true, oppNames: true, oppLineup: lineup.map((l) => l.name),
     oppPitcher: hand ? { name: x.pitcher, hand } : { name: x.pitcher, handUnknown: true },
     intra: { team: x.team, pos: lineup.map((l) => l.pos), starters: lineup, startingPitcher: x.pitcher, bench: [...new Set((x.bench ?? []).filter((n) => n && !starting.has(n)))], subs: [], ...(x.bats ? { bats: x.bats } : {}), ...(x.throws ? { throws: x.throws } : {}) },
   }
@@ -257,7 +260,8 @@ export function finishTimes(s: RecordState): { start: string; end: string; live:
 }
 
 /* ------------------------------------------------ 對方打者姓名 */
-const lineupOf = (names: string[]) => Array.from({ length: 9 }, (_, i) => (names[i] ?? '').trim())
+/** Their batting order as 9 names, or more (a 友誼賽 order of up to 12). */
+const lineupOf = (names: string[]) => Array.from({ length: Math.min(12, Math.max(9, names.length)) }, (_, i) => (names[i] ?? '').trim())
 /** The opponent batter up now: a name typed for this plate appearance, else (記對方打者姓名) their batting order's. */
 export const oppBatterOf = (s: RecordState): string => s.oppBatter || (s.oppNames ? s.oppLineup?.[s.oppOrder - 1] ?? '' : '')
 /** The latest batter's name in one of their batting-order slots from today's rows ('' when none has one). A 對方代跑
@@ -277,7 +281,7 @@ export function setOppLineup(s: RecordState, names: string[]): RecordState {
   const next = lineupOf(names)
   let out: RecordState = { ...s, oppLineup: next }
   // (a name typed into a blank slot is the same batter; a different name is a new one: his side is asked again)
-  for (let i = 0; i < 9; i++) { const was = s.oppLineup?.[i] ?? ''; if (was && was !== next[i]) out = clearOppBats(out, i + 1) }
+  for (let i = 0; i < next.length; i++) { const was = s.oppLineup?.[i] ?? ''; if (was && was !== next[i]) out = clearOppBats(out, i + 1) }
   return out
 }
 
@@ -519,9 +523,9 @@ export const setSlot = (s: RecordState, slot: number): RecordState => ({ ...s, s
 /** How many batters their order turns over in (oppSlots; 9 when not set). */
 export const oppCycle = (s: Pick<RecordState, 'oppSlots'>): number => s.oppSlots ?? 9
 export const setOppOrder = (s: RecordState, n: number): RecordState => ({ ...s, oppOrder: ((n - 1 + oppCycle(s)) % oppCycle(s)) + 1 })
-/** Their order has `n` batters (7–9) from now on; the batter up stays unless his slot is gone. */
+/** Their order has `n` batters (7–12) from now on; the batter up stays unless his slot is gone. */
 export const setOppSlots = (s: RecordState, n: number): RecordState => {
-  const k = Math.min(9, Math.max(1, Math.round(n)))
+  const k = Math.min(12, Math.max(1, Math.round(n)))
   const { oppSlots: _o, ...rest } = s
   void _o
   return { ...(k === 9 ? rest : { ...rest, oppSlots: k }), oppOrder: s.oppOrder > k ? 1 : s.oppOrder }
@@ -574,6 +578,14 @@ function lineupChange(s: RecordState, slot: number, name: string, pos: string): 
   return next
 }
 export const setReentry = (s: RecordState, on: boolean): RecordState => ({ ...s, reentry: on })
+/** 被換下的球員: 不能再上場 (none), 依大專規則 (college: a starter, once, back into his own slot), or 自由替換 (free). */
+export type ReentryMode = 'none' | 'college' | 'free'
+export const reentryMode = (s: Pick<RecordState, 'reentry' | 'freeReentry'>): ReentryMode => (!s.reentry ? 'none' : s.freeReentry ? 'free' : 'college')
+export function setReentryMode(s: RecordState, mode: ReentryMode): RecordState {
+  const { freeReentry: _f, ...rest } = s
+  void _f
+  return { ...rest, reentry: mode !== 'none', ...(mode === 'free' ? { freeReentry: true } : {}) }
+}
 
 /**
  * 對方代跑: the opponent runner on `row` (the pitching row where he reached, a 突破僵局 runner too) is replaced by `name`
@@ -598,7 +610,7 @@ function intraRowNow(s: RecordState): { row?: number } {
  */
 export function intraSub(s: RecordState, slot: number, name: string, pos: string): RecordState {
   const x = s.intra
-  if (!x || slot < 0 || slot > 8) return s
+  if (!x || slot < 0 || slot >= oppCycle(s)) return s
   const lineup = lineupOf(s.oppLineup ?? [])
   const old = lineup[slot]
   const oldPos = x.pos[slot] ?? ''
@@ -646,11 +658,11 @@ export function intraPitcher(s: RecordState, name: string, opts: { logged?: bool
  */
 export function otherSide(s: RecordState): RecordState {
   const x = s.intra!
-  const names = lineupOf(s.oppLineup ?? [])
+  const names = lineupOf(s.oppLineup ?? []).slice(0, oppCycle(s))
   return {
     ...s, game: { ...s.game, homeAway: s.game.homeAway === '主' ? '客' : '主' },
     lineup: names.map((name, i) => ({ name, pos: x.pos[i] ?? '' })), slot: s.oppOrder - 1, pitcher: s.oppPitcher?.name ?? '',
-    starters: x.starters, startingPitcher: x.startingPitcher, bench: x.bench, subs: x.subs, reentry: true,
+    starters: x.starters, startingPitcher: x.startingPitcher, bench: x.bench, subs: x.subs, reentry: true, freeReentry: true,
     runners: s.runners.map((r) => ({ ...r, side: r.side === 'us' ? 'opp' : 'us' })),
     batting: [], pitching: [], intra: undefined,
   }
@@ -681,7 +693,7 @@ export function pinchRunOpp(s: RecordState, row: number, name: string): RecordSt
     ...(offense(s) === 'opp' && (s.pitches.length > 0 || s.pitching.length > row + 1) ? { oppPrAt: [...(s.oppPrAt ?? []), { label, at: s.pitches.length }] } : {}),
   }
   const slot = pa.oppOrder
-  if (s.oppNames && slot && slot >= 1 && slot <= 9) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === slot - 1 ? typed : n))
+  if (s.oppNames && slot && slot >= 1 && slot <= oppCycle(s)) next.oppLineup = lineupOf(s.oppLineup ?? []).map((n, i) => (i === slot - 1 ? typed : n))
   return next
 }
 
@@ -747,6 +759,7 @@ export function subCandidates(s: RecordState, pool: string[], mode: 'batter' | '
   const startSlot = new Map(startersOf(s).flatMap((l, i) => (l.name ? [[l.name, i + 1] as const] : [])))
   const leftTag = (n: string) => {
     if (!s.reentry) return '（已下場）'
+    if (s.freeReentry) return '（已下場・可再上場）'
     const slot = startSlot.get(n)
     if (!slot) return '（已下場・不是先發，依大專規則不能再上場）'
     if ((s.subs ?? []).some((x) => x.in === n && !(x.out === n && x.kind === 'DEF'))) return '（已下場・已經再上場過一次）'

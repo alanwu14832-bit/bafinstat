@@ -76,12 +76,13 @@ export function withOppPrMark(note: string | undefined, label: string, at?: numb
   const rest = (note ?? '').split('；').filter((x) => x && !oppPrMarks(x).some((m) => m.label === label))
   return [...(at === undefined ? [] : [oppPrMark(label, at)]), ...rest].join('；') || undefined
 }
-/** How many slots a batting order turns over in, from where it went back to the 1st (a 友誼賽 lineup of 8 goes 8 → 1;
- *  a lineup has at least 6): 9 until it has turned over. */
+/** How many slots a batting order turns over in, from where it went back to the 1st (a 友誼賽 lineup of 8 goes 8 → 1,
+ *  one of 12 goes 12 → 1; a lineup has at least 6): until it has turned over, 9 or the highest slot up so far. */
 export function orderCycle(orders: ReadonlyArray<number | undefined>): number {
-  let n = 0, prev = 0
-  for (const k of orders) { if (!k) continue; if (k === 1 && prev >= 6) n = Math.max(n, prev); prev = k }
-  return n || 9
+  let n = 0, prev = 0, top = 0
+  for (const k of orders) { if (!k) continue; if (k === 1 && prev >= 6) n = Math.max(n, prev); prev = k; top = Math.max(top, k) }
+  // (before it turns over: 9, or more when a 10th–12th batter has come up)
+  return n || Math.max(9, top)
 }
 export const NO_BATTED_BALL = new Set(['三振', '保送', '故四', '觸身', '妨礙', '其他出局'])
 /** A batted ball (BIP): a real plate appearance whose result put the ball in play, whether or not its 落點／軌跡／強度 were recorded. */

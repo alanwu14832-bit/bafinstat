@@ -20,16 +20,17 @@ const check = (ok, what) => { if (!ok) fails.push(what); console.log(ok ? '✓' 
 // ---------------------------------------------------------------- two sides from the roster
 await p.goto(`${URL}/lineup`, { waitUntil: 'networkidle' })
 const names = (await p.locator('select[aria-label="DH 指定打擊"] option').allTextContents()).filter((t) => t && !t.includes('不用')).map((t) => t.replace(/（.*$/, ''))
-// (the sample roster has 17: 白隊 starts six, two more come in)
+// (the sample roster has 17: 紅隊 bats 8, 白隊 bats 7 and two more come in)
 if (names.length < 17) throw new Error(`roster too small: ${names.length}`)
-const red = names.slice(0, 9), white = names.slice(9, 15), [whiteRelief, whitePH] = names.slice(15, 17)
-const POS = ['SS', 'C', '1B', '2B', '3B', 'LF', 'CF', 'RF', 'P']
-const WPOS = ['SS', 'C', '1B', '2B', 'CF', 'P']
+const red = names.slice(0, 8), white = names.slice(8, 15), [whiteRelief, whitePH] = names.slice(15, 17)
+const POS = ['SS', 'C', '1B', '2B', '3B', 'LF', 'CF', 'P']
+const WPOS = ['SS', 'C', '1B', '2B', 'CF', 'P', '3B']
 await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); localStorage.removeItem('bafin.registrations.v1'); localStorage.setItem('bafin.lineup.v1', JSON.stringify(L)) },
-  { L: { field: Object.fromEntries(POS.map((pos, i) => [pos, red[i]])), dh: '', order: red, bench: [], gameId: '', regKey: '', reentry: false, updatedAt: new Date().toISOString() } })
+  { L: { field: Object.fromEntries(POS.map((pos, i) => [pos, red[i]])), dh: '', order: [...red, ''], bench: [], gameId: '', regKey: '', reentry: false, updatedAt: new Date().toISOString() } })
 await p.goto(`${URL}/record`, { waitUntil: 'networkidle' })
 await main.getByRole('tab', { name: '隊內賽' }).click()
 await main.getByLabel('先後攻').selectOption('客')   // 紅隊先攻
+await main.getByLabel('白隊打序人數').selectOption('7')
 for (let i = 0; i < white.length; i++) {
   await main.getByLabel(`白隊第 ${i + 1} 棒`, { exact: true }).selectOption(white[i])
   await main.getByLabel(`白隊第 ${i + 1} 棒守位`).selectOption(WPOS[i])
