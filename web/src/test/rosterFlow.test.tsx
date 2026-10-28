@@ -67,7 +67,7 @@ describe('roster feature end to end (local mode)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: '修改' })[0])
     expect(screen.getByDisplayValue(`${SCHED.date} ${SCHED.time} vs ${SCHED.opponent}（${SCHED.tournament}）`)).toBeInTheDocument()
     for (const n of ['許振謙', '謝昊瑾', '嚴敬翔']) expect(screen.getByRole('button', { name: n })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByLabelText('允許被換下的球員再上場')).toBeChecked()
+    expect(screen.getByLabelText('被換下的球員')).toHaveValue('college')
     expect(screen.getByText('依「2026 大專盃」報名名單（12 人）')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '開始紀錄' }))
     let s = readDraft()!

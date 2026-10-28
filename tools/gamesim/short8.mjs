@@ -1,5 +1,6 @@
-// 友誼賽 with players short: 8 batters each side. Setup refuses a gap in the first six slots and shows 7–9 as 選填;
-// then every batter strikes out for three innings on the real 紀錄比賽 screen, and both orders turn over after the 8th.
+// 友誼賽 with 8 batters for us and 10 for them. Setup brings 打序人數 in as 8 from the 先發陣容 page, picks 自由替換 for a
+// 友誼賽, and refuses an order with a slot left empty; then every batter strikes out for four innings on the real 紀錄比賽
+// screen, and the orders turn over after our 8th and their 10th.
 import { createRequire } from 'node:module'
 const { chromium } = await import('playwright').catch(() => createRequire(`${process.cwd()}/`)('playwright'))
 const URL = process.env.GAMESIM_URL ?? 'http://localhost:4173'
@@ -22,20 +23,24 @@ await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); 
 await p.goto(`${URL}/record`, { waitUntil: 'networkidle' })
 await main.getByLabel('對手', { exact: true }).last().fill('友誼隊')
 await main.getByLabel('主客').selectOption('客')
-await main.getByLabel('對方打序').selectOption('8')
-// a gap in the order is refused
+await main.getByLabel('杯賽').fill('友誼賽')
+await main.getByLabel('對方打序').selectOption('10')
 await main.getByRole('button', { name: '修改打序' }).click().catch(() => {})
-await main.getByLabel('第 5 棒', { exact: true }).selectOption('')
+check(await main.getByLabel('打序人數', { exact: true }).inputValue() === '8', '先發陣容排 8 棒：打序人數帶成 8 棒')
+check(await main.getByLabel('第 9 棒', { exact: true }).count() === 0, '8 棒時沒有第 9 棒的欄位')
+check(await main.getByLabel('被換下的球員').inputValue() === 'free', '友誼賽：被換下的球員預設「自由替換」')
+// a slot left empty is refused (打序人數 10: the 9th and 10th are empty)
+await main.getByLabel('打序人數', { exact: true }).selectOption('10')
 await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTimeout(200)
-check((await main.textContent()).includes('第 5 棒還沒填'), '前六棒有空著：擋下並說明')
-check(await main.getByLabel('第 9 棒', { exact: true }).locator('option:checked').textContent() === '選填', '第 9 棒顯示「選填」')
+check((await main.textContent()).includes('第 9 棒還沒填'), '打序選 10 棒但只填 8 棒：擋下並說明')
 if (OUT) await p.screenshot({ path: `${OUT}/short8-setup.png`, fullPage: true })
-await main.getByLabel('第 5 棒', { exact: true }).selectOption(names[4])
+await main.getByLabel('打序人數', { exact: true }).selectOption('8')
 await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTimeout(400)
 const d0 = await draft()
-check(d0?.lineup?.length === 8 && d0?.oppSlots === 8, `開賽：我方 ${d0?.lineup?.length} 棒、對方 ${d0?.oppSlots} 棒`)
+check(d0?.lineup?.length === 8 && d0?.oppSlots === 10, `開賽：我方 ${d0?.lineup?.length} 棒、對方 ${d0?.oppSlots} 棒`)
+check(d0?.reentry === true && d0?.freeReentry === true, '開賽：自由替換')
 
-// strike everyone out: 3 innings = 9 of ours and 9 of theirs
+// strike everyone out: 4 innings = 12 of ours and 12 of theirs
 const answer = async () => {
   for (const [g, btn] of [['對方投手左右投', '不知道'], ['對方打者左打或右打', '右打']]) {
     const grp = main.getByRole('group', { name: g })
@@ -43,12 +48,12 @@ const answer = async () => {
   }
 }
 const k = async () => { for (let i = 0; i < 3; i++) { await answer(); await main.getByRole('button', { name: /^揮空/ }).first().click(); await p.waitForTimeout(50) } await main.getByRole('button', { name: /^送出/ }).click(); await p.waitForTimeout(200) }
-for (let i = 0; i < 18; i++) await k()
+for (let i = 0; i < 24; i++) await k()
 const d = await draft()
-check(JSON.stringify(d.batting.map((x) => x.order)) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 1]), `我方棒次 ${d.batting.map((x) => x.order).join(',')}`)
-check(JSON.stringify(d.pitching.map((x) => x.oppOrder)) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 1]), `對方棒次 ${d.pitching.map((x) => x.oppOrder).join(',')}`)
+check(JSON.stringify(d.batting.map((x) => x.order)) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4]), `我方棒次 ${d.batting.map((x) => x.order).join(',')}`)
+check(JSON.stringify(d.pitching.map((x) => x.oppOrder)) === JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, 2]), `對方棒次 ${d.pitching.map((x) => x.oppOrder).join(',')}`)
 if (OUT) await p.screenshot({ path: `${OUT}/short8-live.png` })
 console.log('page errors:', errs)
 await b.close()
 if (fails.length || errs.length) { console.log('不符：', fails); process.exit(1) }
-console.log('八棒友誼賽：全部相符')
+console.log('友誼賽 8 棒對 10 棒：全部相符')

@@ -172,7 +172,7 @@ export function LastOppLineupButton({ opponent, date, onClick }: { opponent: str
 }
 
 /** 9 rows 「1 棒 [姓名或背號]」 (one column on phones; `cols` sets the wider layout, three from sm by default). */
-export function OppLineupFields({ value, onChange, names, current, focusSlot, idPrefix = 'opp-lineup', cols = 'sm:grid-cols-3' }: {
+export function OppLineupFields({ value, onChange, names, current, focusSlot, idPrefix = 'opp-lineup', cols = 'sm:grid-cols-3', count = 9 }: {
   value: string[]
   onChange: (next: string[]) => void
   /** datalist: names seen against this opponent */
@@ -184,6 +184,8 @@ export function OppLineupFields({ value, onChange, names, current, focusSlot, id
   idPrefix?: string
   /** grid columns above phone width: pick them for the box this sits in (a narrow card needs fewer) */
   cols?: string
+  /** their 打序人數 (7–12; 9 by default) */
+  count?: number
 }) {
   const refs = useRef<Array<HTMLInputElement | null>>([])
   useEffect(() => { if (focusSlot) refs.current[focusSlot - 1]?.focus() }, [focusSlot])
@@ -191,10 +193,10 @@ export function OppLineupFields({ value, onChange, names, current, focusSlot, id
   return (
     <div className={cx('grid grid-cols-1 gap-x-4 gap-y-2', cols)}>
       <datalist id={list}>{names.map((n) => <option key={n} value={n} />)}</datalist>
-      {Array.from({ length: 9 }, (_, i) => (
+      {Array.from({ length: count }, (_, i) => (
         <label key={i} className="flex items-center gap-2 min-w-0">
           <span className="text-[13px] text-ink-2 tnum w-9 shrink-0">{i + 1} 棒</span>
-          <Input ref={(el) => { refs.current[i] = el }} value={value[i] ?? ''} onChange={(e) => onChange(Array.from({ length: 9 }, (_, k) => (k === i ? e.target.value : value[k] ?? '')))}
+          <Input ref={(el) => { refs.current[i] = el }} value={value[i] ?? ''} onChange={(e) => onChange(Array.from({ length: count }, (_, k) => (k === i ? e.target.value : value[k] ?? '')))}
             list={list} placeholder="姓名或背號" maxLength={40} aria-label={`對方第 ${i + 1} 棒`} className="flex-1" />
           {current === i + 1 && <span className="text-[11px] text-ink font-medium shrink-0">現在打擊</span>}
         </label>
@@ -204,10 +206,12 @@ export function OppLineupFields({ value, onChange, names, current, focusSlot, id
 }
 
 /** 對方打序 during the game: changes apply once on 完成 (one undo step, one sync). */
-export function OppLineupSheet({ open, onClose, lineup, current, names, last, opponent, onDone }: {
+export function OppLineupSheet({ open, onClose, lineup, count, current, names, last, opponent, onDone }: {
   open: boolean
   onClose: () => void
   lineup: string[]
+  /** their 打序人數 */
+  count?: number
   current: number
   names: string[]
   last: { date: string; names: string[] } | null
@@ -227,7 +231,7 @@ export function OppLineupSheet({ open, onClose, lineup, current, names, last, op
           <p className="text-[12px] text-muted mt-1">比賽中改名字＝代打：前面的打席不會變</p>
         </div>
         {blank && last && <LastOppLineupButton opponent={opponent} date={last.date} onClick={() => setDraft(last.names)} />}
-        <OppLineupFields value={draft} onChange={setDraft} names={names} current={current} focusSlot={open ? current : undefined} idPrefix="opp-lineup-sheet" />
+        <OppLineupFields value={draft} onChange={setDraft} names={names} current={current} focusSlot={open ? current : undefined} idPrefix="opp-lineup-sheet" count={count} />
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
           <Button variant="primary" onClick={() => { onDone(draft); onClose() }}>完成</Button>

@@ -20,6 +20,9 @@ import { balksIn, playLabel } from '../../data/plays'
 import { parseTiebreakBases } from '../../record/tiebreak'
 import { needsOutOnBase } from '../../data/audit'
 
+// 棒次 1–12 (a 友誼賽 order can be up to 12)
+const ORDER_OPTS = [{ value: '', label: '—' }, ...Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]
+
 export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
 const isBat = (side: PaSide, _pa: AnyPA): _pa is BattingPA => side === 'bat'
@@ -663,7 +666,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
   const pit = !bat ? (pa as PitchingPA) : null
   const base = timeline && typeof timeline.step.batter === 'number' ? BASE_ZH[timeline.step.batter] : ''
   const run = pa.code === 'R' || pa.code === 'ER'
-  const orderOpts = [{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]
+  const orderOpts = ORDER_OPTS
   return (
     <div className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/40 p-3 md:p-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -788,7 +791,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       ) : bat ? (
         <Section title="打者">
           <div className="flex items-end gap-2 flex-wrap">
-            <label className="flex flex-col gap-1 text-[12px] text-ink-2">棒次<Select value={bat.order ? String(bat.order) : ''} onChange={(e) => set({ order: e.target.value ? Number(e.target.value) : undefined })} options={[{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]} className="w-[104px]" /></label>
+            <label className="flex flex-col gap-1 text-[12px] text-ink-2">棒次<Select value={bat.order ? String(bat.order) : ''} onChange={(e) => set({ order: e.target.value ? Number(e.target.value) : undefined })} options={ORDER_OPTS} className="w-[104px]" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[160px]">打者<PlayerSelect aria-label="打者" value={bat.batter} onChange={(v) => set({ batter: v })} names={bat.batter && !names.includes(bat.batter) ? [bat.batter, ...names] : names} className="w-full" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2">守位<Select value={bat.pos ?? ''} onChange={(e) => set({ pos: e.target.value || undefined })} options={[{ value: '', label: '—' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[88px]" /></label>
           </div>
@@ -797,7 +800,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         <Section title="投手與對方打者">
           <div className="flex items-end gap-2 flex-wrap">
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[160px]">我隊投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" /></label>
-            <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={[{ value: '', label: '—' }, ...Array.from({ length: 9 }, (_, i) => ({ value: String(i + 1), label: `第 ${i + 1} 棒` }))]} className="w-[104px]" /></label>
+            <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={ORDER_OPTS} className="w-[104px]" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[140px]">對方打者<Input value={pit.oppBatter ?? ''} onChange={(e) => set({ oppBatter: e.target.value || undefined })} placeholder="可不填" /></label>
             <label className="flex flex-col gap-1 text-[12px] text-ink-2 w-[160px]">代跑<Input aria-label="對方代跑" value={pit.runner ?? ''} maxLength={40} onChange={(e) => { const n = { ...pit, runner: e.target.value || undefined }; if (!e.target.value) delete n.runner; onChange(n) }} placeholder="他上壘後換人才填" /></label>
           </div>

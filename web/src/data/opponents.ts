@@ -28,7 +28,9 @@ export function lastOppLineup(ds: Dataset, opponent: string): { gameId: string; 
   for (const g of gamesVs(ds, opponent)) {
     const rows = ds.pitching.filter((p) => p.gameId === g.id)
     if (!rows.some((p) => oppBatterName(p.oppBatter))) continue
-    const names = Array.from({ length: 9 }, (_, k) => oppBatterName(rows.find((p) => p.oppOrder === k + 1)?.oppBatter))
+    // (a 友誼賽 order of up to 12)
+    const n = Math.min(12, Math.max(9, ...rows.map((p) => p.oppOrder ?? 0)))
+    const names = Array.from({ length: n }, (_, k) => oppBatterName(rows.find((p) => p.oppOrder === k + 1)?.oppBatter))
     return { gameId: g.id, date: g.date, names }
   }
   return null
