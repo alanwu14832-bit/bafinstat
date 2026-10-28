@@ -1,0 +1,1 @@
+import{d as i}from"./history-CnCF4-t1.js";import{a as r,am as n,c0 as c,dC as m,dD as u}from"./index-DR1jr6JC.js";let s=null;function l(e,a){const o=u();return(!s||s.ds!==e||s.raw!==a||s.live!==o)&&(s={ds:e,raw:a,live:o,h:i(e,m(a,e.pitching))}),s.h}function v(){const e=r(t=>t.base),a=r(t=>t.demo),o=r(t=>t.params);return n(),l(c(e,a),o)}export{v as u};

@@ -1,0 +1,1 @@
+import{d as i}from"./history-Ca3RAqu8.js";import{a as r,bv as n,cP as c}from"./index-DRt2bi8_.js";let a=null;function u(t,e){return(!a||a.ds!==t||a.raw!==e)&&(a={ds:t,raw:e,h:i(t,c(e,t.pitching))}),a.h}function h(){const t=r(o=>o.base),e=r(o=>o.demo),s=r(o=>o.params);return u(n(t,e),s)}export{h as u};

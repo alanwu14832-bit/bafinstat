@@ -1,0 +1,1 @@
+import{d as i}from"./history-DcAlZgtX.js";import{a as r,ak as n,bY as u,du as c,dv as m}from"./index-Dhvi8Ubw.js";let s=null;function l(e,a){const o=m();return(!s||s.ds!==e||s.raw!==a||s.live!==o)&&(s={ds:e,raw:a,live:o,h:i(e,c(a,e.pitching))}),s.h}function d(){const e=r(t=>t.base),a=r(t=>t.demo),o=r(t=>t.params);return n(),l(u(e,a),o)}export{d as u};
