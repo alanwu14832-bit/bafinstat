@@ -16,6 +16,9 @@ import { f2, f3, pct, pct0, shortDate, signedInt } from '../lib/fmt'
 import { TEAM_NAME } from '../data/seed'
 import { useDataStore } from '../store/data'
 import { SeasonHero } from '../components/ui/SeasonHero'
+import { useAccess } from '../hooks/useAccess'
+import { MembersTeaser } from '../components/layout/Gate'
+import { cx } from '../lib/format'
 import { GameCard, gameStar } from '../components/ui/GameCard'
 import { teamStories } from '../data/stories'
 import { scheduledGames } from '../data/schedule'
@@ -53,6 +56,8 @@ export function OverviewPage() {
   const filters = useDataStore((st) => st.filters)
   const next = useMemo(() => { const today = new Date().toISOString().slice(0, 10); return scheduledGames(s.dataset.games).find((g) => g.date >= today) }, [s.dataset.games])
   const resetFilters = useDataStore((st) => st.resetFilters)
+  // 一般人 see the season and the recent games; the full numbers are for the team's accounts (球員 and up)
+  const { level } = useAccess()
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
   const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
 
@@ -83,6 +88,31 @@ export function OverviewPage() {
       </>
     )
   }
+
+  // 近期比賽: the newest games as the same scoreboard cards as the 比賽 page (three on a phone, four elsewhere)
+  const recent = (wide: boolean) => (
+    <section aria-label="近期比賽" className={cx('flex flex-col gap-3 min-w-0', !wide && 'xl:col-span-3')}>
+      <div className="flex items-end justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h3 className="text-[16px] text-ink leading-6">近期比賽</h3>
+          <p className="text-xs text-muted leading-4 mt-0.5">新的在前；點一場看逐局比分與攻守成績</p>
+        </div>
+        <Button variant="ghost" size="sm" to="/games?view=results">全部比賽 →</Button>
+      </div>
+      <div className={cx('grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5', wide && 'xl:grid-cols-4')}>
+        {recentGames.map((g, i) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={gameStar(s.dataset, g.game.id)} onOpen={() => openGame({ id: g.game.id })} className={i === 3 ? 'hidden sm:flex' : undefined} />)}
+      </div>
+    </section>
+  )
+  if (level < 1) return (
+    <>
+      <PageHeader scoped title="總覽" description={`${TEAM.org}的戰績與最近比賽。`} />
+      <DemoBanner />
+      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={tournamentFilter !== 'all' ? `${TEAM.org}・${tournamentFilter}` : TEAM.org} />
+      {recent(true)}
+      <MembersTeaser />
+    </>
+  )
 
   return (
     <>
@@ -117,19 +147,7 @@ export function OverviewPage() {
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />
-        {/* 近期比賽: the newest games as the same scoreboard cards as the 比賽 page (three on a phone, four elsewhere) */}
-        <section aria-label="近期比賽" className="xl:col-span-3 flex flex-col gap-3 min-w-0">
-          <div className="flex items-end justify-between gap-3 px-1">
-            <div className="min-w-0">
-              <h3 className="text-[16px] text-ink leading-6">近期比賽</h3>
-              <p className="text-xs text-muted leading-4 mt-0.5">新的在前；點一場看逐局比分與攻守成績</p>
-            </div>
-            <Button variant="ghost" size="sm" to="/games?view=results">全部比賽 →</Button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
-            {recentGames.map((g, i) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={gameStar(s.dataset, g.game.id)} onOpen={() => openGame({ id: g.game.id })} className={i === 3 ? 'hidden sm:flex' : undefined} />)}
-          </div>
-        </section>
+        {recent(false)}
       </div>
       <TeamSeasonsTable title="逐季戰績" subtitle={`依上方篩選；勝率 = 勝 ÷（勝＋敗）${seasonNote() ? `；${seasonNote()}` : ''}。點一列把篩選設成那一季`} rows={seasonRows}
         total={{ avg: team.avg, ops: team.ops, era: teamPitch.era }}

@@ -15,7 +15,7 @@ Project Settings → **API**：
 anon key 可以放在前端，因為資料表已開啟 RLS：未登入只能讀，登入才能寫。
 
 ## 3. 登入方式（紀錄員）
-紀錄員由網站上的「紀錄員名單」管理：現有紀錄員新增對方的 email，拿到一組 10 碼邀請碼；對方在登入框選「第一次使用」，輸入 email、邀請碼並設定密碼。沒有邀請碼的帳號只能瀏覽。為此要設定：
+帳號由網站上的「帳號管理」管理（管理者才看得到）：新增對方的 email 並選身分（球員／紀錄員／管理者），拿到一組 10 碼邀請碼；對方在登入框選「第一次使用」，輸入 email、邀請碼並設定密碼。沒有邀請碼的帳號只能瀏覽。為此要設定：
 - Authentication → Sign In / Providers → Email：打開 **Allow new users to sign up**、關閉 **Confirm email**、Minimum password length 設 **8**（「第一次使用」要能建立帳號；不用擔心陌生人註冊，沒有邀請碼寫不了任何東西）。
 - 要用「快速登入」的話，同一頁再打開 **Allow anonymous sign-ins**（見 docs/SECURITY.md）。
 - 還沒有任何紀錄員時（第一位）：Authentication → Users → **Add user → Create new user**（勾 Auto Confirm User），再到 SQL Editor 執行 `select admin_bind_editor('對方email','名字');`。
@@ -63,6 +63,7 @@ npm run dev
 後來加的，舊專案到 SQL Editor 各執行一次（重複執行安全）：
 - `supabase/migrations/2026-09-10_record_drafts.sql`：換裝置接續逐球紀錄、即時比分頁。沒執行時紀錄頁仍能用，只是不能在另一台裝置接續。
 - `supabase/migrations/2026-09-11_editors.sql`：**紀錄員名單**。執行後只有 `editors` 表裡的 email 能寫入；先把裡面的預設 email 改成你們的管理員。沒執行時維持「任何登入者都能寫」。
+- `supabase/migrations/2026-11-05_roles.sql`：**身分分層**（一般人 → 球員 → 紀錄員 → 管理者）。`editors` 多一欄身分，原本名單上的人都是紀錄員，備註「管理員」的那一列（沒有的話最早啟用的帳號）成為管理者；球員只能看、不能寫入，帳號管理只有管理者。執行完最下面會列出每個人的身分。沒執行前網站照常運作，名單上的人照舊都能管理名單。
 - `supabase/migrations/2026-09-12_albums_schedule.sql`：**相簿連結與賽程**。建立 `albums` 表（每場比賽或活動的 Google Drive 連結）並在 `games` 加 `status` 欄（預定／取消）。沒執行時相簿頁會提示尚未開通，賽程仍可用但「預定」狀態存不進雲端。
 - `supabase/migrations/2026-09-26_rosters.sql`：**當日登錄名單與報名名單**。在 `games` 加 `day_roster` 欄（先發、板凳、替補紀錄、允許再上場），並建立 `registrations` 表（某年某杯賽的報名名單）。沒執行時比賽照常紀錄與儲存，只是登錄名單存不進雲端（存檔時會提醒）、比賽頁的「當日登錄名單」改由打席紀錄推定、球員頁的報名名單會提示尚未開通，先發陣容與紀錄比賽的候選名單則列出全隊。
 - `supabase/migrations/2026-10-07_play_events.sql`、`2026-10-08_security.sql`、`2026-10-09_baserunning_outs.sql`、`2026-10-10_quick_login.sql`、`2026-10-12_quick_login_fix.sql`：逐球跑壘、資料安全、壘死、快速登入（說明見各檔開頭與 `docs/SECURITY.md`）。

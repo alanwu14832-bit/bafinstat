@@ -34,7 +34,7 @@ describe('LoginForm 第一次使用', () => {
     expect(screen.getByRole('status').textContent).toBe('密碼至少 8 個字元')
     fill('new@gmail.com', 'K7Q2', 'abcdefgh')
     fireEvent.click(screen.getByRole('button', { name: '設定密碼並登入' }))
-    expect(screen.getByRole('status').textContent).toBe('請輸入紀錄員給你的 10 碼邀請碼')
+    expect(screen.getByRole('status').textContent).toBe('請輸入管理者給你的 10 碼邀請碼')
     expect(signUp).not.toHaveBeenCalled()
   })
 
@@ -43,7 +43,7 @@ describe('LoginForm 第一次使用', () => {
     render(<LoginForm onDone={done} />)
     fill(' new@gmail.com ', 'k7q2m-9xapd', 'abcdefgh')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '設定密碼並登入' })) })
-    expect(await screen.findByText('已設定密碼並啟用紀錄員權限')).toBeTruthy()
+    expect(await screen.findByText('已設定密碼並啟用帳號')).toBeTruthy()
     expect(signUp).toHaveBeenCalledWith('new@gmail.com', 'abcdefgh')
     expect(claim).toHaveBeenCalledWith('K7Q2M-9XAPD')
     expect(done).toHaveBeenCalled()

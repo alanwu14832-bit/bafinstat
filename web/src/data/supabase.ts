@@ -350,8 +350,10 @@ export async function fetchIsEditor(email: string | undefined | null): Promise<b
   return (data ?? []).length > 0
 }
 
-/** The whole 紀錄員名單 (only editors can read it), oldest first. */
+/** The whole account list (only admins can read it; before the roles migration, every recorder), oldest first. */
 export async function listEditors(): Promise<Editor[]> {
+  const withRole = await supabase().from('editors').select('email, note, created_at, user_id, bound_at, invite_expires, role').order('created_at')
+  if (!withRole.error) return (withRole.data ?? []) as Editor[]
   const full = await supabase().from('editors').select('email, note, created_at, user_id, bound_at, invite_expires').order('created_at')
   if (!full.error) return (full.data ?? []) as Editor[]
   // before the security migration the binding columns do not exist
@@ -368,6 +370,31 @@ export async function addEditor(email: string, note: string): Promise<string | n
   const ins = await supabase().from('editors').insert({ email: email.trim().toLowerCase(), note: note.trim() || null })
   if (ins.error) throw new Error(ins.error.code === '23505' ? '這個 email 已經在名單裡' : ins.error.code === '42501' ? '只有紀錄員可以新增紀錄員' : ins.error.message)
   return null
+}
+// ---------------------------------------------------------------- 身分 (supabase/migrations/2026-11-05_roles.sql)
+export type Role = 'player' | 'recorder' | 'admin'
+export const ROLES_MIGRATION = 'supabase/migrations/2026-11-05_roles.sql'
+/** What the signed-in account is ('admin' 管理者 / 'recorder' 紀錄員 / 'player' 球員, null: not on the list);
+ *  undefined on a database without the roles migration. */
+export async function fetchMyRole(): Promise<Role | null | undefined> {
+  const { data, error } = await supabase().rpc('my_role')
+  if (error) { if (missingFn(error, 'my_role')) return undefined; throw new Error(error.message) }
+  return data === 'admin' || data === 'recorder' || data === 'player' ? data : null
+}
+/** 新增帳號 with a role; returns the one-time 邀請碼. Before the roles migration only recorders can be added. */
+export async function addMember(email: string, role: Role, note: string): Promise<string | null> {
+  const { data, error } = await supabase().rpc('add_member', { p_email: email.trim().toLowerCase(), p_role: role, p_note: note.trim() || null })
+  if (!error) return data as string
+  if (missingFn(error, 'add_member')) {
+    if (role === 'recorder') return addEditor(email, note)
+    throw new Error(`資料庫還沒更新，還不能新增球員或管理者：請在 Supabase 執行 ${ROLES_MIGRATION}`)
+  }
+  throw new Error(error.code === '23505' ? '這個 email 已經在名單裡' : error.code === '42501' ? '只有管理者可以新增帳號' : error.message)
+}
+/** 改身分 (never your own). */
+export async function setMemberRole(email: string, role: Role): Promise<void> {
+  const { error } = await supabase().rpc('set_member_role', { p_email: email.trim().toLowerCase(), p_role: role })
+  if (error) throw new Error(missingFn(error, 'set_member_role') ? `資料庫還沒更新：請在 Supabase 執行 ${ROLES_MIGRATION}` : error.message)
 }
 /** New 邀請碼 for someone (forgot password, new account): their old account loses write access until it is used. */
 export async function resetEditor(email: string): Promise<string> {
