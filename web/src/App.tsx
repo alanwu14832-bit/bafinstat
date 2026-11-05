@@ -1,9 +1,10 @@
 import { lazy, Suspense, useEffect, type ComponentType } from 'react'
-import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Link, Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { Skeleton } from './components/ui/Skeleton'
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
 import { RequireLevel } from './components/layout/Gate'
+import { ARCHIVE } from './config/archive'
 
 // Each page is its own file to download (the charts, the Excel reader and the recording screen are big), so the first
 // page opens sooner. Shortly after the site opens every page is fetched in the background, so moving to another page —
@@ -68,6 +69,17 @@ function PageLoading() {
 /** GitHub Pages serves from a sub-path; strip the trailing slash for the router basename. */
 export const ROUTER_BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '')
 
+/**
+ * 紀錄比賽 is for 紀錄員, but its 練習紀錄 (?practice=1) stays open to everyone, as before the levels: it never leaves
+ * this device. Someone without the level gets the way in from the notice.
+ */
+function RecordRoute() {
+  const [params] = useSearchParams()
+  const practice = !ARCHIVE && params.get('practice') === '1'
+  const tryIt = <Link to="/record?practice=1" className="press inline-flex items-center h-10 px-5 rounded-full border border-border text-ink text-[14px] font-medium hover:bg-surface-2 transition-colors">先練習看看（不用登入、不會存檔）</Link>
+  return <RequireLevel level={2} title="紀錄比賽" open={practice} extra={tryIt}><RecordPage /></RequireLevel>
+}
+
 /** The site: every page inside the shell (sidebar, top bar, filters). */
 function ShellRoutes() {
   const { pathname } = useLocation()
@@ -90,7 +102,7 @@ function ShellRoutes() {
         <Route path="/photos" element={<RequireLevel level={1} title="相簿"><PhotosPage /></RequireLevel>} />
         <Route path="/schedule" element={<Navigate to="/games?view=schedule" replace />} />
         <Route path="/lineup" element={<RequireLevel level={2} title="先發陣容"><LineupPage /></RequireLevel>} />
-        <Route path="/record" element={<RequireLevel level={2} title="紀錄比賽"><RecordPage /></RequireLevel>} />
+        <Route path="/record" element={<RecordRoute />} />
         <Route path="/import" element={<RequireLevel level={2} title="資料匯入"><ImportPage /></RequireLevel>} />
         <Route path="/dictionary" element={<DictionaryPage />} />
         <Route path="/guide" element={<GuidePage />} />
