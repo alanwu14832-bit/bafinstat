@@ -61,4 +61,14 @@ describe('身分分層: who sees what', () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>)
     expect(screen.getByRole('link', { name: '帳號管理' })).toBeInTheDocument()
   })
+
+  it('練習紀錄 stays open to everyone; the 紀錄比賽 notice offers it', () => {
+    as(null, false)
+    render(<MemoryRouter><RequireLevel level={2} open><p>練習畫面</p></RequireLevel></MemoryRouter>)
+    expect(screen.getByText('練習畫面')).toBeInTheDocument()
+    cleanup()
+    render(<MemoryRouter><RequireLevel level={2} title="紀錄比賽" extra={<a href="/record?practice=1">先練習看看</a>}><p>紀錄畫面</p></RequireLevel></MemoryRouter>)
+    expect(screen.queryByText('紀錄畫面')).toBeNull()
+    expect(screen.getByRole('link', { name: '先練習看看' })).toBeInTheDocument()
+  })
 })

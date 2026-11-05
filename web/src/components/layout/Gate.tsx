@@ -8,14 +8,22 @@ import { HeroGlow } from '../ui/HeroGlow'
 import { Reveal } from '../motion/Reveal'
 
 /** A page for `level` and up: anyone below sees why, and (signed out) a way to sign in. */
-export function RequireLevel({ level, title, children }: { level: Level; title?: string; children: ReactNode }) {
+export function RequireLevel({ level, title, open = false, extra, children }: {
+  level: Level; title?: string
+  /** let everyone in this time (練習紀錄 on /record: it never leaves the device) */
+  open?: boolean
+  /** more ways on, next to the notice's links */
+  extra?: ReactNode
+  children: ReactNode
+}) {
   const access = useAccess()
+  if (open) return <>{children}</>
   if (access.pending) return <div aria-busy="true" className="min-h-[40vh]" />
   if (access.level >= level) return <>{children}</>
-  return <GateNotice level={level} title={title} />
+  return <GateNotice level={level} title={title} extra={extra} />
 }
 
-export function GateNotice({ level, title }: { level: Level; title?: string }) {
+export function GateNotice({ level, title, extra }: { level: Level; title?: string; extra?: ReactNode }) {
   const access = useAccess()
   const [open, setOpen] = useState(false)
   const signedIn = !!access.role
@@ -43,6 +51,7 @@ export function GateNotice({ level, title }: { level: Level; title?: string }) {
           )}
           <Link to="/games" className="press inline-flex items-center h-10 px-5 rounded-full bg-surface-2 text-ink text-[14px] font-medium hover:bg-surface-3 transition-colors">看比賽</Link>
           <Link to="/live" className="press inline-flex items-center h-10 px-5 rounded-full bg-surface-2 text-ink text-[14px] font-medium hover:bg-surface-3 transition-colors">即時比分</Link>
+          {!ARCHIVE && extra}
         </div>
       </Reveal>
       <AuthDialog open={open} onClose={() => setOpen(false)} title="登入" />
