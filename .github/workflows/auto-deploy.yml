@@ -65,7 +65,15 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql > /dev/null
           V=$(ls /usr/lib/postgresql | sort -V | tail -1)
-          sudo apt-get install -y -qq "postgresql-server-dev-$V" > /dev/null
+          # 標頭檔要和已裝的 PostgreSQL 同一版。GitHub 的 Ubuntu 26.04 映像預裝的是 PostgreSQL 官方來源（PGDG）的版本，
+          # 卻沒有設定那個來源，Ubuntu 自己的 server-dev 又綁定 Ubuntu 版的 client，所以裝不起來：這時把 PGDG 加進來再裝
+          if ! sudo apt-get install -y -qq "postgresql-server-dev-$V" > /dev/null 2>&1; then
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+            if ! sudo apt-get install -y -qq "postgresql-server-dev-$V" > /dev/null; then
+              apt-cache policy "postgresql-$V" "postgresql-client-$V" "postgresql-server-dev-$V"
+              exit 1
+            fi
+          fi
           git clone -q --depth 1 --branch 1.7 https://github.com/eradman/pg-safeupdate.git "$RUNNER_TEMP/safeupdate"
           make -s -C "$RUNNER_TEMP/safeupdate" PG_CONFIG="/usr/lib/postgresql/$V/bin/pg_config" with_llvm=no
           sudo make -s -C "$RUNNER_TEMP/safeupdate" PG_CONFIG="/usr/lib/postgresql/$V/bin/pg_config" with_llvm=no install
