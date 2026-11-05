@@ -25,7 +25,8 @@ import { answered } from './answered'
 
 const wait = (ms: number) => act(() => new Promise<void>((r) => setTimeout(r, ms)))
 
-describe('autosave while recording (cloud mode)', () => {
+// (the tests wait out the real autosave delay, ~1.3 s at a time: allow more than the 5 s default on a slow runner)
+describe('autosave while recording (cloud mode)', { timeout: 20_000 }, () => {
   it('syncs a ball mid plate appearance, rewrites the rows only when they change, and says when it failed', async () => {
     const lineup = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬'].map((name, i) => ({ name, pos: ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'][i] }))
     let s = newGame({ id: 'G20261010-01', date: '2026-10-10', tournament: '聯賽', opponent: '政大', homeAway: '主' }, lineup, '甲')
