@@ -13,7 +13,7 @@ import { generateDemo, mergeDatasets } from '../data/demo'
 import { SEED_DATASET } from '../data/seed'
 import { TEAM } from '../config/team'
 import { ARCHIVE } from '../config/archive'
-import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, END_TIME_COLUMN, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, OPP_HAND_COLUMN, OPP_PITCHER_COLUMN, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, BATTING_ERRORS, OPP_BATS_COLUMN, PITCHING_RBI, PRIOR_PITCHERS_COLUMN, PITCHING_RUNNER, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
+import { claimEditor, cloudConfigured, currentUser, deleteCloudGame, fetchMyRole, type Role, END_TIME_COLUMN, fetchCloudDataset, fetchIsEditor, type EditorAccess, onAuthChange, OPP_HAND_COLUMN, OPP_PITCHER_COLUMN, pushCloudDataset, ERRORS_COLUMN, EVENTS_COLUMN, pushRoster, BATTING_ERRORS, OPP_BATS_COLUMN, PITCHING_RBI, PRIOR_PITCHERS_COLUMN, PITCHING_RUNNER, RUNNER_COLUMN, SAVE_GAMES_FN, SAVE_GAMES_UNSUPPORTED, subscribeCloudChanges, subscribeRegistrationChanges, updateGameDayRosters, updateGameHolds } from '../data/supabase'
 import { applyRosterChange, renamesOf, validateRosterChange, type RosterChange } from '../data/roster'
 import { deleteCloudAlbum, loadCloudAlbums, readLocalAlbums, saveCloudAlbum, writeLocalAlbums, type AlbumLink } from '../data/albums'
 import {
@@ -25,6 +25,15 @@ import { applyGameEdit, normalizeGameEdit, removeGame, type GameEdit } from '../
 import { ALL_RECORD_FIELDS, recordFieldWarnings, type RecordFields } from '../data/recordFields'
 import type { GameWarning } from '../data/normalize'
 import { DEFAULT_FILTERS, DEFAULT_PARAMS, EMPTY_DATASET, isPracticeId, type Dataset, type Filters, type Game, type Registration, type StatParams } from '../data/types'
+
+/** 紀錄員 and 管理者 write; 球員 only read. */
+const canWrite = (role: Role | null | undefined) => role === 'recorder' || role === 'admin'
+/** The role of an account bound to the list; a database without the roles migration: every recorder manages the
+ *  list as before (管理者). */
+async function roleOfBound(): Promise<Role | null> {
+  const r = await fetchMyRole().catch(() => undefined)
+  return r === undefined ? 'admin' : r
+}
 
 const DATA_KEY = 'bafin.dataset.v1'
 const DEMO_KEY = 'bafin.demo'
@@ -57,7 +66,12 @@ interface DataState {
   params: StatParams
   cloud: { configured: boolean; status: CloudStatus; error: string | null; user: User | null; lastSync: string | null; pushing: boolean; /** signed in AND on the editors allowlist (true while unknown) */ isEditor: boolean
     /** why a signed-in account cannot write yet (need_code: enter the 邀請碼…); null when it can, or unknown */
-    access?: EditorAccess | null }
+    access?: EditorAccess | null
+    /** 身分 of the signed-in account: 球員 reads everything, 紀錄員 also writes, 管理者 also manages the accounts;
+     *  null when signed out or not on the list, undefined while it is being checked */
+    role?: Role | null
+    /** the saved sign-in has been looked at (before that, a signed-in member still looks signed out) */
+    authReady?: boolean }
   setFilters: (patch: Partial<Filters>) => void
   resetFilters: () => void
   setDemo: (on: boolean) => void
@@ -151,7 +165,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   demo: initialDemo,
   filters: DEFAULT_FILTERS,
   params: { ...DEFAULT_PARAMS, ...(readJSON<Partial<StatParams>>(PARAMS_KEY) ?? {}) },
-  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false, isEditor: false },
+  cloud: { configured: cloudConfigured, status: cloudConfigured ? 'loading' : 'off', error: null, user: null, lastSync: null, pushing: false, isEditor: false, role: null, authReady: !cloudConfigured || !!ARCHIVE },
   setFilters: (patch) => set({ filters: { ...get().filters, ...patch } }),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
   setDemo: (on) => { writeJSON(DEMO_KEY, on); set({ demo: on }) },
@@ -312,38 +326,43 @@ export const useDataStore = create<DataState>((set, get) => ({
       // a 快速登入 account counts as signed in only once the database says it is a live quick session: while the
       // password is being checked, after a wrong one, or once it expired, the site shows the sign-in form
       const c0 = get().cloud
-      if (c0.user?.id !== user.id) set({ cloud: { ...c0, user: null, isEditor: false, access: null } })
+      if (c0.user?.id !== user.id) set({ cloud: { ...c0, user: null, isEditor: false, role: null, access: null } })
       void claimEditor().then((a) => {
         const c = get().cloud
-        if (a === 'ok') set({ cloud: { ...c, user, isEditor: true, access: null } })
+        if (a === 'ok') set({ cloud: { ...c, user, isEditor: true, role: 'recorder', access: null } })
         // (an answer from before the password was accepted never takes it back)
-        else if (c.user?.id === user.id && !c.isEditor) set({ cloud: { ...c, user: null, isEditor: false, access: null } })
+        else if (c.user?.id === user.id && !c.isEditor) set({ cloud: { ...c, user: null, isEditor: false, role: null, access: null } })
       }, () => undefined)
       return
     }
-    set({ cloud: { ...get().cloud, user, isEditor: false, access: null } })
+    set({ cloud: { ...get().cloud, user, isEditor: false, role: user ? undefined : null, access: null } })
     if (!user) return
     // the account must be the one bound to its listed email (a database without the security migration: email check)
-    // a check started before a 邀請碼 was used may answer after it: never take access back from the same account
-    const settle = (isEditor: boolean, access: EditorAccess | null) => { const c = get().cloud; if (c.user?.id === user.id && !(c.isEditor && !isEditor)) set({ cloud: { ...c, isEditor, access: isEditor ? null : access } }) }
+    // a check started before a 邀請碼 was used may answer after it: never take write access back from the same account
+    const settle = (role: Role | null, access: EditorAccess | null) => {
+      const c = get().cloud, isEditor = canWrite(role)
+      if (c.user?.id === user.id && !(c.isEditor && !isEditor)) set({ cloud: { ...c, isEditor, role, access: role ? null : access } })
+    }
     void claimEditor()
-      .then(async (a) => (a === null ? settle(await fetchIsEditor(user.email), 'not_listed') : settle(a === 'ok', a)))
-      .catch(() => settle(false, null))
+      .then(async (a) => (a === null ? settle((await fetchIsEditor(user.email)) ? 'admin' : null, 'not_listed') : settle(a === 'ok' ? await roleOfBound() : null, a)))
+      .catch(() => settle(null, null))
   },
   recheckAccess: async () => {
     const user = get().cloud.user ?? (await currentUser())
     if (!user) return
     const a = await claimEditor()
     if (a === null) return
-    if (user.is_anonymous) { if (a === 'ok') set({ cloud: { ...get().cloud, user, isEditor: true, access: null } }); return }
-    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: a === 'ok', access: a === 'ok' ? null : a } })
+    if (user.is_anonymous) { if (a === 'ok') set({ cloud: { ...get().cloud, user, isEditor: true, role: 'recorder', access: null } }); return }
+    const role = a === 'ok' ? await roleOfBound() : null
+    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: canWrite(role), role, access: a === 'ok' ? null : a } })
   },
   claimWithCode: async (code) => {
     const user = get().cloud.user
     if (!user) return 'not_signed_in'
     const a = await claimEditor(code)
     if (a === null) return 'ok'
-    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: a === 'ok', access: a === 'ok' ? null : a } })
+    const role = a === 'ok' ? await roleOfBound() : null
+    if (get().cloud.user?.id === user.id) set({ cloud: { ...get().cloud, isEditor: canWrite(role), role, access: a === 'ok' ? null : a } })
     return a
   },
   albums: cloudConfigured ? [] : readLocalAlbums(),
@@ -417,7 +436,7 @@ if (cloudConfigured && typeof window !== 'undefined') {
   void st.loadRegistrations()
   // a saved older version of the site (網站版本) only shows the data: nobody signs in there
   if (!ARCHIVE) {
-    void currentUser().then((u) => st.setCloudUser(u))
+    void currentUser().then((u) => { st.setCloudUser(u); const c = useDataStore.getState().cloud; useDataStore.setState({ cloud: { ...c, authReady: true } }) }, () => { const c = useDataStore.getState().cloud; useDataStore.setState({ cloud: { ...c, authReady: true } }) })
     onAuthChange((u) => useDataStore.getState().setCloudUser(u))
   }
   subscribeCloudChanges(() => { const s = useDataStore.getState(); void s.loadCloud(); void s.loadAlbums(); void s.loadRegistrations() })

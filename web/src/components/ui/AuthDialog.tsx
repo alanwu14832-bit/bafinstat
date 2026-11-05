@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { LoginForm } from './LoginForm'
 import { Button } from './Button'
+import { TeamLogo } from './TeamLogo'
+import { TEAM } from '../../config/team'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'
 
@@ -10,7 +12,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  * Small centred sign-in dialog, opened from the sidebar. While open, Tab stays inside it, the page behind cannot be
  * reached (inert), Escape closes it, and the focus goes back to the button that opened it.
  */
-export function AuthDialog({ open, onClose, title = '紀錄員登入', intro }: { open: boolean; onClose: () => void; title?: string; intro?: string }) {
+export function AuthDialog({ open, onClose, title = '登入', intro }: { open: boolean; onClose: () => void; title?: string; intro?: string }) {
   const panel = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose })
@@ -41,9 +43,17 @@ export function AuthDialog({ open, onClose, title = '紀錄員登入', intro }: 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6">
       <div className="absolute inset-0 bg-black/45" onClick={onClose} />
-      <div ref={panel} className="relative w-full sm:max-w-sm bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] p-5 flex flex-col gap-4">
-        <div className="flex items-center justify-between"><div className="text-[16px] font-semibold text-ink">{title}</div><Button variant="ghost" size="sm" icon={<X />} aria-label="關閉" onClick={onClose} /></div>
-        <LoginForm onDone={onClose} autoFocus intro={intro} />
+      <div ref={panel} className="relative w-full sm:max-w-sm bg-surface border border-border rounded-t-[14px] sm:rounded-[14px] shadow-[var(--shadow-modal)] overflow-hidden flex flex-col">
+        {/* whose site this is: the team's mark and name */}
+        <div className="relative px-5 pt-5 pb-1 flex items-center gap-3">
+          <span className="relative"><TeamLogo size={34} /></span>
+          <div className="relative min-w-0 flex-1">
+            <div className="text-[16px] font-bold text-ink leading-tight">{title}</div>
+            <div className="text-[11px] text-muted mt-0.5 truncate">{TEAM.org}</div>
+          </div>
+          <Button variant="ghost" size="sm" icon={<X />} aria-label="關閉" onClick={onClose} className="relative" />
+        </div>
+        <div className="p-5 pt-3"><LoginForm onDone={onClose} autoFocus intro={intro} /></div>
       </div>
     </div>,
     document.body,

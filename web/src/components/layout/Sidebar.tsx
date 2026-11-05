@@ -1,12 +1,11 @@
-import { ARCHIVE } from '../../config/archive'
 import { motion } from 'framer-motion'
-import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import { Lock, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import { useAccess } from '../../hooks/useAccess'
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { NAV_GROUPS } from './nav'
 import { TeamLogo } from '../ui/TeamLogo'
 import { useUiStore } from '../../store/ui'
-import { useDataStore } from '../../store/data'
 import { SidebarAccount } from './SidebarAccount'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
@@ -31,9 +30,9 @@ interface NavListProps {
 
 /** Grouped nav list. Icons keep a fixed x-position; labels fade and are clipped by the link. */
 function NavList({ collapsed, reduced }: NavListProps) {
-  const cloud = useDataStore((s) => s.cloud)
-  const showEditorItems = !ARCHIVE && (!cloud.configured || (!!cloud.user && cloud.isEditor))
-  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => !i.editorOnly || showEditorItems) })).filter((g) => g.items.length)
+  const { level } = useAccess()
+  // 球員 pages show to everyone (with a lock until signed in); 紀錄員 and 管理者 pages only to those who may open them
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => (i.level ?? 0) <= Math.max(level, 1)) })).filter((g) => g.items.length)
   return (
     <div className="flex flex-col gap-5 px-3">
       {groups.map((group, gi) => (
@@ -44,7 +43,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
             </div>
           )}
           <ul className="flex flex-col gap-0.5" role="list">
-            {group.items.map(({ to, label, icon: Icon }) => (
+            {group.items.map(({ to, label, icon: Icon, level: need = 0 }) => (
               <li key={to} className="relative group">
                 <NavLink
                   to={to}
@@ -78,6 +77,7 @@ function NavList({ collapsed, reduced }: NavListProps) {
                       >
                         {label}
                       </motion.span>
+                      {need > level && !collapsed && <Lock aria-label="登入後才能看" className="relative ml-auto size-3.5 text-muted shrink-0" />}
                     </>
                   )}
                 </NavLink>

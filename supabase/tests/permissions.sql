@@ -27,15 +27,22 @@ end $$;
 grant execute on all functions in schema pg_temp to anon, authenticated;
 do $$ begin if current_setting('test.safeupdate', true) = 'on' then perform pg_temp.refused('delete from quick_sessions', 'safeupdate is on (a DELETE without WHERE is refused, as on Supabase)'); end if; end $$;
 
--- people: A = recorder bound to the account, B = signed up but not listed, C = listed but never activated (no 邀請碼 used),
--- D = recorder who will be reset, Q = a throwaway anonymous account (快速登入)
+-- people: A = admin bound to the account, B = signed up but not listed, C = listed but never activated (no 邀請碼 used),
+-- D = recorder who will be reset, R = recorder (not an admin), P = player (reads, never writes),
+-- Q = a throwaway anonymous account (快速登入)
 insert into auth.users (id, email, encrypted_password) values
   ('00000000-0000-0000-0000-00000000000a', 'a@x.com', 'x'), ('00000000-0000-0000-0000-00000000000b', 'b@x.com', 'x'),
-  ('00000000-0000-0000-0000-00000000000c', 'c@x.com', 'x'), ('00000000-0000-0000-0000-00000000000d', 'd@x.com', 'x');
+  ('00000000-0000-0000-0000-00000000000c', 'c@x.com', 'x'), ('00000000-0000-0000-0000-00000000000d', 'd@x.com', 'x'),
+  ('00000000-0000-0000-0000-0000000000e1', 'r@x.com', 'x'), ('00000000-0000-0000-0000-0000000000e2', 'p@x.com', 'x');
 insert into auth.users (id, is_anonymous) values ('00000000-0000-0000-0000-0000000000a1', true);
 select admin_bind_editor('a@x.com', '小明');
 select admin_bind_editor('d@x.com', '小華');
 insert into editors (email) values ('c@x.com') on conflict do nothing;
+select admin_bind_editor('r@x.com', '小強');
+select admin_bind_editor('p@x.com', '球員甲');
+-- 2026-11-05 身分: A manages the accounts, P is a player (bound accounts start as recorders)
+update editors set role = 'admin' where email = 'a@x.com';
+update editors set role = 'player' where email = 'p@x.com';
 insert into games (id, date, tournament, opponent, home_away) values ('G0', '2026-10-01', '聯賽', '政大', '主');
 insert into batting_pa (game_id, seq, inning, batter) values ('G0', 1, 1, '甲');
 
@@ -58,6 +65,7 @@ select pg_temp.act('00000000-0000-0000-0000-00000000000b', 'b@x.com');
 set role authenticated;
 select pg_temp.ok(not is_editor(), 'B is not a recorder');
 select pg_temp.ok(claim_editor() = 'not_listed', 'B: claim_editor says not_listed');
+select pg_temp.ok(my_role() is null and not is_member(), 'B has no role');
 select pg_temp.refused($q$insert into games (id, date) values ('X', '2026-10-01')$q$, 'B cannot add a game');
 select pg_temp.refused($q$select save_games('[{"id":"X","date":"2026-10-01"}]')$q$, 'B cannot save games');
 select pg_temp.refused($q$insert into record_drafts (game_id, state) values ('X', '{}')$q$, 'B cannot write progress');
@@ -77,6 +85,7 @@ reset role;
 select pg_temp.act('00000000-0000-0000-0000-00000000000a', 'a@x.com');
 set role authenticated;
 select pg_temp.ok(is_editor() and is_bound_editor(), 'A is a bound recorder');
+select pg_temp.ok(my_role() = 'admin' and is_admin(), 'A is an admin');
 select pg_temp.ok(save_games('[{"id":"G1","date":"2026-10-02","opponent":"台大"}]', '[{"game_id":"G1","seq":1,"inning":1,"batter":"甲","pitches":["B","IP"],"result":"一安"}]') = 1, 'A saves a game with save_games');
 select pg_temp.ok(pg_temp.val($q$select updated_by from games where id = 'G1'$q$) = '小明', 'the game is stamped with the recorder''s name');
 select pg_temp.ok(not exists (select 1 from games where updated_by like '%@%'), 'no email on the public games table');
@@ -114,11 +123,46 @@ select pg_temp.ok(pg_temp.val('select count(*) from editors')::int >= 3, 'A sees
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'A sees the 操作紀錄');
 select pg_temp.ok(length(add_editor('e@x.com', '新人')) = 10, 'A adds a recorder and gets a 10-character 邀請碼');
 select pg_temp.ok(length(reset_editor('d@x.com')) = 10, 'A resets D (new 邀請碼)');
+select pg_temp.ok(length(add_member('p2@x.com', 'player', '新球員')) = 10, 'A adds a player and gets a 邀請碼');
+select pg_temp.ok(set_member_role('p2@x.com', 'recorder') = 'recorder', 'A changes an account''s role');
+select pg_temp.refused($q$select set_member_role('a@x.com', 'player')$q$, 'A cannot change his own role');
+select pg_temp.refused($q$select add_member('z@x.com', 'coach')$q$, 'an unknown role is refused');
 select pg_temp.ok(set_quick_login('248163', 30) = 'on', 'A sets the 快速登入密碼 (its DELETE has a WHERE)');
 delete from editors where email = 'a@x.com';   -- row level security leaves his own row alone
 select pg_temp.ok(pg_temp.val($q$select count(*) from editors where email = 'a@x.com'$q$)::int = 1, 'A cannot remove himself');
 reset role;
 select pg_temp.ok(not exists (select 1 from audit_log where old_row::text like '%invite_hash%'), 'the 操作紀錄 never keeps a 邀請碼 hash');
+
+\echo '--- 紀錄員，不是管理者（R）'
+select pg_temp.act('00000000-0000-0000-0000-0000000000e1', 'r@x.com');
+set role authenticated;
+select pg_temp.ok(my_role() = 'recorder' and is_editor() and is_bound_editor() and not is_admin(), 'R is a recorder, not an admin');
+select pg_temp.ok(save_games('[{"id":"G7","date":"2026-10-07"}]') = 1, 'R saves a game');
+select pg_temp.ok(pg_temp.val('select count(*) from editors')::int = 1, 'R sees only his own row of the account list');
+select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int > 0, 'R sees the 操作紀錄');
+select pg_temp.refused($q$select add_member('y@x.com', 'player')$q$, 'R cannot add accounts');
+select pg_temp.refused($q$select add_editor('y@x.com')$q$, 'R cannot add recorders');
+select pg_temp.refused($q$select reset_editor('d@x.com')$q$, 'R cannot re-issue 邀請碼');
+select pg_temp.refused($q$select set_member_role('p@x.com', 'recorder')$q$, 'R cannot change roles');
+delete from editors where email = 'c@x.com';
+reset role;
+select pg_temp.ok(exists (select 1 from editors where email = 'c@x.com'), 'C is still on the list after R tried to remove him');
+
+\echo '--- 球員（P）'
+select pg_temp.act('00000000-0000-0000-0000-0000000000e2', 'p@x.com');
+set role authenticated;
+select pg_temp.ok(my_role() = 'player' and is_member(), 'P is a player');
+select pg_temp.ok(not is_editor() and not is_bound_editor() and not is_admin(), 'P cannot write');
+select pg_temp.ok(claim_editor() = 'ok', 'P: claim_editor says ok (bound), the role says what he may do');
+select pg_temp.ok(pg_temp.val('select count(*) from batting_pa')::int > 0, 'P reads the records');
+select pg_temp.refused($q$insert into games (id, date) values ('X', '2026-10-01')$q$, 'P cannot add a game');
+select pg_temp.refused($q$select save_games('[{"id":"X","date":"2026-10-01"}]')$q$, 'P cannot save games');
+select pg_temp.refused($q$insert into record_drafts (game_id, state) values ('X', '{}')$q$, 'P cannot write progress');
+select pg_temp.ok(pg_temp.val('select count(*) from editors')::int = 1, 'P sees only his own row of the account list');
+select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int = 0, 'P sees no 操作紀錄');
+select pg_temp.refused($q$select add_member('x@x.com', 'player')$q$, 'P cannot add accounts');
+select pg_temp.refused($q$select set_member_role('p@x.com', 'admin')$q$, 'P cannot make himself an admin');
+reset role;
 
 \echo '--- 被重設的紀錄員（D）'
 select pg_temp.act('00000000-0000-0000-0000-00000000000d', 'd@x.com');

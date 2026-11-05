@@ -3,6 +3,7 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from 
 import { AppShell } from './components/layout/AppShell'
 import { Skeleton } from './components/ui/Skeleton'
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
+import { RequireLevel } from './components/layout/Gate'
 
 // Each page is its own file to download (the charts, the Excel reader and the recording screen are big), so the first
 // page opens sooner. Shortly after the site opens every page is fetched in the background, so moving to another page —
@@ -13,6 +14,7 @@ const PAGES = {
   game: () => import('./pages/GamePage'), live: () => import('./pages/Live'), photos: () => import('./pages/Photos'),
   lineup: () => import('./pages/Lineup'), record: () => import('./pages/Record'), import: () => import('./pages/Import'),
   dictionary: () => import('./pages/Dictionary'), guide: () => import('./pages/Guide'), versions: () => import('./pages/Versions'),
+  accounts: () => import('./pages/Accounts'),
   notFound: () => import('./pages/NotFound'),
   // batch 3: 投手休息表, 紀錄員小抄
   pitcherRest: () => import('./pages/PitcherRest'), cheatSheet: () => import('./pages/CheatSheet'),
@@ -35,6 +37,7 @@ const ImportPage = page(PAGES.import, 'ImportPage')
 const DictionaryPage = page(PAGES.dictionary, 'DictionaryPage')
 const GuidePage = page(PAGES.guide, 'GuidePage')
 const VersionsPage = page(PAGES.versions, 'VersionsPage')
+const AccountsPage = page(PAGES.accounts, 'AccountsPage')
 const NotFoundPage = page(PAGES.notFound, 'NotFoundPage')
 const PitcherRestPage = page(PAGES.pitcherRest, 'PitcherRestPage')
 const CheatSheetPage = page(PAGES.cheatSheet, 'CheatSheetPage')
@@ -74,24 +77,26 @@ function ShellRoutes() {
       <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route path="/" element={<OverviewPage />} />
-        <Route path="/batting" element={<BattingPage />} />
-        <Route path="/pitching" element={<PitchingPage />} />
-        <Route path="/pitching/rest" element={<PitcherRestPage />} />
-        <Route path="/fielding" element={<FieldingPage />} />
-        <Route path="/players" element={<PlayersPage />} />
+        {/* 身分分層 (hooks/useAccess): 1 球員, 2 紀錄員, 3 管理者; the rest is open to everyone */}
+        <Route path="/batting" element={<RequireLevel level={1} title="打擊"><BattingPage /></RequireLevel>} />
+        <Route path="/pitching" element={<RequireLevel level={1} title="投球"><PitchingPage /></RequireLevel>} />
+        <Route path="/pitching/rest" element={<RequireLevel level={1} title="投手休息表"><PitcherRestPage /></RequireLevel>} />
+        <Route path="/fielding" element={<RequireLevel level={1} title="守備"><FieldingPage /></RequireLevel>} />
+        <Route path="/players" element={<RequireLevel level={1} title="球員"><PlayersPage /></RequireLevel>} />
         <Route path="/recordbook" element={<RecordsPage />} />
         <Route path="/games" element={<GamesPage />} />
         <Route path="/games/:id" element={<GamePage />} />
         <Route path="/live" element={<LivePage />} />
-        <Route path="/photos" element={<PhotosPage />} />
+        <Route path="/photos" element={<RequireLevel level={1} title="相簿"><PhotosPage /></RequireLevel>} />
         <Route path="/schedule" element={<Navigate to="/games?view=schedule" replace />} />
-        <Route path="/lineup" element={<LineupPage />} />
-        <Route path="/record" element={<RecordPage />} />
-        <Route path="/import" element={<ImportPage />} />
+        <Route path="/lineup" element={<RequireLevel level={2} title="先發陣容"><LineupPage /></RequireLevel>} />
+        <Route path="/record" element={<RequireLevel level={2} title="紀錄比賽"><RecordPage /></RequireLevel>} />
+        <Route path="/import" element={<RequireLevel level={2} title="資料匯入"><ImportPage /></RequireLevel>} />
         <Route path="/dictionary" element={<DictionaryPage />} />
         <Route path="/guide" element={<GuidePage />} />
         <Route path="/guide/cheatsheet" element={<CheatSheetPage />} />
-        <Route path="/versions" element={<VersionsPage />} />
+        <Route path="/versions" element={<RequireLevel level={3} title="網站版本"><VersionsPage /></RequireLevel>} />
+        <Route path="/accounts" element={<RequireLevel level={3} title="帳號管理"><AccountsPage /></RequireLevel>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </Suspense>

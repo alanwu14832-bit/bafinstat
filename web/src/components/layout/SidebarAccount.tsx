@@ -6,6 +6,7 @@ import { AuthDialog } from '../ui/AuthDialog'
 import { useDataStore } from '../../store/data'
 import { signOut } from '../../data/supabase'
 import { cx } from '../../lib/format'
+import { ROLE_LABEL } from '../../hooks/useAccess'
 
 const EASE = [0.22, 1, 0.36, 1] as const
 
@@ -15,8 +16,10 @@ export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; red
   const [open, setOpen] = useState(false)
   if (!cloud.configured || ARCHIVE) return null
   const quick = !!cloud.user?.is_anonymous
-  const label = cloud.user ? (quick ? '快速登入' : cloud.user.email ?? '已登入') : '紀錄員登入'
-  const sub = cloud.user ? (cloud.isEditor ? '紀錄員' : quick ? '已失效，請重新登入' : '瀏覽者（不在名單）') : '紀錄、上傳需要登入'
+  const label = cloud.user ? (quick ? '快速登入' : cloud.user.email ?? '已登入') : '登入'
+  const sub = cloud.user
+    ? (cloud.role ? ROLE_LABEL[cloud.role] : cloud.role === undefined ? '確認身分中…' : quick ? '已失效，請重新登入' : '不在帳號名單（只看得到公開頁面）')
+    : '球員、紀錄員、管理者'
   return (
     <div className="px-3 pt-3 border-t border-border">
       <div className="flex items-center gap-1">

@@ -45,6 +45,13 @@ A database change needs a migration in both repos, and the user must run it in b
   or for a live 快速登入 session (anonymous sign-in + the shared password checked in the database, `quick_sessions`;
   `supabase/migrations/2026-10-10_quick_login.sql`). `is_editor()` = either; the 紀錄員名單, `audit_log` and the quick
   password itself stay with `is_bound_editor()`. Never check that password in the site.
+  身分分層 (`supabase/migrations/2026-11-05_roles.sql`): `editors.role` is player / recorder / admin; `is_bound_editor()`
+  counts recorders and admins only (so players never write), the account list and `add_member` / `set_member_role` /
+  `reset_editor` need `is_admin()`, `my_role()` tells the site. The site gates pages by level (`hooks/useAccess.ts`,
+  `components/layout/Gate.tsx`, `level` on the menu items): 0 一般人 (即時比分, 比賽, 紀錄簿, 使用指南, 數據字典, a short
+  總覽), 1 球員, 2 紀錄員, 3 管理者 (帳號管理 at /accounts, 網站版本). That gate is only what the site shows: the
+  plate-appearance rows stay publicly readable because 比賽 and 紀錄簿 are built from them. 快速登入 is no longer offered
+  in the sign-in form.
 - Never write an email into a public table (`updated_by`/`created_by` are stamped by a trigger with the recorder's name).
 - Keep the Content-Security-Policy (`web/src/config/security.ts`, written into index.html at build) and the headers in
   `web/vercel.json`; no inline scripts in index.html (put them in `web/public/boot.js`). Run `npm audit` when adding packages.
