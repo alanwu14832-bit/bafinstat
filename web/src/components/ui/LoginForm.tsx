@@ -2,31 +2,39 @@ import { useState } from 'react'
 import { Button } from './Button'
 import { Input } from './Input'
 import { Tabs } from './Tabs'
-import { signInWithPassword, signUpWithPassword } from '../../data/supabase'
+import { quickSignIn, signInWithPassword, signUpWithPassword } from '../../data/supabase'
 import { checkNewPassword } from '../../data/editors'
 import { useDataStore } from '../../store/data'
 
-// (快速登入, the shared password, is no longer offered: every 球員, 紀錄員 and 管理者 signs in with their own account)
-type Mode = 'password' | 'signup'
+// 快速登入 (the shared password a 紀錄員 sets on 資料匯入) makes this device a 紀錄員 for some days; 球員, 紀錄員 and
+// 管理者 otherwise sign in with their own account
+type Mode = 'password' | 'quick' | 'signup'
+// the way this device signed in last time opens first (password or 快速登入)
+const MODE_KEY = 'bafin.login.mode'
+const readMode = (): Mode => { try { return localStorage.getItem(MODE_KEY) === 'quick' ? 'quick' : 'password' } catch { return 'password' } }
+const keepMode = (m: Mode) => { try { localStorage.setItem(MODE_KEY, m === 'quick' ? 'quick' : 'password') } catch { /* storage unavailable */ } }
 
-/** Email + password sign-in and the first-time 邀請碼 sign-up. Shared by the cloud panel and the sign-in dialog. */
+/** Email + password sign-in, 快速登入 with the shared password, and the first-time 邀請碼 sign-up. Shared by the cloud panel and the sign-in dialog. */
 export function LoginForm({ onDone, autoFocus, intro }: { onDone?: () => void; autoFocus?: boolean; intro?: string }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [again, setAgain] = useState('')
   const [invite, setInvite] = useState('')
   const claimWithCode = useDataStore((s) => s.claimWithCode)
-  const [mode, setMode] = useState<Mode>('password')
+  const [mode, setMode] = useState<Mode>(readMode)
+  const [quick, setQuick] = useState('')
+  const recheckAccess = useDataStore((s) => s.recheckAccess)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const run = async (fn: () => Promise<void>, ok: string, done = false) => {
     setBusy(true); setMsg(null)
-    try { await fn(); setMsg(ok); if (done) onDone?.() } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+    try { await fn(); setMsg(ok); keepMode(mode); if (done) onDone?.() } catch (e) { setMsg(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
   return (
     <form className="flex flex-col gap-2.5 text-[13px]" onSubmit={(e) => {
       e.preventDefault()
       if (mode === 'password') void run(() => signInWithPassword(email.trim(), password), '登入成功', true)
+      else if (mode === 'quick') void run(async () => { await quickSignIn(quick); await recheckAccess() }, '已用快速登入', true)
       else {
         const bad = checkNewPassword(password, again) ?? (invite.replace(/[^A-Za-z0-9]/g, '').length < 10 ? '請輸入管理者給你的 10 碼邀請碼' : null)
         if (bad) setMsg(bad)
@@ -39,10 +47,16 @@ export function LoginForm({ onDone, autoFocus, intro }: { onDone?: () => void; a
         }, '已設定密碼並啟用帳號', true)
       }
     }}>
-      <p className="text-muted">{intro ?? '球員、紀錄員、管理者都用自己的 email 登入。比賽、即時比分、紀錄簿不用登入就看得到。'}</p>
-      <Tabs size="sm" aria-label="登入方式" value={mode} onChange={(m) => { setMode(m); setMsg(null) }} items={[{ value: 'password', label: '登入' }, { value: 'signup', label: '第一次使用' }]} className="self-start" />
-      <Input type="email" required autoComplete="username" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="email" autoFocus={autoFocus} />
-      {mode === 'password' ? (
+      <p className="text-muted">{intro ?? '球員、紀錄員、管理者用自己的 email 登入；要紀錄比賽也可以用快速登入。比賽、即時比分、紀錄簿不用登入就看得到。'}</p>
+      <Tabs size="sm" aria-label="登入方式" value={mode} onChange={(m) => { setMode(m); setMsg(null) }} items={[{ value: 'password', label: '登入' }, { value: 'quick', label: '快速登入' }, { value: 'signup', label: '第一次使用' }]} className="self-start" />
+      {mode !== 'quick' && <Input type="email" required autoComplete="username" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="email" autoFocus={autoFocus} />}
+      {mode === 'quick' ? (
+        <>
+          <Input type="password" required autoComplete="current-password" placeholder="快速登入密碼" value={quick} onChange={(e) => setQuick(e.target.value)} aria-label="快速登入密碼" autoFocus={autoFocus} />
+          <Button type="submit" variant="primary" disabled={busy} className="w-full">{busy ? '登入中…' : '快速登入'}</Button>
+          <p className="text-xs text-muted">輸入紀錄員設定的共用密碼，這台裝置就能當紀錄員一段時間：紀錄、修改比賽，但不能管理帳號。</p>
+        </>
+      ) : mode === 'password' ? (
         <>
           <Input type="password" required autoComplete="current-password" placeholder="密碼" value={password} onChange={(e) => setPassword(e.target.value)} aria-label="密碼" />
           <Button type="submit" variant="primary" disabled={busy} className="w-full">{busy ? '登入中…' : '登入'}</Button>
