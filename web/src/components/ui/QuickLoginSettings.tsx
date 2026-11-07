@@ -60,7 +60,7 @@ export function QuickLoginSettings() {
           <>
             <p className="text-ink-2 leading-relaxed">
               {status.enabled
-                ? <>知道密碼的人在登入框選「快速登入」輸入它，那台裝置就能{howLong(status.days)}（不能管理紀錄員名單和這個設定）。目前 <span className="font-medium text-ink tnum">{status.active}</span> 個裝置用快速登入。</>
+                ? <>知道密碼的人在登入框選「快速登入」輸入它，那台裝置就能{howLong(status.days)}（算紀錄員：不能管理帳號和這個設定）。目前 <span className="font-medium text-ink tnum">{status.active}</span> 個裝置用快速登入。</>
                 : '設一組密碼後，知道它的人不用帳號也能紀錄、修改比賽。'}
               {status.updated_at && <span className="text-muted">（{status.updated_by ?? '紀錄員'} 於 {new Date(status.updated_at).toLocaleDateString('zh-TW')} 設定）</span>}
             </p>

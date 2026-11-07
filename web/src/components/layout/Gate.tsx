@@ -34,7 +34,7 @@ export function GateNotice({ level, title, extra }: { level: Level; title?: stri
       ? `你的帳號是${ROLE_LABEL[access.role!]}。需要更多權限的話，請管理者在「帳號管理」幫你調整身分。`
       : level === 1
         ? '打擊、投球、守備、球員等完整數據是球隊內部看的：球員、紀錄員用自己的帳號登入就能看。比賽、即時比分和紀錄簿不用登入。'
-        : '請用紀錄員或管理者的帳號登入。'
+        : level === 2 ? '請用紀錄員或管理者的帳號登入，或用紀錄員給你的快速登入密碼。' : '請用管理者的帳號登入。'
   return (
     <section aria-label={title ?? head} className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] p-6 md:p-9">
       <HeroGlow size="sm" />

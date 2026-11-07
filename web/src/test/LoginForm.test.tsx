@@ -3,12 +3,14 @@ import { vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
 const signUp = vi.fn(async (_email: string, _password: string) => {})
+const quick = vi.fn(async (_code: string) => {})
 const claim = vi.fn(async (code?: string) => (code?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === 'K7Q2M9XAPD' ? 'ok' : 'bad_code'))
 vi.mock('../data/supabase', async (orig) => ({
   ...(await orig<typeof import('../data/supabase')>()),
   signInWithPassword: vi.fn(),
   signUpWithPassword: (email: string, password: string) => signUp(email, password),
   claimEditor: (code?: string) => claim(code),
+  quickSignIn: (code: string) => quick(code),
 }))
 const { LoginForm } = await import('../components/ui/LoginForm')
 const { useDataStore } = await import('../store/data')
@@ -54,5 +56,22 @@ describe('LoginForm 第一次使用', () => {
     fill('new@gmail.com', 'AAAAA-BBBBB', 'abcdefgh')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: '設定密碼並登入' })) })
     expect(await screen.findByText(/邀請碼不對/)).toBeTruthy()
+  })
+})
+
+describe('LoginForm 快速登入 (系隊、校隊)', () => {
+  it('signs this device in with the shared password, without an email', async () => {
+    const recheck = vi.fn(async () => {})
+    useDataStore.setState({ recheckAccess: recheck })
+    const done = vi.fn()
+    render(<LoginForm onDone={done} />)
+    fireEvent.click(screen.getByRole('tab', { name: '快速登入' }))
+    expect(screen.queryByLabelText('email')).toBeNull()
+    fireEvent.change(screen.getByLabelText('快速登入密碼'), { target: { value: 'game-day' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '快速登入' })) })
+    expect(await screen.findByText('已用快速登入')).toBeTruthy()
+    expect(quick).toHaveBeenCalledWith('game-day')
+    expect(recheck).toHaveBeenCalled()
+    expect(done).toHaveBeenCalled()
   })
 })
