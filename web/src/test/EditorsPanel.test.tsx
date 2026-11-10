@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
@@ -47,6 +47,55 @@ describe('帳號管理 with 邀請碼 and roles', () => {
     expect(pick.value).toBe('player')
     await act(async () => { fireEvent.change(pick, { target: { value: 'recorder' } }) })
     expect(await screen.findByText('wait@team.tw 改成紀錄員了')).toBeTruthy()
+  })
+
+  it('整批新增: a pasted list becomes one account and one 邀請碼 each, ready to copy', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const write = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    render(<EditorsPanel />)
+    await screen.findAllByText('已啟用')
+    fireEvent.click(screen.getByRole('tab', { name: '整批新增' }))
+    const area = screen.getByLabelText('要新增的 email（一行一個）') as HTMLTextAreaElement
+    fireEvent.change(area, { target: { value: 'p1@team.tw 王小明 #18\nme@team.tw\n沒有信箱\nP2@team.tw' } })
+    expect(screen.getByText(/1 個已經在名單裡/)).toBeTruthy()
+    expect(screen.getByText(/1 行找不到 email/)).toBeTruthy()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '新增 2 個帳號' })) })
+    const { addMember } = await import('../data/supabase')
+    expect(addMember).toHaveBeenCalledWith('p1@team.tw', 'player', '王小明 #18')
+    expect(addMember).toHaveBeenCalledWith('p2@team.tw', 'player', '')
+    expect(area.value).toBe('')
+    const box = screen.getByRole('region', { name: '整批新增的邀請碼' })
+    expect(within(box).getAllByText('K7Q2M-9XAPD')).toHaveLength(2)
+    // the message for one person, and the whole table for a spreadsheet
+    const one = within(box).getByRole('button', { name: '複製要傳給 p1@team.tw 的訊息' })
+    await act(async () => { fireEvent.click(one) })
+    expect(write.mock.calls.at(-1)![0]).toContain('email：p1@team.tw、邀請碼：K7Q2M-9XAPD')
+    expect(one.textContent).toBe('已複製')
+    await act(async () => { fireEvent.click(within(box).getByRole('button', { name: '複製全部' })) })
+    expect(write.mock.calls.at(-1)![0]).toBe('email\t備註\t身分\t邀請碼\np1@team.tw\t王小明 #18\t球員\tK7Q2M-9XAPD\np2@team.tw\t\t球員\tK7Q2M-9XAPD')
+  })
+
+  it('整批新增: the codes stay when the page is left and opened again; one that fails says why and stays in the box', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { addMember } = await import('../data/supabase')
+    vi.mocked(addMember).mockRejectedValueOnce(new Error('這個 email 已經在名單裡'))
+    render(<EditorsPanel />)
+    await screen.findAllByText('已啟用')
+    // (a fresh mount: the two codes of the last batch are still there)
+    const box = screen.getByRole('region', { name: '整批新增的邀請碼' })
+    expect(within(box).getAllByText('K7Q2M-9XAPD')).toHaveLength(2)
+    fireEvent.click(screen.getByRole('tab', { name: '整批新增' }))
+    const area = screen.getByLabelText('要新增的 email（一行一個）') as HTMLTextAreaElement
+    fireEvent.change(area, { target: { value: 'x1@team.tw 甲\nx2@team.tw 乙' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '新增 2 個帳號' })) })
+    expect(within(box).getByText('這個 email 已經在名單裡')).toBeTruthy()
+    expect(within(box).getAllByText('K7Q2M-9XAPD')).toHaveLength(3)
+    expect(area.value).toBe('x1@team.tw 甲')
+    expect(screen.getByText(/新增了 1 個，1 個沒有成功/)).toBeTruthy()
+    // 清除 asks first, then the codes are gone
+    await act(async () => { fireEvent.click(within(box).getByRole('button', { name: '清除' })) })
+    expect(screen.queryByRole('region', { name: '整批新增的邀請碼' })).toBeNull()
   })
 
   it('a recorder (not an admin) does not see the account list', () => {
