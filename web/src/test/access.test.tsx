@@ -25,6 +25,7 @@ describe('身分分層: who sees what', () => {
     expect(accessOf({ configured: true, user, role: undefined, authReady: true }).pending).toBe(true)
     expect(accessOf({ configured: true, user, role: null, authReady: true }).level).toBe(0)
     expect(accessOf({ configured: true, user, role: 'player', authReady: true }).level).toBe(1)
+    expect(accessOf({ configured: true, user, role: 'coach', authReady: true }).level).toBe(1)   // 教練 sees what a player sees
     expect(accessOf({ configured: true, user, role: 'recorder', authReady: true }).level).toBe(2)
     expect(accessOf({ configured: true, user, role: 'admin', authReady: true }).level).toBe(3)
   })

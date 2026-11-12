@@ -372,14 +372,19 @@ export async function addEditor(email: string, note: string): Promise<string | n
   return null
 }
 // ---------------------------------------------------------------- 身分 (supabase/migrations/2026-11-05_roles.sql)
-export type Role = 'player' | 'recorder' | 'admin'
+export type Role = 'player' | 'coach' | 'recorder' | 'admin'
+/** 教練 'coach' (reads like a player) needs this one */
+export const COACH_MIGRATION = 'supabase/migrations/2026-11-12_coach_role.sql'
+// the database before that migration: its role check (22023 from the functions, 23514 from the table) turns 'coach' down
+const noCoach = (e: { code?: string }, role: Role) => role === 'coach' && (e.code === '22023' || e.code === '23514')
+const NO_COACH = `資料庫還沒更新，還不能選「教練」：請在 Supabase 執行 ${COACH_MIGRATION}`
 export const ROLES_MIGRATION = 'supabase/migrations/2026-11-05_roles.sql'
 /** What the signed-in account is ('admin' 管理者 / 'recorder' 紀錄員 / 'player' 球員, null: not on the list);
  *  undefined on a database without the roles migration. */
 export async function fetchMyRole(): Promise<Role | null | undefined> {
   const { data, error } = await supabase().rpc('my_role')
   if (error) { if (missingFn(error, 'my_role')) return undefined; throw new Error(error.message) }
-  return data === 'admin' || data === 'recorder' || data === 'player' ? data : null
+  return data === 'admin' || data === 'recorder' || data === 'coach' || data === 'player' ? data : null
 }
 /** 新增帳號 with a role; returns the one-time 邀請碼. Before the roles migration only recorders can be added. */
 export async function addMember(email: string, role: Role, note: string): Promise<string | null> {
@@ -389,12 +394,13 @@ export async function addMember(email: string, role: Role, note: string): Promis
     if (role === 'recorder') return addEditor(email, note)
     throw new Error(`資料庫還沒更新，還不能新增球員或管理者：請在 Supabase 執行 ${ROLES_MIGRATION}`)
   }
+  if (noCoach(error, role)) throw new Error(NO_COACH)
   throw new Error(error.code === '23505' ? '這個 email 已經在名單裡' : error.code === '42501' ? '只有管理者可以新增帳號' : error.message)
 }
 /** 改身分 (never your own). */
 export async function setMemberRole(email: string, role: Role): Promise<void> {
   const { error } = await supabase().rpc('set_member_role', { p_email: email.trim().toLowerCase(), p_role: role })
-  if (error) throw new Error(missingFn(error, 'set_member_role') ? `資料庫還沒更新：請在 Supabase 執行 ${ROLES_MIGRATION}` : error.message)
+  if (error) throw new Error(missingFn(error, 'set_member_role') ? `資料庫還沒更新：請在 Supabase 執行 ${ROLES_MIGRATION}` : noCoach(error, role) ? NO_COACH : error.message)
 }
 /** New 邀請碼 for someone (forgot password, new account): their old account loses write access until it is used. */
 export async function resetEditor(email: string): Promise<string> {

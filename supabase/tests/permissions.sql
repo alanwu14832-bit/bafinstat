@@ -126,7 +126,8 @@ select pg_temp.ok(length(reset_editor('d@x.com')) = 10, 'A resets D (new 邀請�
 select pg_temp.ok(length(add_member('p2@x.com', 'player', '新球員')) = 10, 'A adds a player and gets a 邀請碼');
 select pg_temp.ok(set_member_role('p2@x.com', 'recorder') = 'recorder', 'A changes an account''s role');
 select pg_temp.refused($q$select set_member_role('a@x.com', 'player')$q$, 'A cannot change his own role');
-select pg_temp.refused($q$select add_member('z@x.com', 'coach')$q$, 'an unknown role is refused');
+select pg_temp.refused($q$select add_member('z@x.com', 'owner')$q$, 'an unknown role is refused');
+select pg_temp.ok(length(add_member('k@x.com', 'coach', '教練')) = 10, 'A adds a coach (2026-11-12) and gets a 邀請碼');
 select pg_temp.ok(set_quick_login('248163', 30) = 'on', 'A sets the 快速登入密碼 (its DELETE has a WHERE)');
 delete from editors where email = 'a@x.com';   -- row level security leaves his own row alone
 select pg_temp.ok(pg_temp.val($q$select count(*) from editors where email = 'a@x.com'$q$)::int = 1, 'A cannot remove himself');
@@ -162,6 +163,16 @@ select pg_temp.ok(pg_temp.val('select count(*) from editors')::int = 1, 'P sees 
 select pg_temp.ok(pg_temp.val('select count(*) from audit_log')::int = 0, 'P sees no 操作紀錄');
 select pg_temp.refused($q$select add_member('x@x.com', 'player')$q$, 'P cannot add accounts');
 select pg_temp.refused($q$select set_member_role('p@x.com', 'admin')$q$, 'P cannot make himself an admin');
+reset role;
+
+\echo '--- 教練（P 改成教練）：和球員一樣只能讀'
+update editors set role = 'coach' where email = 'p@x.com';
+set role authenticated;
+select pg_temp.ok(my_role() = 'coach' and is_member(), 'P is now a coach');
+select pg_temp.ok(not is_editor() and not is_bound_editor() and not is_admin(), 'a coach cannot write');
+select pg_temp.ok(pg_temp.val('select count(*) from batting_pa')::int > 0, 'a coach reads the records');
+select pg_temp.refused($q$select save_games('[{"id":"X","date":"2026-10-01"}]')$q$, 'a coach cannot save games');
+select pg_temp.refused($q$select add_member('x@x.com', 'player')$q$, 'a coach cannot add accounts');
 reset role;
 
 \echo '--- 被重設的紀錄員（D）'
