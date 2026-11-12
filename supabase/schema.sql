@@ -792,9 +792,9 @@ grant execute on function unlock_quick_login() to authenticated;
 -- 球員（只能看）、紀錄員（紀錄、修改）、管理者（帳號管理）；第一位管理者是備註「管理員」的那一列。
 alter table editors add column if not exists role text not null default 'recorder';
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'editors_role_check') then
-    alter table editors add constraint editors_role_check check (role in ('player', 'recorder', 'admin'));
-  end if;
+  -- (2026-11-12: 教練 'coach' reads like a player)
+  alter table editors drop constraint if exists editors_role_check;
+  alter table editors add constraint editors_role_check check (role in ('player', 'coach', 'recorder', 'admin'));
 end $$;
 grant select (role) on editors to authenticated;
 
@@ -847,7 +847,7 @@ create or replace function add_member(p_email text, p_role text, p_note text def
 language plpgsql volatile security definer set search_path = public as $$
 begin
   if not is_admin() then raise exception '只有管理者可以新增帳號' using errcode = '42501'; end if;
-  if p_role is null or p_role not in ('player', 'recorder', 'admin') then raise exception '身分只能是球員、紀錄員或管理者' using errcode = '22023'; end if;
+  if p_role is null or p_role not in ('player', 'coach', 'recorder', 'admin') then raise exception '身分只能是球員、教練、紀錄員或管理者' using errcode = '22023'; end if;
   if p_email is null or lower(trim(p_email)) !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then raise exception 'email 格式不對' using errcode = '22023'; end if;
   insert into editors (email, note, role) values (lower(trim(p_email)), nullif(left(trim(coalesce(p_note, '')), 60), ''), p_role);
   return _set_invite(p_email);
@@ -857,7 +857,7 @@ create or replace function set_member_role(p_email text, p_role text) returns te
 language plpgsql volatile security definer set search_path = public as $$
 begin
   if not is_admin() then raise exception '只有管理者可以改身分' using errcode = '42501'; end if;
-  if p_role is null or p_role not in ('player', 'recorder', 'admin') then raise exception '身分只能是球員、紀錄員或管理者' using errcode = '22023'; end if;
+  if p_role is null or p_role not in ('player', 'coach', 'recorder', 'admin') then raise exception '身分只能是球員、教練、紀錄員或管理者' using errcode = '22023'; end if;
   if lower(trim(p_email)) = lower(auth.jwt() ->> 'email') then raise exception '不能改自己的身分' using errcode = '42501'; end if;
   update editors set role = p_role where lower(email) = lower(trim(p_email));
   if not found then raise exception '名單上沒有這個 email' using errcode = 'P0002'; end if;

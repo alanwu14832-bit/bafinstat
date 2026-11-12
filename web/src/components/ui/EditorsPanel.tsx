@@ -14,6 +14,7 @@ import { TEAM } from '../../config/team'
 
 const ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: 'player', label: '球員（看全部數據）' },
+  { value: 'coach', label: '教練（看全部數據，和球員一樣）' },
   { value: 'recorder', label: '紀錄員（還能紀錄、修改）' },
   { value: 'admin', label: '管理者（還能管理帳號）' },
 ]
@@ -123,7 +124,7 @@ export function EditorsPanel() {
   }
 
   return (
-    <Card title="帳號管理" subtitle="球員登入看全部數據；紀錄員還能紀錄與修改；管理者還能管理帳號">
+    <Card title="帳號管理" subtitle="球員、教練登入看全部數據；紀錄員還能紀錄與修改；管理者還能管理帳號">
       <div className="flex flex-col gap-3 text-[13px]">
         <ul className="flex flex-col divide-y divide-border rounded-[var(--radius-sm)] border border-border">
           {editors === null && <li className="px-3 py-2.5 text-muted">載入中…</li>}

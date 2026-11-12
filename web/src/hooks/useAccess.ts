@@ -9,8 +9,8 @@ import type { Role } from '../data/supabase'
  */
 export type Level = 0 | 1 | 2 | 3
 export const LEVEL_LABEL: Record<Level, string> = { 0: '一般人', 1: '球員', 2: '紀錄員', 3: '管理者' }
-export const ROLE_LABEL: Record<Role, string> = { player: '球員', recorder: '紀錄員', admin: '管理者' }
-export const ROLE_LEVEL: Record<Role, Level> = { player: 1, recorder: 2, admin: 3 }
+export const ROLE_LABEL: Record<Role, string> = { player: '球員', coach: '教練', recorder: '紀錄員', admin: '管理者' }
+export const ROLE_LEVEL: Record<Role, Level> = { player: 1, coach: 1, recorder: 2, admin: 3 }
 
 export interface Access {
   level: Level

@@ -6,8 +6,8 @@ export interface Editor {
   email: string; note: string | null; created_at: string
   /** the bound account (null: not activated yet) — after the 2026-10-08 security migration */
   user_id?: string | null; bound_at?: string | null; invite_expires?: string | null
-  /** 'player' 球員 / 'recorder' 紀錄員 / 'admin' 管理者 — after the 2026-11-05 roles migration */
-  role?: 'player' | 'recorder' | 'admin'
+  /** 'player' 球員 / 'coach' 教練 (reads like a player) / 'recorder' 紀錄員 / 'admin' 管理者 — after the 2026-11-05 roles migration */
+  role?: 'player' | 'coach' | 'recorder' | 'admin'
 }
 
 /** 10-character 邀請碼 shown as K7Q2M-9XAPD. */
