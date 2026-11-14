@@ -5,7 +5,7 @@ import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
 import { Tabs } from './Tabs'
 import { cx } from '../../lib/format'
-import { applyErrorFixes, fieldingErrorFixes, reconcileFielding, type GameEdit } from '../../data/edit'
+import { applyErrorFixes, carryPitcher, fieldingErrorFixes, pitcherChangedAt, pitcherRunAfter, reconcileFielding, type GameEdit } from '../../data/edit'
 import { fieldersOf, rowCharges, rowsInInning } from '../../data/normalize'
 import { DefenseByInning, ErrorFixNotice } from './DefenseEditor'
 import { useRegistrationMoveNote } from '../../hooks/useRegistrationMoves'
@@ -268,6 +268,15 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const touchTable = (side: PaSide, was: Array<BatDraft | PitDraft>, next: Array<BatDraft | PitDraft>) => {
     const key = (r?: BatDraft | PitDraft) => (r ? `${r.inning}|${r.result}|${r.basesBefore ?? ''}|${r.outsBefore ?? ''}|${r.code ?? ''}` : '')
     for (let i = 0; i < Math.max(was.length, next.length); i++) if (key(was[i]) !== key(next[i])) for (const r of [was[i], next[i]]) if (r) touch(side, +r.inning || 1)
+  }
+  // 我隊投球: one row's pitcher corrected, and the rows after it (until the next pitching change) still name the old
+  // one — the same stint, so offer to change them together (the usual case: the starter was entered wrong)
+  const withPitcherRun = <T extends { pitcher: string; priorPitchers?: Array<{ name: string; pitches: number }> }>(was: T[], next: T[]): T[] => {
+    const i = pitcherChangedAt(was, next)
+    if (i === null || !next[i].pitcher.trim()) return next
+    const old = was[i].pitcher, n = pitcherRunAfter(next, i, old)
+    if (!n || !window.confirm(`後面連續 ${n} 個打席的投手也是「${old}」（到下一次換投為止），要一起改成「${next[i].pitcher}」嗎？\n\n按「取消」就只改這一個打席。`)) return next
+    return carryPitcher(next, i, old, next[i].pitcher)
   }
   const insertPa = (side: PaSide, at: number, inning?: number) => {
     const rows = side === 'bat' ? batRows : pitRows
@@ -652,7 +661,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     const i = sel.index
     return (
       <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames} nextMissing={nextMissingFrom(rows, i)}
-        onChange={(pa) => { if (side === 'bat') missedSub(rows[i] as BattingPA, pa as BattingPA); return side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x))).map(toPitDraft)) }}
+        onChange={(pa) => { if (side === 'bat') missedSub(rows[i] as BattingPA, pa as BattingPA); return side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(withPitcherRun(pitRows, pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x)))).map(toPitDraft)) }}
         onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
         onDelete={() => {
           touch(side, rows[i].inning)
@@ -868,7 +877,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
         )}
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={(next) => { touchTable('bat', bat, next); setBat(next) }} blank={blankBat} listId="game-editor-names" names={names} />
           : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
-        {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={(next) => { touchTable('pit', pit, next); setPit(next) }} blank={blankPit} listId="game-editor-names" names={names} />
+        {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={(next) => { touchTable('pit', pit, next); setPit(withPitcherRun(pit, next)) }} blank={blankPit} listId="game-editor-names" names={names} />
           : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} onAddRelief={addRelief} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
         {tab === 'fld' && (
           <div className="flex flex-col gap-3">
