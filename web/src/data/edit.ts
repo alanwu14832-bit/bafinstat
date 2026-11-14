@@ -177,3 +177,29 @@ export function applyErrorFixes(lines: FieldingLine[], game: Game, fixes: ErrorF
   }
   return out
 }
+
+/**
+ * 修改資料, one row's pitcher corrected (the starter was entered wrong): how many rows right after it still name the
+ * pitcher it had, up to the next pitching change. They are the same stint, so the editor offers to change them with it.
+ */
+export function pitcherRunAfter<T extends { pitcher: string }>(rows: T[], i: number, was: string): number {
+  if (!was.trim()) return 0
+  let n = 0
+  while (rows[i + 1 + n] && rows[i + 1 + n].pitcher === was) n++
+  return n
+}
+/** Those rows renamed too; the row after them, where he left during a count, keeps his pitches under the new name. */
+export function carryPitcher<T extends { pitcher: string; priorPitchers?: Array<{ name: string; pitches: number }> }>(rows: T[], i: number, was: string, to: string): T[] {
+  const n = pitcherRunAfter(rows, i, was)
+  return rows.map((r, k) => {
+    if (k > i && k <= i + n) return { ...r, pitcher: to }
+    if (k === i + n + 1 && r.priorPitchers?.some((p) => p.name === was)) return { ...r, priorPitchers: r.priorPitchers.map((p) => (p.name === was ? { ...p, name: to } : p)) }
+    return r
+  })
+}
+/** The one row whose pitcher differs between two versions of the same rows (null: none, several, or rows added/removed). */
+export function pitcherChangedAt<T extends { pitcher: string }>(was: T[], next: T[]): number | null {
+  if (was.length !== next.length) return null
+  const at = next.flatMap((r, k) => (r.pitcher !== was[k].pitcher ? [k] : []))
+  return at.length === 1 ? at[0] : null
+}
