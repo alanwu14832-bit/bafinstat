@@ -16,15 +16,17 @@ export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; red
   const [open, setOpen] = useState(false)
   if (!cloud.configured || ARCHIVE) return null
   const quick = !!cloud.user?.is_anonymous
+  // signed in, on the list, the 邀請碼 not used yet: the account block opens the place to enter it
+  const pending = !!cloud.user && !quick && cloud.role === null && !!cloud.access && cloud.access !== 'not_listed'
   const label = cloud.user ? (quick ? '快速登入' : cloud.user.email ?? '已登入') : '登入'
   const sub = cloud.user
-    ? (cloud.role ? ROLE_LABEL[cloud.role] : cloud.role === undefined ? '確認身分中…' : quick ? '已失效，請重新登入' : '不在帳號名單（只看得到公開頁面）')
+    ? (cloud.role ? ROLE_LABEL[cloud.role] : cloud.role === undefined ? '確認身分中…' : quick ? '已失效，請重新登入' : cloud.access && cloud.access !== 'not_listed' ? '還沒啟用：點這裡輸入邀請碼' : '不在帳號名單（只看得到公開頁面）')
     : '球員、紀錄員、管理者'
   return (
     <div className="px-3 pt-3 border-t border-border">
       <div className="flex items-center gap-1">
-        <button type="button" onClick={() => { if (!cloud.user) setOpen(true) }} title={cloud.user ? label : '登入'} aria-label={cloud.user ? `已登入 ${label}` : '登入'}
-          className={cx('flex items-center h-10 flex-1 min-w-0 rounded-[var(--radius-sm)] pl-[13px] pr-2 overflow-hidden whitespace-nowrap text-left', !cloud.user && 'hover:bg-surface-2 cursor-pointer', 'transition-colors motion-reduce:transition-none')}>
+        <button type="button" onClick={() => { if (!cloud.user || pending) setOpen(true) }} title={cloud.user ? label : '登入'} aria-label={cloud.user ? `已登入 ${label}` : '登入'}
+          className={cx('flex items-center h-10 flex-1 min-w-0 rounded-[var(--radius-sm)] pl-[13px] pr-2 overflow-hidden whitespace-nowrap text-left', (!cloud.user || pending) && 'hover:bg-surface-2 cursor-pointer', 'transition-colors motion-reduce:transition-none')}>
           <span className={cx('size-[18px] shrink-0 inline-flex items-center justify-center', cloud.user ? 'text-ink' : 'text-ink-2')}>{cloud.user ? <UserRound className="size-[18px]" strokeWidth={1.8} /> : <LogIn className="size-[18px]" strokeWidth={1.8} />}</span>
           <motion.span className="ml-3 min-w-0" initial={false} animate={{ opacity: collapsed ? 0 : 1 }} transition={reduced ? { duration: 0 } : { duration: 0.16, ease: EASE }} aria-hidden={collapsed}>
             <span className="block text-[12.5px] font-medium text-ink truncate">{label}</span>
@@ -35,7 +37,7 @@ export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; red
           <button type="button" onClick={() => void signOut()} title="登出" aria-label="登出" className="size-8 shrink-0 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-muted hover:text-ink hover:bg-surface-2 cursor-pointer"><LogOut className="size-4" /></button>
         )}
       </div>
-      <AuthDialog open={open} onClose={() => setOpen(false)} />
+      <AuthDialog open={open} onClose={() => setOpen(false)} title={pending ? '啟用帳號' : undefined} />
     </div>
   )
 }
