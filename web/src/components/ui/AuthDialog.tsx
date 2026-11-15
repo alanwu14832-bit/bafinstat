@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { LoginForm } from './LoginForm'
+import { EditorClaim } from './EditorClaim'
+import { useDataStore } from '../../store/data'
 import { Button } from './Button'
 import { TeamLogo } from './TeamLogo'
 import { TEAM } from '../../config/team'
@@ -14,6 +16,9 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  */
 export function AuthDialog({ open, onClose, title = '登入', intro }: { open: boolean; onClose: () => void; title?: string; intro?: string }) {
   const panel = useRef<HTMLDivElement>(null)
+  // signed in with an account that is not activated yet (it signed up before it had a 邀請碼): the code goes in here
+  const cloud = useDataStore((s) => s.cloud)
+  const claim = !!cloud.user && !cloud.user.is_anonymous && cloud.role === null && !!cloud.access
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose })
   // what had the focus before opening (read while rendering: the form's autofocus moves it before any effect runs)
@@ -53,7 +58,7 @@ export function AuthDialog({ open, onClose, title = '登入', intro }: { open: b
           </div>
           <Button variant="ghost" size="sm" icon={<X />} aria-label="關閉" onClick={onClose} className="relative" />
         </div>
-        <div className="p-5 pt-3"><LoginForm onDone={onClose} autoFocus intro={intro} /></div>
+        <div className="p-5 pt-3">{claim ? <EditorClaim /> : <LoginForm onDone={onClose} autoFocus intro={intro} />}</div>
       </div>
     </div>,
     document.body,

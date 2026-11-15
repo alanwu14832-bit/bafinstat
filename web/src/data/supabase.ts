@@ -467,11 +467,16 @@ export async function signInWithPassword(email: string, password: string) {
  * 第一次使用: create a password account and sign in. Writing still needs the email on the 紀錄員名單.
  * Needs Supabase → Authentication → Sign In / Providers → Email: "Allow new users to sign up" on, "Confirm email" off.
  */
+/** 第一次使用 on an email that already has an account (someone signed up before getting a 邀請碼). */
+export class AccountExistsError extends Error {
+  constructor() { super('這個 email 之前已經註冊過帳號'); this.name = 'AccountExistsError' }
+}
 export async function signUpWithPassword(email: string, password: string) {
   const { data, error } = await supabase().auth.signUp({ email, password })
-  if (error) throw new Error(/already registered/i.test(error.message) ? '這個 email 已經有帳號，請改用「密碼登入」；如果不是你本人建立的，請找紀錄員重發邀請碼' : /signups? not allowed/i.test(error.message) ? '目前沒有開放設定密碼，請找管理員' : error.message)
+  if (error && /already registered/i.test(error.message)) throw new AccountExistsError()
+  if (error) throw new Error(/signups? not allowed/i.test(error.message) ? '目前沒有開放設定密碼，請找管理員' : error.message)
   // an existing account comes back without identities (Supabase hides that it exists)
-  if (data.user && !data.user.identities?.length) throw new Error('這個 email 已經有帳號，請改用「密碼登入」；如果不是你本人建立的，請找紀錄員重發邀請碼')
+  if (data.user && !data.user.identities?.length) throw new AccountExistsError()
   if (!data.session) throw new Error('帳號已建立，但需要先到信箱確認；請管理員到 Supabase 關閉「Confirm email」')
 }
 export async function signOut() {

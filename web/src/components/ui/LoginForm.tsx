@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from './Button'
 import { Input } from './Input'
 import { Tabs } from './Tabs'
-import { quickSignIn, signInWithPassword, signUpWithPassword } from '../../data/supabase'
+import { AccountExistsError, quickSignIn, signInWithPassword, signUpWithPassword } from '../../data/supabase'
 import { checkNewPassword } from '../../data/editors'
 import { useDataStore } from '../../store/data'
 
@@ -39,7 +39,14 @@ export function LoginForm({ onDone, autoFocus, intro }: { onDone?: () => void; a
         const bad = checkNewPassword(password, again) ?? (invite.replace(/[^A-Za-z0-9]/g, '').length < 10 ? '請輸入管理者給你的 10 碼邀請碼' : null)
         if (bad) setMsg(bad)
         else void run(async () => {
-          await signUpWithPassword(email.trim(), password)
+          try { await signUpWithPassword(email.trim(), password) } catch (e) {
+            // the email signed up before it had a 邀請碼 (the account exists, bound to nothing): with the password it
+            // was given then, sign in and let the code below bind it — no need to start over
+            if (!(e instanceof AccountExistsError)) throw e
+            try { await signInWithPassword(email.trim(), password) } catch {
+              throw new Error('這個 email 之前已經註冊過。請在密碼那兩格輸入「當時設定的密碼」再按一次，就會用邀請碼啟用這個帳號。忘記當時的密碼，請找管理者幫你重設帳號。')
+            }
+          }
           // the 邀請碼 binds this new account to the email's place on the list (球員 / 紀錄員 / 管理者); without it the
           // account sees only what anyone may see
           const a = await claimWithCode(invite)

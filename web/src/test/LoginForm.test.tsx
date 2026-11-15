@@ -2,12 +2,13 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
+const signIn = vi.fn(async (_email: string, _password: string) => {})
 const signUp = vi.fn(async (_email: string, _password: string) => {})
 const quick = vi.fn(async (_code: string) => {})
 const claim = vi.fn(async (code?: string) => (code?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === 'K7Q2M9XAPD' ? 'ok' : 'bad_code'))
 vi.mock('../data/supabase', async (orig) => ({
   ...(await orig<typeof import('../data/supabase')>()),
-  signInWithPassword: vi.fn(),
+  signInWithPassword: (email: string, password: string) => signIn(email, password),
   signUpWithPassword: (email: string, password: string) => signUp(email, password),
   claimEditor: (code?: string) => claim(code),
   quickSignIn: (code: string) => quick(code),
@@ -73,5 +74,29 @@ describe('LoginForm 快速登入 (系隊、校隊)', () => {
     expect(quick).toHaveBeenCalledWith('game-day')
     expect(recheck).toHaveBeenCalled()
     expect(done).toHaveBeenCalled()
+  })
+})
+
+describe('LoginForm 第一次使用: the email signed up before it had a 邀請碼', () => {
+  it('signs in with the password typed and activates the account with the code', async () => {
+    const { AccountExistsError } = await import('../data/supabase')
+    signUp.mockRejectedValueOnce(new AccountExistsError()); signIn.mockClear(); claim.mockClear()
+    const done = vi.fn()
+    render(<LoginForm onDone={done} />)
+    fill('early@gmail.com', 'K7Q2M-9XAPD', 'abcdefgh')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '設定密碼並登入' })) })
+    expect(await screen.findByText('已設定密碼並啟用帳號')).toBeTruthy()
+    expect(signIn).toHaveBeenCalledWith('early@gmail.com', 'abcdefgh')
+    expect(claim).toHaveBeenCalledWith('K7Q2M-9XAPD')
+    expect(done).toHaveBeenCalled()
+  })
+  it('a different password than the one set then: says to type that one (the code is not spent)', async () => {
+    const { AccountExistsError } = await import('../data/supabase')
+    signUp.mockRejectedValueOnce(new AccountExistsError()); signIn.mockRejectedValueOnce(new Error('email 或密碼錯誤')); claim.mockClear()
+    render(<LoginForm />)
+    fill('early@gmail.com', 'K7Q2M-9XAPD', 'abcdefgh')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '設定密碼並登入' })) })
+    expect(await screen.findByText(/之前已經註冊過。請在密碼那兩格輸入「當時設定的密碼」/)).toBeTruthy()
+    expect(claim).not.toHaveBeenCalled()
   })
 })
