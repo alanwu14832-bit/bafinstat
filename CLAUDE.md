@@ -51,7 +51,9 @@ A database change needs a migration in both repos, and the user must run it in b
   `reset_editor` need `is_admin()`, `my_role()` tells the site. The site gates pages by level (`hooks/useAccess.ts`,
   `components/layout/Gate.tsx`, `level` on the menu items): 0 一般人 (即時比分, 比賽, 紀錄簿, 使用指南, 數據字典, a short
   總覽, 練習紀錄), 1 球員, 2 紀錄員, 3 管理者 (帳號管理 at /accounts, 網站版本). That gate is only what the site shows: the
-  plate-appearance rows stay publicly readable because 比賽 and 紀錄簿 are built from them. 快速登入 is in the sign-in form again
+  plate-appearance rows stay publicly readable because 比賽 and 紀錄簿 are built from them. **This site runs with
+  `openStats` on (teamDefaults.ts, 2026-11-17): the 球員 pages are open to everyone, so only 紀錄員 and 管理者 need an
+  account; the tests keep the gate on (`VITE_TEAM_OPEN_STATS=0` in vite.config.ts) and the 校隊 keeps it.** 快速登入 is in the sign-in form again
   (2026-11-07) and counts as a 紀錄員 (`my_role()` gives 'recorder'); its settings card is on 資料匯入.
 - Never write an email into a public table (`updated_by`/`created_by` are stamped by a trigger with the recorder's name).
 - Keep the Content-Security-Policy (`web/src/config/security.ts`, written into index.html at build) and the headers in

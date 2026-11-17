@@ -72,5 +72,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // the tests cover the 身分分層 gate itself; this site runs with the 球員 pages open (teamDefaults.openStats)
+    env: { VITE_TEAM_OPEN_STATS: '0' },
   },
 })

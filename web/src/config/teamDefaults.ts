@@ -55,6 +55,9 @@ export const TEAM_DEFAULTS = {
    *  one, e.g. https://x.github.io/bafinstat), so link previews (LINE, Facebook…) get an absolute picture URL. A build
    *  whose base path differs from it keeps a relative picture. Set it after moving to your own domain. */
   siteUrl: 'https://bafinstat.vercel.app',
+  /** VITE_TEAM_OPEN_STATS (1 / 0): the 球員 pages (打擊, 投球, 守備, 球員, 相簿, the full 總覽) are open to everyone, no
+   *  account needed; only 紀錄員 and 管理者 sign in. 系隊 chose this on 2026-11-17; with 0 those pages need a 球員 account. */
+  openStats: true,
   /** VITE_TEAM_OG_IMAGE: the 1200×630 link-preview picture: a file in web/public or a full URL. Without the file the
    *  build uses the logo and a small preview card. */
   ogImage: 'og.png',
@@ -81,6 +84,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
   const tb = str('VITE_TEAM_TIEBREAK', '').toLowerCase()
   const tiebreak = ['2', '12', '123'].includes(tb) ? tb : ['0', 'off', 'false', 'no'].includes(tb) ? '' : TEAM_DEFAULTS.tiebreak
   const seasonStart = Number(str('VITE_TEAM_SEASON_START', ''))
+  const open = str('VITE_TEAM_OPEN_STATS', '')
   return {
     name: str('VITE_TEAM_NAME', TEAM_DEFAULTS.name),
     org: str('VITE_TEAM_ORG', TEAM_DEFAULTS.org),
@@ -99,6 +103,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
     pitchRest: TEAM_DEFAULTS.pitchRest,
     siteUrl: siteUrl(str('VITE_TEAM_SITE_URL', '')) ?? TEAM_DEFAULTS.siteUrl,
+    openStats: open ? !['0', 'false', 'no', 'off'].includes(open.toLowerCase()) : TEAM_DEFAULTS.openStats,
     ogImage: str('VITE_TEAM_OG_IMAGE', TEAM_DEFAULTS.ogImage),
     description: str('VITE_TEAM_DESCRIPTION', TEAM_DEFAULTS.description),
   }

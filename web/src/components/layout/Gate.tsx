@@ -18,8 +18,8 @@ export function RequireLevel({ level, title, open = false, extra, children }: {
 }) {
   const access = useAccess()
   if (open) return <>{children}</>
-  if (access.pending) return <div aria-busy="true" className="min-h-[40vh]" />
   if (access.level >= level) return <>{children}</>
+  if (access.pending) return <div aria-busy="true" className="min-h-[40vh]" />
   return <GateNotice level={level} title={title} extra={extra} />
 }
 

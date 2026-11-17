@@ -1,4 +1,5 @@
 import { ARCHIVE } from '../config/archive'
+import { TEAM } from '../config/team'
 import { useDataStore } from '../store/data'
 import type { Role } from '../data/supabase'
 
@@ -21,7 +22,15 @@ export interface Access {
 
 type CloudLike = { configured: boolean; user: unknown; role?: Role | null; authReady?: boolean }
 
-export function accessOf(cloud: CloudLike, archive: boolean = !!ARCHIVE): Access {
+/**
+ * `open` (teamDefaults.openStats): the 球員 pages need no account, so everyone starts at level 1 — also while the site
+ * is still finding out who is signed in. 紀錄員 and 管理者 pages are unchanged.
+ */
+export function accessOf(cloud: CloudLike, archive: boolean = !!ARCHIVE, open: boolean = TEAM.openStats): Access {
+  const a = gated(cloud, archive)
+  return open && a.level < 1 ? { ...a, level: 1 } : a
+}
+function gated(cloud: CloudLike, archive: boolean): Access {
   // local mode (no cloud): the whole site belongs to this device
   if (!cloud.configured) return { level: 3, role: 'admin', pending: false }
   // a saved older version of the site never signs in: it shows what anyone may see

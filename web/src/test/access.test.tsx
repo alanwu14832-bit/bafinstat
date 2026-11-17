@@ -30,6 +30,14 @@ describe('身分分層: who sees what', () => {
     expect(accessOf({ configured: true, user, role: 'admin', authReady: true }).level).toBe(3)
   })
 
+  it('openStats (系隊): the 球員 pages need no account, also while the sign-in is still being checked; the rest is unchanged', () => {
+    expect(accessOf({ configured: true, user: null, authReady: true }, false, true).level).toBe(1)
+    expect(accessOf({ configured: true, user: null, authReady: false }, false, true)).toEqual({ level: 1, role: null, pending: true })
+    expect(accessOf({ configured: true, user, role: 'admin', authReady: true }, true, true).level).toBe(1)
+    expect(accessOf({ configured: true, user, role: 'recorder', authReady: true }, false, true).level).toBe(2)
+    expect(accessOf({ configured: true, user, role: 'admin', authReady: true }, false, true).level).toBe(3)
+  })
+
   it('a 球員 page asks a visitor to sign in; a player sees it; a 紀錄員 page tells a player what it needs', () => {
     as(null, false)
     render(<MemoryRouter><RequireLevel level={1} title="打擊"><p>打擊表</p></RequireLevel></MemoryRouter>)
