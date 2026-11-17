@@ -5,6 +5,7 @@ import { Tabs } from './Tabs'
 import { AccountExistsError, quickSignIn, signInWithPassword, signUpWithPassword } from '../../data/supabase'
 import { checkNewPassword } from '../../data/editors'
 import { useDataStore } from '../../store/data'
+import { TEAM } from '../../config/team'
 
 // 快速登入 (the shared password a 紀錄員 sets on 資料匯入) makes this device a 紀錄員 for some days; 球員, 紀錄員 and
 // 管理者 otherwise sign in with their own account
@@ -54,7 +55,7 @@ export function LoginForm({ onDone, autoFocus, intro }: { onDone?: () => void; a
         }, '已設定密碼並啟用帳號', true)
       }
     }}>
-      <p className="text-muted">{intro ?? '球員、紀錄員、管理者用自己的 email 登入；要紀錄比賽也可以用快速登入。比賽、即時比分、紀錄簿不用登入就看得到。'}</p>
+      <p className="text-muted">{intro ?? (TEAM.openStats ? '紀錄員、管理者用自己的 email 登入；要紀錄比賽也可以用快速登入。看數據不用登入。' : '球員、紀錄員、管理者用自己的 email 登入；要紀錄比賽也可以用快速登入。比賽、即時比分、紀錄簿不用登入就看得到。')}</p>
       <Tabs size="sm" aria-label="登入方式" value={mode} onChange={(m) => { setMode(m); setMsg(null) }} items={[{ value: 'password', label: '登入' }, { value: 'quick', label: '快速登入' }, { value: 'signup', label: '第一次使用' }]} className="self-start" />
       {mode !== 'quick' && <Input type="email" required autoComplete="username" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="email" autoFocus={autoFocus} />}
       {mode === 'quick' ? (

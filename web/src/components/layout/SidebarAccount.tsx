@@ -7,6 +7,7 @@ import { useDataStore } from '../../store/data'
 import { signOut } from '../../data/supabase'
 import { cx } from '../../lib/format'
 import { ROLE_LABEL } from '../../hooks/useAccess'
+import { TEAM } from '../../config/team'
 
 const EASE = [0.22, 1, 0.36, 1] as const
 
@@ -21,7 +22,7 @@ export function SidebarAccount({ collapsed, reduced }: { collapsed: boolean; red
   const label = cloud.user ? (quick ? '快速登入' : cloud.user.email ?? '已登入') : '登入'
   const sub = cloud.user
     ? (cloud.role ? ROLE_LABEL[cloud.role] : cloud.role === undefined ? '確認身分中…' : quick ? '已失效，請重新登入' : cloud.access && cloud.access !== 'not_listed' ? '還沒啟用：點這裡輸入邀請碼' : '不在帳號名單（只看得到公開頁面）')
-    : '球員、紀錄員、管理者'
+    : TEAM.openStats ? '紀錄員、管理者' : '球員、紀錄員、管理者'
   return (
     <div className="px-3 pt-3 border-t border-border">
       <div className="flex items-center gap-1">
