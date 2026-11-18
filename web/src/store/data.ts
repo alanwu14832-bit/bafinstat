@@ -440,6 +440,18 @@ if (cloudConfigured && typeof window !== 'undefined') {
     onAuthChange((u) => useDataStore.getState().setCloudUser(u))
   }
   subscribeCloudChanges(() => { const s = useDataStore.getState(); void s.loadCloud(); void s.loadAlbums(); void s.loadRegistrations() })
+  // live updates stop while a phone sleeps or a tab sits in the background (the connection drops quietly); coming back
+  // fetches the latest so another device's edits (and the game's 待核對) show without a reload — at most every 15 s
+  if (typeof window !== 'undefined') {
+    let last = Date.now()
+    const back = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < 15_000) return
+      last = Date.now(); const s = useDataStore.getState(); void s.loadCloud(); void s.loadAlbums(); void s.loadRegistrations()
+    }
+    document.addEventListener('visibilitychange', back)
+    window.addEventListener('online', back)
+    window.addEventListener('focus', back)
+  }
 }
 
 let demoCache: { base: Dataset; ds: Dataset } | null = null
