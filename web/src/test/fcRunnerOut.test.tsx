@@ -65,7 +65,8 @@ describe('紀錄比賽: 內滾 with the runner out is a 野選', () => {
 })
 
 describe('紀錄比賽: 逐打席', () => {
-  it('sits above the lineup; a row opens to fix its 落點 and 備註 without touching the game', async () => {
+  it('sits above the lineup; a row opens the full editor: its result changed, the bases follow', async () => {
+    // 甲 singled, 乙 up: change 甲's single into a strikeout from the list
     let s = newGame(game, lineup, '甲')
     s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7, traj: 'L' })
     start(s)
@@ -74,13 +75,14 @@ describe('紀錄比賽: 逐打席', () => {
     expect(log.compareDocumentPosition(order) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(within(log).getByText('甲'))
     const sheet = await screen.findByRole('dialog', { name: '修改這個打席' })
-    expect(within(sheet).getByText(/第 1 個打席・甲・一安/)).toBeTruthy()
-    fireEvent.click(within(sheet).getAllByRole('button', { name: /^8 CF/ })[0])
-    fireEvent.change(within(sheet).getByLabelText('這個打席的備註'), { target: { value: '中外野前' } })
-    fireEvent.click(within(sheet).getByRole('button', { name: '儲存' }))
-    await wait(50)
-    expect(draft().batting[0]).toMatchObject({ result: '一安', loc: 8, note: '中外野前' })
-    expect([draft().runners, draft().outs]).toEqual([s.runners, s.outs])
+    // the 修改資料 panel, without 插入／刪除 while the game goes on
+    expect(within(sheet).queryByRole('button', { name: '在前面插入' })).toBeNull()
+    fireEvent.click(within(sheet).getByRole('button', { name: /^三振$/ }))
+    fireEvent.click(within(sheet).getByRole('button', { name: '儲存修改' }))
+    await wait(80)
+    expect(screen.queryByRole('dialog', { name: '修改這個打席' })).toBeNull()
+    expect(draft().batting[0].result).toBe('三振')
+    expect([draft().outs, draft().runners]).toEqual([1, []])
   })
 })
 

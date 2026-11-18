@@ -511,6 +511,8 @@ export interface PaPanelProps {
   /** `inning`: the inning of the row it goes next to */
   onInsert: (at: number, inning?: number) => void
   onMove: (d: -1 | 1) => void
+  /** (紀錄比賽, the game still going) no 插入／移動／刪除: the batting order has to keep following */
+  fixed?: boolean
   /** our half-inning: the rows before this one whose runners may still be on base, editable from here */
   others?: Array<{ index: number; pa: BattingPA }>
   onChangeOther?: (index: number, pa: BattingPA) => void
@@ -629,7 +631,7 @@ export function PaPanel(props: PaPanelProps) {
 }
 
 /** A reliever who came in and made an out on the bases before he faced anyone (types.RELIEF): not a plate appearance. */
-function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, onClose, onDelete }: PaPanelProps) {
+function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, onClose, onDelete, fixed }: PaPanelProps) {
   const pit = pa as PitchingPA
   const set = (patch: Partial<PitchingPA>) => onChange({ ...pit, ...patch })
   const outsOpts = [0, 1, 2].map((n) => ({ value: String(n), label: `${n} 出局時換投` }))
@@ -671,7 +673,7 @@ function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, 
         </div>
       )}
       <div className="flex pt-2 border-t border-border">
-        <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onDelete}>刪除這一列</Button>
+        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onDelete}>刪除這一列</Button>}
       </div>
     </div>
   )
@@ -733,7 +735,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
 
 // the pitches 修改資料 inserts or changes to (the result's own last pitch — 擊進場內, 觸身 — comes from the result)
 const PITCH_EDIT: Array<[string, string]> = [['B', '壞球'], ['CS', '好球・未揮'], ['SS', '揮空'], ['F', '界外'], ['T', '擦棒']]
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, deleteNote, onInsert, onMove, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, deleteNote, onInsert, onMove, fixed, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
   const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
@@ -950,13 +952,13 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-border">
+      {!fixed && <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-border">
         <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index, pa.inning)}>在前面插入</Button>
         <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index + 1, pa.inning)}>在後面插入</Button>
         <Button size="sm" variant="ghost" icon={<ArrowUp />} aria-label="往前移" title="往前移" onClick={() => onMove(-1)} disabled={index === 0} />
         <Button size="sm" variant="ghost" icon={<ArrowDown />} aria-label="往後移" title="往後移" onClick={() => onMove(1)} disabled={index >= total - 1} />
         <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？${deleteNote ? `\n${deleteNote()}` : ''}\n（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
-      </div>
+      </div>}
     </div>
   )
 }

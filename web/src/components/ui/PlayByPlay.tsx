@@ -151,13 +151,13 @@ export { oppPitcherMarks } from '../../data/broadcast'
 function openRow(onOpen: ((i: number) => void) | undefined, i: number) {
   if (!onOpen) return {}
   return {
-    tabIndex: 0, title: '點一下修改這個打席的落點、軌跡、強弱、備註',
+    tabIndex: 0, title: '點一下修改這個打席（逐球、結果、跑者、落點）',
     onClick: (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('button')) onOpen(i) },
     onKeyDown: (e: KeyboardEvent) => { if (e.key === 'Enter' && e.target === e.currentTarget) onOpen(i) },
   }
 }
 
-export function BattingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; /** (紀錄比賽) tapping a row opens it to fix its 落點／軌跡／強弱／備註 */ onOpen?: (index: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
+export function BattingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; /** (紀錄比賽) tapping a row opens it in the full editor */ onOpen?: (index: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const marks = oppPitcherMarksOf(pas)

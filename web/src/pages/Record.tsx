@@ -1,3 +1,5 @@
+import { GameEditor } from '../components/ui/GameEditor'
+import { applyLiveEdit } from '../record/liveEdit'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -20,8 +22,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type BattingPA, type Game, type OutAt, type PitchingPA, type Registration } from '../data/types'
-import { rowName } from '../record/paEdit'
+import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -492,8 +493,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   })()
   // every play ends with one line saying what went in, and a way to take it back
   const [toast, setToast] = useState<ToastData | null>(null)
-  // 逐打席: a plate appearance already sent, opened to fix what does not change the game (落點／軌跡／強弱／備註)
+  // 逐打席: a plate appearance already sent, opened in the full editor (LiveEditSheet)
   const [fixPa, setFixPa] = useState<{ side: 'bat' | 'pit'; i: number } | null>(null)
+  const rosterAll = useDataStore((st) => st.base.roster)
+  const editNames = useMemo(() => [...new Set([...state.lineup.map((l) => l.name), ...rosterAll.map((r) => r.name)].filter(Boolean))], [state.lineup, rosterAll])
   // the plate appearance just sent: 復原 right after it brings its confirm panel back, filled in (fix one thing, send again)
   const sent = useRef<PAPlan | null>(null)
   const undoStep = () => {
@@ -1103,38 +1106,26 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onDone={(names) => act((s) => setOppLineup(s, names))} />}
       {/* (at the top: at the bottom it covered 跑者去向 and 送出) */}
       <Toast toast={toast} onDone={() => setToast(null)} placement="top" ms={3500} />
-      <FixPaSheet target={fixPa} state={state} onClose={() => setFixPa(null)}
-        onSave={(side, i, patch) => { apply((s) => (side === 'bat' ? { ...s, batting: s.batting.map((p, k) => (k === i ? { ...p, ...patch } : p)) } : { ...s, pitching: s.pitching.map((p, k) => (k === i ? { ...p, ...patch } : p)) })); setFixPa(null); setToast({ id: Date.now(), text: '已修改這個打席' }) }} />
+      <LiveEditSheet target={fixPa} state={state} roster={editNames} onClose={() => setFixPa(null)}
+        onSave={(next) => { apply(() => next); setFixPa(null); setToast({ id: Date.now(), text: '已修改這個打席' }) }} />
     </div>
   )
 }
 
 
-type PaFix = Pick<BattingPA, 'loc' | 'traj' | 'quality' | 'note'>
 /**
- * 逐打席 → one plate appearance already sent: its 落點、軌跡、強弱 and 備註 can be fixed here, since none of them changes
- * the bases, outs or score. The result and the runners are what the rest of the game stands on: those are changed with
- * 復原 (back to that plate appearance) or, after the game, in 修改資料.
+ * 逐打席 → a plate appearance already sent, opened in the full 修改資料 panel (逐球、結果、跑者、落點…) while the game goes
+ * on. Saving hands the rows to record/liveEdit, which works the half being played out again (outs, runners) and refuses
+ * a change that would end it or break a finished one — the editor shows why and stays open.
  */
-function FixPaSheet({ target, state, onClose, onSave }: { target: { side: 'bat' | 'pit'; i: number } | null; state: RecordState; onClose: () => void; onSave: (side: 'bat' | 'pit', i: number, patch: PaFix) => void }) {
-  const pa = target ? (target.side === 'bat' ? state.batting[target.i] : state.pitching[target.i]) : undefined
-  const [v, setV] = useState<PaFix>(() => ({}))
-  useEffect(() => { if (pa) setV({ loc: pa.loc, traj: pa.traj, quality: pa.quality, note: pa.note }) }, [pa])
-  const who = !pa || !target ? '' : target.side === 'bat' ? (pa as BattingPA).batter : rowName('pit', pa as PitchingPA)
+function LiveEditSheet({ target, state, roster, onClose, onSave }: { target: { side: 'bat' | 'pit'; i: number } | null; state: RecordState; roster: string[]; onClose: () => void; onSave: (next: RecordState) => void }) {
   return (
-    <Sheet open={!!pa} onClose={onClose} ariaLabel="修改這個打席" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
-      {pa && target && (
-        <div className="p-5 flex flex-col gap-4">
-          <div>
-            <h3 className="text-[16px] font-semibold text-ink">第 {target.i + 1} 個打席・{who}・{pa.result || '沒有結果'}</h3>
-            <p className="text-[12px] text-muted mt-1 leading-relaxed">這裡可以改落點、軌跡、強弱和備註，不會影響比分和壘上。要改結果或跑者：用「復原」退回到這個打席重記，或結束比賽後到「修改資料」改。</p>
-          </div>
-          {!NO_BATTED_BALL.has(pa.result) && <BattedBallPicker result={pa.result} value={v} onChange={(b) => setV({ ...v, ...b })} />}
-          <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={v.note ?? ''} maxLength={200} onChange={(e) => setV({ ...v, note: e.target.value })} className="flex-1" /></label>
-          <div className="flex gap-2 justify-end">
-            <Button variant="ghost" onClick={onClose}>取消</Button>
-            <Button variant="primary" onClick={() => onSave(target.side, target.i, { ...v, note: v.note?.trim() || undefined })}>儲存</Button>
-          </div>
+    <Sheet open={!!target} onClose={onClose} ariaLabel="修改這個打席" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-3xl" contentClassName="record-zoom">
+      {target && (
+        <div className="p-4 sm:p-5 flex flex-col gap-3">
+          <p className="text-[12px] text-muted leading-relaxed">比賽進行中：可以改逐球、結果、跑者、落點。改到現在這個半局的話，出局數和壘上會跟著重算；會讓這個半局變成三出局的改法不能存，請用「復原」或比賽結束後到「修改資料」。</p>
+          <GameEditor live={{ side: target.side, index: target.i }} initial={{ game: state.game, batting: state.batting, pitching: state.pitching, fielding: [] }} roster={roster}
+            onSave={(e) => onSave(applyLiveEdit(state, e.batting, e.pitching))} onCancel={onClose} onDelete={() => undefined} />
         </div>
       )}
     </Sheet>
