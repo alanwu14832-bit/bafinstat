@@ -163,6 +163,16 @@ const ROMAN = ['I', 'II', 'III'] as const
 const EXTRAS0: Extras = { sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, pka: 0 }
 
 export const weBatTop = (s: RecordState) => s.game.homeAway === '客'
+/**
+ * 切換主客場 (主客 was set wrong at the start): who bats first changes with it. Only before the first plate appearance
+ * is sent — the pitches of the batter up (and their runner plays) belonged to the other side and are cleared.
+ */
+export const canSwitchHomeAway = (s: RecordState) => !s.batting.length && !s.pitching.length && s.inning === 1 && s.half === 'top'
+export function switchHomeAway(s: RecordState): RecordState {
+  if (!canSwitchHomeAway(s)) return s
+  const { plays: _p, priorPitchers: _pp, ...rest } = s; void _p; void _pp
+  return { ...rest, game: { ...s.game, homeAway: s.game.homeAway === '主' ? '客' : '主' }, pitches: [], extras: { ...EXTRAS0 }, outs: 0, runners: [] }
+}
 export const offense = (s: RecordState): Side => (s.half === 'top') === weBatTop(s) ? 'us' : 'opp'
 export const basesString = (runners: Runner[]) => { const b = runners.map((r) => r.base).sort().join(''); return b || '無' }
 
