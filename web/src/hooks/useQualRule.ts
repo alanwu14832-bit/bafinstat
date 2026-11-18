@@ -1,3 +1,4 @@
+import { TEAM } from '../config/team'
 import { useSearchParams } from 'react-router-dom'
 import type { QualRule } from '../data/qualify'
 
@@ -11,10 +12,10 @@ const stored = (): QualRule | null => { try { return parse(localStorage.getItem(
  */
 export function useQualRule(): [QualRule, (rule: QualRule) => void] {
   const [params, setParams] = useSearchParams()
-  const rule = parse(params.get('min')) ?? stored() ?? 'team'
+  const rule = parse(params.get('min')) ?? stored() ?? TEAM.qualRule
   const set = (r: QualRule) => {
     try { localStorage.setItem(KEY, r) } catch { /* storage unavailable: the link still carries it */ }
-    setParams((prev) => { const n = new URLSearchParams(prev); if (r === 'team') n.delete('min'); else n.set('min', r); return n }, { replace: true })
+    setParams((prev) => { const n = new URLSearchParams(prev); if (r === TEAM.qualRule) n.delete('min'); else n.set('min', r); return n }, { replace: true })
   }
   return [rule, set]
 }
