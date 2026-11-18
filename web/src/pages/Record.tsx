@@ -35,7 +35,7 @@ import { HoldPicker } from '../components/ui/HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSituations'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
-import {
+import { canSwitchHomeAway, switchHomeAway,
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, wildPitch, score, setOppOrder, reentryMode, setReentryMode, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
@@ -773,6 +773,11 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? <><span className="max-[400px]:hidden">離開全螢幕</span><span className="min-[401px]:hidden">離開</span></> : '全螢幕'}</Button>
         <Button variant="ghost" size="sm" icon={<Type />} onClick={onToggleLarge} aria-pressed={large} title="按鈕和字放大一級，大太陽下比較好看（這台裝置會記住）">{large ? '一般字' : '大字'}</Button>
         <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
+        {/* 主客 set wrong: switch before the first plate appearance is sent (who bats first follows) */}
+        {canSwitchHomeAway(state) && <Button variant="ghost" size="sm" onClick={() => {
+          const to = state.game.homeAway === '主' ? '客場（我隊先攻）' : '主場（對方先攻）'
+          if (window.confirm(`改成${to}？${state.pitches.length ? `\n目前記的 ${state.pitches.length} 球會清掉。` : ''}`)) act(switchHomeAway)
+        }}>切換主客場</Button>}
         {!practice && <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>}
         {!practice && !state.suspended && <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('保留這場比賽（因雨、天黑暫停，改天續賽）？\n進度會留在雲端和這台裝置；保留期間比賽頁寫「保留中」，不算進戰績。續賽時按「恢復比賽」接著記。')) act((s) => ({ ...s, suspended: new Date().toISOString() })) }}>保留比賽</Button>}
         <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">{practice ? '結束練習' : '結束比賽'}</Button>
