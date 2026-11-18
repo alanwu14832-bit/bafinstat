@@ -20,7 +20,7 @@ import { applyOppBats, applyOppPitcher, blankBattingAt, oppSlotRowsOf, oppStintO
 import { HoldPicker } from './HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../../data/pitchingSituations'
 import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../../data/gameTime'
-import { addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, isBatterOutMark, batterOutMark, midOf, reachedOn, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
+import { outsDuring, addPlay, applyPlayCounts, batterEndFor, deriveHalf, homesIn, inferAll, inningsOf, isBatterOutMark, batterOutMark, midOf, reachedOn, rebuildHalf, removePlay, scored, setBatterResult, setEnd, stepProblems, type End, type Half } from '../../record/timeline'
 import { withResult } from '../../record/paEdit'
 import type { TimelineProps } from './PaEditor'
 import type { ExtraBases } from '../../record/widgets'
@@ -57,6 +57,9 @@ export function parseIp(raw: string): number | undefined {
 interface Col<T> { key: keyof T & string; label: string; kind: Kind; options?: readonly string[]; optionLabel?: (v: string) => string; w?: number; list?: string }
 
 const cell = cx(inputCls('sm'), 'h-7 px-1.5 text-[12px] rounded-[6px] w-full')
+
+/** 內滾／犧觸 that put a runner out instead of the batter: 野選 (onEnd). */
+const FC_FROM = new Set(['內滾', '犧觸'])
 
 function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, names }: { rows: T[]; cols: Col<T>[]; onChange: (rows: T[]) => void; blank: (prev?: T) => T; listId: string; names: string[] }) {
   const update = (i: number, key: keyof T, raw: string, kind: Kind) => {
@@ -160,7 +163,7 @@ const batCols: Col<BatDraft>[] = [
   { key: 'pitchesText', label: '逐球（SS CS S F IP B）', kind: 'text', w: 170 }, { key: 'result', label: '結果', kind: 'select', options: RESULT_OPTIONS, w: 76 },
   { key: 'loc', label: '落點', kind: 'select', options: LOCS, optionLabel: locOption, w: 64 }, { key: 'traj', label: '軌跡', kind: 'select', options: TRAJ, w: 52 }, { key: 'quality', label: '強度', kind: 'select', options: QUAL, w: 52 },
   { key: 'runner', label: '代跑', kind: 'name', w: 96 },
-  { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '壘死', kind: 'int', w: 44 },
+  { key: 'sb', label: '盜壘', kind: 'int', w: 44 }, { key: 'cs', label: '盜失', kind: 'int', w: 44 }, { key: 'advOnError', label: '失誤進壘', kind: 'int', w: 56 }, { key: 'outOnBase', label: '壘上出局', kind: 'int', w: 56 }, { key: 'baserunningOuts', label: '跑壘失誤', kind: 'int', w: 44 },
   { key: 'run', label: '得分', kind: 'int', w: 44 }, { key: 'rbi', label: '打點', kind: 'int', w: 44 }, { key: 'code', label: '代碼', kind: 'select', options: CODES, w: 56 }, { key: 'note', label: '備註', kind: 'text', w: 120 },
   { key: 'errorsText', label: '對方失誤（守位）', kind: 'text', w: 96 },
   { key: 'oppPitcher', label: '對方投手', kind: 'text', w: 88 }, { key: 'oppHand', label: '對方左右', kind: 'select', options: ['L', 'R'], optionLabel: (v) => (v === 'L' ? '左投' : '右投'), w: 64 },
@@ -302,6 +305,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   }
   // the runner timeline of every inning that can be followed (rows with 壘上(前) / 出局(前) throughout)
   const halves = useMemo(() => ({ bat: inferAll(batRows, 'bat'), pit: inferAll(pitRows, 'pit') }), [batRows, pitRows])
+  const outsDuringNow = useMemo(() => ({ bat: outsDuring(halves.bat), pit: outsDuring(halves.pit) }), [halves])
   const [tlNotice, setTlNotice] = useState<string | null>(null)
   // where the runners were going when this plate appearance was opened: changing the result starts from there,
   // so trying 保送 and going back to 三振 undoes the runners it forced
@@ -402,6 +406,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
       return next.length ? { ...rest, errors: next } : rest
     }
     const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
+      // 內滾／犧觸 (the batter out) and now a runner put out on that play: the batter was safe — a 野選 (both out
+      // would have been 雙殺). The result follows, so the out goes to the runner and the batter stands on first.
+      if (who !== 'batter' && end === 'out' && FC_FROM.has(rows[i].result) && step.batter === 'out' && step.dest[who] !== 'out') {
+        const h = setEnd(setBatterResult(half, i, '野選'), i, who, 'out')
+        if (!commitHalf(side, rows.map((r, k) => (k === i ? withResult(r, '野選') : r)), h)) setTlNotice(`結果改成「野選」：${rows[i].result === '犧觸' ? '觸擊' : '滾地球'}讓前面的跑者出局、打者安全上一壘（打者也出局的話請選「雙殺」）`)
+        return
+      }
       let next = base
       const old = who === 'batter' ? step.batter : step.dest[who]
       // a 失誤進壘 mark on the play goes once he ends somewhere else: its bases come off his 失誤進壘 count
@@ -876,9 +887,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
           </div>
         )}
         {tab === 'bat' && (paView === 'table' ? <EditableTable rows={bat} cols={batCols} onChange={(next) => { touchTable('bat', bat, next); setBat(next) }} blank={blankBat} listId="game-editor-names" names={names} />
-          : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
+          : paPanel('bat') ?? <PaList side="bat" rows={batRows} flags={flags.bat} outsDuring={outsDuringNow.bat} onOpen={(i) => setSel({ side: 'bat', index: i })} onInsert={(at) => insertPa('bat', at)} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('bat', inning, b)} />)}
         {tab === 'pit' && (paView === 'table' ? <EditableTable rows={pit} cols={pitCols} onChange={(next) => { touchTable('pit', pit, next); setPit(withPitcherRun(pit, next)) }} blank={blankPit} listId="game-editor-names" names={names} />
-          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} onAddRelief={addRelief} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
+          : paPanel('pit') ?? <PaList side="pit" rows={pitRows} flags={flags.pit} outsDuring={outsDuringNow.pit} fielderAt={fielderAt} onOpen={(i) => setSel({ side: 'pit', index: i })} onInsert={(at) => insertPa('pit', at)} onAddRelief={addRelief} extraInnings={extraInningSet} onAddPlaced={(inning, b) => addPlaced('pit', inning, b)} />)}
         {tab === 'fld' && (
           <div className="flex flex-col gap-3">
             <ErrorFixNotice fixes={errorFixes} onApply={applyFixes} />

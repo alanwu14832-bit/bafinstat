@@ -45,6 +45,20 @@ export interface Step {
 }
 export interface Half { inning: number; steps: Step[] }
 
+/**
+ * For the plate-appearance lists: a runner's out code sits on his own row (the scorebook's way: the out is written in
+ * the box of the man put out), but it happened during a later batter's plate appearance. Row → the index of the plate
+ * appearance he was put out during, for every runner put out after his own.
+ */
+export function outsDuring(halves: Map<number, Half | null>): Map<number, number> {
+  const at = new Map<number, number>()
+  for (const half of halves.values()) for (const st of half?.steps ?? []) {
+    for (const m of st.moves) if (m.to === 'out' && m.row !== st.index) at.set(m.row, st.index)
+    for (const [row, end] of Object.entries(st.dest)) if (end === 'out' && Number(row) !== st.index) at.set(Number(row), st.index)
+  }
+  return at
+}
+
 type Row = BattingPA | PitchingPA
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const ROMAN = ['I', 'II', 'III'] as const

@@ -37,25 +37,25 @@ describe('修改資料: 三安 then out on the bases', () => {
     expect(saved).toMatchObject({ result: '三安', code: 'I', outOnBase: 1 })
     expect((saved.events ?? []).filter(isBatterOutMark)).toHaveLength(1)
   })
-  it('the batter set to 出局 after his triple: 壘上出局 by itself, a 跑壘失誤（壘死） toggle, back to 3B clears both', async () => {
+  it('the batter set to 出局 after his triple: 壘上出局 by itself, a 自己跑壘失誤 toggle, back to 3B clears both', async () => {
     const onSave = vi.fn(async () => undefined)
     const rows = [bat({ batter: '苗軒杰', result: '三安', loc: 8, traj: 'L', code: 'L' }), bat({ batter: '乙', order: 2, basesBefore: '3', code: 'I' }), bat({ batter: '丙', order: 3, basesBefore: '3', outsBefore: 1, code: 'II' })]
     render(<GameEditor initial={edit(rows)} roster={roster} onSave={onSave} onCancel={() => {}} onDelete={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: /^修改第 1 個打席/ }))
     const ends = await screen.findByRole('group', { name: '苗軒杰 這打席結束時' })
-    expect(screen.queryByRole('button', { name: '跑壘失誤（壘死）' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '自己跑壘失誤' })).toBeNull()
     fireEvent.click(within(ends).getByRole('button', { name: '出局' }))
-    const toggle = await screen.findByRole('button', { name: '跑壘失誤（壘死）' })
+    const toggle = await screen.findByRole('button', { name: '自己跑壘失誤' })
     expect(toggle.getAttribute('aria-pressed')).toBe('false')
     expect(screen.queryByText(/卻記出局碼/)).toBeNull()
     fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: '跑壘失誤（壘死）' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: '自己跑壘失誤' }).getAttribute('aria-pressed')).toBe('true')
     const saved = await saveAndGet(onSave)
     expect(saved.batting[0]).toMatchObject({ code: 'I', outOnBase: 1, baserunningOuts: 1 })
     expect(saved.batting.map((r) => r.code)).toEqual(['I', 'II', 'III'])
     // back on 3B
     fireEvent.click(within(screen.getByRole('group', { name: '苗軒杰 這打席結束時' })).getByRole('button', { name: '3B' }))
-    expect(screen.queryByRole('button', { name: '跑壘失誤（壘死）' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '自己跑壘失誤' })).toBeNull()
     onSave.mockClear()
     const again = (await saveAndGet(onSave)).batting[0]
     expect(again).toMatchObject({ code: 'L', outOnBase: 0 })

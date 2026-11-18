@@ -97,7 +97,7 @@ function checkSequence<T extends { inning: number; code?: string; result: string
     const where = whereOf(p)
     const code = p.code ?? ''
     // result vs code
-    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p) && !sacReachedOnError(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」是出局，但結果代碼不是 I／II／III` })
+    if (OUT_RESULTS.has(p.result) && !(code in OUT_CODES) && !reachedOnStrikeout(p) && !sacReachedOnError(p)) out.push({ side, index: i, message: `${where}：結果「${p.result}」代表打者出局，但這個打席沒有記他是第幾個出局${p.result === '內滾' || p.result === '犧觸' ? '。打者如果安全上壘、出局的是前面的跑者，請把結果改成「野選」' : ''}` })
     if (side === 'bat' && needsOutOnBase(p as unknown as BattingPA)) out.push({ side, index: i, message: outOnBaseMessage(where, p.result, code, place) })
     if (p.result === '雙殺' && (p.outsBefore ?? 0) >= 2) out.push({ side, index: i, message: `${where}：2 出局後不可能雙殺` })
     // pitches vs result

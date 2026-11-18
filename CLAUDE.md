@@ -35,6 +35,10 @@ A database change needs a migration in both repos, and the user must run it in b
   and subs; its batters/pitchers are named on the rows). The other side's view is made when the data is read
   (`withMirrors`, id + `~2`) and never saved; `Filters.intra` decides whether stats count them (default: not), and team
   records never do. `tools/gamesim/intra.mjs` records one through the real screen.
+- 跑者出局 (2026-11-18): the runner pickers (修改資料 EndPicker, 紀錄比賽 DestRow) have one 壘死 for a runner put out (the batter's
+  row: 出局) and a 「自己跑壘失誤」 tick beside it (`baserunningOuts`, shown as 跑壘失誤; the Excel column keeps the name 壘死).
+  內滾／犧觸 plus a runner put out on that play becomes 野選 (FC_FROM in GameEditor and Record). Out codes stay on the runner's
+  own row (scorebook style); `record/timeline.outsDuring` lets the editor list say which plate appearance he was put out in.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).
