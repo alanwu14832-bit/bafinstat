@@ -39,6 +39,9 @@ A database change needs a migration in both repos, and the user must run it in b
   row: 出局) and a 「自己跑壘失誤」 tick beside it (`baserunningOuts`, shown as 跑壘失誤; the Excel column keeps the name 壘死).
   內滾／犧觸 plus a runner put out on that play becomes 野選 (FC_FROM in GameEditor and Record). Out codes stay on the runner's
   own row (scorebook style); `record/timeline.outsDuring` lets the editor list say which plate appearance he was put out in.
+- 紀錄比賽 → 逐打席 → a row opens the full 修改資料 panel (`GameEditor` with `live`: no 插入／移動／刪除, no draft);
+  `record/liveEdit.applyLiveEdit` puts the game back on the changed rows (finished halves keep 3 outs, the half being played
+  gets its outs and runners again, a third out is refused). 好壞球分佈 is `components/charts/StrikeRatioCard` (share, sortable).
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

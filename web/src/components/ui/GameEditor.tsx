@@ -204,10 +204,13 @@ export interface GameEditorProps {
   onSave: (edit: GameEdit) => Promise<void> | void
   onCancel: () => void
   onDelete: () => Promise<void> | void
+  /** 紀錄比賽 → 逐打席: the game is still being recorded — only this plate appearance's panel (and its neighbours'),
+   *  no 插入／移動／刪除, no game info, no draft kept on the device; 儲存修改 hands the rows back (record/liveEdit) */
+  live?: { side: PaSide; index: number }
 }
 
 /** Edit every input field of one game: header info, our plate appearances, the opponent's, and fielding lines. */
-export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }: GameEditorProps) {
+export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, live }: GameEditorProps) {
   const [game, setGame] = useState<Game>({ ...initial.game })
   const [bat, setBat] = useState<BatDraft[]>(() => initial.batting.map(toBatDraft))
   const [pit, setPit] = useState<PitDraft[]>(() => initial.pitching.map(toPitDraft))
@@ -219,10 +222,10 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [reentry, setReentry] = useState(!!initial.game.dayRoster?.reentry)
   // the rules it was played by (紀錄比賽 saves them; an older game's can be set here): 獲勝機率 reads them
   const [rules, setRules] = useState<GameRules | undefined>(initial.game.dayRoster?.rules)
-  const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>('bat')
+  const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>(live?.side ?? 'bat')
   // plate appearances: tap one to edit it with the recording buttons (default), or the whole table at once
   const [paView, setPaView] = useState<'tap' | 'table'>('tap')
-  const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(null)
+  const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(live ?? null)
   const batRows = useMemo(() => bat.map(fromBatDraft), [bat])
   const pitRows = useMemo(() => pit.map(fromPitDraft), [pit])
   // who stood where in each inning we fielded (the 登錄名單 as edited): names next to 我隊守備失誤, 失誤 SS（王鼎鈞）
@@ -673,7 +676,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
     return (
       <PaPanel side={side} pa={rows[i]} index={i} total={rows.length} issues={flags[side].get(i) ?? []} names={names} pitcherNames={pitcherNames} nextMissing={nextMissingFrom(rows, i)}
         onChange={(pa) => { if (side === 'bat') missedSub(rows[i] as BattingPA, pa as BattingPA); return side === 'bat' ? setBat((b) => b.map((x, k) => (k === i ? toBatDraft(pa as BattingPA) : x))) : setPit(withEarned(withPitcherRun(pitRows, pitRows.map((x, k) => (k === i ? (pa as PitchingPA) : x)))).map(toPitDraft)) }}
-        onNav={(k) => setSel({ side, index: k })} onClose={() => setSel(null)}
+        onNav={(k) => setSel({ side, index: k })} onClose={() => (live ? cancel() : setSel(null))} fixed={!!live}
         onDelete={() => {
           touch(side, rows[i].inning)
           // the plate appearances after it: one slot back along the order, if this one was recorded by mistake
@@ -750,9 +753,9 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const [baseKey] = useState(() => hashOf(initial))
   const changes = useMemo(() => changeCount(pristine, snap({ game, batting: batRows, pitching: pitRows, fielding: fld, roster: { starters, bench, subs, reentry, rules } })), [pristine, game, batRows, pitRows, fld, starters, bench, subs, reentry, rules])
   // a draft left on this device: shown (instead of the editor) until 接著改 or 丟掉 is picked
-  const [stored, setStored] = useState(() => readEditDraft<EditDraft>(initial.game.id))
+  const [stored, setStored] = useState(() => (live ? null : readEditDraft<EditDraft>(initial.game.id)))
   useEffect(() => {
-    if (stored) return
+    if (stored || live) return
     writeEditDraft<EditDraft>(game.id, changes ? { savedAt: new Date().toISOString(), base: baseKey, changes, game, bat, pit, fld, starters, bench, subs, reentry, rules, basis, touched: [...touched] } : null)
   }, [stored, changes, baseKey, game, bat, pit, fld, starters, bench, subs, reentry, rules, basis, touched])
   const changesRef = useRef(changes)
@@ -818,6 +821,20 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete }
   const blankStarter = (prev?: StarterDraft): StarterDraft => ({ order: prev ? (prev.order && prev.order < 9 ? prev.order + 1 : undefined) : 1, pos: '', name: '' })
   const blankFld = (): FieldingLine => ({ gameId: game.id, player: '', pos: '', innings: game.innings, po: 0, a: 0, e: 0, dp: 0, pb: 0, sb: 0, cs: 0 })
 
+  if (live) {
+    const side = sel?.side ?? live.side
+    return (
+      <div className="flex flex-col gap-3">
+        {paPanel(side)}
+        {error && <div role="alert" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2 text-[13px] text-ink">{error}</div>}
+        <div className="flex items-center gap-2 flex-wrap justify-end pt-1 sticky bottom-0 z-10 bg-surface py-2 border-t border-border">
+          {changes > 0 && <span aria-live="polite" className="text-[12px] font-medium text-ink-2 tnum mr-auto">{changes} 處修改還沒儲存</span>}
+          <Button variant="outline" onClick={cancel} disabled={busy}>取消</Button>
+          <Button variant="primary" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存修改'}</Button>
+        </div>
+      </div>
+    )
+  }
   if (stored) {
     const at = new Date(stored.savedAt)
     const when = Number.isNaN(at.getTime()) ? '' : `，最後改在 ${at.getMonth() + 1}/${at.getDate()} ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`

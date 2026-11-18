@@ -1,3 +1,4 @@
+import { StrikeRatioCard } from '../components/charts/StrikeRatioCard'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BedDouble, Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
@@ -25,7 +26,6 @@ import { BelowMinimum, compactColumns, tagNameColumn, useTableView, withFraction
 import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, tieNote, type Leader, type LeaderResult } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
-import { StackedBarCard } from '../components/charts/StackedBarCard'
 import { LineChartCard } from '../components/charts/LineChartCard'
 import { useStats } from '../hooks/useStats'
 import { ipDisplay, pitchingLines, type PitchingLine } from '../data/stats'
@@ -83,7 +83,8 @@ export function PitchingPage() {
   const rows = useMemo(() => (qualifiedOnly ? pitchers.filter((p) => p.outs >= minOuts) : pitchers), [pitchers, qualifiedOnly, minOuts])
 
   const eraFip = useMemo(() => s.pitchers.filter((p) => p.outs >= minOuts).map((p) => ({ name: p.name, ERA: Number((p.era ?? 0).toFixed(2)), FIP: Number((p.fip ?? 0).toFixed(2)) })), [s.pitchers, minOuts])
-  const mix = useMemo(() => s.pitchers.filter((p) => p.pc > 0).slice(0, 10).map((p) => ({ name: p.name, 好球: p.strikes, 壞球: p.balls })), [s.pitchers])
+  // 好壞球分佈: every pitcher who threw (the card sorts them itself)
+  const mix = useMemo(() => s.pitchers.filter((p) => p.pc > 0).map((p) => ({ name: p.name, strikes: p.strikes, balls: p.balls })), [s.pitchers])
   const csw = useMemo(() => [...s.pitchers].filter((p) => p.pc >= 20).sort((a, b) => (b.cswPct ?? 0) - (a.cswPct ?? 0)).map((p) => ({ name: p.name, csw: Number(((p.cswPct ?? 0) * 100).toFixed(1)) })), [s.pitchers])
   const trend = useMemo(() => s.summaries.map((g, i) => {
     const window = s.summaries.slice(Math.max(0, i - 4), i + 1).map((x) => x.game.id)
@@ -159,7 +160,7 @@ export function PitchingPage() {
       <SplitsCard id="splits" side="pit" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} title="情境拆分（面對的打者）" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="ERA 與 FIP" subtitle="差距可能來自守備、事件順序或樣本太少，場數少時僅供參考；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
-        <StackedBarCard title="好壞球分佈" subtitle="每位投手的好球（含界外）與壞球數" data={mix} onBarClick={openPlayer} series={[{ key: '好球', label: '好球' }, { key: '壞球', label: '壞球' }]} layout="horizontal" />
+        <StrikeRatioCard rows={mix} onPick={(name) => openPlayer({ name })} />
         <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} onBarClick={openPlayer} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
         <LineChartCard title="ERA / WHIP 走勢" subtitle={s.summaries.length >= 5 ? '近 5 場滾動；點一下看那一場' : `目前 ${s.summaries.length} 場，為累計（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
       </div>
