@@ -36,8 +36,8 @@ import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSit
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import {
-  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, setRbi, wildPitch, score, setOppOrder, reentryMode, setReentryMode, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
-  addOppError, removeOppError, pinchHitOpp, setOppRbi, oppPitchCount,
+  addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, wildPitch, score, setOppOrder, reentryMode, setReentryMode, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
+  addOppError, removeOppError, pinchHitOpp, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
   answerOppHand, needsOppBats, needsOppHand, oppBatsNow, setOppBats,
   intraPitcher, intraSub, otherSide, appeared, oppCycle, setOppSlots,
@@ -1035,7 +1035,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         <div className="xl:col-span-4 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
           <Card still title="逐打席" action={<Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} />} flush>
             <div className="max-h-[420px] overflow-y-auto">
-              {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onRbi={(i, rbi) => apply((s) => setRbi(s, i, rbi))} onOpen={(i) => setFixPa({ side: 'bat', i })} /> : <PitchingPlayByPlay pas={state.pitching} onRbi={(i, rbi) => apply((s) => setOppRbi(s, i, rbi))} onOpen={(i) => setFixPa({ side: 'pit', i })} />}
+              {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onOpen={(i) => setFixPa({ side: 'bat', i })} /> : <PitchingPlayByPlay pas={state.pitching} onOpen={(i) => setFixPa({ side: 'pit', i })} />}
             </div>
             {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
               <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">
