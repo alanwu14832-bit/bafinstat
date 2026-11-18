@@ -474,6 +474,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   // (plate appearances only: the 突破僵局 runners of the half get the pitcher too, but nobody batted)
   const halfRowsWithoutOpp = side === 'us' ? state.batting.filter((b) => b.inning === state.inning && isPA(b) && !b.oppHand && !b.oppPitcher).length : 0
   const [logTab, setLogTab] = useState<'bat' | 'pit'>(side === 'us' ? 'bat' : 'pit')
+  // (each half-inning change switches it: 打擊 while we bat, 投球 while we field; the recorder can still pick the other)
+  useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit') }, [side])
   useEffect(() => { setLogTab(side === 'us' ? 'bat' : 'pit'); setPlan(null); setRunnerOpen(false); setErrOpen(false); setPhOpen(false); if (hasPlay) toBatter() }, [side, state.inning]) // eslint-disable-line react-hooks/exhaustive-deps
   const hasPlay = state.batting.length > 0 || state.pitching.length > 0
   // 左右開弓: their batter's side was carried over from his last time up, against a pitcher of ours who threw with the
