@@ -13,7 +13,7 @@ import { cx } from '../../lib/format'
 import { isNoBatter, isPlaced, isUnfinished, missingBattedBallTag, type OutAt, OPP_BATS_LABEL, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../../data/types'
 import { count, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
-import { applyRunEvent, basePath, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
+import { applyRunEvent, basePath, rowName, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { errAdvanceErrors, errorsOf, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
 import { batterEndFor, batterOutMark, inningsOf, isBatterOutMark, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
 import { balksIn, playLabel } from '../../data/plays'
@@ -27,6 +27,7 @@ export type PaSide = 'bat' | 'pit'
 type AnyPA = BattingPA | PitchingPA
 const isBat = (side: PaSide, _pa: AnyPA): _pa is BattingPA => side === 'bat'
 
+const OUT_CODE_SET = new Set(['I', 'II', 'III'])
 const CODE_LABEL: Record<string, string> = { I: '1 出局', II: '2 出局', III: '3 出局', L: '殘壘', R: '得分', ER: '自責分' }
 const whoOf = (side: PaSide, p: AnyPA) => {
   if (isBat(side, p)) return `${p.order ? `第 ${p.order} 棒 ` : ''}${p.batter || '（未填打者）'}`
@@ -46,7 +47,7 @@ const ourErrorsText = (p: PitchingPA, fielderAt?: FielderAt, index?: number) => 
   return all.length ? `失誤 ${all.join('、')}` : ''
 }
 const extrasOf = (side: PaSide, p: AnyPA, fielderAt?: FielderAt, index?: number) => [...(isBat(side, p)
-  ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `壘死 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`, p.errors?.length && `對方失誤 ${errorsText(p.errors)}`]
+  ? [p.runner && `代跑 ${p.runner}`, p.sb && `盜壘 ${p.sb}`, p.cs && `盜壘失敗 ${p.cs}`, p.advOnError && `失誤進壘 ${p.advOnError}`, p.baserunningOuts && `跑壘失誤 ${p.baserunningOuts}`, p.outOnBase - (p.baserunningOuts ?? 0) > 0 && `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}`, p.rbi && `打點 ${p.rbi}`, p.errors?.length && `對方失誤 ${errorsText(p.errors)}`]
   : [(p as PitchingPA).oppBats && OPP_BATS_LABEL[(p as PitchingPA).oppBats!], (p as PitchingPA).runner && pinchMark((p as PitchingPA).runner!), ourErrorsText(p as PitchingPA, fielderAt, index), (p as PitchingPA).sba && `被盜 ${(p as PitchingPA).sba}`, p.cs && `阻殺 ${p.cs}`, (p as PitchingPA).wp && `暴投 ${(p as PitchingPA).wp}`, (p as PitchingPA).pb && `捕逸 ${(p as PitchingPA).pb}`, (p as PitchingPA).pk && `牽制出局 ${(p as PitchingPA).pk}`, (p as PitchingPA).rbi && `打點 ${(p as PitchingPA).rbi}`]
 ), balksIn(p.events) && `投手犯規 ${balksIn(p.events)}`].filter(Boolean).join('・')
 
@@ -67,7 +68,7 @@ function AddPlaced({ onAdd }: { onAdd: (bases: Base[]) => void }) {
   )
 }
 
-export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAddPlaced, onAddRelief, fielderAt }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; onOpen: (i: number) => void; onInsert: (at: number) => void; /** (their plate appearances) add a 換投後未面對打者 row at the end of an inning */ onAddRelief?: (inning: number) => void; /** the innings that can be extra innings (record/tiebreak extraInnings) */ extraInnings?: Set<number>; /** 突破僵局 runners in front of an extra inning */ onAddPlaced?: (inning: number, bases: Base[]) => void; /** who stood at a position when we fielded an inning: 「失誤 SS（王鼎鈞）」 */ fielderAt?: FielderAt }) {
+export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAddPlaced, onAddRelief, fielderAt, outsDuring }: { side: PaSide; rows: AnyPA[]; flags: Map<number, string[]>; /** runner row → the plate appearance he was put out during (record/timeline outsDuring) */ outsDuring?: Map<number, number>; onOpen: (i: number) => void; onInsert: (at: number) => void; /** (their plate appearances) add a 換投後未面對打者 row at the end of an inning */ onAddRelief?: (inning: number) => void; /** the innings that can be extra innings (record/tiebreak extraInnings) */ extraInnings?: Set<number>; /** 突破僵局 runners in front of an extra inning */ onAddPlaced?: (inning: number, bases: Base[]) => void; /** who stood at a position when we fielded an inning: 「失誤 SS（王鼎鈞）」 */ fielderAt?: FielderAt }) {
   let last = -1
   // the base each 突破僵局 runner was put on
   const placedAt: Record<number, number> = {}
@@ -112,7 +113,15 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                       {pitcher && <span className="text-[11px] text-muted">投手 {pitcher}</span>}
                       {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>}
                       {isNoBatter(p) && <span className="text-[11px] text-muted">不算打席</span>}
-                      {p.code && <span className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{CODE_LABEL[p.code] ?? p.code}</span>}
+                      {p.code && (() => {
+                        // the out code on a runner's own row, though he was put out later: say where (第 11 打席壘死)
+                        const later = OUT_CODE_SET.has(p.code) ? outsDuring?.get(i) : undefined
+                        return <span title={later !== undefined ? `出局記在被刺殺的人自己這一格（紀錄表的寫法）；實際是在第 ${later + 1} 個打席出局` : undefined} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{later !== undefined ? `第 ${later + 1} 打席壘死・${CODE_LABEL[p.code]}` : CODE_LABEL[p.code] ?? p.code}</span>
+                      })()}
+                      {/* the runners put out during this plate appearance (their out codes are on their own rows) */}
+                      {outsDuring && [...outsDuring].filter(([, at]) => at === i).map(([row]) => rows[row] && (
+                        <span key={row} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{rowName(side, rows[row])} 壘死{rows[row].code && CODE_LABEL[rows[row].code!] ? `・${CODE_LABEL[rows[row].code!]}` : ''}</span>
+                      ))}
                       {missingBattedBall(p).length > 0 && <span title={`這個擊球還沒記${missingBattedBall(p).join('、')}（可以先儲存，之後再補）`} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] border border-[color-mix(in_srgb,var(--warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-ink">{missingBattedBallTag(missingBattedBall(p))}</span>}
                       {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
                     </span>
@@ -251,19 +260,28 @@ export interface TimelineProps {
   notice: string | null
 }
 /** One segmented control: where someone was when this plate appearance ended. */
-function EndPicker({ value, from, onPick, label, mistake }: { value: End; from: number; onPick: (e: End) => void; label: string; mistake?: { on: boolean; set: (on: boolean) => void } }) {
-  // a runner of ours can also be 壘死 (out by his own baserunning mistake): an 出局 that is charged to him
-  type Opt = { v: End; l: string; m?: boolean }
-  const opts: Opt[] = [{ v: 'out', l: '出局', m: false }, ...(mistake ? [{ v: 'out' as End, l: '壘死', m: true }] : []), ...([1, 2, 3] as const).filter((b) => b >= Math.max(1, from)).map((b) => ({ v: b as End, l: `${b}B` })), { v: 'home', l: '得分' }]
-  const isOn = (o: Opt) => value === o.v && (o.m === undefined || !mistake || mistake.on === o.m)
+function EndPicker({ value, from, onPick, label, mistake, batter }: { value: End; from: number; onPick: (e: End) => void; label: string; mistake?: { on: boolean; set: (on: boolean) => void }; batter?: boolean }) {
+  // a runner put out on the bases is 壘死 (the batter: 出局); whether it was his own baserunning mistake is the
+  // 「自己跑壘失誤」 tick next to it (charged to him as 跑壘失誤), off for a plain force or tag
+  type Opt = { v: End; l: string }
+  const opts: Opt[] = [{ v: 'out', l: batter ? '出局' : '壘死' }, ...([1, 2, 3] as const).filter((b) => b >= Math.max(1, from)).map((b) => ({ v: b as End, l: `${b}B` })), { v: 'home', l: '得分' }]
+  const isOn = (o: Opt) => value === o.v
   return (
+    <>
     <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border flex-wrap" role="group" aria-label={`${label} 這打席結束時`}>
       {opts.map((o) => (
-        <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.m !== undefined && mistake ? mistake.set(o.m) : onPick(o.v))}
-          title={o.m ? '自己跑壘失誤出局（算這位跑者的壘死）' : o.m === false && mistake ? '被守備刺殺／封殺出局' : undefined}
+        <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.v === 'out' && mistake ? mistake.set(false) : onPick(o.v))}
+          title={o.v === 'out' && !batter ? '在壘上出局（被封殺、刺殺、觸殺）' : undefined}
           className={cx('h-9 pointer-fine:h-8 min-w-11 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? (o.v === 'out' ? 'bg-critical text-bg' : 'bg-ink text-bg') : cx('text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && 'text-critical'))}>{o.l}</button>
       ))}
     </div>
+      {mistake && value === 'out' && (
+        <button type="button" aria-pressed={mistake.on} onClick={() => mistake.set(!mistake.on)} title="衝過頭、飛球回不去被雙殺、離壘被觸殺這種自己跑壞的才勾；被封殺、刺殺不勾"
+          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
+          <span aria-hidden className={cx('size-3.5 rounded-[3px] border inline-flex items-center justify-center text-[10px] leading-none', mistake.on ? 'border-critical bg-critical text-bg' : 'border-border')}>{mistake.on ? '✓' : ''}</span>自己跑壘失誤
+        </button>
+      )}
+    </>
   )
 }
 /**
@@ -447,7 +465,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-ink min-w-[7rem]"><span className="text-muted mr-1">打者</span>{batterName}<span className="text-muted font-normal ml-1">{pa.result ? `（${pa.result}）` : ''}</span></span>
             {/* where the batter ended on his own play: a single that took second on the throw ends on 2B */}
-            <EndPicker value={step.batter} from={typeof batterEndFor(pa.result) === 'number' ? (batterEndFor(pa.result) as number) : 1} onPick={(e) => tl.onEnd('batter', e)} label={batterName} />
+            <EndPicker value={step.batter} from={typeof batterEndFor(pa.result) === 'number' ? (batterEndFor(pa.result) as number) : 1} onPick={(e) => tl.onEnd('batter', e)} label={batterName} batter />
             <ThrowChip tl={tl} who="batter" name={batterName} />
             {tl.earned && step.batter === 'home' && <EarnedChip on={tl.earned.of(step.index)} onToggle={() => tl.earned!.toggle(step.index)} />}
             {typeof step.batter === 'number' && (
@@ -461,8 +479,8 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
           {step.batter === 'out' && tl.batterMistake?.can && (
             // he reached, then was put out on this same play (a triple, then tagged out at home): an out on the bases
             <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" aria-pressed={tl.batterMistake.on} onClick={() => tl.batterMistake!.set(!tl.batterMistake!.on)} title="自己跑壘失誤出局（衝過頭、離壘被觸殺），算他的壘死"
-                className={cx(chipBtn(tl.batterMistake.on), 'h-9 pointer-fine:h-8 px-2.5 text-[12px]')}>跑壘失誤（壘死）</button>
+              <button type="button" aria-pressed={tl.batterMistake.on} onClick={() => tl.batterMistake!.set(!tl.batterMistake!.on)} title="自己跑壘失誤出局（衝過頭、離壘被觸殺），算他的跑壘失誤"
+                className={cx(chipBtn(tl.batterMistake.on), 'h-9 pointer-fine:h-8 px-2.5 text-[12px]')}>自己跑壘失誤</button>
               <span className="text-[11px] text-muted">上壘後在壘上被觸殺：記成壘上出局，安打照算</span>
             </div>
           )}

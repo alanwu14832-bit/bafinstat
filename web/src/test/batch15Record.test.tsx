@@ -66,17 +66,20 @@ describe('紀錄比賽: 更正這位投手 vs 對方換投', () => {
 })
 
 describe('紀錄比賽: 三安, then out on the bases on the same play', () => {
-  it('the batter row offers 出局 and 壘死; either way his row counts 壘上出局 and no warning comes up', async () => {
+  it('the batter row offers 出局 and a 自己跑壘失誤 tick (2026-11-18: one 出局, the mistake beside it); his row counts 壘上出局 and no warning comes up', async () => {
     start(newGame(game, lineup, '甲'))
     fireEvent.click(screen.getByRole('button', { name: '不知道' }))
     fireEvent.click(screen.getByRole('button', { name: '三安' }))
     fireEvent.click(screen.getAllByRole('button', { name: /^8 CF/ })[0])
     fireEvent.click(screen.getByRole('button', { name: '平飛 L' }))
     const row = screen.getByText('打者 甲').parentElement as HTMLElement
-    fireEvent.click(within(row).getByRole('button', { name: '壘死' }))
-    expect(within(row).getByRole('button', { name: '壘死' }).getAttribute('aria-pressed')).toBe('true')
+    expect(within(row).queryByRole('button', { name: '自己跑壘失誤' })).toBeNull()
+    fireEvent.click(within(row).getByRole('button', { name: '出局' }))
+    fireEvent.click(within(row).getByRole('button', { name: '自己跑壘失誤' }))
+    expect(within(row).getByRole('button', { name: '出局' }).getAttribute('aria-pressed')).toBe('true')
+    expect(within(row).getByRole('button', { name: '自己跑壘失誤' }).getAttribute('aria-pressed')).toBe('true')
     // touch targets: 36px on a phone, 32px only with a mouse (like 修改資料's chips)
-    for (const b of within(row).getAllByRole('button')) if (['出局', '壘死', '3B', '得分'].includes(b.textContent ?? '')) expect(b.className).toMatch(/(^| )h-9 pointer-fine:h-8 min-w-9/)
+    for (const b of within(row).getAllByRole('button')) if (['出局', '3B', '得分'].includes(b.textContent ?? '')) expect(b.className).toMatch(/(^| )h-9 pointer-fine:h-8 min-w-9/)
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)
     const b = draft().batting[0]
@@ -84,11 +87,12 @@ describe('紀錄比賽: 三安, then out on the bases on the same play', () => {
     expect(auditGame(draft().batting, []).filter((i) => i.message.includes('卻記出局碼'))).toEqual([])
     expect(draft().outs).toBe(1)
   })
-  it('not a reach (內滾): no 壘死 on the batter row', async () => {
+  it('not a reach (內滾): no 自己跑壘失誤 on the batter row', async () => {
     start(newGame(game, lineup, '甲'))
     fireEvent.click(screen.getByRole('button', { name: '不知道' }))
     fireEvent.click(screen.getByRole('button', { name: '內滾' }))
     const row = screen.getByText('打者 甲').parentElement as HTMLElement
-    expect(within(row).queryByRole('button', { name: '壘死' })).toBeNull()
+    fireEvent.click(within(row).getByRole('button', { name: '出局' }))
+    expect(within(row).queryByRole('button', { name: '自己跑壘失誤' })).toBeNull()
   })
 })

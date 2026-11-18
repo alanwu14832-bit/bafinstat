@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, type KeyboardEvent, type MouseEvent } from 'react'
 import { isPlaced, pinchMark, type BattingPA, type PitchingPA, type PlayEvent } from '../../data/types'
 import { balksIn, playText, playWhen } from '../../data/plays'
 import { inningsOf, placedBases } from '../../record/timeline'
@@ -147,7 +147,17 @@ export { oppPitcherMarks } from '../../data/broadcast'
  * 「1-1 後 右外野安打」. `win` (game pages): a 「WPA」 column after 結果, by row index (the 逐球 filter's 關鍵打席 chip
  * passes its rows as `visible`, from data/pbpFilter's 'key' set).
  */
-export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
+/** (紀錄比賽) a row that opens on a tap or Enter, except on its own buttons (打點 −／＋). */
+function openRow(onOpen: ((i: number) => void) | undefined, i: number) {
+  if (!onOpen) return {}
+  return {
+    tabIndex: 0, title: '點一下修改這個打席的落點、軌跡、強弱、備註',
+    onClick: (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('button')) onOpen(i) },
+    onKeyDown: (e: KeyboardEvent) => { if (e.key === 'Enter' && e.target === e.currentTarget) onOpen(i) },
+  }
+}
+
+export function BattingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording = 'code', win }: { pas: BattingPA[]; flags?: Map<number, string[]>; onRbi?: (index: number, rbi: number) => void; /** (紀錄比賽) tapping a row opens it to fix its 落點／軌跡／強弱／備註 */ onOpen?: (index: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const marks = oppPitcherMarksOf(pas)
@@ -165,11 +175,11 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
             const pt = pitchTotals(p.pitches)
             const header = p.inning !== lastInning
             lastInning = p.inning
-            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.baserunningOuts ? `壘死 ${p.baserunningOuts}` : '', p.outOnBase - (p.baserunningOuts ?? 0) > 0 ? `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : '', p.errors?.length ? `對方失誤 ${errorsText(p.errors)}` : ''].filter(Boolean).join('・')
+            const running = [p.runner ? `代跑 ${p.runner}` : '', p.sb ? `盜壘 ${p.sb}` : '', p.cs ? `盜壘失敗 ${p.cs}` : '', p.advOnError ? `失誤進壘 ${p.advOnError}` : '', p.baserunningOuts ? `跑壘失誤 ${p.baserunningOuts}` : '', p.outOnBase - (p.baserunningOuts ?? 0) > 0 ? `壘上出局 ${p.outOnBase - (p.baserunningOuts ?? 0)}` : '', !onRbi && p.rbi ? `打點 ${p.rbi}` : '', p.errors?.length ? `對方失誤 ${errorsText(p.errors)}` : ''].filter(Boolean).join('・')
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" cols={win ? 10 : 9} />}
-                <tr className={cx('border-t border-border hover:bg-surface-2/60', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
+                <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{situation(p)}</td>
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}{marks.has(i) && <div className="mt-1"><Badge variant="outline">{marks.get(i)}</Badge></div>}</td>
@@ -202,7 +212,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code'
 }
 
 /** Pitch-by-pitch log of our pitchers vs the opponent for one game. */
-export function PitchingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; /** (紀錄比賽) their RBI −／＋, like ours */ onRbi?: (index: number, rbi: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
+export function PitchingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording = 'code', win }: { pas: PitchingPA[]; flags?: Map<number, string[]>; /** (紀錄比賽) their RBI −／＋, like ours */ onRbi?: (index: number, rbi: number) => void; onOpen?: (index: number) => void; visible?: Set<number>; wording?: PbpWording; win?: Map<number, RowWin> }) {
   if (!pas.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   if (visible && !pas.some((_, i) => visible.has(i))) return <NoMatch />
   const placed = placedMap(pas)
@@ -226,7 +236,7 @@ export function PitchingPlayByPlay({ pas, flags, onRbi, visible, wording = 'code
             return (
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" cols={win ? 10 : 9} />}
-                <tr className={cx('border-t border-border hover:bg-surface-2/60', changed && !header && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
+                <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', changed && !header && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
                   <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{situation(p)}</td>
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>

@@ -29,7 +29,8 @@ describe('壘死 asks which base', () => {
     // not out yet: nothing to ask
     expect(screen.queryByRole('group', { name: /死在哪個壘包/ })).toBeNull()
     const row = screen.getByText('打者 甲').parentElement as HTMLElement
-    fireEvent.click(within(row).getByRole('button', { name: '壘死' }))
+    fireEvent.click(within(row).getByRole('button', { name: '出局' }))
+    fireEvent.click(within(row).getByRole('button', { name: '自己跑壘失誤' }))
     const at = screen.getByRole('group', { name: '打者 死在哪個壘包' })
     expect(within(at).getAllByRole('button').map((b) => b.textContent)).toEqual(['1B', '2B', '3B', '本壘'])
     expect(pressed('死在本壘')).toBe('true')

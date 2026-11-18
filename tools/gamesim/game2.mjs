@@ -50,7 +50,8 @@ const posPick = (pos) => new RegExp(`^${posLabel(pos)}( |$)`)
 const runnerEv = async (base, ev) => { const sheet = await runnerSheet(base); await sheet.getByRole('button', { name: ev, exact: true }).click(); await p.waitForTimeout(250) }
 const destRow = (prefix) => main.locator('span[class*="w-[132px]"]', { hasText: new RegExp('^' + prefix) }).first().locator('xpath=..')
 const setDest = async (prefix, d) => {
-  const label = d === 'out' ? '出局' : d === 'home' ? '得分' : `${d}B`
+  // (2026-11-18: a runner put out is 壘死; the batter's row keeps 出局)
+  const label = d === 'out' ? (/^打者/.test(prefix) ? '出局' : '壘死') : d === 'home' ? '得分' : `${d}B`
   const row = destRow(prefix)
   if (!(await row.count())) { notes.push(`找不到跑者去向「${prefix}」`); return }
   await row.getByRole('button', { name: label, exact: true }).first().click(); await p.waitForTimeout(60)

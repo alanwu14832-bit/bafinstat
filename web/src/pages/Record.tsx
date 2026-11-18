@@ -20,7 +20,8 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
+import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type BattingPA, type Game, type OutAt, type PitchingPA, type Registration } from '../data/types'
+import { rowName } from '../record/paEdit'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -489,6 +490,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   })()
   // every play ends with one line saying what went in, and a way to take it back
   const [toast, setToast] = useState<ToastData | null>(null)
+  // 逐打席: a plate appearance already sent, opened to fix what does not change the game (落點／軌跡／強弱／備註)
+  const [fixPa, setFixPa] = useState<{ side: 'bat' | 'pit'; i: number } | null>(null)
   // the plate appearance just sent: 復原 right after it brings its confirm panel back, filled in (fix one thing, send again)
   const sent = useRef<PAPlan | null>(null)
   const undoStep = () => {
@@ -558,7 +561,19 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     else setPlan({ ...plan, quality: '中', ...(GROUND_ONLY.has(result) ? { traj: 'G' } : {}), ...(kept?.loc ? { loc: kept.loc } : {}), ...(kept?.traj && !GROUND_ONLY.has(result) ? { traj: kept.traj } : {}), ...(kept?.quality ? { quality: kept.quality } : {}) })
     setRbiTouched(false); planFrom.current = state.pitches.at(-1) === 'IP' ? 'ip' : 'pick'
   }
-  const setDest = (row: number | 'batter', d: Dest) => setDests([[row, d]])
+  const setDest = (row: number | 'batter', d: Dest) => {
+    // 內滾／犧觸 (the batter out) and a runner put out on the play: the batter was safe — a 野選 (both out is 雙殺).
+    // The plan becomes 野選 (batted ball kept), with this runner out.
+    if (plan && row !== 'batter' && d === 'out' && FC_FROM.has(plan.result) && plan.batter === 'out' && plan.runners[row] !== 'out') {
+      const fc = defaultPlan(state, '野選')
+      // (the others as the batter's reaching pushes them — the 失誤 layout — rather than 野選's own guess of who was out)
+      setPlan({ ...fc, loc: plan.loc, traj: plan.traj, quality: plan.quality, note: plan.note, runners: { ...defaultPlan(state, '失誤').runners, [row]: 'out' } })
+      setRbiTouched(false)
+      setToast({ id: Date.now(), text: `結果改成「野選」：前面的跑者出局、打者上一壘（打者也出局的話請選「雙殺」）` })
+      return
+    }
+    setDests([[row, d]])
+  }
   // several at once (全部進一壘／全部不動)
   const setDests = (moves: Array<[number | 'batter', Dest]>) => setPlan((p) => {
     if (!p) return p
@@ -1013,6 +1028,17 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         </div>
 
         <div className="xl:col-span-4 [@media_(orientation:landscape)_and_(max-height:520px)]:col-span-4 flex flex-col gap-4 md:gap-5 min-w-0">
+          <Card still title="逐打席" action={<Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} />} flush>
+            <div className="max-h-[420px] overflow-y-auto">
+              {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onRbi={(i, rbi) => apply((s) => setRbi(s, i, rbi))} onOpen={(i) => setFixPa({ side: 'bat', i })} /> : <PitchingPlayByPlay pas={state.pitching} onRbi={(i, rbi) => apply((s) => setOppRbi(s, i, rbi))} onOpen={(i) => setFixPa({ side: 'pit', i })} />}
+            </div>
+            {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
+              <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">
+                <span>失分性質：</span>
+                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} title={liveCalls.get(i)?.why ?? '點一下切換自責／非自責'} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.runner || p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code === 'ER' ? '自責' : '非自責'}</span></button> : null)}
+              </div>
+            )}
+          </Card>
           <Card still title={intra ? `${names.us}打線` : '打線'} subtitle="點棒次可跳到該打者" flush>
             <ul className="divide-y divide-[var(--border)]">
               {state.lineup.map((l, i) => (
@@ -1045,17 +1071,6 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2">投手 <span className="font-medium text-ink">{other.pitcher}</span></div>
             </Card>
           )}
-          <Card still title="逐打席" action={<Tabs size="sm" aria-label="紀錄" value={logTab} onChange={setLogTab} items={[{ value: 'bat', label: '打擊', count: state.batting.length }, { value: 'pit', label: '投球', count: state.pitching.length }]} />} flush>
-            <div className="max-h-[420px] overflow-y-auto">
-              {logTab === 'bat' ? <BattingPlayByPlay pas={state.batting} onRbi={(i, rbi) => apply((s) => setRbi(s, i, rbi))} /> : <PitchingPlayByPlay pas={state.pitching} onRbi={(i, rbi) => apply((s) => setOppRbi(s, i, rbi))} />}
-            </div>
-            {logTab === 'pit' && state.pitching.some((p) => p.code === 'R' || p.code === 'ER') && (
-              <div className="px-4 py-2.5 border-t border-border text-[12px] text-ink-2 flex flex-wrap gap-2 items-center">
-                <span>失分性質：</span>
-                {state.pitching.map((p, i) => (p.code === 'R' || p.code === 'ER') ? <button key={i} type="button" onClick={() => apply((s) => toggleEarned(s, i))} title={liveCalls.get(i)?.why ?? '點一下切換自責／非自責'} className="h-7 px-2 rounded-[6px] border border-border hover:bg-surface-2 cursor-pointer tnum">{p.inning} 局 {p.runner || p.oppBatter || `${p.oppOrder} 棒`}：<span className="font-medium text-ink">{p.code === 'ER' ? '自責' : '非自責'}</span></button> : null)}
-              </div>
-            )}
-          </Card>
         </div>
       </div>
 
@@ -1086,26 +1101,68 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onDone={(names) => act((s) => setOppLineup(s, names))} />}
       {/* (at the top: at the bottom it covered 跑者去向 and 送出) */}
       <Toast toast={toast} onDone={() => setToast(null)} placement="top" ms={3500} />
+      <FixPaSheet target={fixPa} state={state} onClose={() => setFixPa(null)}
+        onSave={(side, i, patch) => { apply((s) => (side === 'bat' ? { ...s, batting: s.batting.map((p, k) => (k === i ? { ...p, ...patch } : p)) } : { ...s, pitching: s.pitching.map((p, k) => (k === i ? { ...p, ...patch } : p)) })); setFixPa(null); setToast({ id: Date.now(), text: '已修改這個打席' }) }} />
     </div>
   )
 }
 
 
+type PaFix = Pick<BattingPA, 'loc' | 'traj' | 'quality' | 'note'>
+/**
+ * 逐打席 → one plate appearance already sent: its 落點、軌跡、強弱 and 備註 can be fixed here, since none of them changes
+ * the bases, outs or score. The result and the runners are what the rest of the game stands on: those are changed with
+ * 復原 (back to that plate appearance) or, after the game, in 修改資料.
+ */
+function FixPaSheet({ target, state, onClose, onSave }: { target: { side: 'bat' | 'pit'; i: number } | null; state: RecordState; onClose: () => void; onSave: (side: 'bat' | 'pit', i: number, patch: PaFix) => void }) {
+  const pa = target ? (target.side === 'bat' ? state.batting[target.i] : state.pitching[target.i]) : undefined
+  const [v, setV] = useState<PaFix>(() => ({}))
+  useEffect(() => { if (pa) setV({ loc: pa.loc, traj: pa.traj, quality: pa.quality, note: pa.note }) }, [pa])
+  const who = !pa || !target ? '' : target.side === 'bat' ? (pa as BattingPA).batter : rowName('pit', pa as PitchingPA)
+  return (
+    <Sheet open={!!pa} onClose={onClose} ariaLabel="修改這個打席" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-lg" contentClassName="record-zoom">
+      {pa && target && (
+        <div className="p-5 flex flex-col gap-4">
+          <div>
+            <h3 className="text-[16px] font-semibold text-ink">第 {target.i + 1} 個打席・{who}・{pa.result || '沒有結果'}</h3>
+            <p className="text-[12px] text-muted mt-1 leading-relaxed">這裡可以改落點、軌跡、強弱和備註，不會影響比分和壘上。要改結果或跑者：用「復原」退回到這個打席重記，或結束比賽後到「修改資料」改。</p>
+          </div>
+          {!NO_BATTED_BALL.has(pa.result) && <BattedBallPicker result={pa.result} value={v} onChange={(b) => setV({ ...v, ...b })} />}
+          <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={v.note ?? ''} maxLength={200} onChange={(e) => setV({ ...v, note: e.target.value })} className="flex-1" /></label>
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" onClick={onClose}>取消</Button>
+            <Button variant="primary" onClick={() => onSave(target.side, target.i, { ...v, note: v.note?.trim() || undefined })}>儲存</Button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+/** 內滾／犧觸 that put a runner out instead of the batter: 野選 (Live › setDest). */
+const FC_FROM = new Set(['內滾', '犧觸'])
+
 function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void }; /** 壘死: 死在哪個壘包 (shown while `show`) */ outAt?: { show: boolean; value: OutAt; set: (a: OutAt) => void; name: string } }) {
-  // a runner of ours can also be 壘死: out by his own baserunning mistake (charged to him), next to a plain 出局
-  type Opt = { v: Dest; l: string; m?: boolean }
-  const opts: Opt[] = [{ v: 'out', l: '出局', m: false }, ...(mistake ? [{ v: 'out' as Dest, l: '壘死', m: true }] : []), { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
-  const isOn = (o: Opt) => value === o.v && (o.m === undefined || !mistake || mistake.on === o.m)
+  // a runner put out on the bases is 壘死 (the batter: 出局); 「自己跑壘失誤」 next to it says it was his own mistake
+  type Opt = { v: Dest; l: string }
+  const opts: Opt[] = [{ v: 'out', l: batter ? '出局' : '壘死' }, { v: 1, l: '1B' }, { v: 2, l: '2B' }, { v: 3, l: '3B' }, { v: 'home', l: '得分' }]
+  const isOn = (o: Opt) => value === o.v
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-[13px] text-ink w-[132px] truncate">{label}</span>
       <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border flex-wrap">
         {opts.filter((o) => batter || o.v === 'out' || o.v === 'home' || (typeof o.v === 'number' && o.v >= min)).map((o) => (
-          <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.m !== undefined && mistake ? mistake.set(o.m) : onChange(o.v))}
-            title={o.m ? '自己跑壘失誤出局（算這位跑者的壘死）' : o.m === false && mistake ? '被守備刺殺／封殺出局' : undefined}
+          <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.v === 'out' && mistake ? mistake.set(false) : onChange(o.v))}
+            title={o.v === 'out' && !batter ? '在壘上出局（被封殺、刺殺、觸殺）' : undefined}
             className={cx('h-9 pointer-fine:h-8 min-w-9 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical')}>{o.l}</button>
         ))}
       </div>
+      {mistake && value === 'out' && (
+        <button type="button" aria-pressed={mistake.on} onClick={() => mistake.set(!mistake.on)} title="衝過頭、飛球回不去被雙殺、離壘被觸殺這種自己跑壞的才勾；被封殺、刺殺不勾"
+          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
+          <span aria-hidden className={cx('size-3.5 rounded-[3px] border inline-flex items-center justify-center text-[10px] leading-none', mistake.on ? 'border-critical bg-critical text-bg' : 'border-border')}>{mistake.on ? '✓' : ''}</span>自己跑壘失誤
+        </button>
+      )}
       {extra}
       {outAt?.show && value === 'out' && <OutAtChips value={outAt.value} onPick={outAt.set} name={outAt.name} />}
     </div>

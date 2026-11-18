@@ -220,7 +220,7 @@ export function basePath(pa: BattingPA): PathStep[] {
   move('盜壘', pa.sb)
   if (pa.run) steps.push({ label: '得分', end: 'run' })
   else if (pa.cs) steps.push({ label: '盜壘失敗', end: 'out' })
-  else if (pa.outOnBase) steps.push({ label: pa.baserunningOuts ? '壘死' : '出局', end: 'out' })
+  else if (pa.outOnBase) steps.push({ label: '壘死', end: 'out' })
   else if (pa.code === 'L') steps.push({ label: '殘壘', end: 'stranded' })
   return steps
 }
