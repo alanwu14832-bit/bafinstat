@@ -11,7 +11,7 @@ import { signedPtsBetween } from '../../lib/fmt'
 import { WPA_DISCLAIMER, type RowWin } from '../../data/winTimeline'
 import { Badge } from './Badge'
 import { oppPitcherMarks as oppPitcherMarksOf } from '../../data/broadcast'
-import { AlertTriangle, X } from 'lucide-react'
+import { AlertTriangle, Pencil, X } from 'lucide-react'
 
 /** Pitch code → chip. 好球類：S/SS/CS/IP；界外 F；壞球 B */
 const PITCH_STYLE: Record<string, { label: string; cls: string; title: string }> = {
@@ -180,7 +180,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording 
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" cols={win ? 10 : 9} />}
                 <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{situation(p)}</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}{marks.has(i) && <div className="mt-1"><Badge variant="outline">{marks.get(i)}</Badge></div>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
@@ -237,7 +237,7 @@ export function PitchingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" cols={win ? 10 : 9} />}
                 <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', changed && !header && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{situation(p)}</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} events={p.events} /></td>
