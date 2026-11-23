@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Camera, CheckCircle2, Info, Maximize2, Pencil, Printer, Share2, Trash2, Video, X } from 'lucide-react'
+import { AlertTriangle, Camera, CheckCircle2, Info, Maximize2, Pencil, Printer, Share2, Smartphone, Trash2, Video, X } from 'lucide-react'
+import { StoryDialog } from '../components/ui/StoryDialog'
 import { LineScoreBoard, PlateBadge, Stitches } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -214,6 +215,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const id = current.game.id
   const media = useMemo(() => gameMedia(albums, id), [albums, id])
   const [sharing, setSharing] = useState(false)
+  const [story, setStory] = useState(false)
   const [boxView, setBoxView] = useState<BoxView>(readBoxView)
   const pickBoxView = (v: BoxView) => { setBoxView(v); writeBoxView(v) }
   const [filter, setFilter] = useState<PbpFilter>('all')
@@ -396,6 +398,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
           <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end -mr-2 sm:mr-0">
             {!page && <Button variant="ghost" size="sm" icon={<Maximize2 />} to={`/games/${encodeURIComponent(id)}`} title="開啟完整比賽頁（可分享、可直接連到某一局）">完整頁</Button>}
             <Button variant="ghost" size="sm" icon={<Share2 />} onClick={() => setSharing((v) => !v)} aria-expanded={sharing} title="複製比分、戰報摘要和網址，貼到 LINE 群組">分享</Button>
+            {(pbpBat.length > 0 || pbpPit.length > 0) && <Button variant="ghost" size="sm" icon={<Smartphone />} onClick={() => setStory(true)} title="做一張球員這一場的成績圖，分享到 Instagram 限時動態">限動</Button>}
             <Button variant="ghost" size="sm" icon={<Printer />} to={`/print/game/${encodeURIComponent(id)}`} title="印出這場的傳統記分表（A4 橫式），也能存成 PDF">列印</Button>
             {media.photos.length === 1 ? <Button variant="ghost" size="sm" icon={<Camera />} href={media.photos[0].url} title="開啟這場的相簿">相簿</Button> : media.photos.length > 1 ? <Button variant="ghost" size="sm" icon={<Camera />} to="/photos" title="這場有多本相簿">相簿 {media.photos.length}</Button> : null}
             {media.videos.length === 1 ? <Button variant="ghost" size="sm" icon={<Video />} href={media.videos[0].url} title="開啟這場的比賽影片（新分頁）">影片</Button> : media.videos.length > 1 ? <Button variant="ghost" size="sm" icon={<Video />} onClick={() => { setTab('summary'); setToMedia(true) }} title="這場有多段影片">影片 {media.videos.length}</Button> : null}
@@ -420,6 +423,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
       </div>
       <div className={cx('flex flex-col gap-5 [&>*]:shrink-0', page ? 'py-5' : 'px-5 md:px-6 py-5')}>
         {sharing && !editing && <SharePanel text={shareText} link={shareLink} onImage={shareImage} onClose={() => setSharing(false)} />}
+        <StoryDialog open={story} onClose={() => setStory(false)} gameId={id} />
         {notice && (
           <div role="status" className={cx('flex items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2.5 text-[13px] text-ink', notice.kind === 'ok' ? 'border-[color-mix(in_srgb,var(--good)_35%,transparent)] bg-[color-mix(in_srgb,var(--good)_8%,transparent)]' : 'border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)]')}>
             {notice.kind === 'ok' ? <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good" /> : <AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning" />}

@@ -8,7 +8,8 @@ import { useHistory } from '../hooks/useHistory'
 import { PlayerCareer } from '../components/ui/PlayerCareer'
 import { filterGames } from '../data/filters'
 import { opponentLabel } from '../data/intrasquad'
-import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, Smartphone, X } from 'lucide-react'
+import { StoryDialog } from '../components/ui/StoryDialog'
 import { PageHeader } from '../components/layout/PageHeader'
 import { activeFilterCount } from '../components/layout/FilterBar'
 import { scopeText, useNavigateWithFilters } from '../components/layout/FilterChips'
@@ -161,6 +162,7 @@ export function PlayersPage() {
   const setPctView = (v: PctView) => { setPctViewState(v); writePctView(v) }
   const [editingRoster, setEditingRoster] = useState(false)
   const [showRegs, setShowRegs] = useState(false)
+  const [story, setStory] = useState(false)
   const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
   const filters = useDataStore((st) => st.filters)
@@ -470,6 +472,7 @@ export function PlayersPage() {
               </span>
             </button>
             <div className="flex items-center justify-end gap-1 shrink-0 -mr-2 -mt-1 sm:m-0">
+              {player && <Button variant="ghost" size="sm" icon={<Smartphone />} onClick={() => setStory(true)} title="做一張成績圖，分享到 Instagram 限時動態（單場或本季）">限動</Button>}
               {player && (bat || pit) && <Button variant="ghost" size="sm" icon={<Download />} onClick={sharePlayer} title="下載這位球員的成績卡（PNG），標明期間與樣本">成績卡</Button>}
               <Button variant="ghost" aria-label="上一位" className="size-10 pointer-fine:size-9" icon={<ChevronLeft />} onClick={() => step(-1)} disabled={names.length < 2} />
               <Button variant="ghost" aria-label="下一位" className="size-10 pointer-fine:size-9" icon={<ChevronRight />} onClick={() => step(1)} disabled={names.length < 2} />
@@ -667,6 +670,7 @@ export function PlayersPage() {
           )}
         </>
       )}
+      {player && <StoryDialog open={story} onClose={() => setStory(false)} player={player.name} />}
     </>
   )
 }
