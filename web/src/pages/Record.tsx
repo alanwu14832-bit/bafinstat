@@ -283,7 +283,8 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場（對方先攻）' }, { value: '客', label: '客場（我隊先攻）' }]} className="w-full" /></Field>
           <Field label="對方打序人數"><Select aria-label="對方打序" value={String(oppSlots)} onChange={(e) => setOppSlotsN(Number(e.target.value))} options={ORDER_SIZES} className="w-full" /></Field>
           </>}
-          <Field label="預定局數"><Input type="number" min={1} max={12} value={game.innings ?? TEAM.innings} onChange={(e) => g('innings', Number(e.target.value) || TEAM.innings)} className="tnum" /></Field>
+          <Field label="預定局數">{/* a list, not a number box: clearing the box to type 7 snapped back to the team's default (9) */}
+            <Select aria-label="預定局數" value={String(game.innings ?? TEAM.innings)} onChange={(e) => g('innings', Number(e.target.value))} options={INNINGS_CHOICES} className="w-full" /></Field>
           <TiebreakSelects idPrefix="setup" innings={innings} from={tiebreakRule?.from ?? null} bases={tbBases} onChange={setTiebreak} />
           <Field label="場地"><Input value={game.venue ?? ''} onChange={(e) => g('venue', e.target.value)} /></Field>
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
@@ -1136,6 +1137,9 @@ function LiveEditSheet({ target, state, roster, onClose, onSave }: { target: { s
     </Sheet>
   )
 }
+
+/** 預定局數: 1 to 12 innings. */
+const INNINGS_CHOICES = Array.from({ length: 12 }, (_, k) => ({ value: String(k + 1), label: `${k + 1} 局` }))
 
 /** 內滾／犧觸 that put a runner out instead of the batter: 野選 (Live › setDest). */
 const FC_FROM = new Set(['內滾', '犧觸'])
