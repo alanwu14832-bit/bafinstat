@@ -1,4 +1,5 @@
 import { GameEditor } from '../components/ui/GameEditor'
+import { SPEED_MAX, SPEED_MIN } from '../data/speeds'
 import { applyLiveEdit } from '../record/liveEdit'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -35,7 +36,7 @@ import { HoldPicker } from '../components/ui/HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSituations'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
-import { canSwitchHomeAway, switchHomeAway,
+import { setSpeed, setSpeedOn, speedAsked, canSwitchHomeAway, switchHomeAway,
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, wildPitch, score, setOppOrder, reentryMode, setReentryMode, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
   addOppError, removeOppError, pinchHitOpp, oppPitchCount,
   correctOppPitcher, fieldersNow, finishTimes, oppBatterOf, oppStintStart, pinchRunOpp, reliefPitchers, setOppLineup, setOppNames, setOppPitcher, stampTimes,
@@ -137,6 +138,9 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   const [reentryPick, setReentryPick] = useState<ReentryMode | null>(null)
   // 記對方打者姓名: off unless this device ticked it last time
   const [oppNames, setOppNamesOn] = useState(() => { try { return localStorage.getItem(OPP_NAMES_KEY) === '1' } catch { return false } })
+  // 記錄球速 (ours / theirs): off unless this device turned it on last time
+  const [speedOn, setSpeedOnPref] = useState<{ us: boolean; opp: boolean }>(() => { try { const v = JSON.parse(localStorage.getItem(SPEED_KEY) ?? '{}'); return { us: !!v.us, opp: !!v.opp } } catch { return { us: false, opp: false } } })
+  const toggleSpeed = (side: 'us' | 'opp', on: boolean) => { const v = { ...speedOn, [side]: on }; setSpeedOnPref(v); try { localStorage.setItem(SPEED_KEY, JSON.stringify(v)) } catch { /* storage unavailable */ } }
   const toggleOppNames = (on: boolean) => { setOppNamesOn(on); try { localStorage.setItem(OPP_NAMES_KEY, on ? '1' : '0') } catch { /* storage unavailable */ } }
   const [oppLineup, setOppLineupNames] = useState<string[]>(() => Array(9).fill(''))
   const oppNameList = useMemo(() => oppBatterNames(base, game.opponent), [base, game.opponent])
@@ -239,7 +243,8 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
     const throws = Object.fromEntries(base.roster.flatMap((x) => (x.throws === 'L' || x.throws === 'R' ? [[x.name, x.throws]] : [])))
     const intra = intraOn ? { intra: { team: teamA.trim(), lineup: themShown.map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher: themPitcher.trim(), bats, throws } } : {}
     const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry: intraOn || reMode !== 'none', freeReentry: intraOn || reMode === 'free', ...(oppNames && !intraOn ? { oppNames: true, oppLineup: oppLineup.slice(0, oppSlots) } : {}), tiebreak: tiebreakRule, ...(!intraOn && oppSlots !== 9 ? { oppSlots } : {}), ...intra })
-    onStart(practice ? { ...s, practice: true } : s)
+    const withSpeed = speedOn.us || speedOn.opp ? { ...s, speedOn: { ...speedOn } } : s
+    onStart(practice ? { ...withSpeed, practice: true } : withSpeed)
   }
   const startRow = (
     <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
@@ -290,6 +295,14 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
           <Field label="紀錄者"><Input value={game.recorder ?? ''} onChange={(e) => g('recorder', e.target.value)} /></Field>
         </div>
         </>}
+        {/* 記錄球速: a number pad after every pitch (ours, theirs, or both) */}
+        <div className="mt-4 pt-4 border-t border-border flex flex-col gap-1">
+          <div className="flex items-center gap-x-5 gap-y-1 flex-wrap">
+            <Checkbox className="min-h-9 pointer-fine:min-h-7" label="記錄我方投手球速" checked={speedOn.us} onChange={(on) => toggleSpeed('us', on)} />
+            <Checkbox className="min-h-9 pointer-fine:min-h-7" label="記錄對方投手球速" checked={speedOn.opp} onChange={(on) => toggleSpeed('opp', on)} />
+          </div>
+          <p className="text-[12px] text-muted">勾了之後，每按一球的結果就會跳出數字鍵盤輸入球速（公里），沒測到可以跳過；比賽中也能隨時開關</p>
+        </div>
         {/* 記對方打者姓名: shown folded or open (隊內賽: the second side's lineup has its own card) */}
         {!intraOn && <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2">
           <Checkbox className="min-h-9 pointer-fine:min-h-7" label="記對方打者姓名（選填）" checked={oppNames} onChange={toggleOppNames} />
@@ -496,6 +509,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const [toast, setToast] = useState<ToastData | null>(null)
   // 逐打席: a plate appearance already sent, opened in the full editor (LiveEditSheet)
   const [fixPa, setFixPa] = useState<{ side: 'bat' | 'pit'; i: number } | null>(null)
+  // 記錄球速: the pitch whose speed the number pad is asking for
+  const [speedAt, setSpeedAt] = useState<number | null>(null)
   const rosterAll = useDataStore((st) => st.base.roster)
   const editNames = useMemo(() => [...new Set([...state.lineup.map((l) => l.name), ...rosterAll.map((r) => r.name)].filter(Boolean))], [state.lineup, rosterAll])
   // the plate appearance just sent: 復原 right after it brings its confirm panel back, filled in (fix one thing, send again)
@@ -744,6 +759,8 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     <div className="basis-full flex items-center gap-x-4 gap-y-1 flex-wrap">
       {!intra && <label className="inline-flex items-center gap-2 text-[12px] text-ink-2">被換下的球員<Select aria-label="被換下的球員" size="sm" value={reentryMode(state)} onChange={(e) => { const m = e.target.value as ReentryMode; apply((s) => setReentryMode(s, m)) }} options={REENTRY_OPTIONS.map((o) => ({ ...o, label: o.label.replace(/（.*$/, '') }))} /></label>}
       <Checkbox label="記對方打者姓名" className="min-h-9 pointer-fine:min-h-7" checked={!!state.oppNames} onChange={(on) => apply((s) => setOppNames(s, on))} />
+      <Checkbox label="記錄我方投手球速" className="min-h-9 pointer-fine:min-h-7" checked={!!state.speedOn?.us} onChange={(on) => apply((s) => setSpeedOn(s, 'us', on))} />
+      <Checkbox label="記錄對方投手球速" className="min-h-9 pointer-fine:min-h-7" checked={!!state.speedOn?.opp} onChange={(on) => apply((s) => setSpeedOn(s, 'opp', on))} />
       {!intra && <label className="inline-flex items-center gap-2 text-[12px] text-ink-2">對方打序<Select aria-label="對方打序幾棒" size="sm" value={String(oppCycle(state))} onChange={(e) => apply((s) => setOppSlots(s, Number(e.target.value)))} options={ORDER_SIZES} /></label>}
       {!!reg?.players.length && <RegistrationHint reg={reg} everyone={everyone} onToggle={() => setEveryone(!everyone)} />}
     </div>
@@ -885,7 +902,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {state.pitches.length > 0 && <Button variant="outline" size="sm" className="ml-auto shrink-0" icon={<Delete />} onClick={() => apply(undoPitch)} aria-label="刪最後一球">刪一球</Button>}
               </div>
               {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}{askOppHand ? '（看不出來就按「不知道」）' : '（左右開弓就選他這次站的那邊）'}</p>}
-              <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver || held) return; apply((s) => addPitch(s, code)); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver || held} twoStrikes={c.strikes === 2} />
+              <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver || held) return; apply((s) => addPitch(s, code)); if (speedAsked(state)) setSpeedAt(state.pitches.length); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver || held} twoStrikes={c.strikes === 2} />
             </div>
 
             {/* between pitches: runners, wild pitches, our errors */}
@@ -1112,6 +1129,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         onDone={(names) => act((s) => setOppLineup(s, names))} />}
       {/* (at the top: at the bottom it covered 跑者去向 and 送出) */}
       <Toast toast={toast} onDone={() => setToast(null)} placement="top" ms={3500} />
+      <SpeedPad at={speedAt !== null && speedAt < state.pitches.length ? speedAt : null} state={state} onClose={() => setSpeedAt(null)} onSave={(at, kmh) => { apply((s) => setSpeed(s, at, kmh)); setSpeedAt(null) }} />
       <LiveEditSheet target={fixPa} state={state} roster={editNames} onClose={() => setFixPa(null)}
         onSave={(next) => { apply(() => next); setFixPa(null); setToast({ id: Date.now(), text: '已修改這個打席' }) }} />
     </div>
@@ -1132,6 +1150,59 @@ function LiveEditSheet({ target, state, roster, onClose, onSave }: { target: { s
           <p className="text-[12px] text-muted leading-relaxed">比賽進行中：可以改逐球、結果、跑者、落點。改到現在這個半局的話，出局數和壘上會跟著重算；會讓這個半局變成三出局的改法不能存，請用「復原」或比賽結束後到「修改資料」。</p>
           <GameEditor live={{ side: target.side, index: target.i }} initial={{ game: state.game, batting: state.batting, pitching: state.pitching, fielding: [] }} roster={roster}
             onSave={(e) => onSave(applyLiveEdit(state, e.batting, e.pitching))} onCancel={onClose} onDelete={() => undefined} />
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+/** 記錄球速 on this device: { us, opp } */
+const SPEED_KEY = 'bafin.record.speed'
+const PITCH_NAME: Record<string, string> = { B: '壞球', S: '好球', CS: '好球（未揮）', SS: '揮空', F: '界外', IP: '擊進場內', T: '擦棒被捕', HP: '觸身', CI: '捕手妨礙' }
+/**
+ * 記錄球速: the number pad after a pitch. Digits, ⌫ and ✓ (always ✓ to send); 跳過 leaves the pitch without a speed. The
+ * last speed this pitcher threw is shown next to it, so a typo stands out.
+ */
+function SpeedPad({ at, state, onClose, onSave }: { at: number | null; state: RecordState; onClose: () => void; onSave: (at: number, kmh: number | null) => void }) {
+  const [text, setText] = useState('')
+  const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => { setText(''); setMsg(null) }, [at])
+  // the last speed of this pitcher: earlier in this plate appearance, else his last plate appearance with one
+  const last = useMemo(() => {
+    if (at === null) return undefined
+    const now = (state.speeds ?? []).slice(0, at).filter((v): v is number => v !== null).at(-1)
+    if (now) return now
+    const ours = offense(state) === 'opp'
+    const rows = ours ? state.pitching.filter((p) => p.pitcher === state.pitcher) : state.batting
+    for (let k = rows.length - 1; k >= 0; k--) { const v = (rows[k].speeds ?? []).filter((x): x is number => x !== null).at(-1); if (v) return v }
+    return undefined
+  }, [at, state])
+  const press = (d: string) => { setMsg(null); setText((t) => (t.length >= 3 ? t : t + d)) }
+  const send = () => {
+    if (at === null) return
+    if (!text) { onSave(at, null); return }
+    const n = Number(text)
+    if (n < SPEED_MIN || n > SPEED_MAX) { setMsg(`球速要在 ${SPEED_MIN}～${SPEED_MAX} 公里之間`); return }
+    onSave(at, n)
+  }
+  const key = 'h-14 rounded-[10px] border border-border bg-surface text-[22px] font-semibold text-ink tnum hover:bg-surface-2 active:scale-[0.98] cursor-pointer'
+  return (
+    <Sheet open={at !== null} onClose={onClose} ariaLabel="輸入球速" side="bottom" desktopFrom="never" contentClassName="record-zoom">
+      {at !== null && (
+        <div className="p-4 flex flex-col gap-3 max-w-sm mx-auto w-full">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="text-[14px] text-ink-2">第 {at + 1} 球・{PITCH_NAME[state.pitches[at]] ?? state.pitches[at]}{offense(state) === 'opp' ? `・${state.pitcher}` : '・對方投手'}</div>
+            {last && <div className="text-[12px] text-muted tnum">上一球 {last}</div>}
+          </div>
+          <div aria-live="polite" className="h-14 rounded-[10px] bg-surface-2 flex items-center justify-center text-[30px] font-bold tnum text-ink">{text || <span className="text-muted text-[16px] font-normal">幾公里？</span>}{text && <span className="text-[14px] font-normal text-muted ml-1">km/h</span>}</div>
+          {msg && <p role="alert" className="text-[12px] text-critical text-center">{msg}</p>}
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="球速數字鍵盤">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => <button key={d} type="button" className={key} onClick={() => press(d)}>{d}</button>)}
+            <button type="button" className={key} aria-label="刪一個數字" onClick={() => { setMsg(null); setText((t) => t.slice(0, -1)) }}>⌫</button>
+            <button type="button" className={key} onClick={() => press('0')}>0</button>
+            <button type="button" className="h-14 rounded-[10px] bg-ink text-bg text-[22px] font-semibold hover:opacity-90 active:scale-[0.98] cursor-pointer" aria-label="確定" onClick={send}>✓</button>
+          </div>
+          <button type="button" onClick={() => onSave(at, null)} className="h-10 rounded-[10px] text-[13px] text-ink-2 hover:text-ink hover:bg-surface-2 cursor-pointer">沒測到，跳過</button>
         </div>
       )}
     </Sheet>
