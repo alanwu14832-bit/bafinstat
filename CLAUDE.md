@@ -47,6 +47,11 @@ A database change needs a migration in both repos, and the user must run it in b
   says so for the pitcher on the mound (us / opp); 修改資料 has a 球速 field; the pitch chips show them. Step 2: `speedSummary`
   (球員 → 投球 `SpeedCard`: 最快, 均速 of every measured pitch — no pitch types —, per inning, per game), the 文字轉播 (each
   pitch's km/h, 「最快」 on the summary line, 上一球 on /live) and Excel (球速 「132,,128」, the last input of 打席紀錄 / 投球紀錄).
+- 限時動態 (2026-11-23, step 1 of the IG story cards: no AI yet): `data/storyCard.ts` works out a card (單場打擊／單場投球／本季打擊／
+  本季投球; the numbers and the one editable sentence), `lib/storyImage.ts` draws it 1080 × 1920 with Instagram's top 250 / bottom
+  340 px kept clear and an optional photo that never leaves the device, `components/ui/StoryDialog.tsx` (the 限動 button on 球員 and
+  on a game page) shares or downloads it. A reader below 球員 level gets single games only (no season card or season line).
+  Planned: step 2 a server-side Claude call for the sentence (key never in the site), step 3 里程碑 and 全隊賽後總結 cards.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

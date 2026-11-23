@@ -4,9 +4,9 @@
  * its context. Colours: the dark scoreboard surface and the team colour lifted for a dark background.
  */
 const W = 1080, H = 1350
-const BG = '#141517', INK = '#f3efe7', MUTED = 'rgba(243,239,231,0.6)', LINE = 'rgba(243,239,231,0.16)'
-const SANS = '"PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif'
-const FIG = '"Barlow Semi Condensed", "SF Pro Display", system-ui, sans-serif'
+export const BG = '#141517', INK = '#f3efe7', MUTED = 'rgba(243,239,231,0.6)', LINE = 'rgba(243,239,231,0.16)'
+export const SANS = '"PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif'
+export const FIG = '"Barlow Semi Condensed", "SF Pro Display", system-ui, sans-serif'
 
 function accent(): string {
   const a = typeof document !== 'undefined' ? getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() : ''
@@ -34,13 +34,13 @@ function canvas(w = W, h = H) {
   return { c, g }
 }
 
-const text = (g: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, color: string, opts: { font?: string; weight?: number; align?: CanvasTextAlign; max?: number } = {}) => {
+export const text = (g: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, color: string, opts: { font?: string; weight?: number; align?: CanvasTextAlign; max?: number } = {}) => {
   g.font = `${opts.weight ?? 600} ${size}px ${opts.font ?? SANS}`; g.fillStyle = color; g.textAlign = opts.align ?? 'left'; g.textBaseline = 'alphabetic'
   g.fillText(s, x, y, opts.max)
 }
 
 /** Wraps a sentence into lines that fit `width`. */
-function wrap(g: CanvasRenderingContext2D, s: string, width: number, size: number): string[] {
+export function wrap(g: CanvasRenderingContext2D, s: string, width: number, size: number): string[] {
   g.font = `500 ${size}px ${SANS}`
   const out: string[] = []; let line = ''
   // numbers and Latin words stay whole (「1.75」 never breaks); CJK may break between any two characters
