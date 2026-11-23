@@ -301,6 +301,9 @@ export interface BattingPA {
   note?: string
   /** runner moves between this plate appearance's pitches, in order */
   events?: PlayEvent[]
+  /** 球速 (km/h) of each pitch, by its place in `pitches` (null: not measured); left out when none was. The pitcher's:
+   *  theirs on our plate appearances, ours on theirs. supabase/migrations/2026-11-23_pitch_speeds.sql */
+  speeds?: Array<number | null>
   /** 對方失誤: their fielders' positions that erred while he was up (one entry per error, '?' = not known), every error
    *  but a 失誤 result's own; see data/errors.ts oppErrorsOf. Left out when there is none. */
   errors?: string[]
@@ -365,6 +368,9 @@ export interface PitchingPA {
   note?: string
   /** runner moves between this plate appearance's pitches, in order */
   events?: PlayEvent[]
+  /** 球速 (km/h) of each pitch, by its place in `pitches` (null: not measured); left out when none was. The pitcher's:
+   *  theirs on our plate appearances, ours on theirs. supabase/migrations/2026-11-23_pitch_speeds.sql */
+  speeds?: Array<number | null>
 }
 
 export interface FieldingLine {

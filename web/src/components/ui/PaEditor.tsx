@@ -3,6 +3,7 @@
  * pitch pad, result chips and batted-ball picker used while recording. Changes stay in the editor until 儲存修改.
  */
 import { Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { parseSpeedsText, speedsText } from '../../data/speeds'
 import { AlertTriangle, ArrowDown, ArrowUp, ChevronLeft, ChevronRight, List, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Input } from './Input'
@@ -127,7 +128,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                     </span>
                     <span className="flex items-center gap-2 flex-wrap text-[11px] text-muted">
                       {(p.outsBefore !== undefined || p.basesBefore) && <span className="tnum">{[p.outsBefore !== undefined && `${p.outsBefore} 出局`, p.basesBefore && `壘上 ${p.basesBefore}`].filter(Boolean).join('・')}</span>}
-                      <PitchChips pitches={p.pitches} />
+                      <PitchChips pitches={p.pitches} speeds={p.speeds} />
                       {extra && <span>{extra}</span>}
                     </span>
                   </span>
@@ -259,6 +260,23 @@ export interface TimelineProps {
   /** why the last change was not made (it would put two runners on a base, or a fourth out) */
   notice: string | null
 }
+/**
+ * 球速 of this plate appearance's pitches, typed in pitch order with commas (「132,,128」: the second not measured);
+ * read when the field is left, so a half-typed number is not thrown away.
+ */
+function SpeedsField({ pitches, speeds, onChange }: { pitches: number; speeds?: Array<number | null>; onChange: (speeds: Array<number | null> | undefined) => void }) {
+  const [text, setText] = useState(speedsText(speeds))
+  if (!pitches) return null
+  return (
+    <label className="flex items-center gap-2 text-[12px] text-ink-2 flex-wrap">
+      <span className="shrink-0">球速（公里）</span>
+      <Input size="sm" value={text} onChange={(e) => setText(e.target.value)} onBlur={() => { const v = parseSpeedsText(text, pitches); onChange(v); setText(speedsText(v)) }}
+        placeholder={Array.from({ length: Math.min(pitches, 4) }, (_, k) => (k === 1 ? '' : String(130 + k))).join(',')} aria-label="這個打席每一球的球速" inputMode="numeric" className="w-56 tnum" />
+      <span className="text-[11px] text-muted">依序用逗號分開，沒測到的留空</span>
+    </label>
+  )
+}
+
 /** One segmented control: where someone was when this plate appearance ended. */
 function EndPicker({ value, from, onPick, label, mistake, batter }: { value: End; from: number; onPick: (e: End) => void; label: string; mistake?: { on: boolean; set: (on: boolean) => void }; batter?: boolean }) {
   // a runner put out on the bases is 壘死 (the batter: 出局); whether it was his own baserunning mistake is the
@@ -739,11 +757,13 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
   const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
-  const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}) })
+  // (球速 follow their pitch: an inserted pitch has none, a removed one takes its speed with it)
+  const spd = (next: Array<number | null> | undefined) => ({ speeds: next && next.some((v) => v !== null) ? next : undefined })
+  const removePitch = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.events ? { events: pa.events.map((e) => (e.at > i ? { ...e, at: e.at - 1 } : e)) } : {}), ...(pa.speeds ? spd(pa.speeds.filter((_, k) => k !== i)) : {}) })
   // one pitch picked to change: 在前面插入 (a pitch missed — the plays before it stay before it), 改成, 刪除
   const [pitchSel, setPitchSel] = useState<{ i: number; mode?: 'insert' | 'change' } | null>(null)
   useEffect(() => setPitchSel(null), [index])
-  const insertPitch = (i: number, code: string) => set({ pitches: [...pa.pitches.slice(0, i), code, ...pa.pitches.slice(i)], ...(pa.events ? { events: pa.events.map((e) => (e.at >= i ? { ...e, at: e.at + 1 } : e)) } : {}) })
+  const insertPitch = (i: number, code: string) => set({ pitches: [...pa.pitches.slice(0, i), code, ...pa.pitches.slice(i)], ...(pa.events ? { events: pa.events.map((e) => (e.at >= i ? { ...e, at: e.at + 1 } : e)) } : {}), ...(pa.speeds ? spd([...pa.speeds.slice(0, i), null, ...pa.speeds.slice(i)]) : {}) })
   const changePitch = (i: number, code: string) => set({ pitches: pa.pitches.map((p, k) => (k === i ? code : p)) })
   const c = count(pa.pitches)
   const bases = new Set((pa.basesBefore ?? '').split(''))
@@ -834,8 +854,8 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
       <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球可插入、改或刪；點跑壘事件可刪除</span>}>
         <div className="flex items-center gap-2 min-h-8 flex-wrap">
           {timeline
-            ? <PitchPlays pitches={pa.pitches} events={timeline.step.moves} whoOf={(n) => timeline.nameOf(timeline.step.moves[n]?.row)} onRemovePitch={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} onRemovePlay={timeline.onRemovePlay} />
-            : <PitchChips pitches={pa.pitches} onRemove={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} />}
+            ? <PitchPlays pitches={pa.pitches} speeds={pa.speeds} events={timeline.step.moves} whoOf={(n) => timeline.nameOf(timeline.step.moves[n]?.row)} onRemovePitch={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} onRemovePlay={timeline.onRemovePlay} />
+            : <PitchChips pitches={pa.pitches} speeds={pa.speeds} onRemove={(i) => setPitchSel({ i })} verb="修改" picked={pitchSel?.i} />}
           {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [], ...(pa.events ? { events: pa.events.map((e) => ({ ...e, at: 0 })) } : {}) })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
         </div>
         {pitchSel && pitchSel.i < pa.pitches.length && (
@@ -855,7 +875,8 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         )}
         {/* why the last change to the runners did not go through, right where it was tried */}
         {timeline?.notice && <p role="alert" className="text-[12px] text-critical">{timeline.notice}</p>}
-        <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code] }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} twoStrikes={count(pa.pitches).strikes === 2} />
+        <SpeedsField key={`${index}-${pa.pitches.length}`} pitches={pa.pitches.length} speeds={pa.speeds} onChange={(speeds) => set({ speeds })} />
+        <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code], ...(pa.speeds ? { speeds: [...pa.speeds.slice(0, pa.pitches.length), null] } : {}) }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} twoStrikes={count(pa.pitches).strikes === 2} />
         {timeline && <PlayBuilder side={side} pitches={pa.pitches.length} tl={timeline} />}
       </Section>
 

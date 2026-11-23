@@ -25,6 +25,7 @@
  *     (PitchingPA.runner, a name or 對方代跑): either way the runner keeps the row he reached on, only the name changes.
  */
 import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
+import { alignSpeeds, speedOf } from '../data/speeds'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
 import { END_PITCH, HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, oppPrMark, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
 import type { GameEdit } from '../data/edit'
@@ -67,6 +68,10 @@ export interface RecordState {
   pitching: PitchingPA[]
   /** pitches of the plate appearance in progress */
   pitches: string[]
+  /** 球速 (km/h) of the pitches of the plate appearance in progress, by place (null: not measured); goes on the row at commitPA */
+  speeds?: Array<number | null>
+  /** 記錄球速: ask for each pitch's speed — our pitcher's (`us`), theirs (`opp`) */
+  speedOn?: { us?: boolean; opp?: boolean }
   /** (we field) pitchers who threw the first pitches of the plate appearance in progress and left before it ended: their
    *  counts, in order (the rest of `pitches` is `pitcher`'s); goes on the row at commitPA (PitchingPA.priorPitchers) */
   priorPitchers?: PriorPitch[]
@@ -171,7 +176,7 @@ export const canSwitchHomeAway = (s: RecordState) => !s.batting.length && !s.pit
 export function switchHomeAway(s: RecordState): RecordState {
   if (!canSwitchHomeAway(s)) return s
   const { plays: _p, priorPitchers: _pp, ...rest } = s; void _p; void _pp
-  return { ...rest, game: { ...s.game, homeAway: s.game.homeAway === '主' ? '客' : '主' }, pitches: [], extras: { ...EXTRAS0 }, outs: 0, runners: [] }
+  return { ...rest, game: { ...s.game, homeAway: s.game.homeAway === '主' ? '客' : '主' }, pitches: [], speeds: undefined, extras: { ...EXTRAS0 }, outs: 0, runners: [] }
 }
 export const offense = (s: RecordState): Side => (s.half === 'top') === weBatTop(s) ? 'us' : 'opp'
 export const basesString = (runners: Runner[]) => { const b = runners.map((r) => r.base).sort().join(''); return b || '無' }
@@ -409,7 +414,17 @@ export function reliefPitchers(s: RecordState): string[] {
 }
 
 /** A ball in play (IP) is the last pitch of the plate appearance: nothing is added after it (a double tap stays one IP). */
-export const addPitch = (s: RecordState, code: string): RecordState => (s.pitches[s.pitches.length - 1] === 'IP' ? s : { ...s, pitches: [...s.pitches, code] })
+export const addPitch = (s: RecordState, code: string): RecordState => (s.pitches[s.pitches.length - 1] === 'IP' ? s : { ...s, pitches: [...s.pitches, code], ...(s.speeds?.length ? { speeds: [...s.speeds.slice(0, s.pitches.length), null] } : {}) })
+/** 球速: whether this pitch's speed is asked — our pitcher's while we field, theirs while we bat (RecordState.speedOn). */
+export const speedAsked = (s: RecordState) => !!(offense(s) === 'opp' ? s.speedOn?.us : s.speedOn?.opp)
+/** 球速 of pitch `at` of the plate appearance in progress (null: not measured). */
+export function setSpeed(s: RecordState, at: number, kmh: number | null): RecordState {
+  if (at < 0 || at >= s.pitches.length) return s
+  const speeds = Array.from({ length: s.pitches.length }, (_, k) => s.speeds?.[k] ?? null)
+  speeds[at] = speedOf(kmh)
+  return { ...s, speeds }
+}
+export const setSpeedOn = (s: RecordState, side: 'us' | 'opp', on: boolean): RecordState => ({ ...s, speedOn: { ...s.speedOn, [side]: on } })
 /** (we field) the pitches of the count in progress by who threw them: the pitcher now's, and the ones who left (priorPitchers). */
 export function liveSplit(s: RecordState): { current: number; prior: PriorPitch[] } {
   const prior = s.priorPitchers ?? []
@@ -424,7 +439,7 @@ export function undoPitch(s: RecordState): RecordState {
   const kept = prior.filter((p) => p.pitches > 0)
   const { priorPitchers: _p, ...rest } = s
   void _p
-  return { ...rest, pitches, ...(kept.length ? { priorPitchers: kept } : {}) }
+  return { ...rest, pitches, ...(kept.length ? { priorPitchers: kept } : {}), ...(s.speeds?.length ? { speeds: s.speeds.slice(0, pitches.length) } : {}) }
 }
 export const addExtra = (s: RecordState, key: Exclude<keyof Extras, 'errors' | 'oppErrors'>): RecordState => ({ ...s, extras: { ...s.extras, [key]: s.extras[key] + 1 } })
 /** One error by our fielder at `pos` during the opponent plate appearance in progress (a hit plus an error, a bad throw…). */
@@ -1050,7 +1065,9 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   const batting = s.batting.map((p) => ({ ...p }))
   const pitching = s.pitching.map((p) => ({ ...p }))
   let outs = s.outs
-  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: withInPlay(s.pitches, plan.result), result: plan.result, loc: plan.loc, traj: plan.traj, quality: plan.quality }
+  const finalPitches = withInPlay(s.pitches, plan.result)
+  const speeds = alignSpeeds(s.speeds, finalPitches.length)
+  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), ...(speeds ? { speeds } : {}), pitches: finalPitches, result: plan.result, loc: plan.loc, traj: plan.traj, quality: plan.quality }
   // (their 代跑 put in during this plate appearance: when, for the 文字轉播 — data/broadcast.ts oppPrMarks)
   const prs = side === 'opp' ? (s.oppPrAt ?? []).map((x) => oppPrMark(x.label, x.at)) : []
   const note = [s.extras.pka ? `牽制 ${s.extras.pka} 次` : '', ...prs, plan.note?.trim() ?? ''].filter(Boolean).join('；') || undefined
@@ -1147,6 +1164,7 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
   next.outs = outs
   next.runners = runners.sort((a, b) => b.base - a.base)
   next.pitches = []
+  delete next.speeds
   delete next.priorPitchers
   if (side === 'opp') { delete next.oppPrAt; delete next.oppPh2 }
   next.extras = { ...EXTRAS0 }
@@ -1340,15 +1358,16 @@ export function settlePending(s: RecordState): RecordState {
  */
 export function unfinishedRow(s: RecordState): RecordState {
   if (!s.pitches.length) return s
-  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: s.pitches.slice(), result: UNFINISHED }
+  const sp = alignSpeeds(s.speeds, s.pitches.length)
+  const base = { gameId: s.game.id, inning: s.inning, outsBefore: s.outs, basesBefore: basesString(s.runners), pitches: s.pitches.slice(), result: UNFINISHED, ...(sp ? { speeds: sp } : {}) }
   if (offense(s) === 'us') {
     const slot = s.lineup[s.slot]
     const row: BattingPA = { ...base, order: s.slot + 1, batter: slot?.name ?? '', ...(slot?.pos ? { pos: slot.pos } : {}), sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...oppFields(s.oppPitcher) }
-    return { ...s, batting: [...s.batting, row], pitches: [] }
+    return { ...s, batting: [...s.batting, row], pitches: [], speeds: undefined }
   }
   if (!s.pitcher) return s
   const row: PitchingPA = { ...base, pitcher: s.pitcher, sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}) }
-  return { ...s, pitching: [...s.pitching, row], pitches: [] }
+  return { ...s, pitching: [...s.pitching, row], pitches: [], speeds: undefined }
 }
 
 /** End the half-inning: runners left on base get L, sides switch, inning advances after the bottom half. */
@@ -1364,7 +1383,7 @@ export function endHalf(s: RecordState): RecordState {
   if (offense(s) === 'opp') recallEarned(pitching, s.inning, s.earnedByHand)
   const { priorPitchers: _pp, oppPrAt: _pr, oppPh2: _ph, ...kept } = s
   void _pp; void _pr; void _ph
-  return { ...kept, batting, pitching, runners: [], outs: 0, pitches: [], extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
+  return { ...kept, batting, pitching, runners: [], outs: 0, pitches: [], speeds: undefined, extras: { ...EXTRAS0 }, plays: [], half: s.half === 'top' ? 'bottom' : 'top', inning: s.half === 'bottom' ? s.inning + 1 : s.inning }
 }
 
 export interface Score { us: number; opp: number; lineUs: number[]; lineOpp: number[] }

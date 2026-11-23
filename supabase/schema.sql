@@ -882,4 +882,15 @@ grant execute on function add_member(text, text, text) to authenticated;
 grant execute on function set_member_role(text, text) to authenticated;
 
 
+-- 2026-11-23 球速 (supabase/migrations/2026-11-23_pitch_speeds.sql)
+alter table batting_pa add column if not exists pitch_speeds integer[];
+alter table pitching_pa add column if not exists pitch_speeds integer[];
+
+-- as long as the pitches at most, each one a believable speed
+do $$
+begin
+  begin alter table batting_pa add constraint batting_pa_pitch_speeds check (pitch_speeds is null or (coalesce(array_length(pitch_speeds, 1), 0) <= 40 and 0 < all (array_replace(pitch_speeds, null, 100)) and 250 > all (array_replace(pitch_speeds, null, 100)))) not valid; exception when duplicate_object then null; end;
+  begin alter table pitching_pa add constraint pitching_pa_pitch_speeds check (pitch_speeds is null or (coalesce(array_length(pitch_speeds, 1), 0) <= 40 and 0 < all (array_replace(pitch_speeds, null, 100)) and 250 > all (array_replace(pitch_speeds, null, 100)))) not valid; exception when duplicate_object then null; end;
+end $$;
+
 notify pgrst, 'reload schema';
