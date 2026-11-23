@@ -20,6 +20,7 @@ import { outsCredited } from './stats'
 import { cleanErrors, cleanOppErrors, errorsOf } from './errors'
 import { CHARGE_COUNTS, defenseTimeline, parseDayRoster, type DefenseStop } from './gameRoster'
 import { cleanTime } from './gameTime'
+import { alignSpeeds } from './speeds'
 
 const OUT_CODES: Record<string, number> = { I: 1, II: 2, III: 3 }
 const REACH = new Set(['一安', '內安', '二安', '場地二安', '三安', '保送', '故四', '觸身', '失誤', '野選', '妨礙'])
@@ -31,6 +32,12 @@ export interface GameWarning { gameId: string; message: string }
 const cleanResult = (r: string) => { const t = (r ?? '').trim(); return RESULT_ALIASES[t] ?? t }
 const cleanCode = (c?: string) => { const t = (c ?? '').trim().toUpperCase(); return t || undefined }
 const cleanPitch = (p: string) => p.trim().toUpperCase()
+/** The pitches tidied (blanks dropped) and their 球速 kept with them, pitch by pitch. */
+function cleanPitches(pitches: string[], speeds?: Array<number | null>): { pitches: string[]; speeds?: Array<number | null> } {
+  const keep = pitches.map((p, k) => [cleanPitch(p), speeds?.[k] ?? null] as const).filter(([p]) => p)
+  const sp = alignSpeeds(keep.map(([, v]) => v), keep.length)
+  return { pitches: keep.map(([p]) => p), ...(sp ? { speeds: sp } : {}) }
+}
 const HOLE_BY_NAME: Record<string, number> = Object.fromEntries(Object.entries(LOC_HOLES).map(([k, v]) => [v, Number(k)]))
 /** 落點: a fielder number 1–9, a gap code (56 / 46 / 34 / 78 / 89) or its name (三游 …); anything else is dropped. */
 export const cleanLoc = (v: unknown): number | undefined => {
@@ -489,14 +496,14 @@ export function normalizeDataset(input: Dataset, place: AuditPlace = 'page'): { 
   const warnings: GameWarning[] = []
   const roster: Player[] = input.roster.map((p) => ({ ...p, name: p.name.trim(), primaryPos: p.primaryPos?.trim().toUpperCase() || undefined, secondaryPos: p.secondaryPos?.trim().toUpperCase() || undefined }))
   const names = new Set(roster.map((p) => p.name))
-  const batting: BattingPA[] = input.batting.map(({ runner, oppPitcher, oppHand, errors, ...p }) => ({
-    ...p, ...oppOf(oppPitcher, oppHand), ...(cleanOppErrors(errors).length ? { errors: cleanOppErrors(errors) } : {}), batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const batting: BattingPA[] = input.batting.map(({ runner, oppPitcher, oppHand, errors, speeds, ...p }) => ({
+    ...p, ...oppOf(oppPitcher, oppHand), ...(cleanOppErrors(errors).length ? { errors: cleanOppErrors(errors) } : {}), batter: p.batter.trim(), ...(runner?.trim() && runner.trim() !== p.batter.trim() ? { runner: runner.trim() } : {}), pos: p.pos?.trim().toUpperCase() || undefined, ...cleanPitches(p.pitches, speeds), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,
   }))
-  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, oppBats, priorPitchers, ...p }) => ({
-    ...p, ...(cleanPrior(priorPitchers, p.pitches.length).length ? { priorPitchers: cleanPrior(priorPitchers, p.pitches.length) } : {}), ...(cleanBats(oppBats) ? { oppBats: cleanBats(oppBats) } : {}), ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), pitches: p.pitches.map(cleanPitch).filter(Boolean), result: cleanResult(p.result), code: cleanCode(p.code),
+  const pitching: PitchingPA[] = input.pitching.map(({ errors, oppBatter, runner, rbi, oppBats, priorPitchers, speeds, ...p }) => ({
+    ...p, ...(cleanPrior(priorPitchers, p.pitches.length).length ? { priorPitchers: cleanPrior(priorPitchers, p.pitches.length) } : {}), ...(cleanBats(oppBats) ? { oppBats: cleanBats(oppBats) } : {}), ...(oppRbiOf(rbi) ? { rbi: oppRbiOf(rbi) } : {}), ...(oppBatter?.trim() ? { oppBatter: oppBatter.trim() } : {}), ...oppRunnerOf(runner, oppBatter), ...(cleanErrors(errors).length ? { errors: cleanErrors(errors) } : {}), pitcher: p.pitcher.trim(), ...cleanPitches(p.pitches, speeds), result: cleanResult(p.result), code: cleanCode(p.code),
     loc: cleanLoc(p.loc), traj: p.traj?.trim().toUpperCase() || undefined, quality: p.quality?.trim() || undefined,
     inning: isNum(p.inning) && p.inning > 0 ? p.inning : 0, outsBefore: isNum(p.outsBefore) ? p.outsBefore : undefined,
     basesBefore: p.basesBefore?.trim() || undefined,

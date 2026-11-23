@@ -98,7 +98,7 @@ export function mirrorGame(game: Game, rows: { batting: BattingPA[]; pitching: P
     return tidy<BattingPA>({
       gameId: id, inning: p.inning, outsBefore: p.outsBefore, basesBefore: p.basesBefore, order: p.oppOrder, pos: batter ? posAt(batter, p.inning) : undefined,
       batter, runner: p.runner && p.runner !== OPP_PR_UNNAMED ? p.runner : undefined,
-      pitches: p.pitches, result: p.result, loc: p.loc, traj: p.traj, quality: p.quality,
+      pitches: p.pitches, speeds: p.speeds, result: p.result, loc: p.loc, traj: p.traj, quality: p.quality,
       sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: isRun(p.code) ? 1 : 0, rbi: p.rbi ?? 0,
       code: p.code === 'ER' ? 'R' : p.code, note: p.note, events: p.events, errors,
       oppPitcher: p.pitcher || undefined, oppHand: handOf(player.get(p.pitcher)),
@@ -128,7 +128,7 @@ export function mirrorGame(game: Game, rows: { batting: BattingPA[]; pitching: P
     return tidy<PitchingPA>({
       gameId: id, inning: b.inning, outsBefore: b.outsBefore, basesBefore: b.basesBefore, oppOrder: b.order, pitcher: pitchers[i] ?? '',
       oppBatter: b.batter || undefined, runner: b.runner,
-      pitches: b.pitches, result: b.result, loc: b.loc, traj: b.traj, quality: b.quality,
+      pitches: b.pitches, speeds: b.speeds, result: b.result, loc: b.loc, traj: b.traj, quality: b.quality,
       sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, errors: withOurErrors([], list, b.result, b.loc), rbi: b.rbi || undefined,
       oppBats: batsOf(player.get(b.batter)), code: b.run > 0 || b.code === 'R' ? 'ER' : b.code, note: b.note, events: b.events,
     })

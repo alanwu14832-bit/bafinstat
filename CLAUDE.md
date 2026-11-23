@@ -44,7 +44,9 @@ A database change needs a migration in both repos, and the user must run it in b
   gets its outs and runners again, a third out is refused). 好壞球分佈 is `components/charts/StrikeRatioCard` (share, sortable).
 - 球速 (2026-11-23): `speeds` on a plate appearance, one per pitch (null = not measured; `data/speeds.ts`), stored as
   `pitch_speeds` (`2026-11-23_pitch_speeds.sql`). 紀錄比賽 asks with a number pad (`SpeedPad`) when `RecordState.speedOn`
-  says so for the pitcher on the mound (us / opp); 修改資料 has a 球速 field; the pitch chips show them.
+  says so for the pitcher on the mound (us / opp); 修改資料 has a 球速 field; the pitch chips show them. Step 2: `speedSummary`
+  (球員 → 投球 `SpeedCard`: 最快, 均速 of every measured pitch — no pitch types —, per inning, per game), the 文字轉播 (each
+  pitch's km/h, 「最快」 on the summary line, 上一球 on /live) and Excel (球速 「132,,128」, the last input of 打席紀錄 / 投球紀錄).
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

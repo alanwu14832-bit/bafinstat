@@ -38,6 +38,8 @@ import { SplitsCard } from '../components/ui/SplitsCard'
 import { BattedBallTable } from '../components/ui/BattedBallTable'
 import { minOutsPitched, minPlateAppearances, outsGapText, paGapText } from '../data/qualify'
 import { DataTable, type Column } from '../components/ui/DataTable'
+import { SpeedCard } from '../components/ui/SpeedCard'
+import { speedSummary } from '../data/speeds'
 import { EmptyState } from '../components/ui/EmptyState'
 import { DemoBanner } from '../components/ui/DemoBanner'
 import { RadarCard } from '../components/charts/RadarCard'
@@ -330,6 +332,9 @@ export function PlayersPage() {
   }, [pitchLog, s.pitching, selected, statParams])
   // where the batters he faced hit the ball
   const pitchSpray = useMemo(() => sprayCounts(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
+  // 球速: only for a pitcher with a measured pitch in the filtered games
+  const speed = useMemo(() => speedSummary(s.pitching.filter((p) => p.pitcher === selected)), [s.pitching, selected])
+  const speedGames = useMemo(() => [...pitchLog].reverse(), [pitchLog])
   // 情境拆分: only his own plate appearances (not the ones he pinch-ran on) / the batters he faced
   const splitBat = useMemo(() => s.batting.filter((p) => p.batter === selected), [s.batting, selected])
   const splitPit = useMemo(() => s.pitching.filter((p) => p.pitcher === selected), [s.pitching, selected])
@@ -651,6 +656,7 @@ export function PlayersPage() {
           </div>
           {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
             : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
+          {speed && <SpeedCard summary={speed} games={speedGames} onGame={openGame} />}
           <SplitsCard side="pit" only="bats" title="對左打・對右打" subtitle="這位投手面對左打者、右打者的成績（被打擊率、被OPS 越低越好）；打席不到 10 個的列變淡。" rows={splitPit} who={player.name} />
           <SplitsCard side="pit" rows={splitPit} who={player.name} title="情境拆分（面對的打者）" />
           <Card title="逐場投球" subtitle="點一列看那一場" flush>
