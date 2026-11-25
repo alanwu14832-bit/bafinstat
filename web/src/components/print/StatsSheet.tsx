@@ -1,5 +1,5 @@
 import { useStats } from '../../hooks/useStats'
-import { useDataStore } from '../../store/data'
+import { usePageFilters } from '../../hooks/usePageFilters'
 import { scopeText } from '../layout/FilterChips'
 import { sortNames } from '../../data/rosterSort'
 import { TEAM } from '../../config/team'
@@ -28,7 +28,7 @@ const PIT_COLS: Array<[string, (l: PitchingLine) => string | number]> = [
 /** 單頁累計成績表 (A4 portrait): the batting and pitching lines of the current filter, with team totals. */
 export function StatsSheet({ sort }: { sort: StatsSort }) {
   const s = useStats()
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const roster = s.dataset.roster
   const number = new Map(roster.map((p) => [p.name, p.number ?? '']))
   const batters = s.batters.filter((b) => b.pa >= 1)

@@ -224,6 +224,11 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const pickBoxView = (v: BoxView) => { setBoxView(v); writeBoxView(v) }
   const [filter, setFilter] = useState<PbpFilter>('all')
   const editable = !current.game.isDemo ? extractGame(base, id) : null
+  // 逐球紀錄: a 紀錄員 or 管理者 taps a plate appearance and 修改資料 opens on it (anyone else: the rows do nothing)
+  const openPa = editable && canEdit && !editing ? (side: 'bat' | 'pit', index: number) => {
+    editView.current = { tab: side, paView: 'tap', sel: { side, index } }
+    setNotice(null); setEditRound(0); setEditing(true)
+  } : undefined
   // this game's rows from every game (whatever the filter; a 隊內賽's other side too); season counts from the team's games
   const ds = s.full
   const official = useMemo(() => intraView(s.full, 'exclude'), [s.full])
@@ -546,8 +551,8 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                 {!intra && current.game.opponent.trim() && <OpponentScoutCard ds={official} opponent={current.game.opponent} title={`歷來對 ${current.game.opponent}`} />}
               </>
             )}
-            {tab === 'bat' && <Card title={`${intra ? names.us : '我隊'}打擊・逐球紀錄`} subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} /></Card>}
-            {tab === 'pit' && <Card title={`${intra ? names.us : '我隊'}投手・逐球紀錄`} subtitle={pbpSubtitle(`${intra ? names.opp : '對方'}每個打席；換投以分隔線標示${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} /></Card>}
+            {tab === 'bat' && <Card title={`${intra ? names.us : '我隊'}打擊・逐球紀錄`} subtitle={pbpSubtitle(`每一列是一個打席，依局數分組${openPa ? '；點一列直接修改那個打席' : ''}${winRows.bat.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<BattingPlayByPlay pas={pbpBat} flags={flags.bat} visible={visible} wording="phrase" win={winRows.bat} onOpen={openPa && ((i) => openPa('bat', i))} /></Card>}
+            {tab === 'pit' && <Card title={`${intra ? names.us : '我隊'}投手・逐球紀錄`} subtitle={pbpSubtitle(`${intra ? names.opp : '對方'}每個打席；換投以分隔線標示${openPa ? '；點一列直接修改那個打席' : ''}${winRows.pit.size ? `；WPA ${WPA_DISCLAIMER}` : ''}`)} action={<PitchLegend />} flush>{filterBar}<PitchingPlayByPlay pas={pbpPit} flags={flags.pit} visible={visible} wording="phrase" win={winRows.pit} onOpen={openPa && ((i) => openPa('pit', i))} /></Card>}
             {tab === 'feed' && <Broadcast halves={feed} weTop={current.game.homeAway === '客'} opponent={current.game.opponent} allOpen />}
             {tab === 'roster' && <DayRosterCard a={{ ...appearances, bench: sortNames(appearances.bench, base.roster, sortMode) }} hasRoster={hasRosterNames(current.game.dayRoster)} reentry={!!current.game.dayRoster?.reentry} onPlayer={openPlayer} />}
             {current.game.note && <p className="text-[12px] text-muted">{current.game.note}</p>}

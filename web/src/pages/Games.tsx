@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Sheet } from '../components/ui/Sheet'
@@ -48,7 +49,7 @@ export function GamesPage() {
 
   // the team's games and every 隊內賽 (once, from its stored side), whatever the 隊內賽 filter says — only them when it
   // says so; the other filters (杯賽, 期間…) apply to both
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const listed = useMemo(() => {
     const intra = filterGames(intraView(s.full, 'only'), { ...filters, opponent: [], result: [] }).summaries.filter((x) => !isMirror(x.game))
     return [...(filters.intra === 'only' ? [] : s.summaries), ...intra].sort((a, b) => a.game.date.localeCompare(b.game.date) || a.game.id.localeCompare(b.game.id))

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { PageHeader } from '../components/layout/PageHeader'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
@@ -45,15 +46,16 @@ export function OverviewPage() {
   const s = useStats()
   const openGame = useOpenGame()
   const { summary, team, teamPitch, summaries } = s
-  const opponentFilter = useDataStore((st) => st.filters.opponent)
-  const tournamentFilter = useDataStore((st) => st.filters.tournament)
+  const pageFilters = usePageFilters()
+  const opponentFilter = pageFilters.opponent
+  const tournamentFilter = pageFilters.tournament
   const params = s.params
   const history = useHistory()
   const stories = useMemo(() => teamStories({ dataset: s.dataset, summaries, batting: s.batting, pitching: s.pitching, params, history }), [s.dataset, summaries, s.batting, s.pitching, params, history])
   // 逐季戰績: the filtered games, one row per season
   const seasonRows = useMemo(() => teamSeasons(summaries, s.batting, s.pitching, s.dataset, params), [summaries, s.batting, s.pitching, s.dataset, params])
   const setFilters = useDataStore((st) => st.setFilters)
-  const filters = useDataStore((st) => st.filters)
+  const filters = pageFilters
   const next = useMemo(() => { const today = new Date().toISOString().slice(0, 10); return scheduledGames(s.dataset.games).find((g) => g.date >= today) }, [s.dataset.games])
   const resetFilters = useDataStore((st) => st.resetFilters)
   // 一般人 see the season and the recent games; the full numbers are for the team's accounts (球員 and up)

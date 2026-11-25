@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useOpenGame } from '../hooks/useOpenGame'
@@ -165,7 +166,7 @@ export function PlayersPage() {
   const [story, setStory] = useState(false)
   const [rosterView, setRosterView] = useState<'all' | 'reg'>('all')
   const base = useDataStore((st) => st.base)
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const goWithFilters = useNavigateWithFilters()
   // every game, for the 生涯 tab, the 里程碑 story and the all-time streak rank
   const history = useHistory()

@@ -8,6 +8,7 @@ import { POSITION_LABEL } from '../../lib/fmt'
 import { useFilterOptions } from '../../hooks/useStats'
 import { useDataStore } from '../../store/data'
 import { DEFAULT_FILTERS, type Filters } from '../../data/types'
+import { ALL_FILTERS, maskFilters, type FilterKey } from '../../hooks/usePageFilters'
 import { SEASON_START, seasonLabel, seasonOfDate, seasonRange } from '../../data/seasons'
 
 type Preset = 'all' | 'season' | 'last90'
@@ -47,15 +48,21 @@ export interface FilterBarProps {
   className?: string
   /** 'row' = one 32px toolbar row (desktop); 'stack' = full-width controls with labels (phone sheet). */
   layout?: 'row' | 'stack'
+  /** the filters this page offers (hooks/usePageFilters); all of them when left out */
+  keys?: FilterKey[]
 }
 
 /** Global filters. Every page reads the same slice. Demo data is toggled on the import page. */
-export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
+export function FilterBar({ className, layout = 'row', keys = ALL_FILTERS }: FilterBarProps) {
   const filters = useDataStore((s) => s.filters)
   const setFilters = useDataStore((s) => s.setFilters)
   const resetFilters = useDataStore((s) => s.resetFilters)
   const opts = useFilterOptions()
-  const isDefault = activeFilterCount(filters) === 0
+  const isDefault = activeFilterCount(maskFilters(filters, keys)) === 0
+  const on = new Set(keys)
+  // 重設: only what this page offers (a 守位 picked on 打擊 stays for 打擊)
+  const resetShown = () => setFilters(Object.fromEntries(Object.entries(maskFilters(DEFAULT_FILTERS, ALL_FILTERS)).filter(([k]) => on.has((k === 'from' || k === 'to' ? 'period' : k) as FilterKey))) as Partial<Filters>)
+  void resetFilters
   const stack = layout === 'stack'
   const size = stack ? 'md' : 'sm'
 
@@ -91,34 +98,44 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
       options={[{ value: 'exclude', label: '不含' }, { value: 'include', label: '含隊內賽' }, { value: 'only', label: '只看隊內賽' }]} />,
   ]
 
+  // the controls this page offers, in the toolbar's order
+  const pick = (k: FilterKey, el: (typeof selects)[number]) => (on.has(k) ? el : null)
+  const [tSel, pSel, oSel, hSel, rSel, iSel] = selects
+  const rowSelects = [pick('position', pSel), pick('opponent', oSel), pick('homeAway', hSel), pick('result', rSel), pick('intra', iSel)].filter(Boolean)
+  const period = on.has('period')
+
   if (stack) {
     return (
       <div className={cx('flex flex-col gap-4', className)} role="group" aria-label="全域篩選">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-ink-2">期間</span>
-          {presetsEl}
-          <div className="grid grid-cols-2 gap-2">
-            <input type="date" aria-label="起始日期" className={dateCls} value={filters.from} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ from: e.target.value })} />
-            <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
+        {period && (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium text-ink-2">期間</span>
+            {presetsEl}
+            <div className="grid grid-cols-2 gap-2">
+              <input type="date" aria-label="起始日期" className={dateCls} value={filters.from} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ from: e.target.value })} />
+              <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col gap-4">{selects.filter((_, i) => i !== 3 && i !== 5)}</div>
-        <div className="grid grid-cols-1 gap-2">{[selects[3], selects[5]]}</div>
-        <Button variant="outline" icon={<RotateCcw />} onClick={resetFilters} disabled={isDefault} className="w-full">重設篩選</Button>
+        )}
+        <div className="flex flex-col gap-4">{[pick('tournament', tSel), pick('position', pSel), pick('opponent', oSel), pick('result', rSel)].filter(Boolean)}</div>
+        <div className="grid grid-cols-1 gap-2">{[pick('homeAway', hSel), pick('intra', iSel)].filter(Boolean)}</div>
+        <Button variant="outline" icon={<RotateCcw />} onClick={resetShown} disabled={isDefault} className="w-full">重設篩選</Button>
       </div>
     )
   }
 
   return (
     <div className={cx('flex items-center gap-2 min-w-max', className)} role="group" aria-label="全域篩選">
-      {selects[0]}
-      {presetsEl}
-      <input type="date" aria-label="起始日期" className={dateCls} value={filters.from} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ from: e.target.value })} />
-      <span className="text-muted text-xs -mx-0.5">–</span>
-      <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
-      {selects.slice(1)}
+      {pick('tournament', tSel)}
+      {period && <>
+        {presetsEl}
+        <input type="date" aria-label="起始日期" className={dateCls} value={filters.from} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ from: e.target.value })} />
+        <span className="text-muted text-xs -mx-0.5">–</span>
+        <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
+      </>}
+      {rowSelects}
       {/* (an icon only: with a word it would push the row past the room it has and into the 篩選 button) */}
-      {!isDefault && <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={resetFilters} aria-label="重設篩選" title="重設篩選" className="px-2" />}
+      {!isDefault && <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={resetShown} aria-label="重設篩選" title="重設篩選" className="px-2" />}
     </div>
   )
 }

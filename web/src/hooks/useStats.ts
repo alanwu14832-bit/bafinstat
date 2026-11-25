@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { usePageFilters } from './usePageFilters'
 import { applyFilters, uniqueSorted, type FilteredData } from '../data/filters'
 import { battingLines, errorsByPosition, fieldingLines, ourRunsOf, pitchingLines, resolveParams, teamBatting, teamPitching, teamSummary, type BattingLine, type FieldingStat, type PitchingLine, type TeamSummary } from '../data/stats'
 import type { Dataset, StatParams } from '../data/types'
@@ -31,7 +32,7 @@ let last: { inputs: Inputs; out: Computed } | null = null
 export function useStats(): Computed {
   const base = useDataStore((s) => s.base)
   const demo = useDataStore((s) => s.demo)
-  const filters = useDataStore((s) => s.filters)
+  const filters = usePageFilters()
   const rawParams = useDataStore((s) => s.params)
   // the games being recorded right now: their result is 比賽進行中 and the W-L leaves them out (hooks/useLiveGames.ts)
   const live = useLiveIds()

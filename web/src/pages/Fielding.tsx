@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { Download } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
-import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
@@ -70,7 +70,7 @@ export function FieldingPage() {
   const full = withJerseyColumn(columns)
   const tableColumns = tableView.compact ? compactColumns(full, ['tc', 'e', 'fpct'], inferredTag) : tagNameColumn(full, inferredTag)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
-  const csvFilters = useDataStore((st) => st.filters)
+  const csvFilters = usePageFilters()
   const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`守備成績.csv`, full, withNumbers(s.fielders, s.dataset.roster), [`${TEAM_NAME} 守備成績`, scopeText(csvFilters, s.games), `標「推定」者有比賽未填守備紀錄，數字由打席紀錄推算`, `來源：${window.location.href}`])}>CSV</Button>
   return (
     <>
