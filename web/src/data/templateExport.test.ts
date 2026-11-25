@@ -1,11 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { backupTables, parseWorkbook } from './xlsx'
 import { fillTemplate } from './templateExport'
 import { SEED_DATASET } from './seed'
 import type { Dataset, Registration } from './types'
+
+// (these read the 5 MB sample workbook: on a busy CI runner that can take longer than the default 5 s)
+vi.setConfig({ testTimeout: 30_000 })
 
 // unzipping, filling and re-zipping the 3 MB template (then reading it back) takes several seconds on a CI runner
 const SLOW = 60_000

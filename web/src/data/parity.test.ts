@@ -6,12 +6,15 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import * as XLSX from 'xlsx'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { datasetToWorkbook, legacyToDataset, parseWorkbook } from './xlsx'
 import { normalizeDataset } from './normalize'
 import { SEED_DATASET } from './seed'
 import { battingLines, fieldingLines, pitchingLines, summarizeGame } from './stats'
 import type { Dataset } from './types'
+
+// (these read the 5 MB sample workbook: on a busy CI runner that can take longer than the default 5 s)
+vi.setConfig({ testTimeout: 30_000 })
 
 const toBuf = (b: Buffer) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer
 const loadFile = (...parts: string[]) => toBuf(readFileSync(resolve(process.cwd(), '..', 'data', ...parts)))

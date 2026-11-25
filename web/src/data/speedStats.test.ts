@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 import { speedSummary } from './speeds'
 import { datasetToWorkbook, parseWorkbook } from './xlsx'
@@ -12,6 +12,9 @@ import { toGameEdit } from '../record/model'
 import { normalizeGameEdit } from './edit'
 import { playGame, POS, roster } from '../test/simGame'
 import type { Game, PitchingPA } from './types'
+
+// (these read the 5 MB sample workbook: on a busy CI runner that can take longer than the default 5 s)
+vi.setConfig({ testTimeout: 30_000 })
 
 const pa = (gameId: string, inning: number, pitches: string[], speeds?: Array<number | null>) => ({ gameId, inning, pitches, ...(speeds ? { speeds } : {}) })
 

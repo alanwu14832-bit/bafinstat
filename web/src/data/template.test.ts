@@ -5,11 +5,14 @@
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 import { datasetToWorkbook, parseWorkbook } from './xlsx'
 import { SEED_DATASET } from './seed'
 import type { Registration } from './types'
+
+// (these read the 5 MB sample workbook: on a busy CI runner that can take longer than the default 5 s)
+vi.setConfig({ testTimeout: 30_000 })
 
 const templateBuf = () => readFileSync(resolve(process.cwd(), '..', 'data', 'BAFIN_棒球數據總表.xlsx'))
 const arrayBuf = (b: Buffer) => b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer

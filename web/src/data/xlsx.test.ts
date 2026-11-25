@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import * as XLSX from 'xlsx'
 import { datasetToWorkbook, dayRosterCells, dayRosterFromCells, legacyToDataset, rulesCell, rulesFromCell, parseAnyDate, parseLegacyGame, parseWorkbook } from './xlsx'
 import { SEED_DATASET } from './seed'
 import { summarizeGame } from './stats'
 import type { Dataset, GameDayRoster } from './types'
+
+// (these read the 5 MB sample workbook: on a busy CI runner that can take longer than the default 5 s)
+vi.setConfig({ testTimeout: 30_000 })
 
 const load = (f: string) => { const b = readFileSync(resolve(process.cwd(), '..', 'data', 'legacy', f)); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer }
 
