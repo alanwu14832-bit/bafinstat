@@ -60,6 +60,8 @@ const cell = cx(inputCls('sm'), 'h-7 px-1.5 text-[12px] rounded-[6px] w-full')
 
 /** 內滾／犧觸 that put a runner out instead of the batter: 野選 (onEnd). */
 const FC_FROM = new Set(['內滾', '犧觸'])
+/** 外飛／界外飛 (caught: the batter out) and a runner scoring on it, with fewer than two out: a 犧飛 (rule 9.08(d)) */
+const SF_FROM = new Set(['外飛', '界外飛'])
 
 function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, names }: { rows: T[]; cols: Col<T>[]; onChange: (rows: T[]) => void; blank: (prev?: T) => T; listId: string; names: string[] }) {
   const update = (i: number, key: keyof T, raw: string, kind: Kind) => {
@@ -414,6 +416,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
       if (who !== 'batter' && end === 'out' && FC_FROM.has(rows[i].result) && step.batter === 'out' && step.dest[who] !== 'out') {
         const h = setEnd(setBatterResult(half, i, '野選'), i, who, 'out')
         if (!commitHalf(side, rows.map((r, k) => (k === i ? withResult(r, '野選') : r)), h)) setTlNotice(`結果改成「野選」：${rows[i].result === '犧觸' ? '觸擊' : '滾地球'}讓前面的跑者出局、打者安全上一壘（打者也出局的話請選「雙殺」）`)
+        return
+      }
+      // 外飛／界外飛 caught and a runner coming home on it (fewer than two out): a 犧飛 — no at bat, an RBI
+      if (who !== 'batter' && end === 'home' && SF_FROM.has(rows[i].result) && step.batter === 'out' && step.dest[who] !== 'home' && (rows[i].outsBefore ?? 0) < 2) {
+        const h = setEnd(setBatterResult(half, i, '犧飛'), i, who, 'home')
+        const next = rows.map((r, k) => (k === i ? (noRbi ? withResult(r, '犧飛') : withRbi(withResult(r, '犧飛'), 1)) : r))
+        if (!commitHalf(side, next, h)) setTlNotice('結果改成「犧飛」：高飛球被接殺、跑者回本壘得分，不算打數、算打點（沒有接殺而是漏接，請改成「失誤」）')
         return
       }
       let next = base

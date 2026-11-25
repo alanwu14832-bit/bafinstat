@@ -593,6 +593,13 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       setToast({ id: Date.now(), text: `結果改成「野選」：前面的跑者出局、打者上一壘（打者也出局的話請選「雙殺」）` })
       return
     }
+    // 外飛／界外飛 caught and a runner sent home on it (fewer than two out): a 犧飛 — no at bat, the run is his RBI
+    if (plan && row !== 'batter' && d === 'home' && SF_FROM.has(plan.result) && plan.batter === 'out' && plan.runners[row] !== 'home' && state.outs < 2) {
+      setPlan((p) => (p ? { ...p, result: '犧飛' } : p))
+      setDests([[row, d]])
+      setToast({ id: Date.now(), text: '結果改成「犧飛」：高飛球被接殺、跑者回本壘得分，不算打數、算打點（漏接沒接到請改成「失誤」）' })
+      return
+    }
     setDests([[row, d]])
   }
   // several at once (全部進一壘／全部不動)
@@ -1214,6 +1221,8 @@ const INNINGS_CHOICES = Array.from({ length: 12 }, (_, k) => ({ value: String(k 
 
 /** 內滾／犧觸 that put a runner out instead of the batter: 野選 (Live › setDest). */
 const FC_FROM = new Set(['內滾', '犧觸'])
+/** 外飛／界外飛 (caught: the batter out) and a runner scoring on it, with fewer than two out: a 犧飛 (rule 9.08(d)) */
+const SF_FROM = new Set(['外飛', '界外飛'])
 
 function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void }; /** 壘死: 死在哪個壘包 (shown while `show`) */ outAt?: { show: boolean; value: OutAt; set: (a: OutAt) => void; name: string } }) {
   // a runner put out on the bases is 壘死 (the batter: 出局); 「自己跑壘失誤」 next to it says it was his own mistake
