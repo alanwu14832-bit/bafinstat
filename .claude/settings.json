@@ -1,0 +1,14 @@
+{
+  "extraKnownMarketplaces": {
+    "nateherk": {
+      "source": {
+        "source": "github",
+        "repo": "nateherkai/scroll-craft",
+        "ref": "75d81f74e83692add18cd7a8a8e078b8a887a579"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "nateherk-design@nateherk": true
+  }
+}
