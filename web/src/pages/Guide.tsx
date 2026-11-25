@@ -115,7 +115,7 @@ export function GuidePage() {
   return (
     <>
       <PageHeader title="使用指南" description="比賽當天怎麼記、賽後怎麼把資料變成全隊看得到的數據。整個流程只需要一份 Excel 總表和這個網站。"
-        actions={<img src={teamAsset(TEAM.logo)} alt={TEAM.short} className="h-14 w-auto rounded-[var(--radius-sm)] bg-white border border-border p-1" onError={(e) => { e.currentTarget.style.display = 'none' }} />} />
+        actions={<img src={teamAsset(TEAM.logo)} alt={TEAM.short} width={56} height={56} className="h-14 w-auto rounded-[var(--radius-sm)] bg-white border border-border p-1" onError={(e) => { e.currentTarget.style.display = 'none' }} />} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         <Card title="1. 比賽前" subtitle="約 5 分鐘">

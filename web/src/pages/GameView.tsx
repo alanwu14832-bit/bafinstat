@@ -383,17 +383,19 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
     { value: 'roster' as const, label: '登錄名單' },
   ]
   const page = mode === 'page'
+  // the full game page's score line is the page's one main heading (screen readers jump to it); in the quick view it sits under the list's
+  const Title = page ? 'h1' : 'h2'
   return (
     <>
       <div className={cx('sticky z-[3] bg-surface border-b border-border px-5 md:px-6 pt-3 sm:pt-5 pb-3 flex flex-col gap-3', page ? 'top-[var(--topbar-h)] -mx-4 md:-mx-10 md:px-10 rounded-none' : 'top-0')}>
         <div className="flex flex-col-reverse sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4">
           <div className="min-w-0">
             <div className="text-[12px] text-muted tnum">{current.game.date}・{current.game.tournament}・{intra ? `${names.us}${current.game.homeAway === '主' ? '後攻' : '先攻'}` : current.game.homeAway === '主' ? '主場' : '客場'}{current.game.venue ? `・${current.game.venue}` : ''}{gameTimeText(current.game) ? `・${gameTimeText(current.game)}` : ''}</div>
-            <h2 className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
+            <Title className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
               <span>{intra ? `${names.us} ` : `${TEAM_NAME} `}<span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
               <span className="inline-flex items-center gap-1.5">{intra && !live ? <Badge>隊內賽</Badge> : unsure ? <PendingBadge /> : resultBadge(current.result, current.game.id)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
               {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent underline underline-offset-2">看即時比分</Link>}
-            </h2>
+            </Title>
             {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
               <p className="text-[12px] text-ink-2 mt-1.5 flex flex-wrap gap-x-3">
                 {current.game.winningPitcher && <span><span className="text-muted">勝投</span> {current.game.winningPitcher}</span>}
@@ -492,8 +494,8 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                         <span className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-accent"><Stitches width={24} />{l.label}</span>
                         <p className="text-[14px] text-ink leading-relaxed">{l.text}</p>
                         <span className="flex gap-3 text-[12px]">
-                          {l.inning && l.side && <button type="button" onClick={() => goInning(l.side!, l.inning!)} className="text-ink-2 underline underline-offset-2 cursor-pointer hover:text-ink">看第 {l.inning} 局逐球</button>}
-                          {l.player && <Link to={`/players?player=${encodeURIComponent(l.player)}${l.kind === 'pitch' ? '&tab=pitching' : ''}`} className="text-ink-2 underline underline-offset-2 hover:text-ink">看 {l.player}</Link>}
+                          {l.inning && l.side && <button type="button" onClick={() => goInning(l.side!, l.inning!)} className="inline-flex items-center min-h-9 pointer-fine:min-h-0 text-ink-2 underline underline-offset-2 cursor-pointer hover:text-ink">看第 {l.inning} 局逐球</button>}
+                          {l.player && <Link to={`/players?player=${encodeURIComponent(l.player)}${l.kind === 'pitch' ? '&tab=pitching' : ''}`} className="inline-flex items-center min-h-9 pointer-fine:min-h-0 text-ink-2 underline underline-offset-2 hover:text-ink">看 {l.player}</Link>}
                         </span>
                       </li>
                     ))}

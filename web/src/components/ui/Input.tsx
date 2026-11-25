@@ -37,10 +37,10 @@ export function Field({ label, children, className, hint }: { label: string; chi
   )
 }
 
-/** Native checkbox with the site's accent and a 13px label. */
+/** Native checkbox with the site's accent and a 13px label (36 px tall on a touch screen, so a finger can hit it, unless the caller sets its own height). */
 export function Checkbox({ label, checked, onChange, className }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; className?: string }) {
   return (
-    <label className={cx('inline-flex items-center gap-2 text-[13px] text-ink-2 cursor-pointer', className)}>
+    <label className={cx('inline-flex items-center gap-2 text-[13px] text-ink-2 cursor-pointer', !className?.includes('min-h-') && 'min-h-9 pointer-fine:min-h-0', className)}>
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="size-4 accent-[var(--ink)] cursor-pointer" />
       {label}
     </label>

@@ -86,7 +86,7 @@ describe('比賽進行中 where 勝／敗 would be', () => {
   it('the game page: the badge, a link to 即時比分, the score as it stands; 勝 again once finished', async () => {
     writeDraft(recording())
     page()
-    const head = screen.getByRole('heading', { level: 2 })
+    const head = screen.getByRole('heading', { level: 1 })
     expect(within(head).getByText('比賽進行中')).toBeTruthy()
     expect(within(head).queryByText('勝')).toBeNull()
     expect(within(head).queryByText('敗')).toBeNull()

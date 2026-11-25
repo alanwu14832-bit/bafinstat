@@ -159,7 +159,7 @@ describe('games in progress from the cloud', () => {
     let answer: (v: Awaited<ReturnType<typeof listCloudDraftHeads>>) => void = () => undefined
     vi.mocked(listCloudDraftHeads).mockImplementationOnce(() => new Promise((r) => { answer = r }))
     render(<MemoryRouter><GameView summary={summarizeGame(ds, today)} mode="page" onClose={() => undefined} /></MemoryRouter>)
-    const head = screen.getByRole('heading', { level: 2 })
+    const head = screen.getByRole('heading', { level: 1 })
     expect(within(head).getByText('確認中')).toBeTruthy()
     expect(within(head).queryByText('勝')).toBeNull()
     // nothing is being recorded: the result shows
