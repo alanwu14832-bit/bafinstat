@@ -87,3 +87,18 @@ describe('gameShareText', () => {
     expect(t.split('\n').filter((l) => l.startsWith('・'))).toHaveLength(0)
   })
 })
+
+describe('resultPhrase: a hit to an infielder', () => {
+  it('says 方向, so a single to third never reads as 三壘安打 (a triple)', async () => {
+    const { resultPhrase } = await import('./gameText')
+    expect(resultPhrase('一安', 5, 'G')).toBe('三壘方向安打')
+    expect(resultPhrase('一安', 4, 'G')).toBe('二壘方向安打')
+    expect(resultPhrase('內安', 6, 'G')).toBe('游擊內野安打')
+    expect(resultPhrase('二安', 5, 'G')).toBe('三壘方向二壘安打')
+    expect(resultPhrase('一安', 8, 'L')).toBe('中外野安打')
+    expect(resultPhrase('一安', 56, 'G')).toBe('三游間安打')
+    expect(resultPhrase('三安', 9, 'L')).toBe('右外野三壘安打')
+    expect(resultPhrase('一安')).toBe('一壘安打')
+    expect(resultPhrase('內滾', 5, 'G')).toBe('三壘滾地球出局')
+  })
+})
