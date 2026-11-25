@@ -66,6 +66,8 @@ A database change needs a migration in both repos, and the user must run it in b
   else gets plain rows); the 紀錄比賽 setup form is kept on the device while it is filled in (`SetupSnap`, `bafin.record.setup.v1`, for
   that day, cleared on 開始紀錄) so a phone reloading the page brings it back; each page offers its own filters (`hooks/usePageFilters`:
   總覽／投球／比賽 no 守位, 打擊／守備／球員 all, other pages none) and a filter a page does not offer does not apply there (`useStats`).
+- 未完成打席 (2026-11-25): its own panel in 修改資料 (`UnfinishedPanel` in PaEditor: who was up — 打者 on our side, 投手 on theirs —,
+  every pitch inserted / changed / deleted / added (no ball in play), 球速, 備註); the runner's out stays on his own row.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).
