@@ -4,6 +4,7 @@ import { balksIn, playText, playWhen } from '../../data/plays'
 import { inningsOf, placedBases } from '../../record/timeline'
 import { pitchTotals, isHitResult } from '../../data/stats'
 import { POSITION_BY_NUMBER } from '../../data/types'
+import { speedClass } from '../../data/speeds'
 import { cx } from '../../lib/format'
 import { errorsText } from '../../data/errors'
 import { countBeforeText, resultPhrase } from '../../data/gameText'
@@ -39,7 +40,7 @@ export function PitchChips({ pitches, speeds, onRemove, verb = '刪除', picked 
           ? <button key={i} type="button" onClick={() => onRemove(i)} aria-pressed={picked === undefined ? undefined : picked === i} title={`${verb}第 ${i + 1} 球（${s.title}）`} aria-label={`${verb}第 ${i + 1} 球 ${s.title}`} className={cx(cls, picked === i && 'ring-2 ring-[var(--ink)]', 'h-8 min-w-8 text-[12px] cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/50')}>{s.label}</button>
           : <span key={i} title={`第 ${i + 1} 球：${s.title}${kmh ? `・${kmh} 公里` : ''}`} className={cx(cls, 'h-5 min-w-5 text-[11px]')}>{s.label}</span>
         // (a measured pitch carries its speed underneath)
-        return kmh ? <span key={i} className="inline-flex flex-col items-center gap-px">{chip}<span className="text-[9.5px] leading-none text-muted tnum">{kmh}</span></span> : chip
+        return kmh ? <span key={i} className="inline-flex flex-col items-center gap-px">{chip}<span className={cx('text-[9.5px] leading-none tnum', speedClass(kmh) || 'text-muted')}>{kmh}</span></span> : chip
       })}
     </span>
   )

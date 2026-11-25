@@ -58,6 +58,10 @@ A database change needs a migration in both repos, and the user must run it in b
   one-value / `all` links still read). 主客 and 隊內賽 stay single.
 - 犧飛 (2026-11-25, a recorder's report): sending a runner home on a 外飛／界外飛 with fewer than two out turns the result into 犧飛
   (SF_FROM in Record and GameEditor, like FC_FROM's 野選); `data/audit` flags an old 外飛／界外飛 with an RBI as 待核對.
+- 2026-11-25 (players' and recorders' asks): 打擊 page's 擊球強度 is a 強擊率 Hard Hit% bar chart (強 ÷ batted balls with a 強度);
+  即時比分 shows 球速 (under each pitch of 本打席, the last one, the pitcher's 最快 today) lit 黃 125–134 / 紅 135+ (`speedTone` in
+  data/speeds.ts; theme colours `speedClass` in the 文字轉播 and pitch chips); 修改資料 stays open after 儲存修改 (GameView remounts
+  it from the saved game via `key`, at the same tab / plate appearance via `view`), and its 取消 reads 結束修改 when nothing is unsaved.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

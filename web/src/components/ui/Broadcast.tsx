@@ -9,7 +9,7 @@ import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { circled } from '../../data/gameText'
 import { chipWho, scoredItem, type FeedHalf, type FeedItem, type FeedSide, type Score2 } from '../../data/broadcast'
 import { cx } from '../../lib/format'
-import { kmhText } from '../../data/speeds'
+import { kmhText, speedClass } from '../../data/speeds'
 
 export type FeedFilter = 'all' | 'runs'
 const readFilter = (key?: string): FeedFilter => { if (!key) return 'all'; try { return localStorage.getItem(key) === 'runs' ? 'runs' : 'all' } catch { return 'all' } }
@@ -138,7 +138,7 @@ function Item({ it, weTop, mark, open, onToggle }: { it: FeedItem; weTop: boolea
         <span className="min-w-0 text-[14px] text-ink"><span className="text-muted text-[12px] mr-1.5">打擊中</span><b className="font-semibold">{it.who}</b>{it.bats && <span className="text-muted text-[12px] ml-1">{it.bats}</span>}</span>
         <span className="flex flex-col items-end gap-1"><span className="text-[14px] font-semibold tnum text-ink" aria-label={`球數 ${it.count}`}>{it.count}</span>{it.score && <ScoreChip score={it.score} weTop={weTop} mark={mark} />}{it.outs ? <Outs n={it.outs} /> : null}</span>
         <span className="col-start-2 col-span-2 text-[12px] text-muted mt-0.5 flex flex-col gap-0.5">
-          <span><span className="tracking-[0.08em]">{it.tokens || '—'}</span>{it.kmh ? <span className="tnum">・上一球 {kmhText(it.kmh)}</span> : null}</span>
+          <span><span className="tracking-[0.08em]">{it.tokens || '—'}</span>{it.kmh ? <span className="tnum">・上一球 <span className={speedClass(it.kmh)}>{kmhText(it.kmh)}</span></span> : null}</span>
           {it.plays.map((p, i) => <span key={i}>{p}</span>)}
         </span>
       </div>
@@ -169,7 +169,7 @@ function Item({ it, weTop, mark, open, onToggle }: { it: FeedItem; weTop: boolea
             {it.moves.filter((m) => m.at <= 0).map((m, i) => <span key={`m0${i}`}>{m.text}</span>)}
             {it.pitches.map((p) => (
               <span key={p.n} className="flex flex-col gap-0.5">
-                <span className="tnum">{circled(p.n)} {p.word}<span className="text-muted ml-1.5">{p.count}</span>{p.kmh ? <span className="text-muted ml-1.5">{kmhText(p.kmh)}</span> : null}</span>
+                <span className="tnum">{circled(p.n)} {p.word}<span className="text-muted ml-1.5">{p.count}</span>{p.kmh ? <span className={cx('ml-1.5', speedClass(p.kmh) || 'text-muted')}>{kmhText(p.kmh)}</span> : null}</span>
                 {it.moves.filter((m) => m.at === p.n || (p.n === it.pitches.length && m.at > p.n)).map((m, i) => <span key={`m${p.n}${i}`} className="pl-5">{m.text}</span>)}
               </span>
             ))}
