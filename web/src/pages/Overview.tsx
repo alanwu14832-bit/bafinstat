@@ -29,7 +29,7 @@ import { teamSeasons } from '../data/history'
 import { seasonNote } from '../data/seasons'
 import { TeamSeasonsTable } from '../components/ui/TeamSeasonsTable'
 import { DEFAULT_FILTERS } from '../data/types'
-import { scopeText } from '../components/layout/FilterChips'
+import { FilterChips, scopeText } from '../components/layout/FilterChips'
 
 export { resultBadge } from '../components/ui/ResultBadge'
 
@@ -109,9 +109,10 @@ export function OverviewPage() {
   )
   if (level < 1) return (
     <>
-      <PageHeader scoped title="總覽" description={`${TEAM.org}的戰績與最近比賽。`} />
-      <DemoBanner />
+      {/* the opening carries the page's title (the team's name); what the numbers cover and the active filters follow it */}
       <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={heroTitle} />
+      <FilterChips />
+      <DemoBanner />
       {recent(true)}
       <MembersTeaser />
     </>
@@ -119,9 +120,9 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader scoped title="總覽" description={`${TEAM_NAME}・${summary.games} 場比賽，依上方篩選即時計算。`} />
-      <DemoBanner />
       <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={heroTitle} />
+      <FilterChips />
+      <DemoBanner />
       {/* the team's numbers in two labelled groups (打擊 / 投球與守備), each with a way into the full tables */}
       <SummaryHead title="打擊摘要" to="/batting" />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">

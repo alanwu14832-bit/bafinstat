@@ -68,6 +68,15 @@ A database change needs a migration in both repos, and the user must run it in b
   總覽／投球／比賽 no 守位, 打擊／守備／球員 all, other pages none) and a filter a page does not offer does not apply there (`useStats`).
 - 未完成打席 (2026-11-25): its own panel in 修改資料 (`UnfinishedPanel` in PaEditor: who was up — 打者 on our side, 投手 on theirs —,
   every pitch inserted / changed / deleted / added (no ball in play), 球速, 備註); the runner's out stays on his own row.
+- 2026-11-25 (3), the look (all three sites: this one, the 校隊's and `alanwu14832-bit/aloongstat`): a `Card`'s `subtitle` folds behind
+  the ⓘ beside its title (`components/ui/InfoNote.tsx`; `noteOpen` opens it for a warning; printing shows every note); the stitches
+  (`Stitches`) stay on page titles only; 選球紀律 lists batters by 打席 with the numbers on the bars; phones get 區塊快捷鈕 on 打擊 and
+  球員 (`components/layout/SectionNav.tsx`, targets by id / `<Section>`), a fade on the right edge of a table that scrolls sideways
+  (`components/ui/ScrollFade.tsx`, in `DataTable` and the hand-built tables) and dots under 本季看點 (`StoryRow`). 總覽 opens with the
+  開場形象區 (`SeasonHero`: the team's name as the page's h1 over its real record; planes in `components/ui/HeroArt.tsx`, the team's own
+  art, moved by `--hp` on scroll, still under reduced motion, no scroll cue). The team photo is `web/public/hero.jpg` (+ `hero-m.jpg`
+  for phones; `heroPhoto*` in teamDefaults.ts, found at build time by vite.config.ts → `config/hero.ts`); without the file the drawn
+  backdrop stands in. The design rules came from the scroll-craft plugin (.claude/settings.json).
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

@@ -10,6 +10,7 @@ import type { CompareRow } from '../../data/playerMetrics'
 import { prMix } from '../../lib/fmt'
 import { cx } from '../../lib/format'
 import { downloadCompareImage } from '../../lib/shareImage'
+import { ScrollX } from './ScrollFade'
 
 export interface ComparePlayer {
   name: string
@@ -56,7 +57,7 @@ export function CompareGrid({ kind, players, rows, onPick, scope, poolNote, foot
       )}>
       {/* relative: the sr-only 「（最佳）」 spans are absolutely positioned; this makes the scroller clip them instead of
           widening the whole page */}
-      <div className="relative overflow-x-auto">
+      <ScrollX className="relative">
         <table className="border-collapse text-[13px]" style={{ width: 88 + 76 * players.length, minWidth: '100%' }} data-testid="compare-grid">
           <thead>
             <tr>
@@ -94,7 +95,7 @@ export function CompareGrid({ kind, players, rows, onPick, scope, poolNote, foot
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollX>
     </Card>
   )
 }

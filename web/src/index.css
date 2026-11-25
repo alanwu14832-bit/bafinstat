@@ -144,6 +144,12 @@
     from { transform: scaleX(0); }
     to { transform: scaleX(1); }
   }
+  /* 開場形象區: the near plane settles into place once, when the page opens */
+  @keyframes hero-settle {
+    from { opacity: 0; transform: translateY(14px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
+  .hero-settle { animation: hero-settle 700ms var(--ease-out) both; }
   .draw-x {
     transform-origin: left;
     animation: draw-x 600ms var(--ease-out) both;
