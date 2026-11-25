@@ -1,6 +1,7 @@
 import { RotateCcw } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
+import { MultiChips, MultiSelect, type MultiOption } from '../ui/MultiSelect'
 import { cx } from '../../lib/format'
 import { inputCls } from '../ui/Input'
 import { POSITION_LABEL } from '../../lib/fmt'
@@ -32,12 +33,12 @@ function presetRange(p: Preset, maxDate: string): Pick<Filters, 'from' | 'to'> {
 /** Number of filters that differ from the default (the date range counts as one). */
 export function activeFilterCount(f: Filters): number {
   let n = 0
-  if (f.tournament !== DEFAULT_FILTERS.tournament) n++
+  if (f.tournament.length) n++
   if (f.from || f.to) n++
-  if (f.position !== DEFAULT_FILTERS.position) n++
-  if (f.opponent !== DEFAULT_FILTERS.opponent) n++
+  if (f.position.length) n++
+  if (f.opponent.length) n++
   if (f.homeAway !== DEFAULT_FILTERS.homeAway) n++
-  if (f.result !== DEFAULT_FILTERS.result) n++
+  if (f.result.length) n++
   if (f.intra !== DEFAULT_FILTERS.intra) n++
   return n
 }
@@ -74,17 +75,18 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
       ))}
     </div>
   )
+  // 杯賽, 守位, 對手, 勝敗 take several values (a dropdown of checkboxes; chips in the phone sheet)
+  // (the toolbar keeps each control's width whatever is picked: a wider one would push the row into the 篩選 button)
+  const multi = (key: string, label: string, options: MultiOption[], value: string[], set: (v: string[]) => void, width: string) => (stack
+    ? <MultiChips key={key} label={label} options={options} value={value} onChange={set} />
+    : <MultiSelect key={key} label={label} size={size} options={options} value={value} onChange={set} className={width} />)
   const selects = [
-    <Select key="t" id={`filter-tournament${stack ? "-sheet" : ""}`} label="杯賽" size={size} value={filters.tournament} onChange={(e) => setFilters({ tournament: e.target.value })} className={stack ? 'w-full' : undefined}
-      options={[{ value: 'all', label: '全部' }, ...opts.tournaments.map((t) => ({ value: t, label: t }))]} />,
-    <Select key="p" id={`filter-position${stack ? "-sheet" : ""}`} label="守位" size={size} value={filters.position} onChange={(e) => setFilters({ position: e.target.value })} className={stack ? 'w-full' : undefined}
-      options={[{ value: 'all', label: '全部' }, ...opts.positions.map((p) => ({ value: p, label: `${p} ${POSITION_LABEL[p] ?? ''}`.trim() }))]} />,
-    <Select key="o" id={`filter-opponent${stack ? "-sheet" : ""}`} label="對手" size={size} value={filters.opponent} onChange={(e) => setFilters({ opponent: e.target.value })} className={stack ? 'w-full' : undefined}
-      options={[{ value: 'all', label: '全部' }, ...opts.opponents.map((o) => ({ value: o, label: o }))]} />,
+    multi('t', '杯賽', opts.tournaments.map((t) => ({ value: t, label: t })), filters.tournament, (v) => setFilters({ tournament: v }), 'w-[136px]'),
+    multi('p', '守位', opts.positions.map((p) => ({ value: p, label: `${p} ${POSITION_LABEL[p] ?? ''}`.trim() })), filters.position, (v) => setFilters({ position: v }), 'w-[104px]'),
+    multi('o', '對手', opts.opponents.map((o) => ({ value: o, label: o })), filters.opponent, (v) => setFilters({ opponent: v }), 'w-[120px]'),
     <Select key="h" id={`filter-homeAway${stack ? "-sheet" : ""}`} label="主客" size={size} value={filters.homeAway} onChange={(e) => setFilters({ homeAway: e.target.value as Filters['homeAway'] })} className={stack ? 'w-full' : undefined}
       options={[{ value: 'all', label: '全部' }, { value: '主', label: '主場' }, { value: '客', label: '客場' }]} />,
-    <Select key="r" id={`filter-result${stack ? "-sheet" : ""}`} label="勝敗" size={size} value={filters.result} onChange={(e) => setFilters({ result: e.target.value as Filters['result'] })} className={stack ? 'w-full' : undefined}
-      options={[{ value: 'all', label: '全部' }, { value: 'W', label: '勝' }, { value: 'L', label: '敗' }, { value: 'T', label: '和' }]} />,
+    multi('r', '勝敗', [{ value: 'W', label: '勝' }, { value: 'L', label: '敗' }, { value: 'T', label: '和' }], filters.result, (v) => setFilters({ result: v as Filters['result'] }), 'w-[100px]'),
     <Select key="i" id={`filter-intra${stack ? "-sheet" : ""}`} label="隊內賽" size={size} value={filters.intra} onChange={(e) => setFilters({ intra: e.target.value as Filters['intra'] })} className={stack ? 'w-full' : undefined}
       options={[{ value: 'exclude', label: '不含' }, { value: 'include', label: '含隊內賽' }, { value: 'only', label: '只看隊內賽' }]} />,
   ]
@@ -100,7 +102,8 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
             <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-2">{selects}</div>
+        <div className="flex flex-col gap-4">{selects.filter((_, i) => i !== 3 && i !== 5)}</div>
+        <div className="grid grid-cols-1 gap-2">{[selects[3], selects[5]]}</div>
         <Button variant="outline" icon={<RotateCcw />} onClick={resetFilters} disabled={isDefault} className="w-full">重設篩選</Button>
       </div>
     )
@@ -114,7 +117,8 @@ export function FilterBar({ className, layout = 'row' }: FilterBarProps) {
       <span className="text-muted text-xs -mx-0.5">–</span>
       <input type="date" aria-label="結束日期" className={dateCls} value={filters.to} min={opts.minDate} max={opts.maxDate} onChange={(e) => setFilters({ to: e.target.value })} />
       {selects.slice(1)}
-      {!isDefault && <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={resetFilters}>重設</Button>}
+      {/* (an icon only: with a word it would push the row past the room it has and into the 篩選 button) */}
+      {!isDefault && <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={resetFilters} aria-label="重設篩選" title="重設篩選" className="px-2" />}
     </div>
   )
 }

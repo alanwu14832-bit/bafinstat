@@ -74,7 +74,7 @@ describe('helpers', () => {
     expect(sprayDirection(7, 'R')).toBe('pull'); expect(sprayDirection(7, 'L')).toBe('oppo'); expect(sprayDirection(8, 'L')).toBe('center'); expect(sprayDirection(undefined, 'R')).toBeNull()
   })
   it('filters by position and date', () => {
-    const only1B = applyFilters(ds, { ...DEFAULT_FILTERS, position: '1B' })
+    const only1B = applyFilters(ds, { ...DEFAULT_FILTERS, position: ['1B'] })
     expect(only1B.batting.every((p) => p.pos === '1B')).toBe(true)
     expect(applyFilters(ds, { ...DEFAULT_FILTERS, from: '2026-01-01' }).games).toHaveLength(0)
   })

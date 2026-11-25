@@ -120,8 +120,8 @@ describe('summarizeGame and the team record with a game in progress', () => {
   it('the filter bar: a live game is in 全部, in neither 勝 nor 敗', () => {
     setLiveGameIds(['G4'])
     expect(applyFilters(ds, DEFAULT_FILTERS).summaries).toHaveLength(4)
-    expect(applyFilters(ds, { ...DEFAULT_FILTERS, result: 'L' }).summaries).toHaveLength(0)
-    expect(applyFilters(ds, { ...DEFAULT_FILTERS, result: 'W' }).summaries).toHaveLength(3)
+    expect(applyFilters(ds, { ...DEFAULT_FILTERS, result: ['L'] }).summaries).toHaveLength(0)
+    expect(applyFilters(ds, { ...DEFAULT_FILTERS, result: ['W'] }).summaries).toHaveLength(3)
   })
   it('streaks: the game in progress neither ends nor extends the winning streak', () => {
     const ss = G.map((x) => summarizeGame(ds, x, LIVE))

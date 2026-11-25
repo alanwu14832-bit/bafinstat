@@ -139,7 +139,7 @@ describe('roster feature end to end (local mode)', () => {
     expect(useDataStore.getState().registrations[0].players).not.toContain('嚴敬翔')
 
     // 10) players page 區隔 under the 杯賽 filter
-    useDataStore.setState({ filters: { ...useDataStore.getState().filters, tournament: '大專盃' } })
+    useDataStore.setState({ filters: { ...useDataStore.getState().filters, tournament: ['大專盃'] } })
     render(<MemoryRouter initialEntries={['/players']}><Routes><Route path="/players" element={<PlayersPage />} /></Routes></MemoryRouter>)
     const toggle = document.querySelector<HTMLButtonElement>('button[aria-controls="roster-panel"]')!
     fireEvent.click(toggle)

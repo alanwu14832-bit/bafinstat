@@ -59,7 +59,8 @@ export function OverviewPage() {
   // 一般人 see the season and the recent games; the full numbers are for the team's accounts (球員 and up)
   const { level } = useAccess()
   // When the filter narrows to one opponent, name it; otherwise each game names its own opponent.
-  const oppLabel = opponentFilter !== 'all' ? opponentFilter : '對手'
+  const oppLabel = opponentFilter.length === 1 ? opponentFilter[0] : '對手'
+  const heroTitle = tournamentFilter.length ? `${TEAM.org}・${tournamentFilter.join('、')}` : TEAM.org
 
   const perGame = useMemo(() => summaries.map((g, i) => ({ name: `${shortDate(g.game.date)}`, idx: i, id: g.game.id, us: g.runsUs, opp: g.runsOpp, opponent: g.game.opponent })), [summaries])
   const cumulative = useMemo(() => {
@@ -108,7 +109,7 @@ export function OverviewPage() {
     <>
       <PageHeader scoped title="總覽" description={`${TEAM.org}的戰績與最近比賽。`} />
       <DemoBanner />
-      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={tournamentFilter !== 'all' ? `${TEAM.org}・${tournamentFilter}` : TEAM.org} />
+      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={heroTitle} />
       {recent(true)}
       <MembersTeaser />
     </>
@@ -118,7 +119,7 @@ export function OverviewPage() {
     <>
       <PageHeader scoped title="總覽" description={`${TEAM_NAME}・${summary.games} 場比賽，依上方篩選即時計算。`} />
       <DemoBanner />
-      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={tournamentFilter !== 'all' ? `${TEAM.org}・${tournamentFilter}` : TEAM.org} />
+      <SeasonHero summary={summary} summaries={summaries} stories={stories} next={next} title={heroTitle} />
       {/* the team's numbers in two labelled groups (打擊 / 投球與守備), each with a way into the full tables */}
       <SummaryHead title="打擊摘要" to="/batting" />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
@@ -143,7 +144,7 @@ export function OverviewPage() {
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
         <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分；點一下看那一場" onPointClick={openGame} data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
         <LineChartCard title="OPS / OBP 走勢" subtitle={summaries.length >= 5 ? '近 5 場滾動平均；點一下看那一場' : `目前 ${summaries.length} 場，為累計平均（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
-        <BarChartCard title="逐局得失分" subtitle={opponentFilter !== 'all' ? `對 ${opponentFilter} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
+        <BarChartCard title="逐局得失分" subtitle={opponentFilter.length === 1 ? `對 ${opponentFilter[0]} 各局合計` : opponentFilter.length ? `對 ${opponentFilter.join('、')} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />
