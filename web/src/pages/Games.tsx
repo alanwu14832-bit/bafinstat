@@ -50,7 +50,7 @@ export function GamesPage() {
   // says so; the other filters (杯賽, 期間…) apply to both
   const filters = useDataStore((st) => st.filters)
   const listed = useMemo(() => {
-    const intra = filterGames(intraView(s.full, 'only'), { ...filters, opponent: 'all', result: 'all' }).summaries.filter((x) => !isMirror(x.game))
+    const intra = filterGames(intraView(s.full, 'only'), { ...filters, opponent: [], result: [] }).summaries.filter((x) => !isMirror(x.game))
     return [...(filters.intra === 'only' ? [] : s.summaries), ...intra].sort((a, b) => a.game.date.localeCompare(b.game.date) || a.game.id.localeCompare(b.game.id))
   }, [s.full, s.summaries, filters])
   const rows: GameRow[] = useMemo(() => [...listed].reverse().map((g) => ({

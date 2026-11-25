@@ -224,7 +224,7 @@ export function PlayersPage() {
     if (!prev || spansPrev) return undefined
     // same filters as the page, with the date range moved to the season before
     const ids = new Set(filterGames(s.dataset, { ...filters, from: prev.from, to: prev.to }).games.map((g) => g.id))
-    const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && ranOrBatted(p, selected) && (filters.position === 'all' || (p.pos ?? '') === filters.position))
+    const pas = s.dataset.batting.filter((p) => ids.has(p.gameId) && ranOrBatted(p, selected) && (!filters.position.length || filters.position.includes(p.pos ?? '')))
     const l = battingLines(s.dataset, pas, statParams).find((x) => x.name === selected)
     return l && l.pa >= 1 ? l : undefined
   }, [prev, spansPrev, s.dataset, filters, selected, statParams])
@@ -435,8 +435,9 @@ export function PlayersPage() {
   // 報名名單 of the tournament picked in the 杯賽 filter, for the years the filtered games are in (every year when no game
   // matches yet). null = no filter or no list, and then the panel shows nothing extra.
   const registered = useMemo(() => {
-    const t = filters.tournament === 'all' ? '' : filters.tournament.trim()
-    const lists = t ? registrations.filter((r) => r.tournament === t) : []
+    const ts = new Set(filters.tournament.map((x) => x.trim()).filter(Boolean))
+    const t = [...ts].join('、')
+    const lists = ts.size ? registrations.filter((r) => ts.has(r.tournament)) : []
     const seasons = new Set(s.games.map((g) => seasonOf(g.date)))
     const used = seasons.size ? lists.filter((r) => seasons.has(r.season)) : lists
     const names = new Set(used.flatMap((r) => r.players))
@@ -562,7 +563,7 @@ export function PlayersPage() {
       {showRegs && (
         <Card title="報名名單" subtitle="每個杯賽每年一份；先發陣容與紀錄比賽選到那個杯賽的比賽時，只列出名單上的人" action={<Button variant="ghost" size="sm" icon={<X />} onClick={() => setShowRegs(false)}>關閉</Button>}>
           <RegistrationEditor registrations={registrations} roster={base.roster} games={base.games} supported={registrationsSupported} canEdit={canEdit}
-            focusTournament={filters.tournament === 'all' ? undefined : filters.tournament} onSave={saveRegistration} onDelete={deleteRegistration} />
+            focusTournament={filters.tournament.length === 1 ? filters.tournament[0] : undefined} onSave={saveRegistration} onDelete={deleteRegistration} />
         </Card>
       )}
       {!player ? (

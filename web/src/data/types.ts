@@ -404,19 +404,20 @@ export const isPracticeId = (id: string) => id.startsWith(PRACTICE_PREFIX)
 export const EMPTY_DATASET: Dataset = { roster: [], games: [], batting: [], pitching: [], fielding: [] }
 
 export interface Filters {
-  tournament: string
+  /** 杯賽, 守位, 對手, 勝敗: any of the values picked (複選); none picked = every game */
+  tournament: string[]
   from: string
   to: string
-  position: string
-  opponent: string
+  position: string[]
+  opponent: string[]
   homeAway: 'all' | HomeAway
-  result: 'all' | GameResult
+  result: GameResult[]
   /** 隊內賽: left out of every number (the default), counted with the rest, or the only games counted */
   intra: 'exclude' | 'include' | 'only'
 }
 
 export const DEFAULT_FILTERS: Filters = {
-  tournament: 'all', from: '', to: '', position: 'all', opponent: 'all', homeAway: 'all', result: 'all', intra: 'exclude',
+  tournament: [], from: '', to: '', position: [], opponent: [], homeAway: 'all', result: [], intra: 'exclude',
 }
 
 /** Tunable constants (same defaults as the workbook's 設定 sheet). */

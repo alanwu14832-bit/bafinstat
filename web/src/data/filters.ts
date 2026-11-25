@@ -24,18 +24,19 @@ export function playedGames(ds: Dataset): Game[] {
   return ds.games.filter((g) => !g.status && withRows.has(g.id)).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id))
 }
 
-/** Game-level filters (tournament / date / opponent / home-away / result). */
+/** Game-level filters (tournament / date / opponent / home-away / result). A list filter passes a game holding any of its
+ *  values; an empty list passes every game. */
 export function filterGames(ds: Dataset, f: Filters): { games: Game[]; summaries: GameSummary[] } {
   const summaries: GameSummary[] = []
   const games: Game[] = []
   for (const g of playedGames(ds)) {
-    if (f.tournament !== 'all' && g.tournament !== f.tournament) continue
+    if (f.tournament.length && !f.tournament.includes(g.tournament)) continue
     if (f.from && g.date < f.from) continue
     if (f.to && g.date > f.to) continue
-    if (f.opponent !== 'all' && g.opponent !== f.opponent) continue
+    if (f.opponent.length && !f.opponent.includes(g.opponent)) continue
     if (f.homeAway !== 'all' && g.homeAway !== f.homeAway) continue
     const s = summarizeGame(ds, g)
-    if (f.result !== 'all' && s.result !== f.result) continue
+    if (f.result.length && !(f.result as string[]).includes(s.result)) continue
     games.push(g); summaries.push(s)
   }
   return { games, summaries }
@@ -45,12 +46,13 @@ export function filterGames(ds: Dataset, f: Filters): { games: Game[]; summaries
 export function applyFilters(ds: Dataset, f: Filters): FilteredData {
   const { games, summaries } = filterGames(ds, f)
   const gameIds = new Set(games.map((g) => g.id))
-  const pos = f.position
+  const pos = new Set(f.position)
+  const posOk = (p?: string) => !pos.size || pos.has(p ?? '')
   return {
     games, summaries: summaries.filter((s) => !isIntra(s.game)), allSummaries: summaries, gameIds,
-    batting: ds.batting.filter((p) => gameIds.has(p.gameId) && (pos === 'all' || (p.pos ?? '') === pos)),
+    batting: ds.batting.filter((p) => gameIds.has(p.gameId) && posOk(p.pos)),
     pitching: ds.pitching.filter((p) => gameIds.has(p.gameId)),
-    fielding: ds.fielding.filter((p) => gameIds.has(p.gameId) && (pos === 'all' || p.pos === pos)),
+    fielding: ds.fielding.filter((p) => gameIds.has(p.gameId) && posOk(p.pos)),
   }
 }
 

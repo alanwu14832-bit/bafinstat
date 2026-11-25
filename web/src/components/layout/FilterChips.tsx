@@ -8,21 +8,33 @@ import { intraView, isMirror, withMirrors } from '../../data/intrasquad'
 import { DEFAULT_FILTERS, type Filters, type Game } from '../../data/types'
 import { POSITION_LABEL } from '../../lib/fmt'
 
-/** Filters in the address (?cup=新生盃&opp=經濟…), so a copied link opens the same data. Short keys, never the page's own. */
+/** Filters in the address (?cup=新生盃&opp=經濟…), so a copied link opens the same data. Short keys, never the page's own.
+ *  A filter with several values repeats its key (?cup=新生盃&cup=大資盃). */
 const URL_KEYS: Record<keyof Filters, string> = { tournament: 'cup', from: 'from', to: 'to', position: 'pos', opponent: 'opp', homeAway: 'ha', result: 'res', intra: 'intra' }
 
 /** location.state flag set by useNavigateWithFilters: this address's filters are to be applied (the rest reset). */
 const APPLY_FILTERS = 'applyFilters'
+const LIST_KEYS = new Set<keyof Filters>(['tournament', 'position', 'opponent', 'result'])
+const RESULTS = new Set(['W', 'L', 'T'])
 const filtersFromParams = (params: URLSearchParams): Partial<Filters> => {
-  const patch: Partial<Filters> = {}
-  for (const [k, q] of Object.entries(URL_KEYS) as Array<[keyof Filters, string]>) { const v = params.get(q); if (v) (patch as Record<string, string>)[k] = v }
-  return patch
+  const patch: Record<string, unknown> = {}
+  for (const [k, q] of Object.entries(URL_KEYS) as Array<[keyof Filters, string]>) {
+    if (LIST_KEYS.has(k)) {
+      // (links made before 複選 say 'all' for no filter)
+      const vs = [...new Set(params.getAll(q).filter((v) => v && v !== 'all'))].filter((v) => k !== 'result' || RESULTS.has(v))
+      if (vs.length) patch[k] = vs
+    } else { const v = params.get(q); if (v) patch[k] = v }
+  }
+  return patch as Partial<Filters>
 }
 /** `params` with the filter keys set to `filters` (default values left out). */
 const withFilters = (params: URLSearchParams, filters: Filters): URLSearchParams => {
   const next = new URLSearchParams(params)
   for (const [k, q] of Object.entries(URL_KEYS) as Array<[keyof Filters, string]>) {
-    if (filters[k] && filters[k] !== DEFAULT_FILTERS[k]) next.set(q, filters[k]); else next.delete(q)
+    const v = filters[k]
+    next.delete(q)
+    if (Array.isArray(v)) for (const x of v) next.append(q, x)
+    else if (v && v !== DEFAULT_FILTERS[k]) next.set(q, v)
   }
   return next
 }
@@ -85,12 +97,12 @@ export function scopeText(filters: Filters, all: Array<Pick<Game, 'date' | 'dayR
   // (a 隊內賽 is one game, both sides' views counted once)
   const games = all.filter((g) => !isMirror(g))
   const parts = [
-    filters.tournament !== 'all' && filters.tournament,
+    filters.tournament.length > 0 && filters.tournament.join('、'),
     (filters.from || filters.to) && `${filters.from || '開始'} – ${filters.to || '至今'}`,
-    filters.opponent !== 'all' && `對手 ${filters.opponent}`,
+    filters.opponent.length > 0 && `對手 ${filters.opponent.join('、')}`,
     filters.homeAway !== 'all' && (filters.homeAway === '主' ? '主場' : '客場'),
-    filters.result !== 'all' && `${RESULT[filters.result]}場`,
-    filters.position !== 'all' && `守位 ${filters.position}`,
+    filters.result.length > 0 && `${filters.result.map((r) => RESULT[r]).join('、')}場`,
+    filters.position.length > 0 && `守位 ${filters.position.join('、')}`,
     filters.intra !== 'exclude' && INTRA_LABEL[filters.intra],
   ].filter(Boolean)
   const last = games.reduce((m, g) => (g.date > m ? g.date : m), '')
@@ -112,13 +124,18 @@ export function FilterChips() {
   // (a 隊內賽 is one game, both sides' views counted once)
   const games = useMemo(() => filterGames(intraView(withMirrors(effectiveDataset(base, demo)), filters.intra), filters).games.filter((g) => !isMirror(g)), [base, demo, filters, live]) // eslint-disable-line react-hooks/exhaustive-deps
   const chips: Array<{ key: string; label: string; clear: Partial<Filters> }> = []
-  if (filters.tournament !== 'all') chips.push({ key: 't', label: filters.tournament, clear: { tournament: 'all' } })
+  // one chip per value picked: its ✕ takes just that value out
+  const each = (key: keyof Filters & ('tournament' | 'opponent' | 'position' | 'result'), label: (v: string) => string) => {
+    const vs = filters[key] as string[]
+    for (const v of vs) chips.push({ key: `${key}:${v}`, label: label(v), clear: { [key]: vs.filter((x) => x !== v) } as Partial<Filters> })
+  }
+  each('tournament', (v) => v)
   if (filters.from || filters.to) chips.push({ key: 'd', label: `${filters.from ? md(filters.from) : '開始'} – ${filters.to ? md(filters.to) : '至今'}`, clear: { from: '', to: '' } })
-  if (filters.opponent !== 'all') chips.push({ key: 'o', label: `對手：${filters.opponent}`, clear: { opponent: 'all' } })
+  each('opponent', (v) => `對手：${v}`)
   if (filters.homeAway !== 'all') chips.push({ key: 'h', label: filters.homeAway === '主' ? '主場' : '客場', clear: { homeAway: 'all' } })
-  if (filters.result !== 'all') chips.push({ key: 'r', label: `${RESULT[filters.result]}場`, clear: { result: 'all' } })
+  each('result', (v) => `${RESULT[v]}場`)
   if (filters.intra !== 'exclude') chips.push({ key: 'i', label: INTRA_LABEL[filters.intra], clear: { intra: 'exclude' } })
-  if (filters.position !== 'all') chips.push({ key: 'p', label: `守位：${filters.position} ${POSITION_LABEL[filters.position] ?? ''}`.trim(), clear: { position: 'all' } })
+  each('position', (v) => `守位：${v} ${POSITION_LABEL[v] ?? ''}`.trim())
   const last = games.reduce((m, g) => (g.date > m ? g.date : m), '')
   return (
     <div className="flex items-center gap-1.5 flex-wrap text-[12px] -mt-2 mb-1" aria-label="資料範圍">
