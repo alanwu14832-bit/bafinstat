@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { useOpenGame } from '../hooks/useOpenGame'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Section, SectionNav } from '../components/layout/SectionNav'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
@@ -143,8 +144,9 @@ export function PitchingPage() {
     <>
       <PageHeader scoped title="投球" description={`ERA、FIP 以每場 ${params.inningsPerGame} 局換算（FIP 常數由本隊所有比賽推算，全隊 FIP＝全隊 ERA）；K/9、BB/9 以 9 局為基準。圖表門檻 IP ≥ ${minIP}${college ? '（大專規程）' : ''}。`}
         actions={<Button variant="outline" size="sm" icon={<BedDouble />} to="/pitching/rest" title="依 Pitch Smart 建議看每位投手要休幾天、哪天可以再投">投手休息表</Button>} />
+      <SectionNav items={[{ id: 'leaders', label: '領先者' }, { id: 'stats', label: '成績表' }, { id: 'platoon', label: '左右打' }, { id: 'splits', label: '情境' }, { id: 'charts', label: '圖表' }]} />
       <DemoBanner />
-      <LeaderStrip leaders={leaders} numbers={numbers} caption={college ? `・大專規程：防禦率、WHIP 需 IP ≥ ${minIP}（1 局 × ${s.summary.games} 場）；防禦率同數比投球局數多、再比被安打少` : `・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
+      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} caption={college ? `・大專規程：防禦率、WHIP 需 IP ≥ ${minIP}（1 局 × ${s.summary.games} 場）；防禦率同數比投球局數多、再比被安打少` : `・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
       <StatGroup>
         <StatTile label="團隊 ERA" to="?view=basic&sort=era&dir=asc#stats" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
         <StatTile label="團隊 FIP" to="?view=advanced&sort=fip&dir=asc#stats" value={s.teamPitch.fip ?? 0} format="era" />
@@ -158,12 +160,14 @@ export function PitchingPage() {
       </Card>
       <PlatoonCard id="platoon" side="pit" rows={s.pitching} />
       <SplitsCard id="splits" side="pit" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} title="情境拆分（面對的打者）" />
+      <Section id="charts">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="ERA 與 FIP" subtitle="差距可能來自守備、事件順序或樣本太少，場數少時僅供參考；點長條看那位投手" data={eraFip} onBarClick={openPlayer} series={[{ key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' }]} formatValue={(v) => v.toFixed(2)} />
         <StrikeRatioCard rows={mix} onPick={(name) => openPlayer({ name })} />
         <BarChartCard title="CSW% 排行" subtitle="用球數 ≥ 20；未揮棒好球＋揮空 ÷ 用球數" data={csw} onBarClick={openPlayer} series={[{ key: 'csw', label: 'CSW%' }]} layout="horizontal" showLabels formatValue={(v) => `${v.toFixed(1)}%`} categoryWidth={64} />
         <LineChartCard title="ERA / WHIP 走勢" subtitle={s.summaries.length >= 5 ? '近 5 場滾動；點一下看那一場' : `目前 ${s.summaries.length} 場，為累計（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={trend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => v.toFixed(2)} />
       </div>
+      </Section>
     </>
   )
 }
