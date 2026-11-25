@@ -18,13 +18,15 @@ export const WHERE: Record<number, string> = {
 /** A result in plain words; `pitches` decides how a strikeout ended (揮棒落空 / 看好球). */
 export function resultPhrase(result: string, loc?: number, traj?: string, pitches?: string[]): string {
   const W = (loc && WHERE[loc]) || ''
+  // a hit to an infielder says 「方向」: 「三壘安打」 for a single to third reads as a triple (三安), 「二壘安打」 as a double
+  const H = loc && loc >= 1 && loc <= 6 ? `${W}方向` : W
   switch (result) {
-    case '一安': return W ? `${W}安打` : '一壘安打'
+    case '一安': return H ? `${H}安打` : '一壘安打'
     case '內安': return `${W}內野安打`
-    case '二安': return `${W}二壘安打`
-    case '場地二安': return `${W}場地二壘安打`
-    case '三安': return `${W}三壘安打`
-    case '全壘打': return `${W}全壘打`
+    case '二安': return `${H}二壘安打`
+    case '場地二安': return `${H}場地二壘安打`
+    case '三安': return `${H}三壘安打`
+    case '全壘打': return `${H}全壘打`
     case '內滾': return `${W || '內野'}滾地球出局`
     case '雙殺': return W + (traj === 'L' ? '平飛球雙殺' : traj === 'F' || traj === 'P' ? '飛球雙殺' : '滾地球雙殺')
     case '內飛': return `${W || '內野'}飛球出局`
