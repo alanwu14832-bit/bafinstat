@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Info, Maximize2, Pencil, Printer, Share2, Smartphone, Trash2, Video, X } from 'lucide-react'
 import { StoryDialog } from '../components/ui/StoryDialog'
@@ -9,7 +9,8 @@ import { Tabs } from '../components/ui/Tabs'
 import { BattingPlayByPlay, PitchLegend, PitchingPlayByPlay } from '../components/ui/PlayByPlay'
 import { Button } from '../components/ui/Button'
 import { DataTable, type Column } from '../components/ui/DataTable'
-import { GameEditor } from '../components/ui/GameEditor'
+import { GameEditor, type EditorView } from '../components/ui/GameEditor'
+import { writeEditDraft } from '../components/ui/editDraft'
 import { rosterNames } from '../components/ui/PlayerSelect'
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { sortNames } from '../data/rosterSort'
@@ -216,6 +217,9 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const media = useMemo(() => gameMedia(albums, id), [albums, id])
   const [sharing, setSharing] = useState(false)
   const [story, setStory] = useState(false)
+  // 修改資料: how many saves this round (the editor restarts from the saved game each time) and where it was
+  const [editRound, setEditRound] = useState(0)
+  const editView = useRef<EditorView | undefined>(undefined)
   const [boxView, setBoxView] = useState<BoxView>(readBoxView)
   const pickBoxView = (v: BoxView) => { setBoxView(v); writeBoxView(v) }
   const [filter, setFilter] = useState<PbpFilter>('all')
@@ -431,11 +435,17 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
           </div>
         )}
         {editing && editable ? (
-          <GameEditor initial={editable} roster={rosterNames(base.roster, sortMode)} busy={cloud.pushing}
-            onCancel={() => setEditing(false)}
+          // after a save the editor stays open on what was being fixed: it starts again from the saved game (key), at the
+          // same tab and plate appearance (view); 結束修改 goes back to the game page
+          <GameEditor key={editRound} initial={editable} roster={rosterNames(base.roster, sortMode)} busy={cloud.pushing}
+            view={editView.current} onViewChange={(v) => { editView.current = v }}
+            savedNote={editRound > 0 ? (notice?.kind === 'warn' ? '已儲存，請看上方的提醒' : '已儲存，可以繼續修改') : undefined}
+            onCancel={() => { setEditing(false); setEditRound(0); editView.current = undefined }}
             onSave={async (edit) => {
               const warnings = await saveGame(edit)
-              setEditing(false)
+              // (saved: the editor that opens next starts clean, with no 接著改 offer)
+              writeEditDraft(edit.game.id, null)
+              setEditRound((n) => n + 1)
               setNotice(warnings.length ? { kind: 'warn', lines: ['已儲存。請核對：', ...warnings.map((w) => w.message)] } : { kind: 'ok', lines: ['已儲存，所有統計已重新計算。'] })
             }}
             onDelete={async () => { await deleteGame(id); onClose() }} />

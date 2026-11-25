@@ -24,7 +24,6 @@ import { withNumbers } from '../data/rosterSort'
 import { LeaderStrip, leaderOf, tieNote, type Leader, type LeaderResult } from '../components/ui/Leaders'
 import { BarChartCard } from '../components/charts/BarChartCard'
 import { DonutCard } from '../components/charts/DonutCard'
-import { StackedBarCard } from '../components/charts/StackedBarCard'
 import { useStats } from '../hooks/useStats'
 import type { BattingLine } from '../data/stats'
 import { f2, f3, pct, signed1, signed2 } from '../lib/fmt'
@@ -83,7 +82,10 @@ export function BattingPage() {
   const bbType = useMemo(() => [{ key: 'gb', label: '滾地球', value: s.team.gb }, { key: 'fb', label: '飛球', value: s.team.fb }, { key: 'ld', label: '平飛球', value: s.team.ld }], [s.team])
   // the donut counts only the batted balls that have a 軌跡 (BIP counts every one), and says so when some lack it
   const trajNote = `全隊有記軌跡的擊球：滾地／飛球／平飛比例${s.team.bip > s.team.bipTraj ? `（BIP ${s.team.bip}，${s.team.bip - s.team.bipTraj} 個沒記軌跡）` : ''}`
-  const quality = useMemo(() => [...s.batters].filter((b) => b.bipQuality >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0)).slice(0, 10).map((b) => ({ name: b.name, 強: b.hard, 中弱: b.bipQuality - b.hard })), [s.batters])
+  // 強擊率 (Hard Hit%): the share of a batter's batted balls with a 強度 that were 強, highest first
+  const hardHit = useMemo(() => [...s.batters].filter((b) => b.bipQuality >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0) || b.hard - a.hard).slice(0, 12)
+    .map((b) => ({ name: b.name, hard: Number(((b.hardPct ?? 0) * 100).toFixed(1)), n: `${b.hard}/${b.bipQuality}` })), [s.batters])
+  const teamHard = s.team.hardPct
   const discipline = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA).sort((a, b) => (a.kPct ?? 0) - (b.kPct ?? 0)).slice(0, 12).map((b) => ({ name: b.name, 'K%': Number(((b.kPct ?? 0) * 100).toFixed(1)), 'BB%': Number(((b.bbPct ?? 0) * 100).toFixed(1)) })), [s.batters, minPA])
 
   const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
@@ -159,7 +161,9 @@ export function BattingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
         <DonutCard title="擊球型態" subtitle={trajNote} segments={bbType} centerCaption="有記軌跡" />
-        <StackedBarCard title="擊球強度" subtitle="強勁擊球與其他，有記強度的擊球 ≥ 3 的打者" data={quality} onBarClick={openPlayer} series={[{ key: '強', label: '強' }, { key: '中弱', label: '中／弱' }]} layout="horizontal" />
+        <BarChartCard title="強擊率 Hard Hit%" subtitle={`強勁擊球 ÷ 有記強度的擊球，由高到低（有記強度的擊球 ≥ 3 的打者，前 12 名）${teamHard === null ? '' : `；全隊 ${(teamHard * 100).toFixed(1)}%`}`}
+          data={hardHit} onBarClick={openPlayer} series={[{ key: 'hard', label: '強擊率' }]} layout="horizontal" showLabels categoryWidth={64}
+          formatValue={(v) => `${v.toFixed(1)}%`} nameFor={(_k, d) => `強擊率（強 ${d.n}）`} />
         <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
     </>

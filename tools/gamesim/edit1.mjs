@@ -54,6 +54,8 @@ await backToList()
 await ed.getByRole('button', { name: /比賽資訊/ }).click(); await p.waitForTimeout(200)
 await ed.getByLabel('場地').fill('新生棒球場')
 await ed.getByRole('button', { name: '儲存修改' }).click(); await p.waitForTimeout(1500)
+// (since 2026-11-25 the editor stays open after a save: 結束修改 goes back to the game page)
+await ed.getByRole('button', { name: '結束修改', exact: true }).click(); await p.waitForTimeout(500)
 
 // ---------------------------------------------------------------- what the site shows now
 const dlg = p.getByRole('dialog').last()

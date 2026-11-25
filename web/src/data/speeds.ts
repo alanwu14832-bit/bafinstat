@@ -59,3 +59,16 @@ export function speedSummary(rows: ReadonlyArray<SpeedRow>): SpeedSummary | null
     byInning: [...innings].sort((a, b) => a[0] - b[0]).map(([inning, vs]) => ({ inning, ...line(vs) })),
   }
 }
+
+/** How a speed stands out: 135 and up 'fast' (red), 125–134 'quick' (yellow), anything slower plain. */
+export type SpeedTone = 'fast' | 'quick' | null
+export const speedTone = (v: number | null | undefined): SpeedTone => (typeof v !== 'number' ? null : v >= 135 ? 'fast' : v >= 125 ? 'quick' : null)
+/** Text classes for a speed on the page (theme colours: 黃 for 125–134, 紅 for 135+). */
+export const SPEED_TEXT: Record<'fast' | 'quick', string> = { fast: 'text-critical font-semibold', quick: 'text-warning font-semibold' }
+export const speedClass = (v: number | null | undefined): string => { const t = speedTone(v); return t ? SPEED_TEXT[t] : '' }
+/** The fastest and the latest measured speed of some plate appearances (the last one's pitches last). */
+export function speedFacts(rows: ReadonlyArray<{ pitches: string[]; speeds?: Array<number | null> }>): { max: number | null; last: number | null } {
+  let max: number | null = null, last: number | null = null
+  for (const r of rows) for (const v of alignSpeeds(r.speeds, r.pitches.length) ?? []) if (v !== null) { last = v; if (max === null || v > max) max = v }
+  return { max, last }
+}

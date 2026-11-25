@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from './Button'
 import { Checkbox, Field, Input, inputCls } from './Input'
 import { Select } from './Select'
@@ -209,10 +209,17 @@ export interface GameEditorProps {
   /** 紀錄比賽 → 逐打席: the game is still being recorded — only this plate appearance's panel (and its neighbours'),
    *  no 插入／移動／刪除, no game info, no draft kept on the device; 儲存修改 hands the rows back (record/liveEdit) */
   live?: { side: PaSide; index: number }
+  /** where to open (the page reopens the editor here after a save, so the recorder stays on what he was fixing) */
+  view?: EditorView
+  /** tells the page where the editor is (its tab, list view and the plate appearance open) */
+  onViewChange?: (view: EditorView) => void
+  /** shown on the save bar while nothing is left unsaved (「已儲存」 after a save) */
+  savedNote?: string
 }
+export interface EditorView { tab: 'bat' | 'pit' | 'fld' | 'roster'; paView: 'tap' | 'table'; sel: { side: PaSide; index: number } | null }
 
 /** Edit every input field of one game: header info, our plate appearances, the opponent's, and fielding lines. */
-export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, live }: GameEditorProps) {
+export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, live, view, onViewChange, savedNote }: GameEditorProps) {
   const [game, setGame] = useState<Game>({ ...initial.game })
   const [bat, setBat] = useState<BatDraft[]>(() => initial.batting.map(toBatDraft))
   const [pit, setPit] = useState<PitDraft[]>(() => initial.pitching.map(toPitDraft))
@@ -224,10 +231,11 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
   const [reentry, setReentry] = useState(!!initial.game.dayRoster?.reentry)
   // the rules it was played by (紀錄比賽 saves them; an older game's can be set here): 獲勝機率 reads them
   const [rules, setRules] = useState<GameRules | undefined>(initial.game.dayRoster?.rules)
-  const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>(live?.side ?? 'bat')
+  const [tab, setTab] = useState<'bat' | 'pit' | 'fld' | 'roster'>(live?.side ?? view?.tab ?? 'bat')
   // plate appearances: tap one to edit it with the recording buttons (default), or the whole table at once
-  const [paView, setPaView] = useState<'tap' | 'table'>('tap')
-  const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(live ?? null)
+  const [paView, setPaView] = useState<'tap' | 'table'>(view?.paView ?? 'tap')
+  const [sel, setSel] = useState<{ side: PaSide; index: number } | null>(live ?? view?.sel ?? null)
+  useEffect(() => { onViewChange?.({ tab, paView, sel }) }, [tab, paView, sel]) // eslint-disable-line react-hooks/exhaustive-deps
   const batRows = useMemo(() => bat.map(fromBatDraft), [bat])
   const pitRows = useMemo(() => pit.map(fromPitDraft), [pit])
   // who stood where in each inning we fielded (the 登錄名單 as edited): names next to 我隊守備失誤, 失誤 SS（王鼎鈞）
@@ -972,9 +980,11 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
 
       {/* phones: the save bar stays at the bottom of the screen while scrolling through the plate appearances */}
       <div className="flex items-center gap-2 flex-wrap justify-end pt-1 max-sm:sticky max-sm:bottom-2 max-sm:z-10 max-sm:rounded-[var(--radius-sm)] max-sm:border max-sm:border-border max-sm:bg-surface max-sm:px-3 max-sm:py-2 max-sm:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.35)]">
-        {changes > 0 && <span aria-live="polite" className="text-[12px] font-medium text-ink-2 tnum mr-auto">{changes} 處修改還沒儲存</span>}
+        {changes > 0 ? <span aria-live="polite" className="text-[12px] font-medium text-ink-2 tnum mr-auto">{changes} 處修改還沒儲存</span>
+          : savedNote ? <span aria-live="polite" className="inline-flex items-center gap-1 text-[12px] font-medium text-good mr-auto"><CheckCircle2 className="size-3.5" />{savedNote}</span> : null}
         {missingBall && <span role="status" className="text-[12px] text-warning basis-full sm:basis-auto text-right">{missingBall}<span className="inline-block max-sm:hidden">（清單上標{MISSING_BALL_TAGS}，</span><span className="inline-block max-sm:hidden">可以先儲存）</span></span>}
-        <Button variant="outline" onClick={cancel} disabled={busy}>取消</Button>
+        {/* (nothing left unsaved: 結束修改 goes back to the game page) */}
+        <Button variant="outline" onClick={cancel} disabled={busy}>{changes ? '取消' : '結束修改'}</Button>
         <Button variant="primary" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存修改'}</Button>
       </div>
       <Button variant="ghost" icon={<Trash2 />} className="self-start -mt-2 text-critical hover:text-critical" disabled={busy} onClick={() => { if (window.confirm(`確定刪除 ${game.id}（${game.date} vs ${game.opponent}）？這會移除這場所有打席與守備紀錄。`)) void onDelete() }}>刪除這場比賽</Button>

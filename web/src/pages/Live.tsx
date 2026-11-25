@@ -28,6 +28,7 @@ import { HIT_BASE_COUNT, OPP_BATS_LABEL, oppBatterName } from '../data/types'
 import { cx } from '../lib/format'
 import { NON_AB_RESULTS } from '../data/stats'
 import { f3 } from '../lib/fmt'
+import { alignSpeeds, speedFacts, speedTone } from '../data/speeds'
 import { TEAM } from '../config/team'
 import { gridCell, type GridTone } from '../data/gameText'
 import { dueUp, halfPlayed, oppFrom, ourFrom, onDeckOf, type UpBatter } from '../record/upNext'
@@ -91,8 +92,18 @@ const CELL = 'min-w-0 px-3 @xl:px-6'
 const DIVIDER = { borderColor: 'rgba(243,239,231,0.14)' }
 const TONE: Record<GridTone, string> = { hit: BOARD_ACCENT, out: BOARD.muted, on: BOARD.ink, other: BOARD.muted }
 
-/** The pitches of the plate appearance in progress as small lit squares, with its runner plays where they happened. */
-function BoardPitches({ pitches, plays, big }: { pitches: string[]; plays: Array<{ at: number; char: string; title: string }>; big: boolean }) {
+/** A speed on the board: 125–134 黃, 135 and up 紅, slower in the board's muted ink. */
+const SPEED_COLOR = { fast: '#ff5a4f', quick: '#f6cf3e' } as const
+const speedColor = (v: number | null | undefined) => { const t = speedTone(v); return t ? SPEED_COLOR[t] : BOARD.muted }
+/** 「135 公里」 lit in its colour */
+function BoardSpeed({ v, big, label }: { v: number; big: boolean; label?: string }) {
+  return <span className={cx('figure font-bold tabular-nums', big ? 'text-[20px] @xl:text-[24px]' : 'text-[15px]')} style={{ color: speedColor(v) }}>{label && <span className="font-normal mr-1" style={{ color: BOARD.muted, fontSize: '0.7em' }}>{label}</span>}{v}<span className="font-normal ml-0.5" style={{ fontSize: '0.62em' }}>km/h</span></span>
+}
+
+/** The pitches of the plate appearance in progress as small lit squares, with its runner plays where they happened
+ *  (and each pitch's 球速 under it when it was measured). */
+function BoardPitches({ pitches, plays, big, speeds }: { pitches: string[]; plays: Array<{ at: number; char: string; title: string }>; big: boolean; speeds?: Array<number | null> }) {
+  const sp = alignSpeeds(speeds, pitches.length)
   if (!pitches.length && !plays.length) return <span style={{ color: BOARD.muted }}>—</span>
   const sq = big ? 'size-8 text-[16px]' : 'size-6 text-[12px]'
   const pill = (p: { char: string; title: string }, k: string) => (
@@ -103,9 +114,11 @@ function BoardPitches({ pitches, plays, big }: { pitches: string[]; plays: Array
       {plays.filter((p) => p.at <= 0).map((p, i) => pill(p, `p0-${i}`))}
       {pitches.map((p, i) => {
         const color = PITCH_COLOR[p] ?? BOARD.muted
+        const square = <span className={cx('figure inline-flex items-center justify-center rounded-[5px] font-bold', sq)} style={{ color, background: `color-mix(in srgb, ${color} 16%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` }}>{pitchToken(p)}</span>
+        const kmh = sp?.[i] ?? null
         return (
           <Fragment key={i}>
-            <span className={cx('figure inline-flex items-center justify-center rounded-[5px] font-bold', sq)} style={{ color, background: `color-mix(in srgb, ${color} 16%, transparent)`, boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${color} 45%, transparent)` }}>{pitchToken(p)}</span>
+            {sp ? <span className="inline-flex flex-col items-center gap-0.5 align-top">{square}<span className={cx('figure tabular-nums leading-none', big ? 'text-[13px]' : 'text-[10px]', kmh === null && 'invisible')} style={{ color: speedColor(kmh), fontWeight: speedTone(kmh) ? 700 : 500 }} aria-label={kmh === null ? undefined : `${kmh} 公里`}>{kmh ?? '–'}</span></span> : square}
             {plays.filter((x) => x.at === i + 1 || (i === pitches.length - 1 && x.at > i + 1)).map((x, k) => pill(x, `p${i}-${k}`))}
           </Fragment>
         )
@@ -251,6 +264,10 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
   const pitcherName = side === 'opp' ? s.pitcher || '投手' : oppPitcherText(s.oppPitcher) || (s.intra ? `${names.opp}投手` : '對方投手')
   const pitchCount = side === 'opp' ? ourP.pc : oppPitchCount(s)
   const pitcherLine = side === 'opp' ? ourP.line : oppPitcherToday(oppStintRows(s.batting, s.oppPitcher, s.oppPitcherFrom))
+  // 球速: the pitcher's fastest today (his finished plate appearances and the one in progress) and the last pitch measured
+  const now = { pitches: s.pitches, speeds: s.speeds }
+  const pitcherSpeed = speedFacts([...(side === 'opp' ? s.pitching.filter((p) => p.pitcher === s.pitcher) : oppStintRows(s.batting, s.oppPitcher, s.oppPitcherFrom)), now])
+  const lastSpeed = speedFacts([now]).last
   const mine = batterRowsToday(s)
   const ab = mine.filter((p) => !NON_AB_RESULTS.has(p.result)).length, hits = mine.filter((p) => p.result in HIT_BASE_COUNT).length
   const batterName = side === 'us' ? slot?.name ?? '' : oppBatterName(oppBatterOf(s)) || (s.intra ? `${names.opp}第 ${s.oppOrder} 棒` : `對方第 ${s.oppOrder} 棒`)
@@ -353,7 +370,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
           // so neither side is left empty; from 1024 px (a wide screen, 大螢幕) three, [投手] | [打者 本打席] | [壘上 下一棒]
           <div className="grid grid-cols-1 @min-[480px]:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] @5xl:grid-cols-3 py-2">
             <div className={cx(CELL, big ? 'py-2' : 'py-1', '@min-[480px]:col-start-1 @min-[480px]:row-start-1 @5xl:row-span-2')}>
-              <MRow big={big} label="投手" value={pitcherName} num={`${pitchCount} 球`} sub={pitcherLine} />
+              <MRow big={big} label="投手" value={pitcherName} num={`${pitchCount} 球`} sub={pitcherLine} subNum={pitcherSpeed.max !== null ? <BoardSpeed v={pitcherSpeed.max} big={big} label="最快" /> : undefined} />
             </div>
             <div className={cx(CELL, big ? 'py-2' : 'py-1', '@min-[480px]:col-start-1 @min-[480px]:row-start-2 @min-[480px]:row-span-2 @5xl:col-start-2 @5xl:row-start-1 @5xl:row-span-1 @5xl:border-l')} style={DIVIDER}>
               <MRow big={big} label="打者"
@@ -363,7 +380,7 @@ function LiveBoard({ live, error }: { live: { state: RecordState; updatedAt: str
                 subNum={season && season.ab >= 1 ? `本季 ${f3(season.avg)} OPS ${f3(season.ops)}` : undefined} />
             </div>
             <div className={cx(CELL, big ? 'py-2' : 'py-1', '@min-[480px]:col-start-2 @min-[480px]:row-start-1 @min-[480px]:border-l @5xl:row-start-2')} style={DIVIDER}>
-              <MRow big={big} label="本打席" value={<BoardPitches pitches={s.pitches} plays={pills} big={big} />} />
+              <MRow big={big} label="本打席" value={<BoardPitches pitches={s.pitches} plays={pills} big={big} speeds={s.speeds} />} num={lastSpeed !== null ? <BoardSpeed v={lastSpeed} big={big} /> : undefined} />
             </div>
             <div className={cx(CELL, big ? 'py-2' : 'py-1', '@min-[480px]:col-start-2 @min-[480px]:row-start-2 @min-[480px]:border-l @5xl:col-start-3 @5xl:row-start-1')} style={DIVIDER}>
               <MRow big={big} wrap label="壘上" value={<span className={cx(!s.runners.length && 'font-normal')} style={s.runners.length ? undefined : { color: BOARD.muted }}>{runnersText.split('・').map((x, i) => <Fragment key={i}>{i > 0 && '・'}<span className="whitespace-nowrap">{x}</span></Fragment>)}</span>} />

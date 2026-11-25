@@ -54,8 +54,9 @@ describe('修改資料: unsaved changes', () => {
 
   it('取消 asks before throwing the changes away, and nothing is left behind after it', () => {
     const { onCancel } = open()
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    expect(onCancel).toHaveBeenCalledTimes(1) // nothing changed: no question
+    // nothing changed: the button reads 結束修改 and asks nothing (取消 once there is something to throw away)
+    fireEvent.click(screen.getByRole('button', { name: '結束修改' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
     rename('新對手')
     const ask = vi.spyOn(window, 'confirm').mockReturnValue(false)
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
