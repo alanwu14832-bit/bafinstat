@@ -73,7 +73,7 @@ export const TEAM_DEFAULTS = {
   /** VITE_TEAM_HERO_PHOTO_MOBILE: an upright crop of it for phones (about 1100 × 1300); missing = the wide one, cropped. */
   heroPhotoMobile: 'hero-m.jpg',
   /** VITE_TEAM_HERO_FOCUS: the part of the photo to keep in view when it is cropped (CSS object-position, 「左右% 上下%」). */
-  heroFocus: '50% 35%',
+  heroFocus: '50% 22%',
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
