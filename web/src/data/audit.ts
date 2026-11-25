@@ -173,6 +173,9 @@ function checkOrder(rows: Array<BattingPA | PitchingPA>, side: 'bat' | 'pit', ou
     prev = { k, again: isUnfinished(r) }
   })
 }
+/** 外飛 with an RBI and fewer than two out: a caught fly that brought a run home is a 犧飛 (no at bat; rule 9.08(d)). */
+const sacFlyMessage = (where: string, result: string) => `${where}：「${result}」有打點：高飛球被接殺、跑者回來得分，應該記成「犧飛」（不算打數）；如果其實是漏接，請改成「失誤」`
+
 export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: AuditPlace = 'page'): Issue[] {
   const out: Issue[] = []
   checkSequence(batting, 'bat', out, place)
@@ -183,6 +186,7 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: A
     if (p.run && p.code !== 'R') out.push({ side: 'bat', index: i, message: `${where}：有得分但代碼是 ${p.code ?? '空白'}，不是 R` })
     if (p.rbi > 4) out.push({ side: 'bat', index: i, message: `${where}：打點 ${p.rbi} 超過 4` })
     if (p.rbi > 0 && (p.result === '三振' || p.result === '雙殺') ) out.push({ side: 'bat', index: i, message: `${where}：「${p.result}」通常不會有打點` })
+    if (p.rbi > 0 && (p.result === '外飛' || p.result === '界外飛') && (p.outsBefore ?? 0) < 2) out.push({ side: 'bat', index: i, message: sacFlyMessage(where, p.result) })
   })
   checkRunsAndSteals(batting, pitching, out)
   // (修改資料: a 棒次 that does not follow on from the one before — a plate appearance missed, or recorded twice)
@@ -192,6 +196,7 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: A
     const rbi = p.rbi ?? 0
     if (rbi > 4) out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：打點 ${rbi} 超過 4` })
     if (rbi > 0 && (p.result === '三振' || p.result === '雙殺' || p.result === '失誤')) out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：「${p.result}」通常不會有打點` })
+    if (rbi > 0 && (p.result === '外飛' || p.result === '界外飛') && (p.outsBefore ?? 0) < 2) out.push({ side: 'pit', index: i, message: sacFlyMessage(`第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒`, p.result) })
     if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛' && p.result !== '三振') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
   })
   return out

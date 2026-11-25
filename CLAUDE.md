@@ -56,6 +56,8 @@ A database change needs a migration in both repos, and the user must run it in b
   the values; different filters still narrow together). `components/ui/MultiSelect.tsx` (desktop: checkbox list in a portal, fixed
   widths so the one-row toolbar keeps fitting; the phone sheet: `MultiChips`); the address repeats the key (`?cup=A&cup=B`, old
   one-value / `all` links still read). 主客 and 隊內賽 stay single.
+- 犧飛 (2026-11-25, a recorder's report): sending a runner home on a 外飛／界外飛 with fewer than two out turns the result into 犧飛
+  (SF_FROM in Record and GameEditor, like FC_FROM's 野選); `data/audit` flags an old 外飛／界外飛 with an RBI as 待核對.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).
