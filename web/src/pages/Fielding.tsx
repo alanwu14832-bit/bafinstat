@@ -8,6 +8,7 @@ import { TEAM_NAME } from '../data/seed'
 import { useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
+import { SectionNav } from '../components/layout/SectionNav'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { StatGroup, StatTile } from '../components/ui/StatTile'
@@ -75,8 +76,9 @@ export function FieldingPage() {
   return (
     <>
       <PageHeader scoped title="守備" description="守備紀錄以每場每位球員一列；上方的守位篩選會直接套用在此頁。沒填 PO／A 的比賽會由投球紀錄推定（三振歸捕手、滾地歸守位助殺與一壘刺殺、飛球歸守位刺殺）；被盜壘、阻殺、捕逸也由投球紀錄歸給當時的捕手（看當日登錄名單的換人）。" />
+      <SectionNav items={[{ id: 'leaders', label: '領先者' }, { id: 'stats', label: '成績表' }, { id: 'errors', label: '失誤' }, { id: 'catchers', label: '捕手' }]} />
       <DemoBanner />
-      <LeaderStrip leaders={leaders} numbers={numbers} caption={`・依上方篩選；守備率需 ≥ ${minTC} 次守備機會`} />
+      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} caption={`・依上方篩選；守備率需 ≥ ${minTC} 次守備機會`} />
       <StatGroup>
         <StatTile label="團隊守備率" to="?sort=fpct&dir=asc#stats" value={tc ? (totals.po + totals.as) / tc : 0} format="decimal3" note={`${tc} 次守備機會`} />
         <StatTile label="失誤" to="?sort=e#stats" value={totals.e} />
@@ -86,7 +88,7 @@ export function FieldingPage() {
       <Card id="stats" title="守備成績" subtitle="點球員開啟個人檔案；標「推定」的球員，有比賽沒填守備紀錄，刺殺／助殺／阻殺等由打席紀錄推算" flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}</span>}>
         <DataTable columns={tableColumns} rows={withNumbers(s.fielders, s.dataset.roster)} rowKey={(r) => r.name} key={linked.tableKey} revealSort={!!linked.sortKey} defaultSort={linked.sortKey && columns.some((c) => c.key === linked.sortKey) ? { key: linked.sortKey as keyof FieldingStat, dir: linked.dir } : { key: 'tc', dir: 'desc' }} onRowClick={openPlayer} dense maxHeight={480} emptyTitle="尚無守備紀錄" emptyDescription="在總表的『守備紀錄』填入每場守備數據後匯入。" />
       </Card>
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
+      <div id="errors" className="scroll-mt-28 grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="失誤分佈" subtitle="各守位失誤次數" counts={errCounts} unit="次失誤" emptyText="沒有失誤" />
         <BarChartCard className="xl:col-span-3" title="各守位失誤" subtitle="依守位彙總；最多的守位以主色標示" data={byPos} series={[{ key: '失誤', label: '失誤' }]} highlightKey={byPos.reduce((m, p) => (p.失誤 > (byPos.find((x) => x.name === m)?.失誤 ?? -1) ? p.name : m), '')} />
       </div>

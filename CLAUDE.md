@@ -70,7 +70,7 @@ A database change needs a migration in both repos, and the user must run it in b
   every pitch inserted / changed / deleted / added (no ball in play), 球速, 備註); the runner's out stays on his own row.
 - 2026-11-25 (3), the look (all three sites: this one, the 校隊's and `alanwu14832-bit/aloongstat`): a `Card`'s `subtitle` folds behind
   the ⓘ beside its title (`components/ui/InfoNote.tsx`; `noteOpen` opens it for a warning; printing shows every note); the stitches
-  (`Stitches`) stay on page titles only; 選球紀律 lists batters by 打席 with the numbers on the bars; phones get 區塊快捷鈕 on 打擊 and
+  (`Stitches`) stay on page titles only; 選球紀律 lists batters by 打席 with the numbers on the bars; phones get 區塊快捷鈕 on 打擊, 投球, 守備 and
   球員 (`components/layout/SectionNav.tsx`, targets by id / `<Section>`), a fade on the right edge of a table that scrolls sideways
   (`components/ui/ScrollFade.tsx`, in `DataTable` and the hand-built tables) and dots under 本季看點 (`StoryRow`). 總覽 opens with the
   開場形象區 (`SeasonHero`: the team's name as the page's h1 over its real record; planes in `components/ui/HeroArt.tsx`, the team's own
