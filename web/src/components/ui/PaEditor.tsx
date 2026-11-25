@@ -12,7 +12,7 @@ import { PlayerSelect } from './PlayerSelect'
 import { PitchChips, PitchPlays } from './PlayByPlay'
 import { cx } from '../../lib/format'
 import { isNoBatter, isPlaced, isUnfinished, missingBattedBallTag, type OutAt, OPP_BATS_LABEL, OPP_HAND_LABEL, pinchMark, POSITION_BY_NUMBER, POSITIONS, posNum, type BattingPA, type OppBats, type OppHand, type PitchingPA } from '../../data/types'
-import { count, missingBattedBall, type Base } from '../../record/model'
+import { count, impliedResult, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, rowName, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
 import { errAdvanceErrors, errorsOf, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
@@ -645,7 +645,94 @@ function OppBatsEdit({ pa, count, onApply }: { pa: PitchingPA; count: number; on
 
 /** One plate appearance — or, for a 突破僵局 runner (not a plate appearance), the runner's own small panel. */
 export function PaPanel(props: PaPanelProps) {
-  return isPlaced(props.pa) ? <PlacedPanel {...props} /> : isNoBatter(props.pa) ? <ReliefPanel {...props} /> : <PlayPanel {...props} />
+  return isPlaced(props.pa) ? <PlacedPanel {...props} /> : isUnfinished(props.pa) ? <UnfinishedPanel {...props} /> : isNoBatter(props.pa) ? <ReliefPanel {...props} /> : <PlayPanel {...props} />
+}
+
+/** The pitches of a plate appearance cut short (未完成打席: the half ended on the bases between pitches): no ball in play. */
+const UNFINISHED_PITCHES: Array<[string, string]> = [['B', '壞球'], ['CS', '好球・未揮'], ['SS', '揮空'], ['F', '界外'], ['T', '擦棒']]
+
+/**
+ * 未完成打席 (the half ended on a 盜壘失敗／牽制 between this batter's pitches): not a plate appearance, but its pitches are
+ * the pitcher's. Who was up, every pitch (insert, change, delete, add), their 球速 and the 備註 can be fixed here; the
+ * runner's out stays on the runner's own row (his 盜壘失敗／牽制 and out code), fixed there.
+ */
+function UnfinishedPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, fixed }: PaPanelProps) {
+  const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
+  const bat = side === 'bat' ? (pa as BattingPA) : null
+  const pit = side === 'pit' ? (pa as PitchingPA) : null
+  const spd = (next: Array<number | null> | undefined) => ({ speeds: next && next.some((v) => v !== null) ? next : undefined })
+  const [sel, setSel] = useState<{ i: number; mode?: 'insert' | 'change' } | null>(null)
+  useEffect(() => setSel(null), [index])
+  const remove = (i: number) => set({ pitches: pa.pitches.filter((_, k) => k !== i), ...(pa.speeds ? spd(pa.speeds.filter((_, k) => k !== i)) : {}) })
+  const insert = (i: number, code: string) => set({ pitches: [...pa.pitches.slice(0, i), code, ...pa.pitches.slice(i)], ...(pa.speeds ? spd([...pa.speeds.slice(0, i), null, ...pa.speeds.slice(i)]) : {}) })
+  const change = (i: number, code: string) => set({ pitches: pa.pitches.map((p, k) => (k === i ? code : p)) })
+  const add = (code: string) => set({ pitches: [...pa.pitches, code], ...(pa.speeds ? { speeds: [...pa.speeds.slice(0, pa.pitches.length), null] } : {}) })
+  const c = count(pa.pitches)
+  // four balls or three strikes would have ended it: the result belongs on a plate appearance then
+  const over = impliedResult(pa.pitches)
+  const nameList = (list: string[], v: string) => (v && !list.includes(v) ? [v, ...list] : list)
+  return (
+    <div className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-ink/20 bg-surface-2/40 p-3 md:p-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" variant="ghost" icon={<List />} onClick={onClose}>回到清單</Button>
+        <div className="flex-1 min-w-0 text-center text-[13px] text-ink tnum whitespace-nowrap">{index + 1} / {total}</div>
+        <Button size="sm" variant="outline" icon={<ChevronLeft />} onClick={() => onNav(index - 1)} disabled={index === 0}>上一個</Button>
+        <Button size="sm" variant="outline" onClick={() => onNav(index + 1)} disabled={index >= total - 1}>下一個<ChevronRight className="size-4" /></Button>
+      </div>
+      <div className="flex flex-col gap-1">
+        <h3 className="text-[15px] font-semibold text-ink">未完成打席（不算打席）</h3>
+        <p className="text-[12px] text-muted">第 {pa.inning} 局 {pa.outsBefore ?? 0} 出局，這個打席還沒打完，半局就因為壘上跑者盜壘失敗、被牽制出局結束了：打者沒有結果，下一局由他重新打。已經投的 {pa.pitches.length} 球照樣算投手的用球數、好壞球、揮空。</p>
+        <p className="text-[12px] text-muted">跑者的出局記在<strong className="font-medium text-ink-2">他自己的打席</strong>（那一列的盜壘失敗／牽制出局和出局碼）；要改跑者，請到他上壘的那一列{index > 0 ? '（按「上一個」往前找）' : ''}。</p>
+      </div>
+      <div className="flex items-end gap-2 flex-wrap">
+        {bat && <>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">打者<PlayerSelect aria-label="打者" value={bat.batter} onChange={(v) => set({ batter: v })} names={nameList(names, bat.batter)} className="w-full" placeholder="選打者" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2">棒次<Select value={bat.order ? String(bat.order) : ''} onChange={(e) => set({ order: e.target.value ? Number(e.target.value) : undefined })} options={ORDER_OPTS} className="w-[104px]" /></label>
+        </>}
+        {pit && <>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={nameList(pitcherNames, pit.pitcher)} className="w-full" placeholder="選投手" /></label>
+          <label className="flex flex-col gap-1 text-[12px] text-ink-2">對方棒次<Select value={pit.oppOrder ? String(pit.oppOrder) : ''} onChange={(e) => set({ oppOrder: e.target.value ? Number(e.target.value) : undefined })} options={ORDER_OPTS} className="w-[104px]" /></label>
+        </>}
+      </div>
+      <Section title="逐球" aside={<span className="text-[12px] text-muted tnum">{c.balls} 壞 {c.strikes} 好・點一顆球可插入、改或刪</span>}>
+        <div className="flex items-center gap-2 min-h-8 flex-wrap">
+          <PitchChips pitches={pa.pitches} speeds={pa.speeds} onRemove={(i) => setSel({ i })} verb="修改" picked={sel?.i} />
+          {pa.pitches.length > 0 && <button type="button" onClick={() => set({ pitches: [], speeds: undefined })} className="ml-auto h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink cursor-pointer underline underline-offset-2">全部清除</button>}
+        </div>
+        {sel && sel.i < pa.pitches.length && (
+          <div role="group" aria-label={`第 ${sel.i + 1} 球`} className="flex items-center gap-1.5 flex-wrap rounded-[var(--radius-sm)] border border-border bg-surface px-2 py-1.5">
+            <span className="text-[12px] text-ink-2 tnum mr-1">第 {sel.i + 1} 球：</span>
+            {!sel.mode ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setSel({ ...sel, mode: 'insert' })}>在前面插入一球</Button>
+                <Button size="sm" variant="outline" onClick={() => setSel({ ...sel, mode: 'change' })}>改成…</Button>
+                <Button size="sm" variant="ghost" className="text-critical hover:text-critical" onClick={() => { remove(sel.i); setSel(null) }}>刪除這一球</Button>
+              </>
+            ) : UNFINISHED_PITCHES.map(([code, label]) => (
+              <Button key={code} size="sm" variant="outline" onClick={() => { if (sel.mode === 'insert') insert(sel.i, code); else change(sel.i, code); setSel(null) }}>{label}</Button>
+            ))}
+            <Button size="sm" variant="ghost" onClick={() => setSel(null)}>取消</Button>
+          </div>
+        )}
+        <div role="group" aria-label="加一球" className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[12px] text-ink-2 mr-1">加一球：</span>
+          {UNFINISHED_PITCHES.map(([code, label]) => <Button key={code} size="sm" variant="outline" onClick={() => add(code)}>{label}</Button>)}
+        </div>
+        <SpeedsField key={`${index}-${pa.pitches.length}`} pitches={pa.pitches.length} speeds={pa.speeds} onChange={(speeds) => set({ speeds })} />
+        {over && <p role="alert" className="text-[12px] text-warning">已經 {over === '保送' ? '4 壞球' : '3 好球'}了，打席應該已經結束：請確認逐球，或把這一列刪掉、改記在一般打席。</p>}
+        {pit && !!pit.priorPitchers?.length && <p className="text-[12px] text-muted">其中前 {pit.priorPitchers.reduce((a, p) => a + p.pitches, 0)} 球是換下的投手投的（{pit.priorPitchers.map((p) => `${p.name} ${p.pitches} 球`).join('、')}），算他的。</p>}
+      </Section>
+      <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pa.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
+      {issues.length > 0 && (
+        <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+        </div>
+      )}
+      <div className="flex pt-2 border-t border-border">
+        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onDelete}>刪除這一列</Button>}
+      </div>
+    </div>
+  )
 }
 
 /** A reliever who came in and made an out on the bases before he faced anyone (types.RELIEF): not a plate appearance. */
@@ -661,29 +748,18 @@ function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, 
         <Button size="sm" variant="outline" icon={<ChevronLeft />} onClick={() => onNav(index - 1)} disabled={index === 0}>上一個</Button>
         <Button size="sm" variant="outline" onClick={() => onNav(index + 1)} disabled={index >= total - 1}>下一個<ChevronRight className="size-4" /></Button>
       </div>
-      {isUnfinished(pit) ? (
-        <div className="flex flex-col gap-1">
-          <h3 className="text-[15px] font-semibold text-ink">未完成打席（不算打席）</h3>
-          <p className="text-[12px] text-muted">這個打席還沒打完，半局就因為盜壘失敗、牽制出局結束了：打者沒有結果，下一局重新打。已經投的 {pit.pitches.length} 球照樣算投手的用球數、好壞球、揮空。</p>
-          <PitchChips pitches={pit.pitches} />
-          {!!pit.priorPitchers?.length && <p className="text-[12px] text-muted">其中前 {pit.priorPitchers.reduce((a, p) => a + p.pitches, 0)} 球是換下的投手投的（{pit.priorPitchers.map((p) => `${p.name} ${p.pitches} 球`).join('、')}），算他的。</p>}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <h3 className="text-[15px] font-semibold text-ink">換投後未面對打者（不算打席）</h3>
-          <p className="text-[12px] text-muted">這位投手上場後、還沒面對任何打者，就讓壘上跑者出局（牽制、盜壘阻殺…）。這個出局和他的牽制次數算他的，不算前一位投手；跑者自己的出局碼仍記在原本那個打席。要排在這局最後一個打席之後。</p>
-        </div>
-      )}
+      <div className="flex flex-col gap-1">
+        <h3 className="text-[15px] font-semibold text-ink">換投後未面對打者（不算打席）</h3>
+        <p className="text-[12px] text-muted">這位投手上場後、還沒面對任何打者，就讓壘上跑者出局（牽制、盜壘阻殺…）。這個出局和他的牽制次數算他的，不算前一位投手；跑者自己的出局碼仍記在原本那個打席。要排在這局最後一個打席之後。</p>
+      </div>
       <div className="flex items-end gap-2 flex-wrap">
         <label className="flex flex-col gap-1 text-[12px] text-ink-2 flex-1 min-w-[150px]">投手<PlayerSelect aria-label="投手" value={pit.pitcher} onChange={(v) => set({ pitcher: v })} names={pit.pitcher && !pitcherNames.includes(pit.pitcher) ? [pit.pitcher, ...pitcherNames] : pitcherNames} className="w-full" placeholder="選投手" /></label>
-        {!isUnfinished(pit) && <label className="flex flex-col gap-1 text-[12px] text-ink-2">換投時<Select value={String(pit.outsBefore ?? 0)} onChange={(e) => set({ outsBefore: Number(e.target.value) })} options={outsOpts} className="w-[140px]" /></label>}
+        <label className="flex flex-col gap-1 text-[12px] text-ink-2">換投時<Select value={String(pit.outsBefore ?? 0)} onChange={(e) => set({ outsBefore: Number(e.target.value) })} options={outsOpts} className="w-[140px]" /></label>
       </div>
-      {!isUnfinished(pit) && (
-        <div className="flex items-center gap-4 flex-wrap">
-          <Stepper label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
-          <Stepper label="阻殺" value={pit.cs} onChange={(v) => set({ cs: v })} />
-        </div>
-      )}
+      <div className="flex items-center gap-4 flex-wrap">
+        <Stepper label="牽制出局" value={pit.pk} onChange={(v) => set({ pk: v })} />
+        <Stepper label="阻殺" value={pit.cs} onChange={(v) => set({ cs: v })} />
+      </div>
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pit.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
