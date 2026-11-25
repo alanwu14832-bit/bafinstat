@@ -29,8 +29,11 @@ function teamSite(): Plugin {
     // A build-time constant, so a team that starts empty (VITE_TEAM_SEED=0) does not ship BaFiN's recorded
     // games in its bundle at all — not just hidden. src/data/seed.ts reads it.
     config(_, { mode }) {
-      const seed = resolveTeam(loadEnv(mode, process.cwd(), 'VITE_')).seed
-      return { define: { __TEAM_SEED__: JSON.stringify(seed) } }
+      const t = resolveTeam(loadEnv(mode, process.cwd(), 'VITE_'))
+      // 開場形象區: the team photo only when it is really there (a full URL, or a file in web/public); src/config/hero.ts reads it
+      const there = (f: string) => (/^https?:/.test(f) || (!!f && existsSync(resolve(process.cwd(), 'public', f))) ? f : '')
+      const hero = { photo: mode === 'test' ? '' : there(t.heroPhoto), mobile: mode === 'test' ? '' : there(t.heroPhotoMobile) }
+      return { define: { __TEAM_SEED__: JSON.stringify(t.seed), __TEAM_HERO__: JSON.stringify(hero) } }
     },
     configResolved(config) {
       const env = loadEnv(config.mode, config.envDir || process.cwd(), 'VITE_')

@@ -3,7 +3,8 @@ import { ArrowUpRight } from 'lucide-react'
 import { cx } from '../../lib/format'
 import { Reveal } from '../motion/Reveal'
 import { HeroGlow } from './HeroGlow'
-import { PlateBadge, Stitches } from './Scoreboard'
+import { PlateBadge } from './Scoreboard'
+import { useInfoNote } from './InfoNote'
 
 export interface Leader {
   /** what he leads in, e.g. 打擊率王 */
@@ -61,15 +62,16 @@ export const tieNote = (l: LeaderResult | null) => (l?.by && l.tied ? `同率 ${
  * 領先者: who leads the page's key numbers, at the top of 打擊 / 投球 / 守備 so the page has a main character before
  * the big table. Same glow and stitching as the homepage hero, quieter.
  */
-export function LeaderStrip({ leaders, numbers, caption }: { leaders: Leader[]; numbers?: Map<string, string | undefined>; caption?: string }) {
+export function LeaderStrip({ leaders, numbers, caption, id }: { leaders: Leader[]; numbers?: Map<string, string | undefined>; caption?: string; id?: string }) {
+  // the conditions (門檻, 篩選) sit behind the ⓘ; a caption written as 「・依上方篩選…」 loses its leading dot there
+  const info = useInfoNote(caption ? caption.replace(/^・/, '') : null, { what: '領先者' })
   if (!leaders.length) return null
   return (
-    <section aria-label="領先者" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)]">
+    <section id={id} aria-label="領先者" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] scroll-mt-28">
       <HeroGlow size="sm" strength={0.7} />
-      <div className="relative px-5 md:px-6 pt-4 flex items-center gap-3 text-[11px] text-muted flex-wrap">
-        <Stitches width={40} />
-        <span className="tracking-[0.08em]">領先者</span>
-        {caption && <span className="text-muted">{caption}</span>}
+      <div className="relative px-5 md:px-6 pt-4">
+        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2 tracking-[0.08em]"><span>領先者</span>{info.button}</div>
+        {info.panel}
       </div>
       {/* phones swipe through the leaders (like the homepage 看點); wider screens show them side by side */}
       <ul className={cx('relative flex overflow-x-auto snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-2 md:p-3 md:grid md:overflow-visible', leaders.length >= 5 ? 'md:grid-cols-5' : leaders.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3')}>

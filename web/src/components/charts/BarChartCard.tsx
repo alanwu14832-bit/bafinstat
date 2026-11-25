@@ -21,7 +21,8 @@ export interface BarChartCardProps extends Omit<ChartFrameProps, 'children' | 'l
   nameFor?: (seriesKey: string, datum: BarDatum) => string
   /** Makes each bar a button (e.g. open that game). */
   onBarClick?: (datum: BarDatum) => void
-  /** Datum field rendered as a second, muted line under each x-axis label (vertical layout only). */
+  /** Datum field rendered as a second, muted line under each category label (under the x-axis label, or under the
+   *  name on the left in horizontal layout). */
   xSubKey?: string
 }
 
@@ -36,6 +37,17 @@ function TwoLineTick({ x = 0, y = 0, payload, sub }: TickProps & { sub: (i: numb
   )
 }
 
+/** Horizontal layout: the category (a name) with a smaller second line under it, right-aligned against the bars. */
+function NameTick({ x = 0, y = 0, payload, sub }: TickProps & { sub: (i: number) => string }) {
+  const i = payload?.index ?? 0
+  return (
+    <text x={x} y={y} textAnchor="end" fill="var(--muted)" fontSize={11}>
+      <tspan x={x} dy={-2}>{payload?.value ?? ''}</tspan>
+      <tspan x={x} dy={12} fontSize={10} fill="var(--muted)" style={{ fontVariantNumeric: 'tabular-nums' }}>{sub(i)}</tspan>
+    </text>
+  )
+}
+
 const MUTED = 'var(--surface-3)'
 
 export function BarChartCard({
@@ -45,7 +57,9 @@ export function BarChartCard({
   const anim = useChartAnimation()
   const horizontal = layout === 'horizontal'
   const fmt = formatValue ?? ((v: number) => String(v))
-  const h = height ?? (horizontal ? Math.max(180, data.length * 32 + 24) : xSubKey ? 280 : 260)
+  // a row of two labelled bars needs more height than one bar
+  const rowH = resolved.length > 1 && showLabels ? 40 : xSubKey ? 36 : 32
+  const h = height ?? (horizontal ? Math.max(180, data.length * rowH + 24) : xSubKey ? 280 : 260)
   const sub = (i: number) => String(data[i]?.[xSubKey ?? ''] ?? '')
 
   return (
@@ -56,14 +70,14 @@ export function BarChartCard({
           layout={horizontal ? 'vertical' : 'horizontal'}
           margin={{ top: showLabels && !horizontal ? 18 : 6, right: showLabels && horizontal ? 40 : 8, bottom: 0, left: horizontal ? 0 : -12 }}
           barGap={2}
-          barCategoryGap="28%"
+          barCategoryGap={horizontal && resolved.length > 1 && showLabels ? '22%' : '28%'}
           {...chartClick(data, onBarClick)}
         >
           <CartesianGrid stroke="var(--grid)" strokeDasharray="0" vertical={horizontal} horizontal={!horizontal} />
           {horizontal ? (
             <>
               <XAxis type="number" {...axisCommon} tickCount={5} />
-              <YAxis type="category" dataKey="name" {...axisCommon} width={categoryWidth} interval={0} />
+              <YAxis type="category" dataKey="name" {...axisCommon} width={categoryWidth} interval={0} {...(xSubKey ? { tick: <NameTick sub={sub} /> } : {})} />
             </>
           ) : (
             <>

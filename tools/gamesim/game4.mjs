@@ -32,7 +32,7 @@ await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); 
 await p.goto(`${URL}/record`, { waitUntil: 'networkidle' })
 await main.getByLabel('對手', { exact: true }).last().fill('模擬隊四')
 await main.getByLabel('主客').selectOption('主')
-await main.getByLabel('預定局數').fill('2')
+await main.getByLabel('預定局數').selectOption('2')
 await p.getByRole('button', { name: '開始紀錄' }).click(); await p.waitForTimeout(300)
 
 // ---------------------------------------------------------------- driving the screen (as in game1/game2)

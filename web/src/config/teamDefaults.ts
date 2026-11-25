@@ -66,6 +66,14 @@ export const TEAM_DEFAULTS = {
   ogImage: 'og.png',
   /** VITE_TEAM_DESCRIPTION: the text under link previews; '' = 「{org}（{name}）的比賽紀錄、即時比分與球員數據…」. */
   description: '',
+  /** VITE_TEAM_HERO_PHOTO: the team photo behind 總覽's opening (開場形象區): a file in web/public or a full URL. A wide
+   *  picture, about 2000 × 1100, under 400 KB. While the file is not there the opening uses the drawn backdrop
+   *  (components/ui/HeroArt.tsx), so the site works before anyone uploads a photo. */
+  heroPhoto: 'hero.jpg',
+  /** VITE_TEAM_HERO_PHOTO_MOBILE: an upright crop of it for phones (about 1100 × 1300); missing = the wide one, cropped. */
+  heroPhotoMobile: 'hero-m.jpg',
+  /** VITE_TEAM_HERO_FOCUS: the part of the photo to keep in view when it is cropped (CSS object-position, 「左右% 上下%」). */
+  heroFocus: '50% 35%',
 }
 
 export type TeamConfig = typeof TEAM_DEFAULTS
@@ -111,6 +119,10 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     qualRule: qual === 'college' || qual === 'team' ? qual : TEAM_DEFAULTS.qualRule,
     ogImage: str('VITE_TEAM_OG_IMAGE', TEAM_DEFAULTS.ogImage),
     description: str('VITE_TEAM_DESCRIPTION', TEAM_DEFAULTS.description),
+    heroPhoto: str('VITE_TEAM_HERO_PHOTO', TEAM_DEFAULTS.heroPhoto),
+    heroPhotoMobile: str('VITE_TEAM_HERO_PHOTO_MOBILE', TEAM_DEFAULTS.heroPhotoMobile),
+    // only 「50% 35%」-style values: it is written into a style attribute
+    heroFocus: /^\d{1,3}% \d{1,3}%$/.test(str('VITE_TEAM_HERO_FOCUS', '')) ? str('VITE_TEAM_HERO_FOCUS', '') : TEAM_DEFAULTS.heroFocus,
   }
 }
 

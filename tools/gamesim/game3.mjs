@@ -30,7 +30,7 @@ await p.evaluate(({ L }) => { localStorage.removeItem('bafin.record.draft.v1'); 
 await p.goto(`${URL}/record`, { waitUntil: 'networkidle' })
 await main.getByLabel('對手', { exact: true }).last().fill('模擬隊三')
 await main.getByLabel('主客').selectOption('客')
-await main.getByLabel('預定局數').fill('2')
+await main.getByLabel('預定局數').selectOption('2')
 // the tie-break follows 預定局數: from the 3rd, on first and second
 {
   const from = await main.locator('#setup-tb-from').inputValue()

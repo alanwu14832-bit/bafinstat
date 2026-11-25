@@ -8,6 +8,7 @@ import { TEAM_NAME } from '../data/seed'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Section, SectionNav } from '../components/layout/SectionNav'
 import { Card } from '../components/ui/Card'
 import { DataTable, type Column } from '../components/ui/DataTable'
 import { Tabs } from '../components/ui/Tabs'
@@ -86,7 +87,8 @@ export function BattingPage() {
   const hardHit = useMemo(() => [...s.batters].filter((b) => b.bipQuality >= 3).sort((a, b) => (b.hardPct ?? 0) - (a.hardPct ?? 0) || b.hard - a.hard).slice(0, 12)
     .map((b) => ({ name: b.name, hard: Number(((b.hardPct ?? 0) * 100).toFixed(1)), n: `${b.hard}/${b.bipQuality}` })), [s.batters])
   const teamHard = s.team.hardPct
-  const discipline = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA).sort((a, b) => (a.kPct ?? 0) - (b.kPct ?? 0)).slice(0, 12).map((b) => ({ name: b.name, 'K%': Number(((b.kPct ?? 0) * 100).toFixed(1)), 'BB%': Number(((b.bbPct ?? 0) * 100).toFixed(1)) })), [s.batters, minPA])
+  // 選球紀律: the batters who came up most first (the numbers that mean the most on top), each with his plate appearances
+  const discipline = useMemo(() => [...s.batters].filter((b) => b.pa >= minPA).sort((a, b) => b.pa - a.pa || (a.kPct ?? 0) - (b.kPct ?? 0)).slice(0, 12).map((b) => ({ name: b.name, pa: `${b.pa} 打席`, 'K%': Number(((b.kPct ?? 0) * 100).toFixed(1)), 'BB%': Number(((b.bbPct ?? 0) * 100).toFixed(1)) })), [s.batters, minPA])
 
   const numbers = useMemo(() => new Map(s.dataset.roster.map((p) => [p.name, p.number])), [s.dataset.roster])
   const leaders = useMemo(() => {
@@ -149,8 +151,9 @@ export function BattingPage() {
   return (
     <>
       <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}${college ? '（大專規程）' : ''}。`} />
+      <SectionNav items={[{ id: 'leaders', label: '領先者' }, { id: 'stats', label: '成績表' }, { id: 'platoon', label: '左右投' }, { id: 'splits', label: '情境' }, { id: 'charts', label: '圖表' }]} />
       <DemoBanner />
-      <LeaderStrip leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
+      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
       <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}${view === 'advanced' ? `。${winNote}` : view === 'batted' ? '。每個比率只算有記那一項的擊球，小字是 分子/分母；GB＋LD＋FB＋PU＝100%（PU 是內野飛球），Pull／Center／Oppo 用球員名單的打擊慣用加落點；BABIP 不含全壘打與觸擊' : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }, { value: 'batted', label: '擊球剖面' }]} /></div>
@@ -158,14 +161,16 @@ export function BattingPage() {
       </Card>
       <PlatoonCard id="platoon" side="bat" rows={s.batting} />
       <SplitsCard id="splits" side="bat" rows={splitRows} who={splitWho || '全隊'} action={splitPicker} perPlayer={!!splitWho} />
+      <Section id="charts">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
         <BarChartCard title="OPS 排行" subtitle="達門檻打者，前 12 名；點長條看那位球員" data={opsRank} onBarClick={openPlayer} series={[{ key: 'ops', label: 'OPS' }]} layout="horizontal" showLabels formatValue={(v) => f3(v)} categoryWidth={64} />
         <DonutCard title="擊球型態" subtitle={trajNote} segments={bbType} centerCaption="有記軌跡" />
         <BarChartCard title="強擊率 Hard Hit%" subtitle={`強勁擊球 ÷ 有記強度的擊球，由高到低（有記強度的擊球 ≥ 3 的打者，前 12 名）${teamHard === null ? '' : `；全隊 ${(teamHard * 100).toFixed(1)}%`}`}
           data={hardHit} onBarClick={openPlayer} series={[{ key: 'hard', label: '強擊率' }]} layout="horizontal" showLabels categoryWidth={64}
           formatValue={(v) => `${v.toFixed(1)}%`} nameFor={(_k, d) => `強擊率（強 ${d.n}）`} />
-        <BarChartCard title="選球紀律" subtitle="三振率與保送率（%），三振率由低到高" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
+        <BarChartCard title="選球紀律" subtitle="三振率 K% 與保送率 BB%，打席多的在上面（達門檻打者，前 12 名）；名字下面是打席數，點長條看那位球員" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" showLabels xSubKey="pa" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
+      </Section>
     </>
   )
 }

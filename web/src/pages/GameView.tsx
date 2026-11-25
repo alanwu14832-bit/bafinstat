@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Info, Maximize2, Pencil, Printer, Share2, Smartphone, Trash2, Video, X } from 'lucide-react'
 import { StoryDialog } from '../components/ui/StoryDialog'
-import { LineScoreBoard, PlateBadge, Stitches } from '../components/ui/Scoreboard'
+import { LineScoreBoard, PlateBadge } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Tabs } from '../components/ui/Tabs'
@@ -486,12 +486,12 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             )}
             <LineScore s={current} usName={names.us} />
             {tab === 'summary' && (
-              <Card title="戰報摘要" subtitle={issues.length ? `這場有 ${issues.length} 項待核對，摘要依目前紀錄產生，僅供參考` : '依這場的紀錄產生；點局數看那半局的逐球、點球員看個人檔案'}>
+              <Card title="戰報摘要" noteOpen={issues.length > 0} subtitle={issues.length ? `這場有 ${issues.length} 項待核對，摘要依目前紀錄產生，僅供參考` : '依這場的紀錄產生；點局數看那半局的逐球、點球員看個人檔案'}>
                 {recap.length === 0 ? <p className="text-[13px] text-muted">這場的紀錄還不足以寫摘要。</p> : (
                   <ul className="flex flex-col gap-3.5">
                     {recap.map((l) => (
                       <li key={l.kind} className="flex flex-col gap-1">
-                        <span className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.08em] text-accent"><Stitches width={24} />{l.label}</span>
+                        <span className="text-[11px] font-semibold tracking-[0.08em] text-accent">{l.label}</span>
                         <p className="text-[14px] text-ink leading-relaxed">{l.text}</p>
                         <span className="flex gap-3 text-[12px]">
                           {l.inning && l.side && <button type="button" onClick={() => goInning(l.side!, l.inning!)} className="inline-flex items-center min-h-9 pointer-fine:min-h-0 text-ink-2 underline underline-offset-2 cursor-pointer hover:text-ink">看第 {l.inning} 局逐球</button>}

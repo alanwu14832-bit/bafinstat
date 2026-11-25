@@ -55,7 +55,8 @@ describe('紀錄簿', () => {
     at('/recordbook?view=team')
     const table = screen.getByText('逐季戰績').closest('section')!
     fireEvent.click(within(table).getAllByText('2025 年')[0])
-    expect(await screen.findByRole('heading', { level: 1, name: '總覽' })).toBeInTheDocument()
+    // 總覽 opens with the season hero (its heading is the team's name)
+    expect(await screen.findByRole('region', { name: '球季概況' })).toBeInTheDocument()
     expect(url()).toBe('/?from=2025-01-01&to=2025-12-31')
     expect(useDataStore.getState().filters).toMatchObject({ from: '2025-01-01', to: '2025-12-31' })
   })

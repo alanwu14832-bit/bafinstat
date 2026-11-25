@@ -21,6 +21,7 @@
 | `VITE_TEAM_FILE_PREFIX` | 匯出備份的檔名開頭 | `NTUBB` |
 | `VITE_TEAM_SITE_URL` | 網站的完整網址（`https://` 開頭、結尾不要 `/`），讓 LINE／FB 的連結預覽抓得到圖；**其他隊一定要填**，不然預覽圖會指到 BaFiN 的網站 | `https://stats.example.org` |
 | `VITE_TEAM_OG_IMAGE` | 連結預覽圖（1200×630）：`web/public` 裡的檔名或完整網址；預設 `og.png`（BaFiN 的圖），用 `tools/og/make-og.mjs` 產生自己的一張放進 `web/public/teams/<隊代號>/` 再填這裡 | `teams/ntu/og.png` |
+| `VITE_TEAM_HERO_PHOTO` | 總覽頁開場形象區的球隊照片：`web/public` 裡的檔名或完整網址；預設 `hero.jpg`。檔案不在就用畫出來的底圖（隊徽＋棒球縫線）。另有 `VITE_TEAM_HERO_PHOTO_MOBILE`（手機用的直式裁切，預設 `hero-m.jpg`）與 `VITE_TEAM_HERO_FOCUS`（裁切時保留的位置，例如 `50% 35%`） |
 | `VITE_TEAM_DESCRIPTION` | 連結預覽下面的一句介紹；不填就自動寫「{組織}（{隊名}）的比賽紀錄、即時比分與球員數據…」 | `台大棒球隊的比賽紀錄與數據` |
 | `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` | 這一隊自己的資料庫（見第 2 步） | — |
 

@@ -4,6 +4,7 @@ import { cx } from '../../lib/format'
 import { EmptyState } from './EmptyState'
 import { StatHint } from './StatHint'
 import { hintFor } from '../../data/glossary'
+import { EdgeFade, useMoreRight } from './ScrollFade'
 
 export type Align = 'left' | 'center' | 'right'
 
@@ -62,6 +63,7 @@ export function DataTable<Row extends object>({
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState(defaultSort ?? null)
   const scroller = useRef<HTMLDivElement>(null)
+  const moreRight = useMoreRight(scroller)
 
   // On a narrow screen a column such as ERA sits far to the right; bring it next to the pinned name column.
   useLayoutEffect(() => {
@@ -99,6 +101,7 @@ export function DataTable<Row extends object>({
   const pin = (i: number) => (i === 0 ? 'sticky left-0 z-[1] bg-inherit' : '')
 
   return (
+    <div className="relative min-w-0">
     <div ref={scroller} className={cx('overflow-x-auto overflow-y-auto scroll-x', className)} style={{ maxHeight }}>
       <span role="status" aria-live="polite" className="sr-only">{sort ? `依 ${String(columns.find((c) => c.key === sort.key)?.header ?? sort.key)} ${sort.dir === 'asc' ? '升冪' : '降冪'}排序` : ''}</span>
       <table className="w-full border-collapse text-[13px] tnum whitespace-nowrap">
@@ -173,6 +176,9 @@ export function DataTable<Row extends object>({
           </tfoot>
         )}
       </table>
+    </div>
+    {/* more columns to the right: the edge fades until the last one is in view */}
+    <EdgeFade show={moreRight} />
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { opponentLabel } from '../data/intrasquad'
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Download, Pencil, Search, Smartphone, X } from 'lucide-react'
 import { StoryDialog } from '../components/ui/StoryDialog'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Section, SectionNav } from '../components/layout/SectionNav'
 import { activeFilterCount } from '../components/layout/FilterBar'
 import { scopeText, useNavigateWithFilters } from '../components/layout/FilterChips'
 import { downloadCompareImage, downloadPercentileImage, downloadPlayerImage } from '../lib/shareImage'
@@ -20,7 +21,6 @@ import { StoryRow } from '../components/ui/SeasonHero'
 import { HeroGlow } from '../components/ui/HeroGlow'
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { sortRoster } from '../data/rosterSort'
-import { Stitches } from '../components/ui/Scoreboard'
 import { playerStories } from '../data/stories'
 import { PlateBadge } from '../components/ui/Scoreboard'
 import { StatHint } from '../components/ui/StatHint'
@@ -452,11 +452,12 @@ export function PlayersPage() {
   return (
     <>
       <PageHeader scoped title="球員" description={`${roster.length} 位球員。分打擊、投球、生涯三頁：打擊、投球依上方篩選計算，生涯是所有比賽、不受篩選影響；百分位是隊內排名（PA ≥ ${PCT_POOL_MIN.bat} 的打者、面對 ${PCT_POOL_MIN.pit} 位以上打者的投手）。`} />
+      <SectionNav items={[{ id: 'p-card', label: '球員' }, { id: 'p-numbers', label: '數據' }, { id: 'p-pct', label: '百分位' }, { id: 'p-trend', label: '走勢' }, { id: 'p-splits', label: '拆分' }, { id: 'p-log', label: '逐場' }]} />
       <DemoBanner />
 
       {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
           看點), with the homepage hero's glow. The name is the switcher: tap it to pick someone else. */}
-      <Card className="overflow-hidden relative" bodyClassName="p-0">
+      <Card id="p-card" className="overflow-hidden relative" bodyClassName="p-0">
         <HeroGlow />
         <div className="relative px-5 md:px-7 pt-4 md:pt-6 pb-4 md:pb-6 flex flex-col gap-4 md:gap-5">
           <div className="flex flex-col-reverse sm:flex-row sm:items-start gap-1 sm:gap-3">
@@ -501,7 +502,7 @@ export function PlayersPage() {
           )}
           {player && stories.length > 0 && (
             <>
-              <div className="flex items-center gap-3 text-[11px] text-muted -mb-1"><Stitches width={40} /><span className="tracking-[0.08em]">{player.name} 的看點</span></div>
+              <div className="text-[12px] font-semibold text-ink-2 tracking-[0.08em] -mb-1">{player.name} 的看點</div>
               <StoryRow stories={stories} link={false} className="relative" />
             </>
           )}
@@ -584,6 +585,7 @@ export function PlayersPage() {
           ) : tab === 'batting' ? (
             !bat ? <Card><EmptyState compact title="目前篩選條件下沒有打席" description={pit ? '這位球員有投球紀錄：點上面的「投球」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <Section id="p-numbers">
             <p className="text-[12px] text-muted -mb-1">{qualPA}</p>
             <StatGroup columns="grid-cols-2 md:grid-cols-4 xl:grid-cols-5">
               <StatTile label="打擊率 AVG" to={rank('/batting?sort=avg')} toLabel="全隊排行" value={bat.avg ?? 0} format="decimal3" note={`${bat.h} H / ${bat.ab} AB`} />
@@ -596,6 +598,7 @@ export function PlayersPage() {
               <StatTile label="得點圈 AVG" to={rank('/batting?view=advanced&sort=rispAvg')} toLabel="全隊排行" value={bat.rispAvg ?? 0} format="decimal3" display={f3(bat.rispAvg)} note={`${bat.rispH} / ${bat.rispAB} RISP AB`} />
               <StatTile label="Whiff% / Hard%" to={rank('/batting?view=process&sort=whiffPct&dir=asc')} toLabel="全隊排行" value={(bat.whiffPct ?? 0) * 100} format="pct" display={`${pct0(bat.whiffPct)}/${pct0(bat.hardPct)}`} note={`揮空 ${bat.whiffs}/${bat.swings} 揮・強勁 ${bat.hard}/${bat.bipQuality} 球（判讀）`} />
             </StatGroup>
+            </Section>
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="打擊・同一篩選範圍；較佳的一方以強調色標示，出賽／打席數只標「較多」（率的門檻 PA ≥ 1）" flush
               action={<><Button variant="ghost" size="sm" icon={<Download />} onClick={() => shareCompare('batting')} title="把這張比較表存成 PNG 圖片">存成圖片</Button><Button variant="ghost" size="sm" icon={<X />} onClick={() => setCompare('')}>關閉比較</Button></>}>
@@ -604,7 +607,7 @@ export function PlayersPage() {
           )}
           {multi && <CompareGrid kind="batting" players={comparePlayers('batting')} rows={compareTableRows('batting')} onPick={(n) => choose(n, selected)}
             scope={scopeText(filters, s.games)} poolNote={comparePoolNote('batting')} footer={`${TEAM_NAME} 數據平台・底色是隊內百分位（紅好藍差），白框＝這一列最佳`} />}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+          <div id="p-pct" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
             {bat && bat.pa < 1 ? <Card title="隊內百分位" subtitle="與同隊打者比較"><EmptyState compact title="有打席後會出現隊內百分位" description={`目前 ${bat.pa} 個打席`} /></Card> : pctView === 'bars' ? (
               <PercentileCard title="隊內百分位" rows={batPct} poolNote={batPoolNote} footnote={PCT_FOOTNOTE} toggle={pctToggle}
                 action={<Button variant="ghost" size="sm" icon={<Download />} onClick={() => sharePercentile('batting')} title="把隊內百分位存成 PNG 圖片">存成圖片</Button>} />
@@ -618,11 +621,13 @@ export function PlayersPage() {
               formatValue={(v) => `PR ${Math.round(v)}`} detail={(d, k) => String(d[k === 'player' ? 'playerDetail' : 'otherDetail'] ?? '')} />}
             <SprayChart title="落點分佈" subtitle="安打 / 場內球" counts={spray.all} secondary={spray.hits} />
           </div>
-          {trend.length > 1 && <LineChartCard title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          {trend.length > 1 && <LineChartCard id="p-trend" title="AVG / OPS 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={trend} series={[{ key: 'AVG', label: 'AVG' }, { key: 'OPS', label: 'OPS' }]} formatValue={(v) => f3(v)} yWidth={52} />}
+          <Section id="p-splits">
           {bat.bip > 0 && <BattedBallTable kind="bat" rows={[{ name: player.name, line: bat }, { name: '全隊', line: s.team }]} />}
           <SplitsCard side="bat" only="hand" title="對左投・對右投" subtitle="這位打者面對左投、右投的成績；打席不到 10 個的列變淡。" rows={splitBat} who={player.name} perPlayer />
           <SplitsCard side="bat" rows={splitBat} who={player.name} perPlayer />
-          <Card title="逐場紀錄" subtitle="點欄位標題排序" flush>
+          </Section>
+          <Card id="p-log" title="逐場紀錄" subtitle="點欄位標題排序" flush>
             <DataTable columns={logCols} rows={gameLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
               </>
@@ -630,6 +635,7 @@ export function PlayersPage() {
           ) : (
             !pit ? <Card><EmptyState compact title="目前篩選條件下沒有投球紀錄" description={bat ? '這位球員有打擊紀錄：點上面的「打擊」看' : undefined} action={noDataActions} /></Card> : (
               <>
+            <Section id="p-numbers">
             <p className="text-[12px] text-muted -mb-1">{qualIP}</p>
             <StatGroup>
               <StatTile label="防禦率 ERA" to={rank('/pitching?view=basic&sort=era&dir=asc')} toLabel="全隊排行" value={pit.era ?? 0} format="era" note={`${pit.ipDisplay} IP・${pit.w} 勝 ${pit.l} 敗${pit.sv ? `・${pit.sv} 救援` : ''}`} />
@@ -645,6 +651,7 @@ export function PlayersPage() {
               <StatTile label="三上三下" to={rank('/pitching?view=process&sort=inn123')} toLabel="全隊排行" value={pit.inn123} display={String(pit.inn123)} note={`13 球內 ${pit.inn13}/${pit.pitchInn} 局`} />
               <StatTile label="首打出局" to={rank('/pitching?view=process&sort=leadoffOutPct')} toLabel="全隊排行" value={(pit.leadoffOutPct ?? 0) * 100} display={pct0(pit.leadoffOutPct)} note={`${pit.leadoffOuts}/${pit.leadoffBf}・滾飛比 ${f2(pit.goAo)}`} />
             </StatGroup>
+            </Section>
           {pit.bip > 0 && <BattedBallTable kind="pit" rows={[{ name: player.name, line: pit }, { name: '全隊投手', line: s.teamPitch }]} />}
           {compare && cmpPlayer && (
             <Card title={`${player.name} vs ${cmpPlayer.name}`} subtitle="投球・同一篩選範圍；較佳的一方以深色標示" flush
@@ -654,17 +661,21 @@ export function PlayersPage() {
           )}
           {multi && <CompareGrid kind="pitching" players={comparePlayers('pitching')} rows={compareTableRows('pitching')} onPick={(n) => choose(n, selected)}
             scope={scopeText(filters, s.games)} poolNote={comparePoolNote('pitching')} footer={`${TEAM_NAME} 數據平台・底色是隊內百分位（紅好藍差），白框＝這一列最佳`} />}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+          <div id="p-pct" className="scroll-mt-28 grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
             <PercentileCard title="隊內百分位" rows={pitPct} poolNote={pitPoolNote} footnote={PCT_FOOTNOTE}
               action={<Button variant="ghost" size="sm" icon={<Download />} onClick={() => sharePercentile('pitching')} title="把隊內百分位存成 PNG 圖片">存成圖片</Button>} />
             <SprayChart title="被擊球落點" subtitle="面對的打者：安打 / 場內球" counts={pitchSpray.all} secondary={pitchSpray.hits} />
           </div>
+          <Section id="p-trend">
           {pitchTrend.length > 1 ? <LineChartCard title="ERA / WHIP 累積走勢" subtitle="賽季至今；點一下看那一場" onPointClick={openGame} data={pitchTrend} series={[{ key: 'ERA', label: 'ERA' }, { key: 'WHIP', label: 'WHIP' }]} formatValue={(v) => f2(v)} yWidth={44} />
             : <Card title="ERA / WHIP 累積走勢"><EmptyState compact title="投第二場之後會出現走勢" /></Card>}
           {speed && <SpeedCard summary={speed} games={speedGames} onGame={openGame} />}
+          </Section>
+          <Section id="p-splits">
           <SplitsCard side="pit" only="bats" title="對左打・對右打" subtitle="這位投手面對左打者、右打者的成績（被打擊率、被OPS 越低越好）；打席不到 10 個的列變淡。" rows={splitPit} who={player.name} />
           <SplitsCard side="pit" rows={splitPit} who={player.name} title="情境拆分（面對的打者）" />
-          <Card title="逐場投球" subtitle="點一列看那一場" flush>
+          </Section>
+          <Card id="p-log" title="逐場投球" subtitle="點一列看那一場" flush>
             <DataTable columns={pitchCols} rows={pitchLog} rowKey={(r) => r.id} onRowClick={openGame} dense maxHeight={360} emptyTitle="沒有逐場紀錄" />
           </Card>
               </>

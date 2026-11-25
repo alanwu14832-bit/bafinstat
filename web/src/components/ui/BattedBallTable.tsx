@@ -17,6 +17,7 @@ import { scopeText } from '../layout/FilterChips'
 import { downloadCsv } from '../../lib/csv'
 import { f3, pct } from '../../lib/fmt'
 import type { BattedBallCounts, BattedBallRates } from '../../data/stats'
+import { ScrollX } from './ScrollFade'
 
 export type BattedBallLine = BattedBallCounts & BattedBallRates
 const MIN_BIP = 10
@@ -65,7 +66,7 @@ export function BattedBallTable({ kind, rows, id, title = '擊球剖面' }: { ki
       action={<Button size="sm" variant="ghost" icon={<Download />} title="下載成 CSV，可用 Excel 開" onClick={csv} disabled={!first?.bip}>CSV</Button>}>
       {!first?.bip ? <EmptyState compact title="目前篩選條件下沒有擊球紀錄" /> : (
         <>
-          <div className="overflow-x-auto">
+          <ScrollX>
             <table className="w-full text-[13px] tnum border-collapse">
               <thead>
                 <tr className="text-[11px] text-muted">
@@ -92,7 +93,7 @@ export function BattedBallTable({ kind, rows, id, title = '擊球剖面' }: { ki
                 })}
               </tbody>
             </table>
-          </div>
+          </ScrollX>
           <p className="px-5 py-3 text-[12px] text-muted leading-5 border-t border-border">
             GB＋LD＋FB＋PU 加起來是 100%（PU 是內野飛球）；AIR＝LD＋FB＋PU。HR/FB 的飛球含內野飛球；BABIP 不含全壘打與觸擊。
             強度是紀錄員判斷的強／中／弱，不是球速；{pit ? 'Pull／Center／Oppo 用對方打者的左右打加落點' : 'Pull／Center／Oppo 用球員名單的打擊慣用加落點（沒填慣用的打者不算）'}。共 {first.bip} 個擊球，

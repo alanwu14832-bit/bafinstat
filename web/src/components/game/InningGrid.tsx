@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import type { Scoresheet, SheetCell, SheetPlayer } from '../../data/scoresheet'
 import { cx } from '../../lib/format'
+import { ScrollX } from '../ui/ScrollFade'
 
 const TONE: Record<SheetCell['tone'], string> = {
   hit: 'font-semibold text-accent',
@@ -52,7 +53,7 @@ export function InningGrid({ sheet, side, stat, onName }: {
   if (!rows.length) return <div className="text-[13px] text-muted px-4 py-8 text-center">沒有逐打席紀錄</div>
   return (
     <div>
-      <div className="overflow-x-auto scroll-x">
+      <ScrollX className="scroll-x">
         <table className="w-full text-[13px] border-collapse">
           <thead>
             <tr className="border-b border-border">
@@ -93,7 +94,7 @@ export function InningGrid({ sheet, side, stat, onName }: {
             })}
           </tbody>
         </table>
-      </div>
+      </ScrollX>
       <p className="px-4 py-2.5 border-t border-border text-[11px] text-muted leading-4">{INNING_GRID_LEGEND}</p>
     </div>
   )
