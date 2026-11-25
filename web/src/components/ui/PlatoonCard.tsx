@@ -5,6 +5,7 @@
  * without it are counted under the table, not in either column. Rows under 10 plate appearances are greyed out.
  */
 import { useMemo, type ReactNode } from 'react'
+import { usePageFilters } from '../../hooks/usePageFilters'
 import { Download } from 'lucide-react'
 import { Card } from './Card'
 import { Button } from './Button'
@@ -12,7 +13,6 @@ import { DataTable, type Column } from './DataTable'
 import { EmptyState } from './EmptyState'
 import { cx } from '../../lib/format'
 import { useStats } from '../../hooks/useStats'
-import { useDataStore } from '../../store/data'
 import { scopeText } from '../layout/FilterChips'
 import { downloadCsv } from '../../lib/csv'
 import { f3, pct } from '../../lib/fmt'
@@ -23,7 +23,7 @@ interface View { id: string; name: string; all: boolean; lPa: number; lAvg: numb
 
 export function PlatoonCard({ side, rows, id, who }: { side: SplitSide; rows: Array<BattingPA | PitchingPA>; id?: string; who?: string }) {
   const s = useStats()
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const ctx = useMemo(() => paContexts(s.dataset, side), [s.dataset, side])
   const table = useMemo(() => platoonRows(rows, ctx, side, s.dataset.roster), [rows, ctx, side, s.dataset.roster])
   const pit = side === 'pit'

@@ -1,10 +1,10 @@
 import { StrikeRatioCard } from '../components/charts/StrikeRatioCard'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BedDouble, Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
-import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
@@ -118,7 +118,7 @@ export function PitchingPage() {
   const full = withJerseyColumn(columnsFor(view))
   const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
-  const csvFilters = useDataStore((st) => st.filters)
+  const csvFilters = usePageFilters()
   const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`投手成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 投手成績`, scopeText(csvFilters, s.games), `ERA、FIP 以每場 ${params.inningsPerGame} 局換算；FIP 常數 ${params.fipConstant.toFixed(3)}；未達門檻（${college ? '大專規程' : '隊內'}）：IP < ${minIP}`, winNote, `來源：${window.location.href}`])}>CSV</Button>
 
   const qualSelect = <Select size="sm" label="門檻" aria-label="排行門檻" value={rule} onChange={(e) => setRule(e.target.value === 'college' ? 'college' : 'team')}

@@ -84,6 +84,34 @@ describe('修改資料: stays open after saving', () => {
   })
 })
 
+describe('比賽頁 逐球紀錄: a tap opens 修改資料 on that plate appearance', () => {
+  const game: Game = { id: 'G2', date: '2026-10-04', tournament: '友誼賽', opponent: '測試隊', homeAway: '主', innings: 7 }
+  const b = (order: number, batter: string, result: string, p: Partial<BattingPA> = {}): BattingPA => ({ gameId: 'G2', inning: 1, outsBefore: order - 1, basesBefore: '無', order, batter, pitches: ['IP'], result, loc: 6, traj: 'G', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, ...p })
+  const ds: Dataset = { ...EMPTY_DATASET, roster: [{ name: '子' }, { name: '丑' }, { name: '寅' }], games: [game], batting: [b(1, '子', '內滾', { code: 'I' }), b(2, '丑', '外飛', { code: 'II', loc: 8, traj: 'F' }), b(3, '寅', '內滾', { code: 'III' })] }
+  const show = () => render(<MemoryRouter><GameView summary={summarizeGame(ds, game)} mode="page" onClose={() => undefined} /></MemoryRouter>)
+  const pbp = () => screen.getAllByRole('table').find((t) => t.textContent?.includes('本打席用球'))!
+  it('a 紀錄員／管理者 (here: this device, local mode) taps 丑\'s row and edits it', async () => {
+    localStorage.clear()
+    useDataStore.setState({ base: ds, demo: false, albums: [], albumsSupported: true })
+    show()
+    fireEvent.click(screen.getByRole('tab', { name: /逐球・打擊/ }))
+    fireEvent.click(within(pbp()).getAllByText('丑')[0])
+    expect(await screen.findByRole('button', { name: '儲存修改' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '刪除這個打席' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^外飛$/ }).getAttribute('aria-pressed')).toBe('true')
+  })
+  it('anyone else: the rows do nothing', () => {
+    localStorage.clear()
+    useDataStore.setState({ base: ds, demo: false, albums: [], albumsSupported: true, cloud: { ...useDataStore.getState().cloud, configured: true, authReady: true, user: null, isEditor: false } })
+    show()
+    fireEvent.click(screen.getByRole('tab', { name: /逐球・打擊/ }))
+    fireEvent.click(within(pbp()).getAllByText('丑')[0])
+    expect(screen.queryByRole('button', { name: '儲存修改' })).toBeNull()
+    expect(within(pbp()).getAllByText('丑')[0].closest('tr')?.getAttribute('tabindex')).toBeNull()
+    useDataStore.setState({ cloud: { ...useDataStore.getState().cloud, configured: false } })
+  })
+})
+
 describe('打擊: 強擊率', () => {
   it('a Hard Hit% bar per batter, highest first, with the team rate', () => {
     useDataStore.setState({ base: SEED_DATASET, demo: false, filters: DEFAULT_FILTERS })

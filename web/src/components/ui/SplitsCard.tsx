@@ -5,6 +5,7 @@
  * dataset. Rows under 10 plate appearances are greyed out with a 「樣本少」 tag.
  */
 import { useMemo, useState, type ReactNode } from 'react'
+import { usePageFilters } from '../../hooks/usePageFilters'
 import { Link } from 'react-router-dom'
 import { Download } from 'lucide-react'
 import { Card } from './Card'
@@ -16,7 +17,6 @@ import { cx } from '../../lib/format'
 import { CountGrid } from './CountGrid'
 import { useTableView } from './jerseyColumn'
 import { useStats } from '../../hooks/useStats'
-import { useDataStore } from '../../store/data'
 import { scopeText } from '../layout/FilterChips'
 import { downloadCsv } from '../../lib/csv'
 import { f3, pct } from '../../lib/fmt'
@@ -71,7 +71,7 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   id?: string
 }) {
   const s = useStats()
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const ctx = useMemo(() => paContexts(s.dataset, side), [s.dataset, side])
   const groups = useMemo(() => availableGroups(side, s.dataset, ctx, perPlayer), [side, s.dataset, ctx, perPlayer])
   const [picked, setGroup] = useState<SplitGroup>('count')

@@ -6,13 +6,13 @@
  * (data/stats.ts BattedBallCounts / BattedBallRates).
  */
 import { Download } from 'lucide-react'
+import { usePageFilters } from '../../hooks/usePageFilters'
 import { Card } from './Card'
 import { Button } from './Button'
 import type { Column } from './DataTable'
 import { EmptyState } from './EmptyState'
 import { withFraction } from './jerseyColumn'
 import { useStats } from '../../hooks/useStats'
-import { useDataStore } from '../../store/data'
 import { scopeText } from '../layout/FilterChips'
 import { downloadCsv } from '../../lib/csv'
 import { f3, pct } from '../../lib/fmt'
@@ -53,7 +53,7 @@ interface Row { id: string; name: string; line: BattedBallLine }
 
 export function BattedBallTable({ kind, rows, id, title = '擊球剖面' }: { kind: 'bat' | 'pit'; rows: Array<{ name: string; line: BattedBallLine }>; id?: string; title?: string }) {
   const s = useStats()
-  const filters = useDataStore((st) => st.filters)
+  const filters = usePageFilters()
   const pit = kind === 'pit'
   const cols = battedColumns<Row & BattedBallLine>()
   const data = rows.map((r) => ({ ...r.line, id: r.name, name: r.name, line: r.line })) as Array<Row & BattedBallLine>

@@ -7,6 +7,7 @@ import { activeFilterCount, FilterBar } from './FilterBar'
 import { useUiStore } from '../../store/ui'
 import { useDataStore } from '../../store/data'
 import { cx } from '../../lib/format'
+import { filterKeysFor, usePageFilters, type FilterKey } from '../../hooks/usePageFilters'
 import { Sheet } from '../ui/Sheet'
 import { IconBaseball } from '../icons/baseball'
 
@@ -31,10 +32,9 @@ function CloudStatus() {
 }
 
 /** Phone (or a desktop too narrow for the filter row): a "篩選" button that opens the filters in a bottom sheet, with a count of active filters. */
-function MobileFilters({ always = false }: { always?: boolean }) {
+function MobileFilters({ always = false, keys }: { always?: boolean; keys: FilterKey[] }) {
   const [open, setOpen] = useState(false)
-  const filters = useDataStore((s) => s.filters)
-  const count = activeFilterCount(filters)
+  const count = activeFilterCount(usePageFilters())
   const { pathname } = useLocation()
   useEffect(() => { setOpen(false) }, [pathname])
   return (
@@ -51,7 +51,7 @@ function MobileFilters({ always = false }: { always?: boolean }) {
           <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="size-9 -mr-2 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer"><X className="size-5" /></button>
         </div>}>
         <div className="px-4 pt-2 pb-4">
-          <FilterBar layout="stack" />
+          <FilterBar layout="stack" keys={keys} />
           <button type="button" onClick={() => setOpen(false)} className="mt-3 w-full h-11 rounded-full bg-ink text-bg text-sm font-medium cursor-pointer active:scale-[0.98]">完成</button>
         </div>
       </Sheet>
@@ -63,8 +63,11 @@ function MobileFilters({ always = false }: { always?: boolean }) {
  * One 56px toolbar. Desktop: the global filters in a single row. Phone: page name + a 篩選 button that opens
  * the same filters as a bottom sheet, so nothing has to be scrolled sideways.
  */
-export function TopBar({ children = <FilterBar /> }: TopBarProps) {
+export function TopBar({ children: given }: TopBarProps) {
   const { pathname } = useLocation()
+  // each page's own filters (hooks/usePageFilters); a page without any shows no filter row and no 篩選 button
+  const keys = filterKeysFor(pathname)
+  const children = given ?? (keys.length ? <FilterBar keys={keys} /> : null)
   const item = findNavItem(pathname)
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen)
   // The one-row filter bar needs about 1,300px. On a 1366 or 1440 laptop (and with Windows' space-taking scrollbars) it
@@ -102,7 +105,7 @@ export function TopBar({ children = <FilterBar /> }: TopBarProps) {
         {/* stays mounted (invisible) while cramped so a wider window or a collapsed sidebar brings the row back */}
         {children && <div ref={barRef} aria-hidden={cramped || undefined} className={cx('hidden xl:block min-w-0 flex-1 scroll-x -my-2 py-2', cramped && 'invisible')}>{children}</div>}
         <div className="flex items-center gap-2 ml-auto shrink-0">
-          <MobileFilters always={cramped} />
+          {keys.length > 0 && <MobileFilters always={cramped} keys={keys} />}
           <CloudStatus />
           <div className="hidden lg:flex items-center gap-2"><FontToggle /><ThemeToggle /></div>
         </div>

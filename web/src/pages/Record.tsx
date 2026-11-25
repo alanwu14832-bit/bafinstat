@@ -100,6 +100,30 @@ function readTiebreakPref(): { on: boolean; bases: string } {
 }
 
 /* ------------------------------------------------------------------ setup */
+/**
+ * What the setup screen holds, kept on this device while it is filled in: a phone that drops the page while the recorder
+ * looks at another app (iOS reloads it on return) brings back the opponent, the lineup and the pitcher instead of a blank
+ * form. Kept for the day it was filled in (and the schedule entry it was for); cleared once the game starts.
+ */
+export interface SetupSnap {
+  savedAt: string; date: string; fromSchedule: string; applied: boolean; infoOpen: boolean; lineupOpen: boolean
+  game: Game; lineup: LineupSlot[]; ourCount: number; pitcher: string; bench: string[]; reentry: boolean; reentryPick: ReentryMode | null
+  oppLineup: string[]; oppSlots: number; tbOffset: number; tbBases: string
+  intraOn: boolean; teamA: string; themLineup: LineupSlot[]; themCount: number; themPitcher: string
+}
+export const SETUP_KEY = 'bafin.record.setup.v1'
+const setupKey = (practice: boolean) => (practice ? `${SETUP_KEY}.practice` : SETUP_KEY)
+export function readSetup(practice: boolean, today: string, scheduleId: string | null): SetupSnap | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(setupKey(practice)) ?? 'null') as SetupSnap | null
+    // (another day's form, or a link to another schedule entry: start afresh)
+    if (!v || v.date !== today || !v.game || !Array.isArray(v.lineup)) return null
+    if (scheduleId && scheduleId !== v.fromSchedule) return null
+    return v
+  } catch { return null }
+}
+const writeSetup = (practice: boolean, v: SetupSnap | null) => { try { if (v) localStorage.setItem(setupKey(practice), JSON.stringify(v)); else localStorage.removeItem(setupKey(practice)) } catch { /* storage unavailable */ } }
+
 function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => void; /** 練習紀錄: no schedule, a PRACTICE- id, never saved */ practice?: boolean }) {
   const base = useDataStore((s) => s.base)
   const registrations = useDataStore((s) => s.registrations)
@@ -113,42 +137,45 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   // ?game= (賽程's 去紀錄, 先發陣容's 帶到紀錄比賽) picks that entry; then the lineup's own game; otherwise the next one coming up
   const [params] = useSearchParams()
   const initial = scheduled.find((g) => g.id === params.get('game')) ?? scheduled.find((g) => g.id === stored?.gameId) ?? scheduled.find((g) => g.date >= today)
-  const [fromSchedule, setFromSchedule] = useState<string>(() => initial?.id ?? '')
+  // the form as it was left on this device (the page reloaded while filling it in): every field starts from it
+  const [back] = useState(() => readSetup(practice, today, params.get('game')))
+  const [fromSchedule, setFromSchedule] = useState<string>(() => back ? back.fromSchedule : initial?.id ?? '')
   // a lineup drawn up for another game (or one already played) is not carried into this one: last week's bench would leak in
-  const [applied, setApplied] = useState(() => !!stored && (!stored.gameId || stored.gameId === initial?.id))
+  const [applied, setApplied] = useState(() => back ? back.applied : !!stored && (!stored.gameId || stored.gameId === initial?.id))
   const saved = applied && stored?.order.some(Boolean) ? stored : null
   // brought in from the schedule / the 先發陣容 page: a summary first, 修改 opens the fields
-  const [infoOpen, setInfoOpen] = useState(() => !initial)
-  const [lineupOpen, setLineupOpen] = useState(() => !saved)
+  const [infoOpen, setInfoOpen] = useState(() => back ? back.infoOpen : !initial)
+  const [lineupOpen, setLineupOpen] = useState(() => back ? back.lineupOpen : !saved)
   // a lineup drawn up for a 報名名單 whose game is not on the schedule yet: start with that tournament, so the same list applies
   const lineupReg = !initial && applied ? registrationByKey(registrations, stored?.regKey) : undefined
-  const [game, setGame] = useState<Game>(() => { const s = initial; return s ? { ...s, recorder: '' } : practice ? { id: '', date: today, tournament: '練習', opponent: '練習對手', homeAway: '主', innings: TEAM.innings, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
+  const [game, setGame] = useState<Game>(() => { if (back) return back.game; const s = initial; return s ? { ...s, recorder: '' } : practice ? { id: '', date: today, tournament: '練習', opponent: '練習對手', homeAway: '主', innings: TEAM.innings, recorder: '' } : { id: '', date: today, tournament: lineupReg?.tournament ?? last?.tournament ?? '友誼賽', opponent: '', homeAway: '主', venue: last?.venue ?? '', innings: TEAM.innings, recorder: '' } })
   const [lineup, setLineup] = useState<LineupSlot[]>(() => {
+    if (back) return padOrder(back.lineup)
     if (saved) return padOrder(toLineupSlots(saved))
     const slots: LineupSlot[] = padOrder([])
     if (last) for (const p of base.batting.filter((b) => b.gameId === last.id)) { const i = (p.order ?? 0) - 1; if (i >= 0 && i < MAX_ORDER && !slots[i].name) slots[i] = { name: p.batter, pos: p.pos ?? '' } }
     return slots
   })
   // 打序人數 (7–12): how many of the slots above are shown and must be filled
-  const [ourCount, setOurCount] = useState(() => orderSize(lineup))
-  const [pitcher, setPitcher] = useState(() => saved?.field.P || (last ? base.pitching.find((p) => p.gameId === last.id)?.pitcher ?? '' : ''))
-  const [bench, setBench] = useState<string[]>(() => (applied && stored ? stored.bench : []))
-  const [reentry, setAllowReentry] = useState(() => (applied && stored ? stored.reentry : false))
+  const [ourCount, setOurCount] = useState(() => back?.ourCount ?? orderSize(lineup))
+  const [pitcher, setPitcher] = useState(() => back ? back.pitcher : saved?.field.P || (last ? base.pitching.find((p) => p.gameId === last.id)?.pitcher ?? '' : ''))
+  const [bench, setBench] = useState<string[]>(() => back ? back.bench : (applied && stored ? stored.bench : []))
+  const [reentry, setAllowReentry] = useState(() => back ? back.reentry : (applied && stored ? stored.reentry : false))
   // 被換下的球員: picked here, else 自由替換 for a 友誼賽 (杯賽 has 友誼) and the lineup's 允許再上場 (the college rule)
-  const [reentryPick, setReentryPick] = useState<ReentryMode | null>(null)
+  const [reentryPick, setReentryPick] = useState<ReentryMode | null>(() => back?.reentryPick ?? null)
   // 記對方打者姓名: off unless this device ticked it last time
   const [oppNames, setOppNamesOn] = useState(() => { try { return localStorage.getItem(OPP_NAMES_KEY) === '1' } catch { return false } })
   // 記錄球速 (ours / theirs): off unless this device turned it on last time
   const [speedOn, setSpeedOnPref] = useState<{ us: boolean; opp: boolean }>(() => { try { const v = JSON.parse(localStorage.getItem(SPEED_KEY) ?? '{}'); return { us: !!v.us, opp: !!v.opp } } catch { return { us: false, opp: false } } })
   const toggleSpeed = (side: 'us' | 'opp', on: boolean) => { const v = { ...speedOn, [side]: on }; setSpeedOnPref(v); try { localStorage.setItem(SPEED_KEY, JSON.stringify(v)) } catch { /* storage unavailable */ } }
   const toggleOppNames = (on: boolean) => { setOppNamesOn(on); try { localStorage.setItem(OPP_NAMES_KEY, on ? '1' : '0') } catch { /* storage unavailable */ } }
-  const [oppLineup, setOppLineupNames] = useState<string[]>(() => Array(9).fill(''))
+  const [oppLineup, setOppLineupNames] = useState<string[]>(() => back?.oppLineup ?? Array(9).fill(''))
   const oppNameList = useMemo(() => oppBatterNames(base, game.opponent), [base, game.opponent])
   const lastOpp = useMemo(() => lastOppLineup(base, game.opponent), [base, game.opponent])
   // 突破僵局: from the inning after 預定局數 (+1 … +3, follows 預定局數), or 不採用; the bases (and 不採用) are remembered
   const [tbPref] = useState(readTiebreakPref)
-  const [tbOffset, setTbOffset] = useState(tbPref.on ? 1 : 0)
-  const [tbBases, setTbBases] = useState(tbPref.bases)
+  const [tbOffset, setTbOffset] = useState(() => back?.tbOffset ?? (tbPref.on ? 1 : 0))
+  const [tbBases, setTbBases] = useState(() => back?.tbBases ?? tbPref.bases)
   const innings = game.innings ?? TEAM.innings
   const setTiebreak = (from: number | null, bases: string) => {
     setTbOffset(from === null ? 0 : from - innings)
@@ -191,14 +218,18 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   // 隊內賽: both sides are our players — the first side is the lineup above (its name `teamA`), the second one is the
   // opponent (game.opponent) with its own lineup and pitcher; both may bring players back (data/intrasquad.ts)
   // 對方打序: 9 batters, or 7–12 in a 友誼賽 (their order then turns over after the last one)
-  const [oppSlots, setOppSlotsN] = useState(9)
+  const [oppSlots, setOppSlotsN] = useState(() => back?.oppSlots ?? 9)
   const reMode: ReentryMode = reentryPick ?? (/友誼/.test(game.tournament) ? 'free' : reentry ? 'college' : 'none')
-  const [intraOn, setIntraOn] = useState(false)
-  const [teamA, setTeamA] = useState('紅隊')
-  const [themLineup, setThemLineup] = useState<LineupSlot[]>(() => padOrder([]))
-  const [themCount, setThemCount] = useState(9)
+  const [intraOn, setIntraOn] = useState(() => back?.intraOn ?? false)
+  const [teamA, setTeamA] = useState(() => back?.teamA ?? '紅隊')
+  const [themLineup, setThemLineup] = useState<LineupSlot[]>(() => padOrder(back?.themLineup ?? []))
+  const [themCount, setThemCount] = useState(() => back?.themCount ?? 9)
   const themShown = useMemo(() => themLineup.slice(0, themCount), [themLineup, themCount])
-  const [themPitcher, setThemPitcher] = useState('')
+  const [themPitcher, setThemPitcher] = useState(() => back?.themPitcher ?? '')
+  // every change is kept on this device until the game starts
+  useEffect(() => {
+    writeSetup(practice, { savedAt: new Date().toISOString(), date: today, fromSchedule, applied, infoOpen, lineupOpen, game, lineup, ourCount, pitcher, bench, reentry, reentryPick, oppLineup, oppSlots, tbOffset, tbBases, intraOn, teamA, themLineup, themCount, themPitcher })
+  }, [practice, today, fromSchedule, applied, infoOpen, lineupOpen, game, lineup, ourCount, pitcher, bench, reentry, reentryPick, oppLineup, oppSlots, tbOffset, tbBases, intraOn, teamA, themLineup, themCount, themPitcher])
   const theirNames = useMemo(() => new Set([...themShown.map((l) => l.name), themPitcher].filter(Boolean)), [themShown, themPitcher])
   const ourNames = useMemo(() => new Set([...starting, ...bench].filter(Boolean)), [starting, bench])
   const pickIntra = (on: boolean) => {
@@ -244,6 +275,8 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
     const intra = intraOn ? { intra: { team: teamA.trim(), lineup: themShown.map((l) => ({ name: l.name.trim(), pos: l.pos })), pitcher: themPitcher.trim(), bats, throws } } : {}
     const s = newGame({ ...game, id, status: undefined, opponent: game.opponent.trim(), tournament: game.tournament.trim() || '未分類', venue: game.venue || undefined, recorder: game.recorder || undefined }, slots, sp, { bench: bench.filter((n) => n !== sp && !slots.some((l) => l.name === n)), reentry: intraOn || reMode !== 'none', freeReentry: intraOn || reMode === 'free', ...(oppNames && !intraOn ? { oppNames: true, oppLineup: oppLineup.slice(0, oppSlots) } : {}), tiebreak: tiebreakRule, ...(!intraOn && oppSlots !== 9 ? { oppSlots } : {}), ...intra })
     const withSpeed = speedOn.us || speedOn.opp ? { ...s, speedOn: { ...speedOn } } : s
+    // (the form is done with: the next game starts from a fresh one)
+    writeSetup(practice, null)
     onStart(practice ? { ...withSpeed, practice: true } : withSpeed)
   }
   const startRow = (

@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { usePageFilters } from '../hooks/usePageFilters'
 import { Download, Printer } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { downloadCsv } from '../lib/csv'
 import { scopeText } from '../components/layout/FilterChips'
-import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLinkedSort } from '../hooks/useLinkedSort'
@@ -121,7 +121,7 @@ export function BattingPage() {
   const full = withJerseyColumn(columnsFor(view))
   const tableColumns = tableView.compact ? compactColumns(full, COMPACT[view], below) : tagNameColumn(full, below)
   // 匯出 CSV: the full table of this tab (every column), with what it covers on top
-  const csvFilters = useDataStore((st) => st.filters)
+  const csvFilters = usePageFilters()
   const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`打擊成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 打擊成績`, scopeText(csvFilters, s.games), `OPS+、wRC+ 以篩選範圍的全隊為 100；未達門檻（${college ? '大專規程' : '隊內'}）：PA < ${minPA}`, winNote, `來源：${window.location.href}`])}>CSV</Button>
 
   // 門檻: 隊內 (PA ≥ 1) or 大專規程 (PA ≥ 2.1 × games); remembered on this device and kept in the link

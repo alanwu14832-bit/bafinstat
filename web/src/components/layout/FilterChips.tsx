@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { usePageFilters } from '../../hooks/usePageFilters'
 import { X } from 'lucide-react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDataStore, effectiveDataset } from '../../store/data'
@@ -115,7 +116,7 @@ const md = (iso: string) => (iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slic
  * filter as a chip with its own ✕, so the scope is visible without opening the filter panel.
  */
 export function FilterChips() {
-  const filters = useDataStore((s) => s.filters)
+  const filters = usePageFilters()
   const setFilters = useDataStore((s) => s.setFilters)
   const resetFilters = useDataStore((s) => s.resetFilters)
   const base = useDataStore((s) => s.base)
