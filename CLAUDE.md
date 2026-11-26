@@ -66,20 +66,23 @@ A database change needs a migration in both repos, and the user must run it in b
   the wasm or the model in public/: every Vercel deployment and archived version would carry them). `vite.config` worker format 'es'.
 - POTG 海報模板 (2026-11-26, from the team's own PLAYER OF THE GAME posts; **this site only** — the user had them taken back out of the
   校隊's and 霸龍's sites): three more layouts in `StoryStyle` — 斜切海報 (darkened
-  photo, a slanted concrete `wall()` on the right, the cut-out across the edge, Knewave title, the name in Yuji Boku brush), 直排姓名
+  photo, a slanted concrete `wall()` on the right, the cut-out across the edge, Knewave title, the name in 王漢宗顏楷體), 直排姓名
   (blurred photo, pale panel, Playfair title, the name down the panel) and 左欄數據 (accent column with the title and `card.stats`
   stacked in Anton italic, the photo framed on the right, a name plate). Their blocks are `potg / pname / stats / logo` (`layersFor`);
   `titleLines` (「/」 breaks a custom title), `card.statLine` (batStats 「2-4 1HR 2B 3RBI」 / pitStats 「3.2 IP  3 K  0 BB  0 R」,
   rewordable), up to three front photos (`fgs`, 連續動作; `defaultFg` per layout keeps the feet above the name). The faces load only
   in the dialog (`lib/storyFonts.ts`). One face per script on a card (the user's rule): every word is set in one stack, `cardFace` —
-  the card's Latin face, then its CJK face (`style.fonts`, '' = the layout's pair: 數據卡 Barlow + 黑體, 斜切 Knewave + Yuji Boku,
-  直排 Playfair + Noto Serif TC, 左欄 Anton + 黑體); blocks have no face of their own. Where Yuji Boku lacks a character on the card
-  (堉, 澔, 吳, 彥) all the card's Chinese is set in Noto Serif TC (`drawsAll` compares drawn pixels).
+  the card's Latin face, then its CJK face (`style.fonts`, '' = the layout's pair: 數據卡 Barlow + 黑體, 斜切 Knewave + 顏楷,
+  直排 Playfair + Noto Serif TC, 左欄 Anton + 黑體); blocks have no face of their own. Where the brush face lacks a character on
+  the card all the card's Chinese is set in Noto Serif TC (`drawsAll` compares drawn pixels). The brush Chinese is 王漢宗顏楷體
+  (the face of the team's own posts, the user's pick): GPL v2, 13,970 characters, kept as `fonts/HanWangYanKai.woff2` (outside
+  web/, so not in every Vercel deployment and archived version) and read from jsDelivr at one pinned commit (`YANKAI_URL`;
+  CSP font-src has cdn.jsdelivr.net for it). A new font file means a new commit in that URL.
 - 先發陣容 IG 貼文 (2026-11-26, from the team's own STARTING LINEUP posts; **this site only**, like the POTG templates): the 先發陣容
   page's 「IG 貼文」 opens `components/ui/LineupPostDialog.tsx` — `data/lineupPost.ts` (rows in batting order, P for a pitcher who
   bats, SP at the bottom under a DH; 「SUN, 10/18/2026 | 3:00 PM」 and 「@venue」 from the chosen game) and `lib/lineupImage.ts`
-  (1080 × 1350: the concrete `wall`, Knewave title / team / positions / date, the names in Yuji Boku — every Chinese word in Noto
-  Serif TC when Yuji Boku lacks a character —, the player in the photo in red, their badge or a disc with their name, our mark).
+  (1080 × 1350: the concrete `wall`, Knewave title / team / positions / date, the names in 王漢宗顏楷體 — every Chinese word in
+  Noto Serif TC when it lacks a character —, the player in the photo in red, their badge or a disc with their name, our mark).
   The photo has 自動去背 and 手動修邊 like the story editor; title, team line and colours are kept on the device (`bafin.lineuppost.v1`).
 - 複選篩選 (2026-11-25): `Filters.tournament / position / opponent / result` are lists (none = every game; a game passes holding any of
   the values; different filters still narrow together). `components/ui/MultiSelect.tsx` (desktop: checkbox list in a portal, fixed
