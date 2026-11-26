@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Reorder, useDragControls } from 'framer-motion'
-import { ArrowDown, ArrowUp, Copy, Eraser, GripVertical, PenLine, Printer, Wand2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Copy, Eraser, GripVertical, PenLine, Printer, Wand2, Image as ImageIcon } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -22,6 +22,7 @@ import { localDate } from '../lib/dates'
 import { RestHint } from '../components/ui/RestHint'
 import { OpponentScoutCard } from '../components/game/OpponentScoutCard'
 import { gamesAgainst } from '../data/opponent'
+import { LineupPostDialog } from '../components/ui/LineupPostDialog'
 import { autoOrder, emptyLineup, lineupIssues, lineupText, positionOf, readLineup, setDesignatedHitter, starters, toggleBench, withoutStarter, writeLineup, type FieldPos, type Lineup } from '../record/lineup'
 
 /** Where each position's dropdown sits on the field (percent of the diagram box). */
@@ -116,6 +117,7 @@ export function LineupPage() {
   // stable keys per batting slot so drag reordering animates the right rows (blank slots have no name to key on)
   const [keys, setKeys] = useState<number[]>(() => Array.from({ length: 9 }, (_, i) => i))
   const [msg, setMsg] = useState<string | null>(null)
+  const [post, setPost] = useState(false)
   const canEdit = !cloud.configured || (!!cloud.user && cloud.isEditor)
   // every change stays on this device, so the lineup survives a refresh and is waiting on the 紀錄比賽 page
   useEffect(() => { if (lineup.updatedAt) writeLineup(lineup) }, [lineup])
@@ -185,7 +187,7 @@ export function LineupPage() {
   return (
     <>
       <PageHeader title="先發陣容" description="先選這份陣容是哪一場，再排守位、打序，最後勾今天有到的板凳；陣容會存在這台裝置，開始紀錄比賽時自動帶入。手機是清單、電腦是球場圖。"
-        actions={<div className="flex items-center gap-2 flex-wrap"><RosterSortToggle /><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="ghost" size="sm" icon={<Printer />} onClick={toPrint} title="印出先發名單（A4 直式，可印 2 份裁開）">列印陣容卡</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
+        actions={<div className="flex items-center gap-2 flex-wrap"><RosterSortToggle /><Button variant="ghost" size="sm" icon={<Copy />} onClick={() => void copy()}>複製文字</Button><Button variant="ghost" size="sm" icon={<ImageIcon />} onClick={() => setPost(true)} title="做一張 STARTING LINEUP 的 Instagram 貼文">IG 貼文</Button><Button variant="ghost" size="sm" icon={<Printer />} onClick={toPrint} title="印出先發名單（A4 直式，可印 2 份裁開）">列印陣容卡</Button><Button variant="primary" size="sm" icon={<PenLine />} onClick={toRecord}>帶到紀錄比賽</Button></div>} />
       {msg && <div role="status" className="rounded-[var(--radius-sm)] border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-ink">{msg}</div>}
       <Card bodyClassName="p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-4">
@@ -226,6 +228,7 @@ export function LineupPage() {
         </Card>
       </div>
       {scoutFor && <OpponentScoutCard ds={base} opponent={scoutFor} />}
+      {post && <LineupPostDialog open onClose={() => setPost(false)} lineup={lineup} game={game} />}
     </>
   )
 }
