@@ -307,7 +307,7 @@ function drawSoft(g: CanvasRenderingContext2D, img: Photo, r: Box, blur: number)
 
 /** A concrete / paper wall (斜切海報's light panel): speckles, a few scuffs, soft blotches; the same every time. */
 const walls = new Map<string, HTMLCanvasElement>()
-function wall(w: number, h: number, base: string): HTMLCanvasElement | null {
+export function wall(w: number, h: number, base: string): HTMLCanvasElement | null {
   const key = `${w}x${h}${base}`
   const hit = walls.get(key)
   if (hit) return hit
