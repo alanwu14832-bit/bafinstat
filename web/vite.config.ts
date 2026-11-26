@@ -70,6 +70,8 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 1500,
   },
+  // the 自動去背 worker (lib/cutout.worker.ts) is a module: ONNX Runtime loads its WebAssembly glue with import()
+  worker: { format: 'es' },
   test: {
     environment: 'jsdom',
     globals: true,

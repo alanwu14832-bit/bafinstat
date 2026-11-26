@@ -3,6 +3,9 @@
  * Vercel, Cloudflare, GitHub Pages). Only this site's own scripts run (no inline or injected script, no eval); data
  * goes only to this site and its own Supabase project; the page cannot be framed (frame-ancestors is sent as an HTTP
  * header by vercel.json / public/_headers, since a <meta> cannot carry it).
+ * 限時動態's 自動去背 runs in a module worker (lib/cutout.worker.ts, served from this site): a <meta> policy does not
+ * reach a worker, which loads ONNX Runtime's WebAssembly from jsDelivr (the exact version in package.json) and the
+ * model from Hugging Face (one pinned revision). The photo itself never leaves the device.
  */
 export function contentSecurityPolicy(supabaseUrl?: string): string {
   let supabase = ''

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { Crosshair, Download, ImagePlus, RotateCcw, Share2, Trash2 } from 'lucide-react'
+import { Crosshair, Download, ImagePlus, RotateCcw, Share2, Trash2, Wand2 } from 'lucide-react'
 import { Sheet } from './Sheet'
 import { Button } from './Button'
 import { Select } from './Select'
@@ -16,6 +16,7 @@ import {
   type FgStyle, type FontKey, type LayerKey, type PhotoView, type StoryBoxes, type StoryLayout, type StoryStyle, type StoryTarget, type TextStyle,
 } from '../../lib/storyImage'
 import { cx } from '../../lib/format'
+import { canCutout, removeBackground, type CutoutProgress } from '../../lib/cutout'
 
 const KINDS: StoryKind[] = ['game-bat', 'game-pit', 'season-bat', 'season-pit']
 const HEADLINE_MAX = 44
@@ -69,6 +70,12 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [view, setView] = useState<PhotoView>(DEFAULT_VIEW)
   const [fg, setFg] = useState<Photo | null>(null)
+  // 自動去背: the cut-out of the front photo, whether it is used, and the run in progress
+  const [fgCut, setFgCut] = useState<HTMLCanvasElement | null>(null)
+  const [useCut, setUseCut] = useState(true)
+  const [cutting, setCutting] = useState<CutoutProgress | null>(null)
+  const [cutNote, setCutNote] = useState('')
+  const cutRun = useRef(0)
   const [mark, setMark] = useState<HTMLImageElement | null>(null)
   const [panel, setPanel] = useState<Panel>('content')
   const [selected, setSelected] = useState<StoryTarget | null>(null)
@@ -94,7 +101,8 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
     if (fs?.load) Promise.all([fs.load('800 136px "Barlow Semi Condensed"'), fs.load('700 44px "Barlow Semi Condensed"'), fs.load('700 60px "Noto Serif TC"')]).then(() => { if (live) setFonts((n) => n + 1) }).catch(() => undefined)
     return () => { live = false }
   }, [open])
-  const drawOpts = useMemo(() => ({ photo, view, fg, mark, style }), [photo, view, fg, mark, style])
+  const front = fgCut && useCut ? fgCut : fg
+  const drawOpts = useMemo(() => ({ photo, view, fg: front, mark, style }), [photo, view, front, mark, style])
   useEffect(() => {
     if (!open || !card || !canvas.current) return
     boxes.current = drawStory(canvas.current, card, { ...drawOpts, guides: true, selected }) ?? {}
@@ -108,7 +116,7 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
     try {
       const p = await loadPhoto(f)
       if (which === 'bg') { setPhoto(p); setView(DEFAULT_VIEW); if (style.layout === 'plain') setStyle((st) => ({ ...st, layout: 'full' })) }
-      else { setFg(p); setSelected('fg') }
+      else { cutRun.current++; setFg(p); setFgCut(null); setCutting(null); setCutNote(''); setSelected('fg') }
     } catch { setNote('這張照片讀不出來，換一張試試（建議 JPG 或 PNG）。') }
   }
 
@@ -154,6 +162,20 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
       } else { downloadBlob(blob, fileName); setNote('圖片已下載。到 Instagram 新增限時動態，選這張圖。') }
     } finally { setBusy(false) }
   }
+
+  const cut = async () => {
+    if (!fg || cutting) return
+    const run = ++cutRun.current
+    setCutNote(''); setCutting({ stage: 'prepare' })
+    try {
+      const c = await removeBackground(fg, (p) => { if (cutRun.current === run) setCutting(p) })
+      if (cutRun.current !== run) return
+      setFgCut(c); setUseCut(true); setCutNote('去背完成。不滿意可以取消勾選「使用去背」換回原圖。')
+    } catch (e) {
+      if (cutRun.current === run) setCutNote(`去背沒有成功：${e instanceof Error ? e.message : '不明原因'}。可以換一張主體清楚的照片再試。`)
+    } finally { if (cutRun.current === run) setCutting(null) }
+  }
+  const cuttingText = !cutting ? '' : cutting.stage === 'download' ? `下載去背工具 ${cutting.total ? Math.round((cutting.loaded / cutting.total) * 100) : Math.round(cutting.loaded / 1e6)}${cutting.total ? '%' : ' MB'}（約 55 MB，只有第一次要下載）` : cutting.stage === 'prepare' ? '準備去背工具…' : '正在去背，大約要 10～30 秒…'
 
   const t = style.text[layer]
   const swatches = ['', '#ffffff', style.accent, '#1d1d1f', '#f2c14e', '#ff5a4e', '#7fb2ff']
@@ -219,8 +241,17 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
                     <div className="flex flex-wrap items-center gap-2">
                       <Button size="sm" variant="outline" icon={<ImagePlus />} onClick={() => fgFile.current?.click()}>{fg ? '換一張' : '選照片'}</Button>
                       {fg && <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => setFgStyle({ cx: DEFAULT_FG.cx, cy: DEFAULT_FG.cy })}>位置還原</Button>}
-                      {fg && <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => { setFg(null); setSelected(null) }}>拿掉</Button>}
+                      {fg && <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => { cutRun.current++; setFg(null); setFgCut(null); setCutting(null); setCutNote(''); setSelected(null) }}>拿掉</Button>}
                     </div>
+                    {fg && canCutout() && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {!fgCut && <Button size="sm" variant="primary" icon={<Wand2 />} disabled={!!cutting} onClick={() => void cut()}>{cutting ? '去背中…' : '自動去背'}</Button>}
+                          {fgCut && <Check label="使用去背" checked={useCut} onChange={setUseCut} />}
+                        </div>
+                        <p className="text-[11.5px] text-muted" role="status">{cuttingText || cutNote || '在這台裝置上計算，照片不會上傳。第一次要下載約 55 MB 的去背工具（建議用 Wi‑Fi），之後會快很多。'}</p>
+                      </div>
+                    )}
                     {fg && <>
                       <Range label="大小" value={style.fg.scale} min={FG_SCALE_MIN} max={FG_SCALE_MAX} step={0.01} onChange={(v) => setFgStyle({ scale: v })} />
                       <div className="flex flex-wrap gap-4">
