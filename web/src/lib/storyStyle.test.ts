@@ -1,16 +1,19 @@
-import { defaultStyle, fgRect, frameHeight, hitTest, placeBox, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW } from './storyImage'
+import { defaultFg, defaultStyle, fgRect, hitTest, layersFor, placeBox, photoFrame, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW, titleLines } from './storyImage'
 
 describe('限時動態的版面設定', () => {
   it('reads a stored look back, keeping what is valid and defaulting the rest', () => {
     const d = defaultStyle()
     expect(readStyle(null)).toEqual(d)
     expect(readStyle('nonsense')).toEqual(d)
-    const r = readStyle({ layout: 'split', accent: '#ff0000', ink: 'red', dim: 5, blur: -3, fg: { scale: 99, frame: true }, text: { big: { show: false, scale: 0.1, color: '#00ff00', font: 'serif', dx: 40 }, title: { font: 'comic' } } })
+    const r = readStyle({ layout: 'split', accent: '#ff0000', ink: 'red', dim: 5, blur: -3, fg: { scale: 99, frame: true }, title: 42, text: { big: { show: false, scale: 0.1, color: '#00ff00', font: 'serif', dx: 40 }, title: { font: 'comic' } } })
     expect(r.layout).toBe('split')
     expect(r.accent).toBe('#ff0000')
     expect(r.ink).toBe(d.ink)                    // not a #rrggbb colour
     expect(r.dim).toBe(0.8); expect(r.blur).toBe(0)
-    expect(r.fg).toMatchObject({ scale: 2.2, frame: true, shadow: true })
+    expect(r.fgs).toHaveLength(3)
+    expect(r.fgs[0]).toMatchObject({ scale: 2.2, frame: true, shadow: true })   // an older single front photo becomes the first slot
+    expect(r.fgs[1]).toEqual(defaultFg('split', 1))
+    expect(r.title).toBe('PLAYER OF THE GAME')
     expect(r.text.big).toEqual({ show: false, scale: 0.6, color: '#00ff00', font: 'serif', dx: 40, dy: 0 })
     expect(r.text.title.font).toBe('')
     expect(r.text.headline).toEqual(d.text.headline)
@@ -18,9 +21,10 @@ describe('限時動態的版面設定', () => {
   it('places a block from its top-left corner and finds what is under a point', () => {
     const b = placeBox({ x: 72, y: 1000, w: 900, h: 100 }, { show: true, scale: 1.5, color: '', font: '', dx: 10, dy: -20 })
     expect(b).toEqual({ x: 82, y: 980, w: 1350, h: 150 })
-    const boxes = { fg: { x: 400, y: 400, w: 500, h: 900 }, name: { x: 72, y: 870, w: 936, h: 166 }, headline: { x: 72, y: 1400, w: 936, h: 100 } }
-    expect(hitTest(boxes, 500, 900)).toBe('name')     // text sits over the front photo
-    expect(hitTest(boxes, 600, 600)).toBe('fg')
+    const boxes = { fg0: { x: 400, y: 400, w: 500, h: 900 }, fg1: { x: 700, y: 300, w: 200, h: 300 }, name: { x: 72, y: 870, w: 936, h: 166 }, headline: { x: 72, y: 1400, w: 936, h: 100 } }
+    expect(hitTest(boxes, 500, 900)).toBe('name')     // text sits over the front photos
+    expect(hitTest(boxes, 600, 600)).toBe('fg0')
+    expect(hitTest(boxes, 750, 450)).toBe('fg1')      // the later slot is on top
     expect(hitTest(boxes, 200, 1450)).toBe('headline')
     expect(hitTest(boxes, 20, 100)).toBeNull()
   })
@@ -31,10 +35,20 @@ describe('限時動態的版面設定', () => {
     expect(r.x + r.w / 2).toBeCloseTo(540); expect(r.y + r.h / 2).toBeCloseTo(960)
   })
   it('滿版 covers the whole card; the photo pans within that frame', () => {
-    expect(frameHeight('full')).toBe(STORY_H)
+    expect(photoFrame('full')).toEqual({ x: 0, y: 0, w: STORY_W, h: STORY_H })
+    expect(photoFrame('plain')).toBeNull()
+    expect(photoFrame('column')!.x).toBeGreaterThan(300)
     const r = photoRect(1600, 1200, DEFAULT_VIEW, STORY_H)
     expect(r.h).toBeCloseTo(STORY_H); expect(r.w).toBeGreaterThan(STORY_W)
     const moved = panView(DEFAULT_VIEW, 100000, 0, 1600, 1200, STORY_H)
     expect(moved.fx).toBe(0)
+  })
+  it('the poster templates: their own blocks of text, and the title as the team writes it', () => {
+    expect(layersFor('poster').map((l) => l.key)).toEqual(['potg', 'pname', 'stats', 'logo'])
+    expect(layersFor('full').map((l) => l.key)).not.toContain('potg')
+    expect(titleLines('PLAYER OF THE GAME').map((l) => l.text)).toEqual(['PLAYER', 'OF THE', 'GAME'])
+    expect(titleLines('player of the game')[1].size).toBeLessThan(1)
+    expect(titleLines('本場 / MVP').map((l) => l.text)).toEqual(['本場', 'MVP'])
+    expect(titleLines('  ')).toEqual([])
   })
 })

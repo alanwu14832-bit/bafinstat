@@ -38,7 +38,7 @@ describe('分享限時動態', () => {
     // the photos and the look are on their own panels
     fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
     expect(within(dlg).getByLabelText('選背景照片')).toHaveAttribute('accept', 'image/*')
-    expect(within(dlg).getByLabelText('選前景照片')).toHaveAttribute('accept', 'image/*')
+    expect(within(dlg).getByLabelText('選前景照片 1')).toHaveAttribute('accept', 'image/*')
     expect(within(dlg).getByRole('button', { name: '滿版照片' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(dlg).getByRole('button', { name: '純數據' }))
     expect(within(dlg).getByRole('button', { name: '純數據' })).toHaveAttribute('aria-pressed', 'true')
@@ -46,6 +46,17 @@ describe('分享限時動態', () => {
     fireEvent.click(within(dlg).getByRole('button', { name: '大數字' }))
     fireEvent.click(within(dlg).getByLabelText('顯示'))
     expect(within(dlg).getByRole('button', { name: '大數字' })).toHaveClass('line-through')
+    // a poster template: its own blocks of text, a title and a stat line to reword
+    fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
+    fireEvent.click(within(dlg).getByRole('button', { name: '斜切海報' }))
+    fireEvent.click(within(dlg).getByRole('tab', { name: '文字' }))
+    expect(within(dlg).getByRole('button', { name: '姓名' })).toBeInTheDocument()
+    expect(within(dlg).queryByRole('button', { name: '大數字' })).toBeNull()
+    fireEvent.click(within(dlg).getByRole('tab', { name: '內容' }))
+    expect((within(dlg).getByLabelText('海報標題（用「/」換行）') as HTMLInputElement).value).toBe('PLAYER OF THE GAME')
+    expect((within(dlg).getByLabelText('數據行（可以自己改）') as HTMLInputElement).value).toMatch(/AVG/)   // the 本季打擊 card is open here
+    fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
+    fireEvent.click(within(dlg).getByRole('button', { name: '純數據' }))
     // the look is kept on this device for the next card
     const saved = JSON.parse(localStorage.getItem('bafin.story.style.v1') ?? '{}')
     expect(saved.layout).toBe('plain')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { batHeadline, gameBatCard, gamePitCard, pitHeadline, seasonBatCard, seasonPitCard, storyCard, storyFileName, storyGames, storyPlayers, type StorySource } from './storyCard'
+import { batHeadline, batStats, pitStats, statLine, gameBatCard, gamePitCard, pitHeadline, seasonBatCard, seasonPitCard, storyCard, storyFileName, storyGames, storyPlayers, type StorySource } from './storyCard'
 import { SEED_DATASET } from './seed'
 import { battingLines, pitchingLines, summarizeGame } from './stats'
 import { DEFAULT_PARAMS } from './types'
@@ -96,5 +96,28 @@ describe('限時動態: the photo always covers its frame', () => {
   it('a tall photo fills the width', () => {
     const r = photoRect(900, 1600, { fx: 0.5, fy: 0, zoom: 1 })
     expect(r.w).toBeCloseTo(STORY_W); expect(r.y).toBeCloseTo(0); expect(r.h).toBeGreaterThan(1040)
+  })
+})
+
+describe('海報模板的數據行', () => {
+  const zero = { ab: 0, h: 0, hr: 0, rbi: 0, r: 0, sb: 0, bb: 0, hbp: 0, h2: 0, h3: 0 }
+  it('a game at bat: 安打-打數, then what happened, at most four more', () => {
+    expect(statLine(batStats({ ...zero, ab: 1, h: 1, bb: 1, sb: 4, r: 2 }))).toBe('1-1 1BB 4SB 2R')
+    expect(statLine(batStats({ ...zero, ab: 4, h: 2, hr: 1, rbi: 3, r: 1, sb: 1, bb: 1, h2: 1 }))).toBe('2-4 1HR 2B 3RBI 1BB')
+    expect(statLine(batStats({ ...zero, ab: 3, h: 2, h2: 2 }))).toBe('2-3 2×2B')
+    expect(batStats({ ...zero, ab: 3 })).toEqual([{ label: 'H-AB', value: '0-3' }])
+  })
+  it('pitching keeps all four, a 0 included', () => {
+    const s = pitStats({ ipDisplay: '3.2', k: 3, bb: 0, r: 0 })
+    expect(s.map((x) => x.label)).toEqual(['IP', 'K', 'BB', 'R'])
+    expect(statLine(s)).toBe('3.2 IP  3 K  0 BB  0 R')
+  })
+  it('every card carries its stat line', () => {
+    const src: StorySource = { team: 'T', site: 'https://x.app', full: SEED_DATASET, counted: SEED_DATASET, params: DEFAULT_PARAMS, season: true }
+    const g = SEED_DATASET.games[0]
+    const name = storyPlayers(SEED_DATASET, g.id)[0]
+    const c = gameBatCard(src, g.id, name)!
+    expect(c.stats[0].label).toBe('H-AB')
+    expect(c.statLine).toBe(statLine(c.stats))
   })
 })
