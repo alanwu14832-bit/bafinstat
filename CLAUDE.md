@@ -56,7 +56,10 @@ A database change needs a migration in both repos, and the user must run it in b
   a background photo (pan, zoom, 變暗, 模糊) and a front photo (`fg`: moved, sized, 白框, 陰影), the colours (主色／文字色／底色, `palettes()`),
   and each block of text (`LAYERS`: shown, size, colour, 字型, moved). drawStory returns the blocks' boxes (`hitTest`) so the preview
   picks and drags them; `guides` draws IG's covered bands and the picked frame only while editing. The look is kept on the device
-  (`bafin.story.style.v1`, `readStyle` cleans it), the photos never. Step 2: 自動去背 on the front photo (on-device model).
+  (`bafin.story.style.v1`, `readStyle` cleans it), the photos never. 自動去背 on the front photo (step 2, same day): `lib/cutout.ts`
+  → module worker `lib/cutout.worker.ts` running IS-Net (MIT int8 build, Hugging Face pinned revision, ~44 MB, kept in Cache Storage
+  `bafin-cutout-v1`) on ONNX Runtime Web (`onnxruntime-web`, its WebAssembly from jsDelivr at the package.json version; never put
+  the wasm or the model in public/: every Vercel deployment and archived version would carry them). `vite.config` worker format 'es'.
 - 複選篩選 (2026-11-25): `Filters.tournament / position / opponent / result` are lists (none = every game; a game passes holding any of
   the values; different filters still narrow together). `components/ui/MultiSelect.tsx` (desktop: checkbox list in a portal, fixed
   widths so the one-row toolbar keeps fitting; the phone sheet: `MultiChips`); the address repeats the key (`?cup=A&cup=B`, old
