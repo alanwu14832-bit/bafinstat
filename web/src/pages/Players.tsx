@@ -62,7 +62,7 @@ import { RollingNumber } from '../components/motion/RollingNumber'
 /** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
 const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runner === name
 
-interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
+interface GameLogRow { id: string; date: string; opponent: string; pa: number; ab: number; h: number; h2: number; h3: number; hr: number; rbi: number; bb: number; so: number; sb: number; avg: string; isDemo: boolean }
 /** One game on the mound: that game's line, with the season ERA after it. */
 interface PitchLogRow { id: string; date: string; opponent: string; dec: string; outs: number; ip: string; bf: number; h: number; r: number; er: number; bb: number; k: number; pc: number; era: string; isDemo: boolean }
 type PlayerTab = 'batting' | 'pitching' | 'career'
@@ -199,7 +199,7 @@ export function PlayersPage() {
     const pas = s.batting.filter((p) => p.gameId === g.game.id && ranOrBatted(p, selected))
     const l = battingLines(s.dataset, pas).find((x) => x.name === selected)
     if (!l) return null
-    return { id: g.game.id, date: g.game.date, opponent: opponentLabel(g.game), pa: l.pa, ab: l.ab, h: l.h, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
+    return { id: g.game.id, date: g.game.date, opponent: opponentLabel(g.game), pa: l.pa, ab: l.ab, h: l.h, h2: l.h2, h3: l.h3, hr: l.hr, rbi: l.rbi, bb: l.bb, so: l.so, sb: l.sb, avg: f3(l.avg), isDemo: !!g.game.isDemo }
   }).filter((r): r is GameLogRow => r !== null).reverse(), [s.allSummaries, s.batting, s.dataset, selected])
 
   // Radar: this player's team percentile on six axes. The second shape is someone or something to compare
@@ -418,7 +418,7 @@ export function PlayersPage() {
   const logCols: Column<GameLogRow>[] = [
     { key: 'date', header: '日期', format: (v) => shortDate(String(v)) },
     { key: 'opponent', header: '對手', className: 'font-medium', format: (v, r) => <span className="inline-flex items-center gap-1.5">{String(v)}{r.isDemo && <Badge variant="outline">示範</Badge>}</span> },
-    { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' }, { key: 'rbi', header: 'RBI', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'sb', header: 'SB', align: 'right' }, { key: 'avg', header: '單場 AVG', align: 'right' },
+    { key: 'pa', header: 'PA', align: 'right' }, { key: 'ab', header: 'AB', align: 'right' }, { key: 'h', header: 'H', align: 'right' }, { key: 'h2', header: '2B', align: 'right' }, { key: 'h3', header: '3B', align: 'right' }, { key: 'hr', header: 'HR', align: 'right' }, { key: 'rbi', header: 'RBI', align: 'right' }, { key: 'bb', header: 'BB', align: 'right' }, { key: 'so', header: 'SO', align: 'right' }, { key: 'sb', header: 'SB', align: 'right' }, { key: 'avg', header: '單場 AVG', align: 'right' },
   ]
 
   // switching players keeps the tab the reader is on
