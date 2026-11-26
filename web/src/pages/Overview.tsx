@@ -30,15 +30,23 @@ import { seasonNote } from '../data/seasons'
 import { TeamSeasonsTable } from '../components/ui/TeamSeasonsTable'
 import { DEFAULT_FILTERS } from '../data/types'
 import { FilterChips, scopeText } from '../components/layout/FilterChips'
+import { Reveal } from '../components/motion/Reveal'
 
 export { resultBadge } from '../components/ui/ResultBadge'
 
-function SummaryHead({ title, to }: { title: string; to: string }) {
+/**
+ * The head of one stretch of 總覽 (打擊, 投球與守備, 走勢…): more air above it than below, so the page reads as a few
+ * stretches instead of one long run of cards; `lead` is the stretch in one line of real numbers.
+ */
+function SummaryHead({ title, lead, to, toLabel = '完整數據 →' }: { title: string; lead?: string; to?: string; toLabel?: string }) {
   return (
-    <div className="flex items-end justify-between gap-3 px-1 -mb-1">
-      <h3 className="text-[16px] text-ink leading-6">{title}</h3>
-      <Button variant="ghost" size="sm" to={to}>完整數據 →</Button>
-    </div>
+    <Reveal className="flex items-end justify-between gap-3 px-1 -mb-2 mt-3 md:mt-7">
+      <div className="min-w-0">
+        <h2 className="text-[20px] md:text-[24px] text-ink leading-tight tracking-[-0.01em]">{title}</h2>
+        {lead && <p className="text-[13px] text-muted mt-1 tnum">{lead}</p>}
+      </div>
+      {to && <Button variant="ghost" size="sm" to={to}>{toLabel}</Button>}
+    </Reveal>
   )
 }
 
@@ -103,7 +111,11 @@ export function OverviewPage() {
         <Button variant="ghost" size="sm" to="/games?view=results">全部比賽 →</Button>
       </div>
       <div className={cx('grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5', wide && 'xl:grid-cols-4')}>
-        {recentGames.map((g, i) => <GameCard key={g.game.id} s={g} teamName={TEAM_NAME} star={gameStar(s.dataset, g.game.id)} onOpen={() => openGame({ id: g.game.id })} className={i === 3 ? 'hidden sm:flex' : undefined} />)}
+        {recentGames.map((g, i) => (
+          <Reveal key={g.game.id} x={28} y={0} delay={0.07 * i} className={cx('min-w-0 flex', i === 3 && 'hidden sm:flex')}>
+            <GameCard s={g} teamName={TEAM_NAME} star={gameStar(s.dataset, g.game.id)} onOpen={() => openGame({ id: g.game.id })} className="w-full" />
+          </Reveal>
+        ))}
       </div>
     </section>
   )
@@ -124,30 +136,31 @@ export function OverviewPage() {
       <FilterChips />
       <DemoBanner />
       {/* the team's numbers in two labelled groups (打擊 / 投球與守備), each with a way into the full tables */}
-      <SummaryHead title="打擊摘要" to="/batting" />
+      <SummaryHead title="打擊摘要" lead={`${summary.rs} 分・${team.h} 支安打・${team.bb} 次保送`} to="/batting" />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="每場得失分" to="/games?view=results" value={summary.runsPerGame ?? 0} display={`${f2(summary.runsPerGame)}/${f2(summary.runsAllowedPerGame)}`} note={`${summary.rs} 得・${summary.ra} 失`} />
-        <StatTile label="團隊打擊率" to="/batting?view=basic&sort=avg" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
-        <StatTile label="團隊 OPS" to="/batting?view=basic&sort=ops" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
-        <StatTile label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
-        <StatTile label="BB% / K%" to="/batting?view=advanced&sort=bbPct" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)}/${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} />
-        <StatTile label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
+        <StatTile count label="每場得失分" to="/games?view=results" value={summary.runsPerGame ?? 0} display={`${f2(summary.runsPerGame)}/${f2(summary.runsAllowedPerGame)}`} note={`${summary.rs} 得・${summary.ra} 失`} />
+        <StatTile count label="團隊打擊率" to="/batting?view=basic&sort=avg" value={team.avg ?? 0} format="decimal3" note={`${team.h} H / ${team.ab} AB`} />
+        <StatTile count label="團隊 OPS" to="/batting?view=basic&sort=ops" value={team.ops ?? 0} format="decimal3" note={`OBP ${f3(team.obp)}・SLG ${f3(team.slg)}`} />
+        <StatTile count label="得點圈 AVG" to="/batting?view=advanced&sort=rispAvg" value={team.rispAvg ?? 0} format="decimal3" display={f3(team.rispAvg)} note={team.rispAB ? `${team.rispH} H / ${team.rispAB} AB` : '需有「壘上(前)」資料'} />
+        <StatTile count label="BB% / K%" to="/batting?view=advanced&sort=bbPct" value={team.bbPct ?? 0} display={`${pct0(team.bbPct)}/${pct0(team.kPct)}`} note={`${team.bb} BB・${team.so} K`} />
+        <StatTile count label="盜壘" to="/batting?view=basic&sort=sb" value={team.sb} note={team.sb + team.cs > 0 ? `成功率 ${pct(team.sbPct)}・失敗 ${team.cs}` : '尚無盜壘'} />
       </StatGroup>
-      <SummaryHead title="投球與守備摘要" to="/pitching" />
+      <SummaryHead title="投球與守備摘要" lead={`${summary.ra} 失分・${teamPitch.k} 次三振・${errors.total} 次失誤`} to="/pitching" />
       <StatGroup columns="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile label="團隊防禦率" to="/pitching?view=basic&sort=era&dir=asc" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
-        <StatTile label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
-        <StatTile label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
-        <StatTile label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
-        <StatTile label="守備率" to="/fielding" value={errors.fpct ?? 0} display={f3(errors.fpct)} note={`${errors.total} 次失誤／${errors.chances} 次機會・每場 ${f2(errors.perGame)} 失誤`} />
-        <StatTile label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
+        <StatTile count label="團隊防禦率" to="/pitching?view=basic&sort=era&dir=asc" value={teamPitch.era ?? 0} format="era" note={`FIP ${f2(teamPitch.fip)}`} />
+        <StatTile count label="團隊 WHIP" to="/pitching?view=basic&sort=whip&dir=asc" value={teamPitch.whip ?? 0} format="ratio" />
+        <StatTile count label="團隊 K / BB" to="/pitching?view=advanced&sort=kbb" value={teamPitch.kbb ?? 0} format="ratio" note={`${teamPitch.k} K / ${teamPitch.bb} BB`} />
+        <StatTile count label="BB/9" to="/pitching?view=advanced&sort=bb9&dir=asc" value={teamPitch.bb9 ?? 0} format="ratio" display={f2(teamPitch.bb9)} note="每九局保送" />
+        <StatTile count label="守備率" to="/fielding" value={errors.fpct ?? 0} display={f3(errors.fpct)} note={`${errors.total} 次失誤／${errors.chances} 次機會・每場 ${f2(errors.perGame)} 失誤`} />
+        <StatTile count label="K/9" to="/pitching?view=advanced&sort=k9" value={teamPitch.k9 ?? 0} format="ratio" display={f2(teamPitch.k9)} note="每九局三振" />
       </StatGroup>
+      <SummaryHead title="球季走勢" lead={`${summaries.length} 場比賽，一場一場看`} to="/games?view=results" toLabel="全部比賽 →" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
-        <BarChartCard title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={openGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
+        <BarChartCard wipe title="逐場得失分" subtitle="每場比賽我隊與對手得分；點長條看那一場" data={perGame} onBarClick={openGame} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]}
           xSubKey="opponent" nameFor={(k, d) => (k === 'opp' ? String(d.opponent) : TEAM_NAME)} />
-        <AreaChartCard title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分；點一下看那一場" onPointClick={openGame} data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
-        <LineChartCard title="OPS / OBP 走勢" subtitle={summaries.length >= 5 ? '近 5 場滾動平均；點一下看那一場' : `目前 ${summaries.length} 場，為累計平均（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
-        <BarChartCard title="逐局得失分" subtitle={opponentFilter.length === 1 ? `對 ${opponentFilter[0]} 各局合計` : opponentFilter.length ? `對 ${opponentFilter.join('、')} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
+        <AreaChartCard wipe title="累積得失分差" subtitle="賽季走勢；零線以上代表淨勝分；點一下看那一場" onPointClick={openGame} data={cumulative} series={{ key: 'diff', label: '累積得失分差' }} zeroLine formatValue={(v) => signedInt(Math.round(v))} />
+        <LineChartCard wipe title="OPS / OBP 走勢" subtitle={summaries.length >= 5 ? '近 5 場滾動平均；點一下看那一場' : `目前 ${summaries.length} 場，為累計平均（滿 5 場後改為近 5 場滾動）；點一下看那一場`} onPointClick={openGame} data={opsTrend} series={[{ key: 'ops', label: 'OPS' }, { key: 'obp', label: 'OBP' }]} formatValue={(v) => f3(v)} yWidth={52} />
+        <BarChartCard wipe title="逐局得失分" subtitle={opponentFilter.length === 1 ? `對 ${opponentFilter[0]} 各局合計` : opponentFilter.length ? `對 ${opponentFilter.join('、')} 各局合計` : '所有比賽各局合計；篩選單一對手時會顯示其隊名'} data={innings} series={[{ key: 'us', label: TEAM_NAME }, { key: 'opp', label: oppLabel }]} />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-4 md:gap-5">
         <SprayChart className="xl:col-span-2" title="打線落點分佈" subtitle="場內球落點（安打／場內球）" counts={spray.all} secondary={spray.hits} />

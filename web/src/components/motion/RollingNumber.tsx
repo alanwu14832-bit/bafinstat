@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
 import { cx } from '../../lib/format'
 
@@ -14,18 +14,29 @@ if (typeof window !== 'undefined') window.setTimeout(() => { firstLoad = false }
  * digits roll, everything else (".", "-", "/", "%", "—") stays put. Positions are matched from the right, so
  * ".298" to ".314" rolls three wheels and "9-5-2" to "10-5-2" keeps the "-5-2" still.
  */
-export function RollingNumber({ text, className }: { text: string; className?: string }) {
+export function RollingNumber({ text, className, onView }: { text: string; className?: string; /** wait at zeros until the figure scrolls into view, then roll up to it once (a number further down a long page) */ onView?: boolean }) {
   const reduced = usePrefersReducedMotion()
+  const box = useRef<HTMLSpanElement>(null)
+  const [seen, setSeen] = useState(!onView)
+  useEffect(() => {
+    if (!onView || seen) return
+    const el = box.current
+    if (!el || typeof IntersectionObserver !== 'function') { setSeen(true); return }
+    const io = new IntersectionObserver((entries) => { if (entries.some((e) => e.isIntersecting)) { setSeen(true); io.disconnect() } }, { threshold: 0.6 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [onView, seen])
+  const waiting = !seen && !reduced
   const chars = [...text]
   const n = chars.length
   return (
-    <span className={cx('inline-flex', className)}>
+    <span ref={box} className={cx('inline-flex', className)}>
       <span className="sr-only">{text}</span>
       <span aria-hidden className="inline-flex items-start">
         {chars.map((c, i) => {
           const fromEnd = n - 1 - i
           if (!/\d/.test(c)) return <span key={`s${fromEnd}${c}`} className="inline-block h-[1em] leading-none">{c}</span>
-          return <Wheel key={`d${fromEnd}`} digit={Number(c)} delay={fromEnd * 24} reduced={reduced} />
+          return <Wheel key={`d${fromEnd}`} digit={waiting ? 0 : Number(c)} delay={fromEnd * 24} reduced={reduced} />
         })}
       </span>
     </span>

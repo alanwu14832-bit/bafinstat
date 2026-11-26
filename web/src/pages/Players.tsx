@@ -18,7 +18,6 @@ import { scopeText, useNavigateWithFilters } from '../components/layout/FilterCh
 import { downloadCompareImage, downloadPercentileImage, downloadPlayerImage } from '../lib/shareImage'
 import { TEAM_NAME } from '../data/seed'
 import { StoryRow } from '../components/ui/SeasonHero'
-import { HeroGlow } from '../components/ui/HeroGlow'
 import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortToggle'
 import { sortRoster } from '../data/rosterSort'
 import { playerStories } from '../data/stories'
@@ -57,6 +56,8 @@ import { isPA, type BattingPA } from '../data/types'
 import { battingLines, ipDisplay, pitchingLines, sprayCounts, type BattingLine, type PitchingLine } from '../data/stats'
 import { f2, f3, pct0, percentile, posLabel, shortDate } from '../lib/fmt'
 import { cx } from '../lib/format'
+import { PlayerBackdrop } from '../components/ui/PlayerArt'
+import { RollingNumber } from '../components/motion/RollingNumber'
 
 /** His plate appearances, plus the ones he ran for (代跑: the run and steals are his). */
 const ranOrBatted = (p: BattingPA, name: string) => p.batter === name || p.runner === name
@@ -458,7 +459,7 @@ export function PlayersPage() {
       {/* 球員卡: the player as the page's main character (jersey number, name, the three numbers that matter, his
           看點), with the homepage hero's glow. The name is the switcher: tap it to pick someone else. */}
       <Card id="p-card" className="overflow-hidden relative" bodyClassName="p-0">
-        <HeroGlow />
+        <PlayerBackdrop number={player?.number} />
         <div className="relative px-5 md:px-7 pt-4 md:pt-6 pb-4 md:pb-6 flex flex-col gap-4 md:gap-5">
           <div className="flex flex-col-reverse sm:flex-row sm:items-start gap-1 sm:gap-3">
             <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="roster-panel"
@@ -467,7 +468,7 @@ export function PlayersPage() {
               <span className="hidden md:flex"><PlateBadge size={76} className="figure">{player?.number ?? player?.name.slice(0, 1) ?? '–'}</PlateBadge></span>
               <span className="min-w-0">
                 <span className="flex items-center gap-2 min-w-0">
-                  <span className="font-display text-[26px] md:text-[34px] font-bold text-ink leading-tight truncate">{player?.name ?? '請選擇球員'}</span>
+                  <span className="font-display text-[28px] md:text-[40px] font-bold text-ink leading-tight tracking-[-0.01em] truncate">{player?.name ?? '請選擇球員'}</span>
                   <ChevronDown aria-hidden className={cx('size-5 text-muted shrink-0 transition-transform motion-reduce:transition-none group-hover:text-ink', open && 'rotate-180')} />
                 </span>
                 <span className="block text-[13px] text-ink-2 truncate mt-0.5">{player ? [`${posLabel(player.primaryPos)}${player.secondaryPos ? ` / ${player.secondaryPos}` : ''}`, player.bats && hand(player.bats), player.status && player.status !== '現役' ? player.status : ''].filter(Boolean).join('・') : ''}</span>
@@ -488,7 +489,7 @@ export function PlayersPage() {
                   {headline.map((h) => (
                     <div key={h.label} className="min-w-0">
                       <dt className="text-[11px] text-muted">{h.label}</dt>
-                      <dd className="figure text-[30px] md:text-[40px] font-bold text-ink leading-none mt-1">{h.value}</dd>
+                      <dd className="figure text-[32px] md:text-[44px] font-bold text-ink leading-none mt-1"><RollingNumber text={h.value} /></dd>
                     </div>
                   ))}
                 </dl>

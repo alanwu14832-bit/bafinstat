@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, useInView } from 'framer-motion'
 import type { ReactNode } from 'react'
 import type { TooltipPayloadEntry } from 'recharts'
 import { Card, type CardProps } from '../ui/Card'
@@ -179,6 +179,8 @@ export interface ChartFrameProps extends Omit<CardProps, 'children'> {
   legend?: ReactNode
   children: ReactNode
   footer?: ReactNode
+  /** The plot wipes in from the left the first time it scrolls into view (總覽's charts: a change of state, not another fade). */
+  wipe?: boolean
 }
 
 /**
@@ -195,8 +197,10 @@ export function primeTouch(e: React.PointerEvent<HTMLDivElement>) {
   e.target.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: e.clientX, clientY: e.clientY }))
 }
 
-export function ChartFrame({ height = 260, legend, footer, children, ...card }: ChartFrameProps) {
+export function ChartFrame({ height = 260, legend, footer, children, wipe, ...card }: ChartFrameProps) {
   const reduced = usePrefersReducedMotion()
+  const plot = useRef<HTMLDivElement>(null)
+  const seen = useInView(plot, { once: true, amount: 0.35 })
   return (
     <motion.div
       initial={reduced ? false : { opacity: 0.01 }}
@@ -206,8 +210,13 @@ export function ChartFrame({ height = 260, legend, footer, children, ...card }: 
     >
       <Card {...card} className="h-full">
         {legend && <div className="mb-3">{legend}</div>}
-        <div style={{ height, width: '100%' }} className="min-w-0" onPointerDownCapture={primeTouch}>
-          {children}
+        {/* (the box that is watched is never clipped itself: a fully clipped box would not count as on screen) */}
+        <div ref={plot} style={{ height, width: '100%' }} className="min-w-0" onPointerDownCapture={primeTouch}>
+          {wipe && !reduced ? (
+            <motion.div className="size-full" initial={false} animate={{ clipPath: seen ? 'inset(0 0% 0 0)' : 'inset(0 100% 0 0)' }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
+              {children}
+            </motion.div>
+          ) : children}
         </div>
         {footer && <div className="mt-3 text-xs text-muted">{footer}</div>}
       </Card>

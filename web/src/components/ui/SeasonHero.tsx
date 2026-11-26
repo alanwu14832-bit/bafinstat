@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, CalendarDays } from 'lucide-react'
 import { cx } from '../../lib/format'
@@ -8,7 +8,7 @@ import { Reveal } from '../motion/Reveal'
 import { HERO_INK, HERO_INK_SOFT, HERO_KICKER, HERO_RECORD, HERO_SCRIM, HERO_SECTION, HERO_STAGE_DRAWN, HERO_TITLE_DRAWN, HeroPlanes } from './HeroArt'
 import { HERO } from '../../config/hero'
 import { TEAM } from '../../config/team'
-import { usePrefersReducedMotion } from '../../hooks/useMediaQuery'
+import { useDepthScroll } from '../../hooks/useDepthScroll'
 import type { Story } from '../../data/stories'
 import { finishedSummaries, LIVE_TEXT, resultText, teamSummary, type GameSummary, type TeamSummary } from '../../data/stats'
 import { LiveDot } from './ResultBadge'
@@ -100,32 +100,6 @@ export function StoryRow({ stories, link = true, className }: { stories: Story[]
   )
 }
 
-/**
- * Sets `--hp` on the hero's stage: 0 while it sits at the top of the page, 1 once it has scrolled away. The planes in
- * HeroArt read it, each at its own rate. One requestAnimationFrame per scroll burst, nothing while the hero is off
- * screen, and nothing at all when the visitor asked for reduced motion (the stage then stays a still picture).
- */
-function useHeroScroll(ref: React.RefObject<HTMLElement | null>) {
-  const reduced = usePrefersReducedMotion()
-  useEffect(() => {
-    const el = ref.current
-    if (!el || reduced) { el?.style.setProperty('--hp', '0'); return }
-    let frame = 0, last = -1
-    const read = () => {
-      frame = 0
-      const h = el.offsetHeight || 1
-      const p = Math.min(1, Math.max(0, window.scrollY / h))
-      if (p === last) return
-      last = p
-      el.style.setProperty('--hp', p.toFixed(4))
-    }
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(read) }
-    read()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => { window.removeEventListener('scroll', onScroll); if (frame) cancelAnimationFrame(frame) }
-  }, [ref, reduced])
-}
-
 /** The team photo plane: fades in once it has loaded over the drawn ground, and travels the least (it is the far wall). */
 function HeroPhoto({ onError }: { onError: () => void }) {
   const [loaded, setLoaded] = useState(false)
@@ -157,7 +131,7 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
   // the numbers beside the record count the same games: a game being recorded is in none of them (戰績先不算)
   const done = useMemo(() => (summary.live ? teamSummary(finishedSummaries(summaries)) : summary), [summary, summaries])
   const stage = useRef<HTMLDivElement>(null)
-  useHeroScroll(stage)
+  useDepthScroll(stage)
   const [photo, setPhoto] = useState(!!HERO.photo)
   return (
     <section aria-label="球季概況" className={cx('relative overflow-hidden rounded-[var(--radius)]', HERO_SECTION)}>
