@@ -30,6 +30,8 @@ export interface StatTileProps {
   to?: string
   /** Says where `to` goes, shown next to the arrow (e.g. 全隊排行) so the destination is never a surprise. */
   toLabel?: string
+  /** The figure waits at zeros and rolls up when the tile scrolls into view (總覽, where the tiles sit below the opening). */
+  count?: boolean
   className?: string
 }
 
@@ -37,7 +39,7 @@ export interface StatTileProps {
  * One metric. Designed to sit inside <StatGroup>, which draws the hairlines between cells;
  * on its own it renders as a bordered card.
  */
-export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, to, toLabel, className }: StatTileProps) {
+export function StatTile({ label, value, format = 'int', display, delta, deltaFormat, deltaLabel, invertDelta, icon, note, compact, to, toLabel, count, className }: StatTileProps) {
   const text = display ?? formatNumber(value, format)
   const good = delta !== undefined && (invertDelta ? delta < 0 : delta > 0)
   const bad = delta !== undefined && (invertDelta ? delta > 0 : delta < 0)
@@ -54,7 +56,7 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
         {to && <span className="inline-flex items-center gap-0.5 shrink-0 text-muted">{toLabel && <span className="text-[11px] opacity-80 group-hover:opacity-100">{toLabel}</span>}<ChevronRight aria-hidden className="size-3.5 shrink-0 opacity-60 transition-[translate,opacity] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0.5" /></span>}
       </div>
-      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[24px]')}><RollingNumber text={text} /></div>
+      <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[24px]')}><RollingNumber text={text} onView={count} /></div>
       {(note || delta !== undefined) && (
         <div className="flex items-center gap-2 text-xs tnum min-w-0">
           {delta !== undefined && (

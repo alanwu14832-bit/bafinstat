@@ -77,6 +77,12 @@ A database change needs a migration in both repos, and the user must run it in b
   art, moved by `--hp` on scroll, still under reduced motion, no scroll cue). The team photo is `web/public/hero.jpg` (+ `hero-m.jpg`
   for phones; `heroPhoto*` in teamDefaults.ts, found at build time by vite.config.ts → `config/hero.ts`); without the file the drawn
   backdrop stands in. The design rules came from the scroll-craft plugin (.claude/settings.json).
+- 2026-11-26, more of the look (all three sites): the 球員卡 has planes of its own (`components/ui/PlayerArt.tsx`: the team colour, the
+  jersey number drawn huge and faint, the seams) moved by the same `--hp` as 總覽's opening (`hooks/useDepthScroll.ts`, shared by both);
+  its three numbers roll when the player changes. 總覽 below the opening reads as stretches (`SummaryHead`: a larger head with a line of
+  real numbers and more air above it: 打擊摘要, 投球與守備摘要, 球季走勢) that each arrive differently: the tiles count up when scrolled
+  to (`StatTile count` → `RollingNumber onView`), the four charts wipe in from the left (`ChartFrame wipe`), 近期比賽 comes in from the
+  side (`Reveal x`). All of it is still under reduced motion.
 - Games are written by the `save_games()` RPC, one transaction per batch (`supabase/migrations/2026-10-13_save_games.sql`);
   `pushCloudDataset` queues saves per device and falls back to piecewise writes before that migration. The record page
   syncs every change (record_drafts each time, the game rows only when they changed).

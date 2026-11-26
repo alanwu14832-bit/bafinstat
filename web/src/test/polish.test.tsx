@@ -80,3 +80,28 @@ describe('區塊快捷鈕', () => {
     expect(screen.queryByRole('navigation')).toBeNull()
   })
 })
+
+describe('2026-11-26: 球員卡 and 總覽 below the opening', () => {
+  it('draws the jersey number behind the player card, hidden from screen readers, and nothing without a number', async () => {
+    const { PlayerBackdrop } = await import('../components/ui/PlayerArt')
+    const { container, rerender } = render(<PlayerBackdrop number="17" />)
+    const back = container.firstElementChild as HTMLElement
+    expect(back).toHaveAttribute('aria-hidden')
+    expect(back.textContent).toBe('17')
+    rerender(<PlayerBackdrop />)
+    expect((container.firstElementChild as HTMLElement).textContent).toBe('')
+  })
+  it('a counting figure always reads as its real value', async () => {
+    const { RollingNumber } = await import('../components/motion/RollingNumber')
+    const { container } = render(<RollingNumber text=".314" onView />)
+    // the wheels are decoration (aria-hidden); the value itself is always in the page
+    expect(container.querySelector('.sr-only')?.textContent).toBe('.314')
+  })
+  it('總覽 has its three stretches after the opening, each with a line of real numbers', () => {
+    localStorage.clear(); useDataStore.setState({ base: SEED_DATASET, demo: false, cloud: { ...useDataStore.getState().cloud, role: 'admin' } as never }); useDataStore.getState().resetFilters()
+    render(<MemoryRouter><OverviewPage /></MemoryRouter>)
+    for (const name of ['打擊摘要', '投球與守備摘要', '球季走勢']) expect(screen.getByRole('heading', { level: 2, name })).toBeInTheDocument()
+    expect(screen.getByText(/^\d+ 分・\d+ 支安打・\d+ 次保送$/)).toBeInTheDocument()
+    expect(screen.getByText(/^\d+ 失分・\d+ 次三振・\d+ 次失誤$/)).toBeInTheDocument()
+  })
+})
