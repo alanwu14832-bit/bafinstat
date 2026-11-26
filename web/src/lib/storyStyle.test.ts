@@ -1,4 +1,4 @@
-import { cardFace, defaultFg, defaultStyle, fgRect, hitTest, layersFor, placeBox, photoFrame, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW, titleLines } from './storyImage'
+import { cardFace, defaultOrder, moveLayer, readOrder, defaultFg, defaultStyle, fgRect, hitTest, layersFor, placeBox, photoFrame, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW, titleLines } from './storyImage'
 
 describe('限時動態的版面設定', () => {
   it('reads a stored look back, keeping what is valid and defaulting the rest', () => {
@@ -60,5 +60,20 @@ describe('限時動態的版面設定', () => {
     expect(f.stack.indexOf('Playfair')).toBeLessThan(f.stack.indexOf('Noto Serif TC'))   // the Latin face first, no generic in between
     expect(cardFace({ ...poster, fonts: { latin: 'figure', cjk: 'sans' } }, card)).toMatchObject({ latin: 'figure', cjk: 'sans' })
     expect(cardFace(defaultStyle(), card).stack).not.toMatch(/system-ui/)
+  })
+  it('圖層: the reader\'s order, kept tidy, and moves among the layers on the card only', () => {
+    const d = defaultOrder()
+    expect(d.slice(0, 3)).toEqual(['fg0', 'fg1', 'fg2'])                 // the photos under the text to start with
+    expect(readOrder(['potg', 'fg1', 'potg', 'nonsense'])).toEqual(['potg', 'fg1', ...d.filter((x) => x !== 'potg' && x !== 'fg1')])
+    const shown = ['fg0', 'pname', 'potg'] as const
+    const up = moveLayer(d, 'fg0', 'top', [...shown])
+    expect(up.filter((x) => (shown as readonly string[]).includes(x))).toEqual(['potg', 'pname', 'fg0'])
+    expect(up.filter((x) => !(shown as readonly string[]).includes(x))).toEqual(d.filter((x) => !(shown as readonly string[]).includes(x)))   // the others keep their places
+    expect(moveLayer(up, 'fg0', 'down', [...shown]).filter((x) => (shown as readonly string[]).includes(x))).toEqual(['potg', 'fg0', 'pname'])
+    expect(moveLayer(d, 'fg0', 'bottom', [...shown])).toEqual(d)          // already at the bottom
+    // the pick follows the order: a front photo put over a block is the one under the finger
+    const boxes = { fg0: { x: 0, y: 0, w: 500, h: 500 }, pname: { x: 100, y: 100, w: 100, h: 100 } }
+    expect(hitTest(boxes, 150, 150)).toBe('pname')
+    expect(hitTest(boxes, 150, 150, up)).toBe('fg0')
   })
 })

@@ -100,6 +100,8 @@ export interface StoryStyle {
   title: string
   /** the card's two faces (one for 英文數字, one for 中文) */
   fonts: { latin: LatinFont; cjk: CjkFont }
+  /** 圖層: the front photos and the blocks of text, bottom first (the background is always under them) */
+  order: StoryTarget[]
   text: Record<LayerKey, TextStyle>
 }
 export const SCALE_MIN = 0.6, SCALE_MAX = 1.8
@@ -126,7 +128,7 @@ export function defaultFg(layout: StoryLayout, i: number): FgStyle {
 export function defaultStyle(): StoryStyle {
   return {
     layout: 'full', accent: teamAccent(), ink: INK, shade: BG, dim: 0, blur: 0,
-    fgs: Array.from({ length: FG_COUNT }, (_, i) => defaultFg('full', i)), title: DEFAULT_TITLE, fonts: { latin: '', cjk: '' },
+    fgs: Array.from({ length: FG_COUNT }, (_, i) => defaultFg('full', i)), title: DEFAULT_TITLE, fonts: { latin: '', cjk: '' }, order: defaultOrder(),
     text: Object.fromEntries(LAYERS.map((l) => [l.key, plainText()])) as Record<LayerKey, TextStyle>,
   }
 }
@@ -164,6 +166,7 @@ export function readStyle(raw: unknown): StoryStyle {
     }),
     title: typeof r.title === 'string' ? r.title.slice(0, TITLE_MAX) : d.title,
     fonts: (() => { const f = (r.fonts ?? {}) as { latin?: unknown; cjk?: unknown }; return { latin: LATIN_KEYS.includes(f.latin as LatinFont) ? (f.latin as LatinFont) : '', cjk: CJK_KEYS.includes(f.cjk as CjkFont) ? (f.cjk as CjkFont) : '' } })(),
+    order: readOrder(r.order),
     text: Object.fromEntries(LAYERS.map(({ key }) => {
       const t = tx[key] ?? {}
       return [key, { show: t.show !== false, scale: num(t.scale, SCALE_MIN, SCALE_MAX, 1), color: typeof t.color === 'string' && HEX.test(t.color) ? t.color : '', dx: num(t.dx, -STORY_W, STORY_W, 0), dy: num(t.dy, -STORY_H, STORY_H, 0) }]
@@ -212,6 +215,32 @@ export type StoryBoxes = Partial<Record<StoryTarget, Box>>
 export const fgTarget = (i: number) => `fg${i}` as FgTarget
 export const fgIndex = (t: StoryTarget | null): number => (t && /^fg[0-2]$/.test(t) ? Number(t[2]) : -1)
 
+/** 圖層 to start from: the front photos at the bottom, the text over them. */
+export function defaultOrder(): StoryTarget[] {
+  return [...Array.from({ length: FG_COUNT }, (_, i) => fgTarget(i)), ...LAYERS.map((l) => l.key)]
+}
+/** A stored order: the known layers it names, in its order, then any it lacks at the top. */
+export function readOrder(raw: unknown): StoryTarget[] {
+  const all = defaultOrder()
+  const got = Array.isArray(raw) ? raw.filter((x, i, a): x is StoryTarget => all.includes(x as StoryTarget) && a.indexOf(x) === i) : []
+  return [...got, ...all.filter((x) => !got.includes(x))]
+}
+/**
+ * One layer moved among the ones on the card (`shown`, the others keep their places): 'up' / 'down' past its neighbour,
+ * 'top' / 'bottom' past all of them.
+ */
+export function moveLayer(order: StoryTarget[], id: StoryTarget, dir: 'up' | 'down' | 'top' | 'bottom', shown: StoryTarget[]): StoryTarget[] {
+  const on = order.filter((x) => shown.includes(x))
+  const at = on.indexOf(id)
+  if (at < 0) return order
+  const to = dir === 'up' ? Math.min(on.length - 1, at + 1) : dir === 'down' ? Math.max(0, at - 1) : dir === 'top' ? on.length - 1 : 0
+  if (to === at) return order
+  const next = on.slice(); next.splice(at, 1); next.splice(to, 0, id)
+  // put the shown ones back into the slots they held, in their new order
+  let k = 0
+  return order.map((x) => (shown.includes(x) ? next[k++] : x))
+}
+
 /** A block's box once the reader sized it (from its top-left corner) and moved it. */
 export function placeBox(natural: Box, t: TextStyle): Box {
   const s = clamp(t.scale, SCALE_MIN, SCALE_MAX)
@@ -224,9 +253,8 @@ export function fgRect(pw: number, ph: number, fg: FgStyle): Box {
 }
 const inside = (b: Box | undefined, x: number, y: number, pad = 12) => !!b && x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad
 /** What is under a point of the card: the topmost block of text, else the topmost front photo, else nothing (the background). */
-export function hitTest(boxes: StoryBoxes, x: number, y: number): StoryTarget | null {
-  for (const { key } of [...LAYERS].reverse()) if (inside(boxes[key], x, y)) return key
-  for (let i = FG_COUNT - 1; i >= 0; i--) if (inside(boxes[fgTarget(i)], x, y, 0)) return fgTarget(i)
+export function hitTest(boxes: StoryBoxes, x: number, y: number, order: StoryTarget[] = defaultOrder()): StoryTarget | null {
+  for (const id of [...readOrder(order)].reverse()) if (inside(boxes[id], x, y, fgIndex(id) >= 0 ? 0 : 12)) return id
   return null
 }
 
@@ -240,7 +268,7 @@ export interface StoryDraw {
   fgs?: Array<Photo | null>
   mark?: Photo | null
   style?: StoryStyle
-  /** editing only: Instagram's covered bands and a frame round the picked block (never in the shared image) */
+  /** editing only: a frame round the picked block (never in the shared image) */
   guides?: boolean; selected?: StoryTarget | null
 }
 /** A #rrggbb colour at an opacity (anything else is returned as it is). */
@@ -331,8 +359,10 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     g.restore()
     return true
   }
-  /** the front photos, in slot order (the last on top) */
-  const fronts = () => fgs.forEach((p, i) => {
+  // the layers (front photos, blocks of text) are queued, then drawn in the reader's 圖層 order over the background
+  const queue: Array<{ id: StoryTarget; run: () => void }> = []
+  /** the front photos */
+  const fronts = () => fgs.forEach((p, i) => queue.push({ id: fgTarget(i), run: () => {
     if (!p) return
     const f = st.fgs[i] ?? defaultFg(layout, i)
     const r = fgRect(p.width, p.height, f)
@@ -346,9 +376,9 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
       g.save(); chip(g, r.x, r.y, r.w, r.h, 14); g.clip(); g.drawImage(p, r.x, r.y, r.w, r.h); g.restore()
     } else g.drawImage(p, r.x, r.y, r.w, r.h)
     g.restore()
-  })
+  } }))
   /** a block of text: drawn at its designed place, then sized from its top-left corner and moved */
-  const block = (key: LayerKey, natural: Box, own: string, shadowed: boolean, draw: (ink: string, muted: string, font: (own?: string) => string) => void) => {
+  const block = (key: LayerKey, natural: Box, own: string, shadowed: boolean, draw: (ink: string, muted: string, font: (own?: string) => string) => void) => queue.push({ id: key, run: () => {
     const t = st.text[key]
     if (!t.show) return
     const s = clamp(t.scale, SCALE_MIN, SCALE_MAX)
@@ -359,7 +389,7 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     draw(ink, alpha(ink, 0.62), () => F)
     g.restore()
     boxes[key] = placeBox(natural, t)
-  }
+  } })
   /** a template title, stacked from (x, y) */
   const titleBlock = (x: number, y: number, base: number, maxW: number, own: string, weight: number, italic: boolean, shadowed: boolean) => {
     const lines = titleLines(st.title)
@@ -603,15 +633,13 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     })
   }
 
-  // ---- editing aids (the shared image is drawn without them)
+  // ---- the layers, bottom first
+  const rank = new Map(readOrder(st.order).map((id, i) => [id, i]))
+  queue.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)).forEach((q) => q.run())
+
+  // ---- editing aid (the shared image is drawn without it): a frame round the picked block
   if (opts.guides) {
     g.save()
-    g.setLineDash([14, 12]); g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,0.55)'
-    g.beginPath(); g.moveTo(0, SAFE_TOP); g.lineTo(W, SAFE_TOP); g.moveTo(0, bottom); g.lineTo(W, bottom); g.stroke()
-    g.setLineDash([])
-    g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 0, W, SAFE_TOP); g.fillRect(0, bottom, W, SAFE_BOTTOM)
-    text(g, 'IG 頭像列會蓋住這裡', W / 2, SAFE_TOP - 24, 30, 'rgba(255,255,255,0.75)', { align: 'center', weight: 500 })
-    text(g, 'IG 回覆列會蓋住這裡', W / 2, bottom + 54, 30, 'rgba(255,255,255,0.75)', { align: 'center', weight: 500 })
     const sel = opts.selected ? boxes[opts.selected] : undefined
     if (sel) {
       g.setLineDash([18, 10]); g.lineWidth = 5; g.strokeStyle = acc
