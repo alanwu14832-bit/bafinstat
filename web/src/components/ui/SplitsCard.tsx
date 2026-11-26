@@ -23,7 +23,7 @@ import { f3, pct } from '../../lib/fmt'
 import { availableGroups, paContexts, SPLIT_GROUP_LABEL, SPLIT_MIN_PA, splitTable, type SplitGroup, type SplitSide } from '../../data/splits'
 import type { BattingPA, PitchingPA } from '../../data/types'
 
-interface View { id: string; label: string; desc?: string; small: boolean; all?: boolean; pa: number; ab: number; h: number; h2: number; hr: number; bb: number; so: number; avg: number | null; obp: number | null; slg: number | null; ops: number | null; kPct: number | null; bbPct: number | null }
+interface View { id: string; label: string; desc?: string; small: boolean; all?: boolean; pa: number; ab: number; h: number; h2: number; h3: number; hr: number; bb: number; so: number; avg: number | null; obp: number | null; slg: number | null; ops: number | null; kPct: number | null; bbPct: number | null }
 
 /** `compact` (精簡): a narrower 情境 column and, for pitchers, shorter 被… headers, so 情境 / PA (BF) / AVG / OBP / OPS
  *  fit a 360px phone without swiping */
@@ -48,7 +48,7 @@ function columnsFor(side: SplitSide, compact = false): Column<View>[] {
     ),
     text: (_, r) => r.label,
   }
-  return [label, num('pa', bat ? 'PA' : 'BF'), num('ab', 'AB'), num('h', 'H'), num('h2', '2B'), num('hr', 'HR'), num('bb', 'BB'), num('so', bat ? 'SO' : 'K'),
+  return [label, num('pa', bat ? 'PA' : 'BF'), num('ab', 'AB'), num('h', 'H'), num('h2', '2B'), num('h3', '3B'), num('hr', 'HR'), num('bb', 'BB'), num('so', bat ? 'SO' : 'K'),
     num('avg', bat ? 'AVG' : short ? '被打擊' : '被打擊率', f3), num('obp', bat ? 'OBP' : short ? '被上壘' : '被上壘率', f3), num('slg', bat ? 'SLG' : '被長打率', f3), num('ops', bat ? 'OPS' : '被OPS', f3),
     num('kPct', 'K%', pct), num('bbPct', 'BB%', pct)]
 }
@@ -82,7 +82,7 @@ export function SplitsCard({ side, rows, title, subtitle, who, action, id, perPl
   const tableView = useTableView()
   const full = useMemo(() => columnsFor(side), [side])
   const columns = useMemo(() => (tableView.compact ? columnsFor(side, true).filter((c) => COMPACT.includes(c.key)) : full), [tableView.compact, side, full])
-  const view: View[] = table.rows.map((r) => ({ id: r.key, label: r.label, desc: r.desc, small: r.small, all: r.all, pa: r.line.pa, ab: r.line.ab, h: r.line.h, h2: r.line.h2, hr: r.line.hr, bb: r.line.bb, so: r.line.so, avg: r.line.avg, obp: r.line.obp, slg: r.line.slg, ops: r.line.ops, kPct: r.line.kPct, bbPct: r.line.bbPct }))
+  const view: View[] = table.rows.map((r) => ({ id: r.key, label: r.label, desc: r.desc, small: r.small, all: r.all, pa: r.line.pa, ab: r.line.ab, h: r.line.h, h2: r.line.h2, h3: r.line.h3, hr: r.line.hr, bb: r.line.bb, so: r.line.so, avg: r.line.avg, obp: r.line.obp, slg: r.line.slg, ops: r.line.ops, kPct: r.line.kPct, bbPct: r.line.bbPct }))
   const any = rows.some((r) => ctx.has(r))
   // (only) no plate appearance has the hand recorded yet
   const noHand = !!only && table.rows[0].line.pa === 0
