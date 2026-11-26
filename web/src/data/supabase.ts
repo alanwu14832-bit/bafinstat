@@ -135,6 +135,20 @@ export async function fetchCloudDataset(): Promise<{ dataset: Dataset; missing: 
   return { dataset: normalizeDataset(rowsToDataset({ players, games, batting, pitching, fielding })).dataset, missing: missingRecordColumns({ games, batting, pitching }) }
 }
 
+/** One game as the cloud has it now (its game row, plate appearances in order), read the way fetchCloudDataset reads them.
+ *  The recording page compares it with the copy after its own last save (record/outsideEdits). */
+export async function fetchCloudGame(gameId: string): Promise<{ game?: Game; batting: BattingPA[]; pitching: PitchingPA[] }> {
+  const sb = supabase()
+  const [g, b, p] = await Promise.all([
+    sb.from('games').select('*').eq('id', gameId),
+    sb.from('batting_pa').select('*').eq('game_id', gameId).order('seq', { ascending: true }),
+    sb.from('pitching_pa').select('*').eq('game_id', gameId).order('seq', { ascending: true }),
+  ])
+  for (const r of [g, b, p]) if (r.error) throw new Error(r.error.message)
+  const ds = normalizeDataset(rowsToDataset({ players: [], games: (g.data ?? []) as GameRow[], batting: (b.data ?? []) as BattingRow[], pitching: (p.data ?? []) as PitchingRow[], fielding: [] })).dataset
+  return { game: ds.games[0], batting: ds.batting, pitching: ds.pitching }
+}
+
 async function chunked<T>(rows: T[], fn: (chunk: T[]) => Promise<void>, size = 500) {
   for (let i = 0; i < rows.length; i += size) await fn(rows.slice(i, i + size))
 }

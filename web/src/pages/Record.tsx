@@ -15,7 +15,8 @@ import { CloudPanel } from '../components/ui/CloudPanel'
 import { BattingPlayByPlay, PitchingPlayByPlay, PitchPlays } from '../components/ui/PlayByPlay'
 import { Toast, type ToastData } from '../components/ui/Toast'
 import { dropCloudCache, useDataStore } from '../store/data'
-import { deleteCloudDraft, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
+import { deleteCloudDraft, fetchCloudGame, listCloudDrafts, saveCloudDraft, type CloudDraft } from '../data/supabase'
+import { mergeOutsideEdits, type CloudGame } from '../record/outsideEdits'
 import { useFilterOptions } from '../hooks/useStats'
 import { TEAM_NAME } from '../data/seed'
 import { activeNames, candidateNames, PlayerChips, PlayerSelect } from '../components/ui/PlayerSelect'
@@ -1354,6 +1355,9 @@ function RecordScreen({ practice }: { practice: boolean }) {
   const latest = useRef(state)
   latest.current = state
   const rowsSaved = useRef('')
+  // the game as the cloud had it right after this device's last save: what another device changed since is taken in
+  // before the next save (record/outsideEdits), so a 球速 typed in 修改資料 on a second device is not written over
+  const cloudAfter = useRef<{ id: string; game: CloudGame } | null>(null)
   const syncing = useRef<Promise<boolean> | null>(null)
   const again = useRef(false)
   const [synced, setSynced] = useState<string | null>(null)   // updatedAt of the last state fully in the cloud
@@ -1380,13 +1384,28 @@ function RecordScreen({ practice }: { practice: boolean }) {
             if (verdict) { setStale(verdict); return false }
             trustedFor.current = s.game.id
           }
-          const edit = toGameEdit(s)
-          const key = JSON.stringify(edit)
-          if ((s.batting.length || s.pitching.length) && key !== rowsSaved.current) { await saveGame(edit); rowsSaved.current = key }
+          let s1 = s
+          let edit = toGameEdit(s1)
+          let key = JSON.stringify(edit)
+          if ((s1.batting.length || s1.pitching.length) && key !== rowsSaved.current) {
+            // another device's changes first (only when the copy after the last save is this game's)
+            const was = cloudAfter.current?.id === s1.game.id ? cloudAfter.current.game : null
+            if (was) {
+              const now = await fetchCloudGame(s1.game.id).catch(() => null)
+              const m = mergeOutsideEdits(s1, was, now)
+              if (m.changed && latest.current === s1) {
+                s1 = m.state; latest.current = s1; setState(s1)
+                edit = toGameEdit(s1); key = JSON.stringify(edit)
+                setMsg(`已收進另一台裝置的修改（${m.changed} 處）${m.skipped ? '；改到打擊結果或跑者的部分沒有收進來，請在「逐打席」確認' : ''}。`)
+              }
+            }
+            await saveGame(edit); rowsSaved.current = key
+            cloudAfter.current = await fetchCloudGame(s1.game.id).then((game) => ({ id: s1.game.id, game })).catch(() => null)
+          }
           if (latest.current?.game.id !== s.game.id) break   // finished or abandoned meanwhile: leave its progress gone
-          const ok = await saveCloudDraft(s.game.id, s, cloud.user?.email)
+          const ok = await saveCloudDraft(s1.game.id, s1, cloud.user?.email)
           if (ok === false) setDraftsSupported(false)
-          setSaveFailed(false); setSynced(s.updatedAt ?? null)
+          setSaveFailed(false); setSynced(s1.updatedAt ?? null)
           setAutoSaved(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
         } while (again.current)
         return true
