@@ -52,6 +52,11 @@ A database change needs a migration in both repos, and the user must run it in b
   340 px kept clear and an optional photo that never leaves the device, `components/ui/StoryDialog.tsx` (the 限動 button on 球員 and
   on a game page) shares or downloads it. A reader below 球員 level gets single games only (no season card or season line).
   Planned: step 2 a server-side Claude call for the sentence (key never in the site), step 3 里程碑 and 全隊賽後總結 cards.
+- 限時動態編輯器 (2026-11-26, the user's ask: a small design desk): `StoryStyle` in lib/storyImage.ts — 版型 滿版照片／上照片下數據／純數據,
+  a background photo (pan, zoom, 變暗, 模糊) and a front photo (`fg`: moved, sized, 白框, 陰影), the colours (主色／文字色／底色, `palettes()`),
+  and each block of text (`LAYERS`: shown, size, colour, 字型, moved). drawStory returns the blocks' boxes (`hitTest`) so the preview
+  picks and drags them; `guides` draws IG's covered bands and the picked frame only while editing. The look is kept on the device
+  (`bafin.story.style.v1`, `readStyle` cleans it), the photos never. Step 2: 自動去背 on the front photo (on-device model).
 - 複選篩選 (2026-11-25): `Filters.tournament / position / opponent / result` are lists (none = every game; a game passes holding any of
   the values; different filters still narrow together). `components/ui/MultiSelect.tsx` (desktop: checkbox list in a portal, fixed
   widths so the one-row toolbar keeps fitting; the phone sheet: `MultiChips`); the address repeats the key (`?cup=A&cup=B`, old

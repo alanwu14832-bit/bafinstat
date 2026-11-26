@@ -15,7 +15,7 @@ const headline = () => screen.getByLabelText('亮點文字（可以自己改）'
 
 describe('分享限時動態', () => {
   beforeAll(() => { HTMLCanvasElement.prototype.getContext = (() => null) as unknown as typeof HTMLCanvasElement.prototype.getContext })
-  beforeEach(() => { useDataStore.setState({ base: SEED_DATASET, demo: false, filters: DEFAULT_FILTERS }) })
+  beforeEach(() => { localStorage.removeItem('bafin.story.style.v1'); useDataStore.setState({ base: SEED_DATASET, demo: false, filters: DEFAULT_FILTERS }) })
   afterEach(() => cleanup())
 
   it('球員頁: his kinds of card, his games, and a sentence he can reword and put back', () => {
@@ -35,7 +35,23 @@ describe('分享限時動態', () => {
     fireEvent.click(within(dlg).getByRole('tab', { name: '本季打擊' }))
     expect(headline().value).toMatch(/^\d+ 場 \d+ 打數/)
     expect(within(dlg).getByRole('button', { name: '下載圖片' })).toBeEnabled()
-    expect(within(dlg).getByLabelText('選照片')).toHaveAttribute('accept', 'image/*')
+    // the photos and the look are on their own panels
+    fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
+    expect(within(dlg).getByLabelText('選背景照片')).toHaveAttribute('accept', 'image/*')
+    expect(within(dlg).getByLabelText('選前景照片')).toHaveAttribute('accept', 'image/*')
+    expect(within(dlg).getByRole('button', { name: '滿版照片' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(dlg).getByRole('button', { name: '純數據' }))
+    expect(within(dlg).getByRole('button', { name: '純數據' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(dlg).getByRole('tab', { name: '文字' }))
+    fireEvent.click(within(dlg).getByRole('button', { name: '大數字' }))
+    fireEvent.click(within(dlg).getByLabelText('顯示'))
+    expect(within(dlg).getByRole('button', { name: '大數字' })).toHaveClass('line-through')
+    // the look is kept on this device for the next card
+    const saved = JSON.parse(localStorage.getItem('bafin.story.style.v1') ?? '{}')
+    expect(saved.layout).toBe('plain')
+    expect(saved.text.big.show).toBe(false)
+    fireEvent.click(within(dlg).getByRole('button', { name: '版面回到預設' }))
+    expect(JSON.parse(localStorage.getItem('bafin.story.style.v1') ?? '{}').text.big.show).toBe(true)
   })
 
   it('比賽頁: pick any of our players in that game; a pitcher gets 單場投球', () => {
