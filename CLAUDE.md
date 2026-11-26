@@ -60,14 +60,17 @@ A database change needs a migration in both repos, and the user must run it in b
   → module worker `lib/cutout.worker.ts` running IS-Net (MIT int8 build, Hugging Face pinned revision, ~44 MB, kept in Cache Storage
   `bafin-cutout-v1`) on ONNX Runtime Web (`onnxruntime-web`, its WebAssembly from jsDelivr at the package.json version; never put
   the wasm or the model in public/: every Vercel deployment and archived version would carry them). `vite.config` worker format 'es'.
-- POTG 海報模板 (2026-11-26, from the team's own PLAYER OF THE GAME posts): three more layouts in `StoryStyle` — 斜切海報 (darkened
+- POTG 海報模板 (2026-11-26, from the team's own PLAYER OF THE GAME posts; **this site only** — the user had them taken back out of the
+  校隊's and 霸龍's sites): three more layouts in `StoryStyle` — 斜切海報 (darkened
   photo, a slanted concrete `wall()` on the right, the cut-out across the edge, Knewave title, the name in Yuji Boku brush), 直排姓名
   (blurred photo, pale panel, Playfair title, the name down the panel) and 左欄數據 (accent column with the title and `card.stats`
   stacked in Anton italic, the photo framed on the right, a name plate). Their blocks are `potg / pname / stats / logo` (`layersFor`);
   `titleLines` (「/」 breaks a custom title), `card.statLine` (batStats 「2-4 1HR 2B 3RBI」 / pitStats 「3.2 IP  3 K  0 BB  0 R」,
   rewordable), up to three front photos (`fgs`, 連續動作; `defaultFg` per layout keeps the feet above the name). The faces load only
-  in the dialog (`lib/storyFonts.ts`); a name with a character Yuji Boku lacks (堉, 澔, 吳, 彥) is set whole in Noto Serif TC 900
-  (`drawsAll` compares drawn pixels).
+  in the dialog (`lib/storyFonts.ts`). One face per script on a card (the user's rule): every word is set in one stack, `cardFace` —
+  the card's Latin face, then its CJK face (`style.fonts`, '' = the layout's pair: 數據卡 Barlow + 黑體, 斜切 Knewave + Yuji Boku,
+  直排 Playfair + Noto Serif TC, 左欄 Anton + 黑體); blocks have no face of their own. Where Yuji Boku lacks a character on the card
+  (堉, 澔, 吳, 彥) all the card's Chinese is set in Noto Serif TC (`drawsAll` compares drawn pixels).
 - 複選篩選 (2026-11-25): `Filters.tournament / position / opponent / result` are lists (none = every game; a game passes holding any of
   the values; different filters still narrow together). `components/ui/MultiSelect.tsx` (desktop: checkbox list in a portal, fixed
   widths so the one-row toolbar keeps fitting; the phone sheet: `MultiChips`); the address repeats the key (`?cup=A&cup=B`, old

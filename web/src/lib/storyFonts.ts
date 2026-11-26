@@ -37,8 +37,18 @@ export async function loadStoryFonts(text = ''): Promise<void> {
  * is drawn twice, with a serif and then a sans-serif fallback behind the family: the same pixels mean the family drew it.
  * (Where the device has one CJK face for both fallbacks this says yes, and the name simply mixes in that face.)
  */
+const known = new Map<string, boolean>()
 export function drawsAll(family: string, text: string, weight = 400): boolean {
-  if (typeof document === 'undefined') return true
+  if (typeof document === 'undefined' || !text) return true
+  // a font that has not arrived yet draws as the fallback: only remember the answer once it is there
+  const key = `${weight}|${family}|${text}`, hit = known.get(key)
+  if (hit !== undefined) return hit
+  const ready = (document as Document & { fonts?: FontFaceSet }).fonts?.check?.(`${weight} 40px ${family}`, text) ?? true
+  const r = check(family, text, weight)
+  if (ready) known.set(key, r)
+  return r
+}
+function check(family: string, text: string, weight: number): boolean {
   const c = document.createElement('canvas'); c.width = 48; c.height = 48
   const g = c.getContext('2d', { willReadFrequently: true })
   if (!g) return true
