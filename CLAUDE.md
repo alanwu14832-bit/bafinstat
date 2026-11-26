@@ -87,6 +87,10 @@ A database change needs a migration in both repos, and the user must run it in b
   總覽／投球／比賽 no 守位, 打擊／守備／球員 all, other pages none) and a filter a page does not offer does not apply there (`useStats`).
 - 未完成打席 (2026-11-25): its own panel in 修改資料 (`UnfinishedPanel` in PaEditor: who was up — 打者 on our side, 投手 on theirs —,
   every pitch inserted / changed / deleted / added (no ball in play), 球速, 備註); the runner's out stays on his own row.
+- 每個打席換守備 (2026-11-26, the user's ask): 修改資料 → 我隊投球 → 逐打席, each of their plate appearances has a 守備陣容 section
+  (`DefenseByInning` with `at={inning,row}`, passed to PaPanel as `defense`): the alignment as it stood for that one
+  (`defenseTimeline(inning, half, row)`), and a change starts from it (a DEF sub with `row` = the rows before it in that half);
+  the plate appearances before keep the old alignment, errors follow. Not in the live editor (紀錄比賽 has its own 換人).
 - 2026-11-25 (3), the look (all three sites: this one, the 校隊's and `alanwu14832-bit/aloongstat`): a `Card`'s `subtitle` folds behind
   the ⓘ beside its title (`components/ui/InfoNote.tsx`; `noteOpen` opens it for a warning; printing shows every note); the stitches
   (`Stitches`) stay on page titles only; 選球紀律 lists batters by 打席 with the numbers on the bars; phones get 區塊快捷鈕 on 打擊, 投球, 守備 and

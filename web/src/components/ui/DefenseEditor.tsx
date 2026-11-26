@@ -19,9 +19,12 @@ const chip = (on: boolean) => cx('h-9 pointer-fine:h-8 min-w-9 px-2.5 rounded-[v
  * someone in the game moves there (a 守位變動; the position he left is flagged as empty until it is filled). The changes
  * of the inning are listed under the grid, each with its own delete.
  */
-export function DefenseByInning({ roster, innings, homeAway, names, bench = [], subs = [], reentry = false, onAdd, onRemove, battersIn }: {
+export function DefenseByInning({ roster, innings, homeAway, names, bench = [], subs = [], reentry = false, onAdd, onRemove, battersIn, at: here }: {
   /** how many of their batters came up in an inning (the change can start in the middle of it: 從第 N 位打者起) */
   battersIn?: (inning: number) => number
+  /** one plate appearance (修改資料's 逐打席: the `row`-th of that inning's opponent rows): no inning picker, the alignment as it
+   *  stood for it, and a change starts from it */
+  at?: { inning: number; row: number }
   roster?: Pick<GameDayRoster, 'starters' | 'subs'>
   innings: number
   homeAway: HomeAway
@@ -45,8 +48,8 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
   const half: 'top' | 'bottom' = homeAway === '客' ? 'bottom' : 'top'
   const timeline = useMemo(() => defenseTimeline(roster), [roster])
   const n = Math.max(1, innings)
-  const at = Math.min(inning, n)
-  const d = timeline?.(at, half)
+  const at = here ? here.inning : Math.min(inning, n)
+  const d = timeline?.(at, half, here?.row)
   if (!timeline || !d) return <p className="text-[12px] text-muted">先發填了守位，這裡就會列出每一局誰守哪裡（失誤、刺殺、助殺依這個算給球員）。</p>
   const field = FIELD_POSITIONS.filter((p) => p !== 'P')
   const holder = pos ? d.byPos.get(pos) : undefined
@@ -59,9 +62,10 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
   const entering = !!who && !d.inGame.has(who)
   const replaced = holder ?? forWho
   const label = posNum(pos)
+  const from = here ? '這個打席起' : `第 ${at} 局起`
   const sentence = !who || !pos ? ''
-    : entering ? `第 ${at} 局起：${who} 上場守 ${label}${replaced ? `，替下 ${replaced}` : ''}`
-    : `第 ${at} 局起：${who} ${d.byName.get(who) ? `從 ${posNum(d.byName.get(who)!)} ` : ''}改守 ${label}`
+    : entering ? `${from}：${who} 上場守 ${label}${replaced ? `，替下 ${replaced}` : ''}`
+    : `${from}：${who} ${d.byName.get(who) ? `從 ${posNum(d.byName.get(who)!)} ` : ''}改守 ${label}`
   const pick = (p: string) => { setPos(p === pos ? '' : p); setWho(''); setForWho('') }
   const confirm = () => {
     if (!who || !pos) return
@@ -69,13 +73,15 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
     if (!out) return
     // the batting slot goes with the change (the Box Score and 逐局表 place him by it): his own, or the one he takes over
     const slot = d.slot.get(out)
-    onAdd({ kind: 'DEF', in: who, out, pos, inning: at, half, ...(slot === undefined ? {} : { slot }), ...(fromRow > 0 ? { row: fromRow } : {}) })
+    const row = here ? here.row : fromRow
+    onAdd({ kind: 'DEF', in: who, out, pos, inning: at, half, ...(slot === undefined ? {} : { slot }), ...(row > 0 ? { row } : {}) })
     setWho(''); setPos(''); setForWho(''); setFromRow(0)
   }
   // a change counts from the first half we field at or after it (one logged while we bat — a 代打 who stays in — shows
   // in the next inning we field, as the grid already has it)
   const fieldedAt = (x: DayRosterSub) => (x.half === half ? x.inning : half === 'top' ? x.inning + 1 : x.inning)
-  const mine = subs.map((x, i) => ({ x, i })).filter(({ x }) => fieldedAt(x) === at)
+  // (one plate appearance: the changes made at it; one logged while we batted counts from the half's first row)
+  const mine = subs.map((x, i) => ({ x, i })).filter(({ x }) => fieldedAt(x) === at && (!here || (x.half === half ? x.row ?? 0 : 0) === here.row))
   // the position each change put someone at (a 代打／代跑 has none of his own: the one he stands at now)
   const changed = new Set(mine.map(({ x }) => (FIELD_POSITIONS.includes(x.pos as never) ? x.pos : d.byName.get(x.in))).filter((p): p is string => !!p && p !== 'P'))
   const KIND: Record<DayRosterSub['kind'], string> = { PH: '代打', PR: '代跑', DEF: '守備', P: '換投' }
@@ -88,11 +94,13 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
   const tag = (x: string) => (d.byName.get(x) ? `（${posNum(d.byName.get(x)!)}）` : '')
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex flex-wrap gap-1.5" role="group" aria-label="看哪一局的守備">
-        {Array.from({ length: n }, (_, i) => i + 1).map((k) => <button key={k} type="button" aria-pressed={k === at} onClick={() => { setInning(k); setPos(''); setWho(''); setForWho('') }} className={chip(k === at)}>{k}</button>)}
-      </div>
-      <p className="text-[11px] text-muted">點要換人的守位 → 選人 → 確認（從這一局起生效）。投手的失誤算給那個打席的投手；換投請用「我隊投球」。</p>
-      <ul className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[13px]" aria-label={`第 ${at} 局守備`}>
+      {!here && (
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="看哪一局的守備">
+          {Array.from({ length: n }, (_, i) => i + 1).map((k) => <button key={k} type="button" aria-pressed={k === at} onClick={() => { setInning(k); setPos(''); setWho(''); setForWho('') }} className={chip(k === at)}>{k}</button>)}
+        </div>
+      )}
+      <p className="text-[11px] text-muted">點要換人的守位 → 選人 → 確認（{here ? '從這個打席起生效，之前的打席不變' : '從這一局起生效'}）。投手的失誤算給那個打席的投手；換投請用「我隊投球」。</p>
+      <ul className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[13px]" aria-label={here ? '這個打席的守備' : `第 ${at} 局守備`}>
         {field.map((p) => {
           const name = d.byPos.get(p)
           return (
@@ -110,7 +118,7 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
       </ul>
       {pos && (
         <div className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border bg-surface-2 p-3" role="group" aria-label="換成誰">
-          <div className="text-[12px] font-medium text-ink">第 {at} 局起，{label}{holder ? `（${holder}）` : ''} 換成：</div>
+          <div className="text-[12px] font-medium text-ink">{from}，{label}{holder ? `（${holder}）` : ''} 換成：</div>
           {benchFirst.length > 0 && (
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-muted">板凳／還沒上場（{holder ? `上場替下 ${holder}` : '上場守這個位置'}）</span>
@@ -136,7 +144,7 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
             </div>
           )}
           {/* (the change in the middle of the inning: the errors and putouts before it stay with who stood there then) */}
-          {who && (battersIn?.(at) ?? 0) > 1 && (
+          {who && !here && (battersIn?.(at) ?? 0) > 1 && (
             <label className="flex items-center gap-2 text-[12px] text-ink-2 flex-wrap">從
               <select value={fromRow} onChange={(e) => setFromRow(Number(e.target.value))} className="h-9 pointer-fine:h-8 rounded-[var(--radius-sm)] border border-border bg-surface px-2 text-[13px]">
                 {Array.from({ length: battersIn!(at) }, (_, k) => <option key={k} value={k}>{k === 0 ? '這局一開始' : `這局第 ${k + 1} 位打者`}</option>)}
@@ -150,9 +158,9 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
           </div>
         </div>
       )}
-      {empty.length > 0 && <p role="status" className="text-[12px] text-warning">第 {at} 局 {empty.map(posNum).join('、')} 沒有人守：點那個守位補人。</p>}
+      {empty.length > 0 && <p role="status" className="text-[12px] text-warning">{here ? '這個打席' : `第 ${at} 局`} {empty.map(posNum).join('、')} 沒有人守：點那個守位補人。</p>}
       {mine.length > 0 && (
-        <ul className="flex flex-col gap-0.5 text-[12px] text-ink-2" aria-label={`第 ${at} 局的變動`}>
+        <ul className="flex flex-col gap-0.5 text-[12px] text-ink-2" aria-label={here ? '這個打席的變動' : `第 ${at} 局的變動`}>
           {mine.map(({ x, i }) => (
             <li key={i} className="flex items-center gap-2 min-h-9">
               <span className="flex-1 min-w-0">{describe(x)}</span>

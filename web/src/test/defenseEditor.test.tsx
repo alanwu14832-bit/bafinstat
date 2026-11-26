@@ -200,3 +200,31 @@ describe('每局守備: the changes of an inning', () => {
     expect(saved(onSave).game.dayRoster!.subs!.at(-1)).toEqual({ kind: 'DEF', in: '丑', out: '子', pos: '2B', inning: 2, half: 'top', slot: 3 })
   })
 })
+
+describe('修改資料: the defence at one plate appearance', () => {
+  // two of their batters in the 2nd; the error is the second one's
+  const two: GameEdit = { ...initial, pitching: [pit({ inning: 2 }), pit({ inning: 2, oppOrder: 2, result: '失誤', code: undefined })] }
+  const openAt = (index: number) => { const onSave = vi.fn(async () => undefined); render(<GameEditor initial={two} roster={[...NAMES, '子', '丑']} onSave={onSave} onCancel={() => {}} onDelete={() => {}} view={{ tab: 'pit', paView: 'tap', sel: { side: 'pit', index } }} />); return onSave }
+  it('a change made at the second plate appearance starts there: the first keeps who stood there, the error moves', async () => {
+    const onSave = openAt(1)
+    const here = screen.getByRole('list', { name: '這個打席的守備' })
+    expect(within(here).getByText('子')).toBeTruthy()
+    fireEvent.click(within(here).getByRole('button', { name: /^6 SS / }))
+    fireEvent.click(within(screen.getByRole('group', { name: '換成誰' })).getByRole('button', { name: /^丑/ }))
+    expect(screen.getByText('這個打席起：丑 上場守 6 SS，替下 子')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '確認' }))
+    expect(within(screen.getByRole('list', { name: '這個打席的守備' })).getByText('丑')).toBeTruthy()
+    expect(within(screen.getByRole('list', { name: '這個打席的變動' })).getByText(/丑 上場守 6 SS，替下 子/)).toBeTruthy()
+    // the plate appearance before it still has 子 at short
+    fireEvent.click(screen.getByRole('button', { name: '上一個' }))
+    expect(within(screen.getByRole('list', { name: '這個打席的守備' })).getByText('子')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalled())
+    const s = saved(onSave)
+    expect(s.game.dayRoster!.subs!.slice(1)).toEqual([{ kind: 'DEF', in: '丑', out: '子', pos: 'SS', inning: 2, half: 'top', slot: 3, row: 1 }])
+  })
+  it('our own plate appearances have no defence to change', () => {
+    render(<GameEditor initial={two} roster={[...NAMES, '子', '丑']} onSave={vi.fn(async () => undefined)} onCancel={() => {}} onDelete={() => {}} view={{ tab: 'bat', paView: 'tap', sel: { side: 'bat', index: 0 } }} />)
+    expect(screen.queryByRole('list', { name: '這個打席的守備' })).toBeNull()
+  })
+})
