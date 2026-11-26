@@ -2,8 +2,8 @@
  * 先發陣容 IG 貼文 on a canvas, 1080 × 1350 (an Instagram portrait post), after the team's own STARTING LINEUP posts:
  * a pale concrete wall, the title in blue brush capitals with the team under it, a cut-out player on the left, the lineup
  * on the right (positions in blue, names in black — the player in the photo in red), and at the bottom the two teams'
- * badges, the date and the field. One face per script (the user's rule): Knewave for letters and figures, Yuji Boku for
- * the names — or Noto Serif TC for every name when Yuji Boku lacks a character of one of them. The photo never leaves
+ * badges, the date and the field. One face per script (the user's rule): Knewave for letters and figures, 王漢宗顏楷體
+ * (the team's own posts' face) for the names — or Noto Serif TC for every name when it lacks a character of one of them. The photo never leaves
  * the device.
  */
 import type { LineupPostRow } from '../data/lineupPost'

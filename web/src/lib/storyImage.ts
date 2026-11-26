@@ -76,7 +76,7 @@ export const layersFor = (l: StoryLayout) => LAYERS.filter((x) => x.group === (i
 export type LatinFont = '' | 'figure' | 'sans' | 'serif' | 'brush' | 'condensed'
 export type CjkFont = '' | 'sans' | 'serif' | 'brush'
 export const LATIN_LABEL: Record<LatinFont, string> = { '': '跟著版型', figure: '運動數字', sans: '黑體', serif: '明體', brush: '毛筆', condensed: '窄體' }
-export const CJK_LABEL: Record<CjkFont, string> = { '': '跟著版型', sans: '黑體', serif: '明體', brush: '毛筆' }
+export const CJK_LABEL: Record<CjkFont, string> = { '': '跟著版型', sans: '黑體', serif: '明體', brush: '顏楷（毛筆）' }
 // the Latin faces carry no generic fallback: one would catch the CJK characters before the CJK face does
 const LATIN: Record<Exclude<LatinFont, ''>, string> = {
   figure: '"Barlow Semi Condensed"', sans: '"Inter", "SF Pro Display", "Helvetica Neue", Arial', serif: SERIF_LATIN, brush: BRUSH_LATIN, condensed: CONDENSED,
@@ -197,7 +197,7 @@ function cardHan(st: StoryStyle, card: StoryCard): string {
 }
 /**
  * The card's one font stack, and which CJK face it ended on: the brush only where it has every character on the card
- * (Yuji Boku lacks e.g. 堉, 澔, 吳, 彥 — then the whole card's Chinese is set in the serif, never half and half).
+ * (王漢宗顏楷體 has every character of the team's names; any it lacks sets the whole card's Chinese in the serif, never half and half).
  */
 export function cardFace(st: StoryStyle, card: StoryCard): { stack: string; latin: Exclude<LatinFont, ''>; cjk: Exclude<CjkFont, ''>; fellBack: boolean } {
   const d = LAYOUT_FONTS[st.layout]

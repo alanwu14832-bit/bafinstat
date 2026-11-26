@@ -15,7 +15,8 @@ export function contentSecurityPolicy(supabaseUrl?: string): string {
     "script-src 'self'",
     // React style attributes and the team colour <style> need inline styles; fonts come from Google Fonts
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    // (cdn.jsdelivr.net: 王漢宗顏楷體 for the 限動 / 先發陣容 cards, pinned to one commit of this repo's fonts/ — lib/storyFonts.ts)
+    "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
     "img-src 'self' data: blob: https:",
     `connect-src 'self'${supabase}`,
     "manifest-src 'self'",
