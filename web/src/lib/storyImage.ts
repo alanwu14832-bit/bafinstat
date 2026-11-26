@@ -22,7 +22,6 @@ const PHOTO_H = 1040
 const PAD = 72
 /** 左欄數據: the coloured column's width */
 const COL_W = 400
-const SERIF = '"Noto Serif TC", "Source Serif 4", "Songti TC", "PMingLiU", serif'
 
 /** Where the reader put the photo: fx / fy = which part shows (0 = left / top edge, 1 = right / bottom), zoom ≥ 1. */
 export interface PhotoView { fx: number; fy: number; zoom: number }
@@ -70,15 +69,22 @@ export const LAYERS: Array<{ key: LayerKey; label: string; group: 'data' | 'temp
   { key: 'potg', label: '標題', group: 'template' }, { key: 'pname', label: '姓名', group: 'template' }, { key: 'stats', label: '數據', group: 'template' }, { key: 'logo', label: '隊徽', group: 'template' },
 ]
 export const layersFor = (l: StoryLayout) => LAYERS.filter((x) => x.group === (isTemplate(l) ? 'template' : 'data'))
-export type FontKey = '' | 'sans' | 'serif' | 'figure' | 'brush' | 'condensed'
-export const FONT_LABEL: Record<FontKey, string> = { '': '預設', sans: '黑體', serif: '明體', figure: '運動數字', brush: '毛筆', condensed: '窄體' }
-const FONTS: Record<Exclude<FontKey, ''>, string> = {
-  sans: SANS, serif: `${SERIF_LATIN}, ${SERIF}`, figure: FIG,
-  brush: `${BRUSH_LATIN}, ${BRUSH_CJK}, ${SERIF_CJK}, serif`, condensed: `${CONDENSED}, ${SANS}`,
+/**
+ * One card, one typeface per script (the team's rule): every block is set in the same stack — the card's Latin face
+ * first (letters and figures), then its CJK face — so 英文數字 never mix two faces, nor 中文. '' follows the layout.
+ */
+export type LatinFont = '' | 'figure' | 'sans' | 'serif' | 'brush' | 'condensed'
+export type CjkFont = '' | 'sans' | 'serif' | 'brush'
+export const LATIN_LABEL: Record<LatinFont, string> = { '': '跟著版型', figure: '運動數字', sans: '黑體', serif: '明體', brush: '毛筆', condensed: '窄體' }
+export const CJK_LABEL: Record<CjkFont, string> = { '': '跟著版型', sans: '黑體', serif: '明體', brush: '毛筆' }
+// the Latin faces carry no generic fallback: one would catch the CJK characters before the CJK face does
+const LATIN: Record<Exclude<LatinFont, ''>, string> = {
+  figure: '"Barlow Semi Condensed"', sans: '"Inter", "SF Pro Display", "Helvetica Neue", Arial', serif: SERIF_LATIN, brush: BRUSH_LATIN, condensed: CONDENSED,
 }
+const CJK: Record<Exclude<CjkFont, ''>, string> = { sans: '"PingFang TC", "Noto Sans TC", "Microsoft JhengHei"', serif: `${SERIF_CJK}, "Songti TC", "PMingLiU"`, brush: BRUSH_CJK }
 
 /** One block of text: shown or not, its size (× the designed size), colour ('' = the layout's own), typeface ('' = its own), and how far it was moved. */
-export interface TextStyle { show: boolean; scale: number; color: string; font: FontKey; dx: number; dy: number }
+export interface TextStyle { show: boolean; scale: number; color: string; dx: number; dy: number }
 /** A front photo: its centre on the card, its size (1 = a little over half the card's height), a white frame, a shadow. */
 export interface FgStyle { cx: number; cy: number; scale: number; frame: boolean; shadow: boolean }
 export const FG_COUNT = 3
@@ -92,6 +98,8 @@ export interface StoryStyle {
   fgs: FgStyle[]
   /** the poster templates' title; 「/」 breaks the line */
   title: string
+  /** the card's two faces (one for 英文數字, one for 中文) */
+  fonts: { latin: LatinFont; cjk: CjkFont }
   text: Record<LayerKey, TextStyle>
 }
 export const SCALE_MIN = 0.6, SCALE_MAX = 1.8
@@ -100,7 +108,7 @@ export const DEFAULT_TITLE = 'PLAYER OF THE GAME'
 export const TITLE_MAX = 30
 const HEX = /^#[0-9a-f]{6}$/i
 const teamAccent = () => (HEX.test(TEAM.accentDark) ? TEAM.accentDark : '#e2a03a')
-const plainText = (): TextStyle => ({ show: true, scale: 1, color: '', font: '', dx: 0, dy: 0 })
+const plainText = (): TextStyle => ({ show: true, scale: 1, color: '', dx: 0, dy: 0 })
 
 /** Where a layout puts its front photos (the first is the main one; the others make a 連續動作 sequence). */
 export function defaultFg(layout: StoryLayout, i: number): FgStyle {
@@ -118,7 +126,7 @@ export function defaultFg(layout: StoryLayout, i: number): FgStyle {
 export function defaultStyle(): StoryStyle {
   return {
     layout: 'full', accent: teamAccent(), ink: INK, shade: BG, dim: 0, blur: 0,
-    fgs: Array.from({ length: FG_COUNT }, (_, i) => defaultFg('full', i)), title: DEFAULT_TITLE,
+    fgs: Array.from({ length: FG_COUNT }, (_, i) => defaultFg('full', i)), title: DEFAULT_TITLE, fonts: { latin: '', cjk: '' },
     text: Object.fromEntries(LAYERS.map((l) => [l.key, plainText()])) as Record<LayerKey, TextStyle>,
   }
 }
@@ -136,7 +144,8 @@ export function palettes(): Array<{ name: string; accent: string; ink: string; s
 }
 
 const LAYOUTS: StoryLayout[] = [...DATA_LAYOUTS, ...TEMPLATE_LAYOUTS]
-const FONT_KEYS: FontKey[] = ['', 'sans', 'serif', 'figure', 'brush', 'condensed']
+const LATIN_KEYS = Object.keys(LATIN_LABEL) as LatinFont[]
+const CJK_KEYS = Object.keys(CJK_LABEL) as CjkFont[]
 /** A style read back from storage: anything missing or out of range takes the default (an older single `fg` becomes the first slot). */
 export function readStyle(raw: unknown): StoryStyle {
   const d = defaultStyle()
@@ -154,10 +163,10 @@ export function readStyle(raw: unknown): StoryStyle {
       return { cx: num(f.cx, -STORY_W, STORY_W * 2, def.cx), cy: num(f.cy, -STORY_H, STORY_H * 2, def.cy), scale: num(f.scale, FG_SCALE_MIN, FG_SCALE_MAX, def.scale), frame: f.frame === true, shadow: f.shadow !== false }
     }),
     title: typeof r.title === 'string' ? r.title.slice(0, TITLE_MAX) : d.title,
+    fonts: (() => { const f = (r.fonts ?? {}) as { latin?: unknown; cjk?: unknown }; return { latin: LATIN_KEYS.includes(f.latin as LatinFont) ? (f.latin as LatinFont) : '', cjk: CJK_KEYS.includes(f.cjk as CjkFont) ? (f.cjk as CjkFont) : '' } })(),
     text: Object.fromEntries(LAYERS.map(({ key }) => {
       const t = tx[key] ?? {}
-      const font = FONT_KEYS.includes(t.font as FontKey) ? (t.font as FontKey) : ''
-      return [key, { show: t.show !== false, scale: num(t.scale, SCALE_MIN, SCALE_MAX, 1), color: typeof t.color === 'string' && HEX.test(t.color) ? t.color : '', font, dx: num(t.dx, -STORY_W, STORY_W, 0), dy: num(t.dy, -STORY_H, STORY_H, 0) }]
+      return [key, { show: t.show !== false, scale: num(t.scale, SCALE_MIN, SCALE_MAX, 1), color: typeof t.color === 'string' && HEX.test(t.color) ? t.color : '', dx: num(t.dx, -STORY_W, STORY_W, 0), dy: num(t.dy, -STORY_H, STORY_H, 0) }]
     })) as Record<LayerKey, TextStyle>,
   }
 }
@@ -168,6 +177,31 @@ export function titleLines(title: string): Array<{ text: string; size: number }>
   if (!t) return []
   if (/^player\s+of\s+the\s+game$/i.test(t)) return [{ text: 'PLAYER', size: 1 }, { text: 'OF THE', size: 0.52 }, { text: 'GAME', size: 0.76 }]
   return t.split('/').map((s) => s.trim()).filter(Boolean).slice(0, 3).map((s, i) => ({ text: s, size: i === 0 ? 1 : 0.7 }))
+}
+
+/** Each layout's own pair of faces. */
+const LAYOUT_FONTS: Record<StoryLayout, { latin: Exclude<LatinFont, ''>; cjk: Exclude<CjkFont, ''> }> = {
+  full: { latin: 'figure', cjk: 'sans' }, split: { latin: 'figure', cjk: 'sans' }, plain: { latin: 'figure', cjk: 'sans' },
+  poster: { latin: 'brush', cjk: 'brush' }, vertical: { latin: 'serif', cjk: 'serif' }, column: { latin: 'condensed', cjk: 'sans' },
+}
+const HAN = /[\u3400-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/g
+/** The Chinese characters a card shows in this layout (the brush face must have every one, or the card leaves it). */
+function cardHan(st: StoryStyle, card: StoryCard): string {
+  const parts = isTemplate(st.layout)
+    ? [card.name, st.title, card.statLine, st.layout === 'column' ? card.role : '']
+    : [card.team, card.title, card.sub, card.name, card.role, card.headline, card.footer, card.result?.text ?? '', ...card.big.map((b) => b.label), ...card.small.map((b) => b.label), card.bar ? '好球率好球壞球' : '']
+  return [...new Set(parts.join('').match(HAN) ?? [])].join('')
+}
+/**
+ * The card's one font stack, and which CJK face it ended on: the brush only where it has every character on the card
+ * (Yuji Boku lacks e.g. 堉, 澔, 吳, 彥 — then the whole card's Chinese is set in the serif, never half and half).
+ */
+export function cardFace(st: StoryStyle, card: StoryCard): { stack: string; latin: Exclude<LatinFont, ''>; cjk: Exclude<CjkFont, ''>; fellBack: boolean } {
+  const d = LAYOUT_FONTS[st.layout]
+  const latin = st.fonts.latin || d.latin, want = st.fonts.cjk || d.cjk
+  const fellBack = want === 'brush' && !drawsAll(BRUSH_CJK, cardHan(st, card))
+  const cjk = fellBack ? 'serif' : want
+  return { stack: `${LATIN[latin]}, ${CJK[cjk]}, ${cjk === 'sans' ? 'sans-serif' : 'serif'}`, latin, cjk, fellBack }
 }
 
 // ---------------------------------------------------------------- where things are
@@ -282,6 +316,9 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
   const layout: StoryLayout = template || (opts.photo && st.layout !== 'plain') ? st.layout : 'plain'
   const boxes: StoryBoxes = {}
   const fgs = (opts.fgs ?? []).slice(0, FG_COUNT)
+  // one stack for every word on the card; the name's weight: the brush has one, the others go heavy
+  const face = cardFace(st, card), F = face.stack, heavy = face.cjk === 'brush' ? 400 : 900
+  const latinW = face.latin === 'brush' || face.latin === 'condensed' ? 400 : 700
   g.fillStyle = shade; g.fillRect(0, 0, W, H)
   const dotsFrom = (top: number) => { g.fillStyle = light ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.035)'; for (let y = top + 2; y < H; y += 8) for (let x = 2; x < W; x += 8) g.fillRect(x, y, 2, 2) }
   /** the background photo into its frame, softened and darkened as the reader set */
@@ -311,7 +348,7 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     g.restore()
   })
   /** a block of text: drawn at its designed place, then sized from its top-left corner and moved */
-  const block = (key: LayerKey, natural: Box, own: string, shadowed: boolean, draw: (ink: string, muted: string, font: (own: string) => string) => void) => {
+  const block = (key: LayerKey, natural: Box, own: string, shadowed: boolean, draw: (ink: string, muted: string, font: (own?: string) => string) => void) => {
     const t = st.text[key]
     if (!t.show) return
     const s = clamp(t.scale, SCALE_MIN, SCALE_MAX)
@@ -319,15 +356,15 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     g.save()
     g.translate(natural.x + t.dx, natural.y + t.dy); g.scale(s, s); g.translate(-natural.x, -natural.y)
     if (shadowed && isLight(ink)) { g.shadowColor = 'rgba(0,0,0,0.55)'; g.shadowBlur = 14 }
-    draw(ink, alpha(ink, 0.62), (f) => (t.font ? FONTS[t.font] : f))
+    draw(ink, alpha(ink, 0.62), () => F)
     g.restore()
     boxes[key] = placeBox(natural, t)
   }
   /** a template title, stacked from (x, y) */
-  const titleBlock = (x: number, y: number, base: number, maxW: number, own: string, font: string, weight: number, italic: boolean, shadowed: boolean) => {
+  const titleBlock = (x: number, y: number, base: number, maxW: number, own: string, weight: number, italic: boolean, shadowed: boolean) => {
     const lines = titleLines(st.title)
     if (!lines.length) return
-    const tf = st.text.potg.font ? FONTS[st.text.potg.font] : font
+    const tf = F
     const sizes = lines.map((l) => Math.min(base * l.size, base * l.size * maxW / Math.max(1, measure(g, l.text, base * l.size, tf, weight, italic))))
     const h = sizes.reduce((a, s) => a + s * 0.94, 0)
     const w = Math.max(...lines.map((l, i) => measure(g, l.text, sizes[i], tf, weight, italic)))
@@ -336,13 +373,8 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
       lines.forEach((l, i) => { at += sizes[i] * 0.94; say(g, l.text, x, at - sizes[i] * 0.12, sizes[i], ink, { font: tf, weight, italic }) })
     })
   }
-  /** the player's name in the template's own face: the brush where it has every character, else heavy serif */
-  const nameFace = (brush: boolean): { font: string; weight: number } => {
-    const t = st.text.pname
-    if (t.font) return { font: FONTS[t.font], weight: t.font === 'sans' ? 900 : t.font === 'serif' ? 900 : 400 }
-    if (brush && drawsAll(BRUSH_CJK, card.name)) return { font: `${BRUSH_CJK}, ${SERIF_CJK}, serif`, weight: 400 }
-    return { font: `${SERIF_CJK}, ${SERIF}`, weight: 900 }
-  }
+  /** the player's name: the card's face at its heaviest */
+  const nameFace = (): { font: string; weight: number } => ({ font: F, weight: heavy })
   const logo = (cx: number, cy: number, size: number, disc: boolean) => {
     if (!opts.mark) return
     const r = disc ? size * 0.72 : size / 2
@@ -365,16 +397,15 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     g.shadowColor = 'transparent'; g.clip(); const t = wall(W, H, '#e6e2da'); if (t) g.drawImage(t, 0, 0)
     g.restore()
     fronts()
-    titleBlock(PAD - 8, SAFE_TOP + 4, 236, W * 0.72, '#f6f1e6', BRUSH_LATIN, 400, false, true)
-    const nf = nameFace(true)
+    titleBlock(PAD - 8, SAFE_TOP + 4, 236, W * 0.72, '#f6f1e6', latinW, false, true)
+    const nf = nameFace()
     const nameBase = bottom - (statsOn ? 104 : 30)
     const size = Math.min(236, (W * 0.62) / Math.max(1, [...card.name].length) * 1.02)
     const nw = measure(g, card.name, size, nf.font, nf.weight)
     block('pname', { x: W - PAD - nw, y: nameBase - size * 0.92, w: nw, h: size * 1.02 }, '#151515', false, (ink) => say(g, card.name, W - PAD, nameBase, size, ink, { font: nf.font, weight: nf.weight, align: 'right' }))
     if (statsOn) {
-      const sf = st.text.stats.font ? FONTS[st.text.stats.font] : CONDENSED
-      const sw = Math.min(W * 0.58, measure(g, card.statLine, 60, sf))
-      block('stats', { x: W - PAD - sw, y: bottom - 82, w: sw, h: 66 }, '#151515', false, (ink) => say(g, card.statLine, W - PAD, bottom - 24, 60, ink, { font: sf, align: 'right', max: W * 0.58 }))
+      const sw = Math.min(W * 0.58, measure(g, card.statLine, 60, F, latinW))
+      block('stats', { x: W - PAD - sw, y: bottom - 82, w: sw, h: 66 }, '#151515', false, (ink) => say(g, card.statLine, W - PAD, bottom - 24, 60, ink, { font: F, weight: latinW, align: 'right', max: W * 0.58 }))
     }
     logo(PAD + 96, bottom - 108, 138, true)
   } else if (layout === 'vertical') {
@@ -386,9 +417,9 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     g.fillStyle = '#f2f0eb'; g.fill(); g.clip(); const t = wall(W, H, '#f2f0eb'); if (t) { g.globalAlpha = 0.55; g.drawImage(t, 0, 0) }
     g.restore()
     fronts()
-    titleBlock(PAD - 10, SAFE_TOP + 4, 200, W * 0.66, '#2b2b2b', `${SERIF_LATIN}, ${SERIF}`, 700, false, false)
+    titleBlock(PAD - 10, SAFE_TOP + 4, 200, W * 0.66, '#2b2b2b', latinW, false, false)
     logo(W - PAD - 80, SAFE_TOP + 90, 160, false)
-    const nf = nameFace(false)
+    const nf = nameFace()
     const chars = [...card.name]
     const room = (statsOn ? bottom - 120 : bottom - 40) - 640
     const size = Math.min(210, room / Math.max(1, chars.length) / 1.1)
@@ -397,9 +428,8 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
       chars.forEach((ch, i) => say(g, ch, cx, 640 + (i + 1) * size * 1.1 - size * 0.18, size, ink, { font: nf.font, weight: nf.weight, align: 'center' }))
     })
     if (statsOn) {
-      const sf = st.text.stats.font ? FONTS[st.text.stats.font] : `${SERIF_LATIN}, ${SERIF}`
-      const sw = Math.min(W - PAD * 2, measure(g, card.statLine, 56, sf, 700))
-      block('stats', { x: W - PAD - sw, y: bottom - 78, w: sw, h: 64 }, '#2b2b2b', false, (ink) => say(g, card.statLine, W - PAD, bottom - 24, 56, ink, { font: sf, weight: 700, align: 'right', max: W - PAD * 2 }))
+      const sw = Math.min(W - PAD * 2, measure(g, card.statLine, 56, F, latinW))
+      block('stats', { x: W - PAD - sw, y: bottom - 78, w: sw, h: 64 }, '#2b2b2b', false, (ink) => say(g, card.statLine, W - PAD, bottom - 24, 56, ink, { font: F, weight: latinW, align: 'right', max: W - PAD * 2 }))
     }
   } else if (layout === 'column') {
     // ---- 左欄數據: a coloured column with the title and the numbers stacked, the photo framed on the right, a name plate
@@ -420,27 +450,27 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
     glow.addColorStop(0, 'rgba(255,236,170,0.7)'); glow.addColorStop(0.35, 'rgba(255,214,120,0.22)'); glow.addColorStop(1, 'rgba(255,214,120,0)')
     g.fillStyle = glow; g.fillRect(0, 0, W, SAFE_TOP + 400)
     fronts()
-    titleBlock(36, SAFE_TOP + 4, 132, COL_W - 64, '#ffffff', CONDENSED, 400, true, true)
+    titleBlock(36, SAFE_TOP + 4, 132, COL_W - 64, '#ffffff', latinW, true, true)
     const stats = card.stats.slice(0, 4)
     if (stats.length) {
       const top = 780, room = bottom - 20 - top, per = room / stats.length
       const vs = Math.min(150, per * 0.6), ls = vs * 0.44
-      const sf = st.text.stats.font ? FONTS[st.text.stats.font] : CONDENSED
+      const sf = F
       block('stats', { x: 24, y: top, w: COL_W - 48, h: room }, '#ffffff', true, (ink) => {
         stats.forEach((s, i) => {
           const y = top + i * per + vs
-          say(g, s.value, COL_W / 2, y, vs, ink, { font: sf, italic: true, align: 'center', max: COL_W - 60 })
-          say(g, s.label, COL_W / 2, y + ls * 1.08, ls, ink, { font: sf, italic: true, align: 'center', max: COL_W - 60 })
+          say(g, s.value, COL_W / 2, y, vs, ink, { font: sf, weight: latinW, italic: true, align: 'center', max: COL_W - 60 })
+          say(g, s.label, COL_W / 2, y + ls * 1.08, ls, ink, { font: sf, weight: latinW, italic: true, align: 'center', max: COL_W - 60 })
         })
       })
     }
-    const nf = st.text.pname.font ? { font: FONTS[st.text.pname.font], weight: 900 } : { font: SANS, weight: 900 }
+    const nf = nameFace()
     const midX = COL_W + (W - COL_W) / 2
     const size = Math.min(132, (W - COL_W - 120) / Math.max(1, [...card.name].length))
     const nw = measure(g, card.name, size, nf.font, nf.weight)
     block('pname', { x: midX - nw / 2, y: 1452 - size, w: nw, h: size + 70 }, '#1d1d1f', false, (ink, muted) => {
       say(g, card.name, midX, 1452, size, ink, { font: nf.font, weight: nf.weight, align: 'center' })
-      say(g, card.role, midX, 1512, 38, muted, { font: SANS, weight: 600, align: 'center', max: W - COL_W - 80 })
+      say(g, card.role, midX, 1512, 38, muted, { font: F, weight: 600, align: 'center', max: W - COL_W - 80 })
     })
     logo(COL_W + 86, 1386, 96, false)
   } else {
@@ -468,7 +498,7 @@ export function drawStory(c: HTMLCanvasElement, card: StoryCard, opts: StoryDraw
         // no photo at all: the jersey number (or the family name) fills the frame
         const big = card.number ?? card.name.slice(0, 1)
         g.save(); g.globalAlpha = 0.2
-        text(g, big, W / 2, 860, card.number ? 620 : 480, acc, { align: 'center', font: card.number ? FIG : SANS, weight: 800, max: W - 120 })
+        text(g, big, W / 2, 860, card.number ? 620 : 480, acc, { align: 'center', font: F, weight: 800, max: W - 120 })
         g.restore()
       }
     }

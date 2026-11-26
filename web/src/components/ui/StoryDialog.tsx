@@ -12,9 +12,9 @@ import { opponentLabel } from '../../data/intrasquad'
 import { STORY_KIND_LABEL, storyCard, storyFileName, storyGames, storyPlayers, type StoryKind, type StorySource } from '../../data/storyCard'
 import {
   canShareFile, canvasBlob, DATA_LAYOUTS, DEFAULT_TITLE, DEFAULT_VIEW, defaultFg, defaultStyle, downloadBlob, drawStory, FG_COUNT, FG_SCALE_MAX, FG_SCALE_MIN,
-  fgIndex, fgTarget, FONT_LABEL, hitTest, isTemplate, layersFor, LAYOUT_LABEL, layoutLook, loadImage, loadPhoto, palettes, panView, photoFrame, readStyle,
+  cardFace, CJK_LABEL, fgIndex, fgTarget, hitTest, LATIN_LABEL, isTemplate, layersFor, LAYOUT_LABEL, layoutLook, loadImage, loadPhoto, palettes, panView, photoFrame, readStyle,
   SCALE_MAX, SCALE_MIN, shareBlob, STORY_H, STORY_W, TEMPLATE_LAYOUTS, TITLE_MAX,
-  type FgStyle, type FontKey, type LayerKey, type PhotoView, type StoryBoxes, type StoryLayout, type StoryStyle, type StoryTarget, type TextStyle,
+  type CjkFont, type FgStyle, type LatinFont, type LayerKey, type PhotoView, type StoryBoxes, type StoryLayout, type StoryStyle, type StoryTarget, type TextStyle,
 } from '../../lib/storyImage'
 import { loadStoryFonts } from '../../lib/storyFonts'
 import { cx } from '../../lib/format'
@@ -126,7 +126,7 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const setFgStyle = (i: number, patch: Partial<FgStyle>) => setStyle((st) => ({ ...st, fgs: st.fgs.map((f, k) => (k === i ? { ...f, ...patch } : f)) }))
   const setFront = (i: number, f: Front | null) => setFronts((all) => all.map((x, k) => (k === i ? f : x)))
   /** a layout brings its own treatment of the photo and puts the front photos where it wants them */
-  const chooseLayout = (l: StoryLayout) => setStyle((st) => ({ ...st, layout: l, ...layoutLook(l), fgs: st.fgs.map((f, i) => ({ ...defaultFg(l, i), frame: f.frame, shadow: f.shadow })) }))
+  const chooseLayout = (l: StoryLayout) => setStyle((st) => ({ ...st, layout: l, ...layoutLook(l), fonts: { latin: '', cjk: '' }, fgs: st.fgs.map((f, i) => ({ ...defaultFg(l, i), frame: f.frame, shadow: f.shadow })) }))
   const pick = async (which: 'bg' | number, f?: File) => {
     if (!f) return
     setNote('')
@@ -206,6 +206,8 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const slots = fronts.map((_, i) => i).filter((i) => fronts[i] || i === fronts.findIndex((x) => !x))
 
   const t = style.text[layerNow]
+  // which faces the card ends on (fonts are loaded by now or are redrawn when they arrive: `fonts` keeps this fresh)
+  const face = useMemo(() => (card ? cardFace(style, card) : null), [style, card, fonts]) // eslint-disable-line react-hooks/exhaustive-deps
   const swatches = ['', '#ffffff', style.accent, '#1d1d1f', '#f2c14e', '#ff5a4e', '#7fb2ff']
   const hint = fgIndex(selected) >= 0 ? '拖曳移動前景照片' : selected ? '拖曳移動這段文字' : photo && frame ? '點文字或前景照片可以選取；拖曳空白處移動背景照片' : '點文字可以選取、拖曳移動'
 
@@ -326,6 +328,13 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
 
               {panel === 'text' && (
                 <div className="flex flex-col gap-4">
+                  <Group title="整張的字型" note="同一種語言整張只用一種字型：中文一種、英文和數字一種。">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Select label="中文" aria-label="中文字型" value={style.fonts.cjk} onChange={(e) => setStyle((st) => ({ ...st, fonts: { ...st.fonts, cjk: e.target.value as CjkFont } }))} options={(Object.keys(CJK_LABEL) as CjkFont[]).map((f) => ({ value: f, label: CJK_LABEL[f] }))} />
+                      <Select label="英文數字" aria-label="英文數字字型" value={style.fonts.latin} onChange={(e) => setStyle((st) => ({ ...st, fonts: { ...st.fonts, latin: e.target.value as LatinFont } }))} options={(Object.keys(LATIN_LABEL) as LatinFont[]).map((f) => ({ value: f, label: LATIN_LABEL[f] }))} />
+                    </div>
+                    {face?.fellBack && <p className="text-[11.5px] text-muted">這張有毛筆字型沒有的字（例如「堉」），所以整張的中文改用明體。</p>}
+                  </Group>
                   <Field label="要調整的文字">
                     <div className="flex flex-wrap gap-1.5">
                       {layers.map((l) => <Chip key={l.key} on={layerNow === l.key} dim={!style.text[l.key].show} onClick={() => { setLayer(l.key); setSelected(l.key) }}>{l.label}</Chip>)}
@@ -346,7 +355,6 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
                         </label>
                       </div>
                     </Field>
-                    <Select label="字型" aria-label="字型" value={t.font} onChange={(e) => setText(layerNow, { font: e.target.value as FontKey })} options={(Object.keys(FONT_LABEL) as FontKey[]).map((f) => ({ value: f, label: FONT_LABEL[f] }))} />
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => setText(layerNow, { dx: 0, dy: 0 })}>位置還原</Button>
                       <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setText(layerNow, defaultStyle().text[layerNow])}>這段還原</Button>

@@ -1,4 +1,4 @@
-import { defaultFg, defaultStyle, fgRect, hitTest, layersFor, placeBox, photoFrame, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW, titleLines } from './storyImage'
+import { cardFace, defaultFg, defaultStyle, fgRect, hitTest, layersFor, placeBox, photoFrame, readStyle, STORY_H, STORY_W, panView, photoRect, DEFAULT_VIEW, titleLines } from './storyImage'
 
 describe('限時動態的版面設定', () => {
   it('reads a stored look back, keeping what is valid and defaulting the rest', () => {
@@ -14,12 +14,13 @@ describe('限時動態的版面設定', () => {
     expect(r.fgs[0]).toMatchObject({ scale: 2.2, frame: true, shadow: true })   // an older single front photo becomes the first slot
     expect(r.fgs[1]).toEqual(defaultFg('split', 1))
     expect(r.title).toBe('PLAYER OF THE GAME')
-    expect(r.text.big).toEqual({ show: false, scale: 0.6, color: '#00ff00', font: 'serif', dx: 40, dy: 0 })
-    expect(r.text.title.font).toBe('')
+    expect(r.text.big).toEqual({ show: false, scale: 0.6, color: '#00ff00', dx: 40, dy: 0 })   // a block no longer has its own face
+    expect(r.fonts).toEqual({ latin: '', cjk: '' })
+    expect(readStyle({ fonts: { latin: 'brush', cjk: 'comic' } }).fonts).toEqual({ latin: 'brush', cjk: '' })
     expect(r.text.headline).toEqual(d.text.headline)
   })
   it('places a block from its top-left corner and finds what is under a point', () => {
-    const b = placeBox({ x: 72, y: 1000, w: 900, h: 100 }, { show: true, scale: 1.5, color: '', font: '', dx: 10, dy: -20 })
+    const b = placeBox({ x: 72, y: 1000, w: 900, h: 100 }, { show: true, scale: 1.5, color: '', dx: 10, dy: -20 })
     expect(b).toEqual({ x: 82, y: 980, w: 1350, h: 150 })
     const boxes = { fg0: { x: 400, y: 400, w: 500, h: 900 }, fg1: { x: 700, y: 300, w: 200, h: 300 }, name: { x: 72, y: 870, w: 936, h: 166 }, headline: { x: 72, y: 1400, w: 936, h: 100 } }
     expect(hitTest(boxes, 500, 900)).toBe('name')     // text sits over the front photos
@@ -50,5 +51,14 @@ describe('限時動態的版面設定', () => {
     expect(titleLines('player of the game')[1].size).toBeLessThan(1)
     expect(titleLines('本場 / MVP').map((l) => l.text)).toEqual(['本場', 'MVP'])
     expect(titleLines('  ')).toEqual([])
+  })
+  it('one face per script on the whole card: the layout\'s pair unless the reader picked one', () => {
+    const card = { kind: 'game-bat', team: 'T', title: 'vs X', sub: '', name: '王小明', role: '', big: [], small: [], stats: [], statLine: '1-2', headline: '', footer: '', site: '' } as unknown as Parameters<typeof cardFace>[1]
+    const poster = { ...defaultStyle(), layout: 'vertical' as const }
+    const f = cardFace(poster, card)
+    expect(f).toMatchObject({ latin: 'serif', cjk: 'serif', fellBack: false })
+    expect(f.stack.indexOf('Playfair')).toBeLessThan(f.stack.indexOf('Noto Serif TC'))   // the Latin face first, no generic in between
+    expect(cardFace({ ...poster, fonts: { latin: 'figure', cjk: 'sans' } }, card)).toMatchObject({ latin: 'figure', cjk: 'sans' })
+    expect(cardFace(defaultStyle(), card).stack).not.toMatch(/system-ui/)
   })
 })
