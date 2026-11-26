@@ -46,7 +46,9 @@ export const posLabel = (pos?: string) => (pos ? `${pos} ${POSITION_LABEL[pos] ?
 /**
  * Percentile rank (0–100) of v within values; higher is better unless invert. Midrank: ties share the middle of their
  * places (so a team where most have 0 HR does not put them all at PR 0), and a v that is not among the values (a player
- * below the sample minimum) is placed among them as one more. Always 0..100; one value or none → 50.
+ * below the sample minimum) is placed among them as one more. The best value is always 100, tied or not (two batters
+ * with 0% K are both the team's best, as on Baseball Savant), unless every value is the same (then 50). Always 0..100;
+ * one value or none → 50.
  */
 export function percentile(v: number | null, values: Array<number | null>, invert = false): number {
   if (v === null) return 0
@@ -55,6 +57,8 @@ export function percentile(v: number | null, values: Array<number | null>, inver
   if (n <= 1) return 50
   const worse = xs.filter((x) => (invert ? x > v : x < v)).length
   let ties = xs.filter((x) => x === v).length
+  if (ties === n) return 50
+  if (ties > 0 && worse + ties === n) return 100
   if (ties === 0) { n += 1; ties = 1 }
   return Math.round((100 * (worse + (ties - 1) / 2)) / (n - 1))
 }

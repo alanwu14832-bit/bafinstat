@@ -8,6 +8,12 @@ describe('percentile (midrank)', () => {
     expect(percentile(0, [0, 0, 0, 1])).toBe(33)
     expect(percentile(1, [0, 0, 0, 1])).toBe(100)
   })
+  it('gives the best value 100 even when tied, and 50 when everyone is the same', () => {
+    expect(percentile(0, [0, 0, 0.1, 0.2, 0.3], true)).toBe(100)
+    expect(percentile(0.3, [0.1, 0.3, 0.3])).toBe(100)
+    expect(percentile(0.1, [0, 0, 0.1, 0.2, 0.3], true)).toBe(50)
+    expect(percentile(0, [0, 0, 0])).toBe(50)
+  })
   it('turns around when lower is better', () => {
     expect(percentile(0.1, [0.1, 0.2, 0.3], true)).toBe(100)
     expect(percentile(0.3, [0.1, 0.2, 0.3], true)).toBe(0)
