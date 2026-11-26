@@ -57,6 +57,9 @@ describe('分享限時動態', () => {
     expect((within(dlg).getByLabelText('數據行（可以自己改）') as HTMLInputElement).value).toMatch(/AVG/)   // the 本季打擊 card is open here
     fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
     fireEvent.click(within(dlg).getByRole('button', { name: '純數據' }))
+    fireEvent.click(within(dlg).getByRole('tab', { name: '圖層' }))
+    expect(within(dlg).getByText('背景（照片、底色、色塊；固定在最下面）')).toBeInTheDocument()
+    fireEvent.click(within(dlg).getByRole('tab', { name: '照片' }))
     // the look is kept on this device for the next card
     const saved = JSON.parse(localStorage.getItem('bafin.story.style.v1') ?? '{}')
     expect(saved.layout).toBe('plain')
