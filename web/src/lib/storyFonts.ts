@@ -52,13 +52,23 @@ export async function loadStoryFonts(text = ''): Promise<void> {
 const known = new Map<string, boolean>()
 export function drawsAll(family: string, text: string, weight = 400): boolean {
   if (typeof document === 'undefined' || !text) return true
-  // a font that has not arrived yet draws as the fallback: only remember the answer once it is there
+  // a font that has not arrived yet draws as the fallback: only remember the answer once it is there (asked of the page's
+  // own list of faces — document.fonts.check() says "nothing to wait for" about a face not added yet, and on Safari a
+  // "lacks a character" read before the download was kept for good, leaving the card in the serif)
   const key = `${weight}|${family}|${text}`, hit = known.get(key)
   if (hit !== undefined) return hit
-  const ready = (document as Document & { fonts?: FontFaceSet }).fonts?.check?.(`${weight} 40px ${family}`, text) ?? true
   const r = check(family, text, weight)
-  if (ready) known.set(key, r)
+  if (familyLoaded(family)) known.set(key, r)
   return r
+}
+/** Whether a face of the stack's first family has finished loading on this page. */
+export function familyLoaded(family: string): boolean {
+  const name = family.split(',')[0].trim().replace(/^["']|["']$/g, '')
+  const set = (document as Document & { fonts?: FontFaceSet }).fonts
+  if (!set?.forEach) return false
+  let loaded = false
+  set.forEach((f) => { if (f.family.replace(/^["']|["']$/g, '') === name && f.status === 'loaded') loaded = true })
+  return loaded
 }
 function check(family: string, text: string, weight: number): boolean {
   const c = document.createElement('canvas'); c.width = 48; c.height = 48
