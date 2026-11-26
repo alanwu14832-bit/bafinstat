@@ -28,6 +28,10 @@ export interface StoryCard {
   big: StoryStat[]
   /** the smaller line under them (at most four) */
   small: StoryStat[]
+  /** the poster templates' numbers, scorebook style: 「H-AB 2-4」「HR 1」… / 「IP 3.2」「K 3」… */
+  stats: StoryStat[]
+  /** the same in one line: 「2-4 1HR 3RBI 1SB」 / 「3.2 IP  3 K  0 BB  0 R」 (the reader may reword it) */
+  statLine: string
   /** 好球率 bar (pitchers, when pitches were recorded) */
   bar?: { strikes: number; balls: number }
   headline: string
@@ -102,6 +106,24 @@ export function pitHeadline(l: Pick<PitchingLine, 'ipDisplay' | 'k' | 'r' | 'w' 
   return `${dec}${l.ipDisplay} 局 ${l.k} 三振，${l.r ? `失 ${l.r} 分` : '無失分'}`
 }
 
+/** A single game's batting in scorebook shorthand: 安打-打數 first, then what happened (at most four more). */
+export function batStats(l: Pick<BattingLine, 'ab' | 'h' | 'hr' | 'rbi' | 'r' | 'sb' | 'bb' | 'hbp' | 'h2' | 'h3'>): StoryStat[] {
+  const more = ([['HR', l.hr], ['3B', l.h3], ['2B', l.h2], ['RBI', l.rbi], ['BB', l.bb], ['HBP', l.hbp], ['SB', l.sb], ['R', l.r]] as const).filter(([, v]) => v > 0).slice(0, 4)
+  return [{ label: 'H-AB', value: `${l.h}-${l.ab}` }, ...more.map(([label, v]) => ({ label, value: String(v) }))]
+}
+/** A single game's pitching: 局數, 三振, 四壞, 失分 (always all four: a 0 there is the good news). */
+export function pitStats(l: Pick<PitchingLine, 'ipDisplay' | 'k' | 'bb' | 'r'>): StoryStat[] {
+  return [{ label: 'IP', value: l.ipDisplay }, { label: 'K', value: String(l.k) }, { label: 'BB', value: String(l.bb) }, { label: 'R', value: String(l.r) }]
+}
+/** The numbers in one line: a game's 安打-打數 stands alone, the rest read 「1HR」; pitching and seasons read 「3.2 IP」. */
+export function statLine(stats: StoryStat[]): string {
+  // 「1HR」, but a double reads 「2B」 (one) or 「2×2B」, never 「12B」
+  const one = (x: StoryStat) => (/^\d/.test(x.label) ? (x.value === '1' ? x.label : `${x.value}×${x.label}`) : `${x.value}${x.label}`)
+  if (stats[0]?.label === 'H-AB') return [stats[0].value, ...stats.slice(1).map(one)].join(' ')
+  return stats.map((x) => `${x.value} ${x.label}`).join('  ')
+}
+const withStats = (stats: StoryStat[]) => ({ stats, statLine: statLine(stats) })
+
 /** 單場打擊: null when he has no line in that game. */
 export function gameBatCard(src: StorySource, gameId: string, name: string): StoryCard | null {
   const game = src.full.games.find((g) => g.id === gameId)
@@ -121,7 +143,7 @@ export function gameBatCard(src: StorySource, gameId: string, name: string): Sto
     const sl = battingLines(src.counted, sr.batting, src.params).find((x) => x.name === name)
     if (sl && sl.pa) footer = seasonBatText(sr.season, sl)
   }
-  return { kind: 'game-bat', ...gameHead(src, game), name, number: numberOf(src.full, name), role, big, small: rest.slice(2, 6), headline: batHeadline(l), footer }
+  return { kind: 'game-bat', ...gameHead(src, game), name, number: numberOf(src.full, name), role, big, small: rest.slice(2, 6), ...withStats(batStats(l)), headline: batHeadline(l), footer }
 }
 
 /** 單場投球: null when he did not pitch in that game. */
@@ -142,7 +164,7 @@ export function gamePitCard(src: StorySource, gameId: string, name: string): Sto
   }
   return {
     kind: 'game-pit', ...gameHead(src, game), name, number: numberOf(src.full, name), role,
-    big: [{ label: '局數', value: l.ipDisplay }, { label: '三振', value: String(l.k) }, { label: '失分', value: String(l.r) }], small,
+    big: [{ label: '局數', value: l.ipDisplay }, { label: '三振', value: String(l.k) }, { label: '失分', value: String(l.r) }], small, ...withStats(pitStats(l)),
     ...(l.strikes + l.balls > 0 ? { bar: { strikes: l.strikes, balls: l.balls } } : {}), headline: pitHeadline(l), footer,
   }
 }
@@ -167,6 +189,7 @@ export function seasonBatCard(src: StorySource, name: string): StoryCard | null 
     kind: 'season-bat', ...seasonHead(src, sr.season, l.g, date), name, number: numberOf(src.counted, name), role: POS[pos ?? ''] ?? '打者',
     big: [{ label: '打擊率', value: f3(l.avg) }, { label: '全壘打', value: String(l.hr) }, { label: '打點', value: String(l.rbi) }],
     small: [{ label: '安打', value: String(l.h) }, { label: '上壘率', value: f3(l.obp) }, { label: 'OPS', value: f3(l.ops) }, { label: '盜壘', value: String(l.sb) }],
+    ...withStats([{ label: 'AVG', value: f3(l.avg) }, { label: 'HR', value: String(l.hr) }, { label: 'RBI', value: String(l.rbi) }, { label: 'OPS', value: f3(l.ops) }]),
     headline: `${l.g} 場 ${l.ab} 打數 ${l.h} 安打，${l.hr} 全壘打、${l.rbi} 打點`, footer: '',
   }
 }
@@ -182,6 +205,7 @@ export function seasonPitCard(src: StorySource, name: string): StoryCard | null 
     kind: 'season-pit', ...seasonHead(src, sr.season, l.g, date), name, number: numberOf(src.counted, name), role: '投手',
     big: [{ label: '防禦率', value: f2(l.era) }, { label: '局數', value: l.ipDisplay }, { label: '三振', value: String(l.k) }],
     small: [{ label: '勝–敗', value: `${l.w}-${l.l}` }, ...(l.sv ? [{ label: '救援', value: String(l.sv) }] : []), { label: 'WHIP', value: f2(l.whip) }, { label: '四死球', value: String(l.bb + l.hbp) }],
+    ...withStats([{ label: 'ERA', value: f2(l.era) }, { label: 'IP', value: l.ipDisplay }, { label: 'K', value: String(l.k) }, { label: 'WHIP', value: f2(l.whip) }]),
     ...(l.strikes + l.balls > 0 ? { bar: { strikes: l.strikes, balls: l.balls } } : {}),
     headline: `${l.g} 場 ${l.ipDisplay} 局，${l.k} 三振、防禦率 ${f2(l.era)}`, footer: '',
   }

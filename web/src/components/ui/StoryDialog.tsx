@@ -11,10 +11,12 @@ import { TEAM_NAME } from '../../data/seed'
 import { opponentLabel } from '../../data/intrasquad'
 import { STORY_KIND_LABEL, storyCard, storyFileName, storyGames, storyPlayers, type StoryKind, type StorySource } from '../../data/storyCard'
 import {
-  canShareFile, canvasBlob, DEFAULT_FG, DEFAULT_VIEW, defaultStyle, downloadBlob, drawStory, FG_SCALE_MAX, FG_SCALE_MIN, FONT_LABEL, frameHeight,
-  hitTest, LAYERS, LAYOUT_LABEL, loadImage, loadPhoto, palettes, panView, readStyle, SCALE_MAX, SCALE_MIN, shareBlob, STORY_H, STORY_W,
+  canShareFile, canvasBlob, DATA_LAYOUTS, DEFAULT_TITLE, DEFAULT_VIEW, defaultFg, defaultStyle, downloadBlob, drawStory, FG_COUNT, FG_SCALE_MAX, FG_SCALE_MIN,
+  fgIndex, fgTarget, FONT_LABEL, hitTest, isTemplate, layersFor, LAYOUT_LABEL, layoutLook, loadImage, loadPhoto, palettes, panView, photoFrame, readStyle,
+  SCALE_MAX, SCALE_MIN, shareBlob, STORY_H, STORY_W, TEMPLATE_LAYOUTS, TITLE_MAX,
   type FgStyle, type FontKey, type LayerKey, type PhotoView, type StoryBoxes, type StoryLayout, type StoryStyle, type StoryTarget, type TextStyle,
 } from '../../lib/storyImage'
+import { loadStoryFonts } from '../../lib/storyFonts'
 import { cx } from '../../lib/format'
 import { canCutout, removeBackground, type CutoutProgress } from '../../lib/cutout'
 
@@ -22,10 +24,13 @@ const KINDS: StoryKind[] = ['game-bat', 'game-pit', 'season-bat', 'season-pit']
 const HEADLINE_MAX = 44
 /** the reader's look for the card, kept on this device (never the photos) */
 const STYLE_KEY = 'bafin.story.style.v1'
+const STAT_MAX = 40
 type Photo = Awaited<ReturnType<typeof loadPhoto>>
+/** a front-photo slot: the picked photo, its cut-out (自動去背) and whether the cut-out is used */
+type Front = { photo: Photo; cut: HTMLCanvasElement | null; useCut: boolean }
 type Panel = 'content' | 'photo' | 'text' | 'color'
 const PANELS: Array<{ value: Panel; label: string }> = [{ value: 'content', label: '內容' }, { value: 'photo', label: '照片' }, { value: 'text', label: '文字' }, { value: 'color', label: '配色' }]
-const LAYOUTS: StoryLayout[] = ['full', 'split', 'plain']
+const EMPTY: Array<Front | null> = Array.from({ length: FG_COUNT }, () => null)
 
 function loadStyle(): StoryStyle {
   try { const raw = localStorage.getItem(STYLE_KEY); return raw ? readStyle(JSON.parse(raw)) : defaultStyle() } catch { return defaultStyle() }
@@ -64,17 +69,18 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const id = `${kind}|${name}|${gid ?? ''}`
   const [custom, setCustom] = useState<{ id: string; text: string } | null>(null)
   const headline = custom?.id === id ? custom.text : base?.headline ?? ''
-  const card = useMemo(() => (base ? { ...base, headline } : null), [base, headline])
+  const [customLine, setCustomLine] = useState<{ id: string; text: string } | null>(null)
+  const line = customLine?.id === id ? customLine.text : base?.statLine ?? ''
+  const card = useMemo(() => (base ? { ...base, headline, statLine: line } : null), [base, headline, line])
 
   const [style, setStyle] = useState<StoryStyle>(loadStyle)
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [view, setView] = useState<PhotoView>(DEFAULT_VIEW)
-  const [fg, setFg] = useState<Photo | null>(null)
-  // 自動去背: the cut-out of the front photo, whether it is used, and the run in progress
-  const [fgCut, setFgCut] = useState<HTMLCanvasElement | null>(null)
-  const [useCut, setUseCut] = useState(true)
-  const [cutting, setCutting] = useState<CutoutProgress | null>(null)
-  const [cutNote, setCutNote] = useState('')
+  // the front photos by slot (up to three: 連續動作), the slot being edited, and the 自動去背 run in progress
+  const [fronts, setFronts] = useState<Array<Front | null>>(EMPTY)
+  const [slot, setSlot] = useState(0)
+  const [cutting, setCutting] = useState<{ slot: number; p: CutoutProgress } | null>(null)
+  const [cutNote, setCutNote] = useState<{ slot: number; text: string } | null>(null)
   const cutRun = useRef(0)
   const [mark, setMark] = useState<HTMLImageElement | null>(null)
   const [panel, setPanel] = useState<Panel>('content')
@@ -89,7 +95,8 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const boxes = useRef<StoryBoxes>({})
   const drag = useRef<{ x: number; y: number; target: StoryTarget | 'bg' } | null>(null)
   const shareable = useMemo(() => canShareFile(), [])
-  const frameH = frameHeight(style.layout)
+  const frame = photoFrame(style.layout)
+  const template = isTemplate(style.layout)
 
   useEffect(() => { try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)) } catch { /* private mode: the look is only kept while the dialog is open */ } }, [style])
   useEffect(() => {
@@ -101,22 +108,32 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
     if (fs?.load) Promise.all([fs.load('800 136px "Barlow Semi Condensed"'), fs.load('700 44px "Barlow Semi Condensed"'), fs.load('700 60px "Noto Serif TC"')]).then(() => { if (live) setFonts((n) => n + 1) }).catch(() => undefined)
     return () => { live = false }
   }, [open])
-  const front = fgCut && useCut ? fgCut : fg
-  const drawOpts = useMemo(() => ({ photo, view, fg: front, mark, style }), [photo, view, front, mark, style])
+  // the poster templates' faces (and the name's characters in them)
+  useEffect(() => {
+    if (!open || !name) return
+    let live = true
+    void loadStoryFonts(name).then(() => { if (live) setFonts((n) => n + 1) })
+    return () => { live = false }
+  }, [open, name])
+  const fgPhotos = useMemo(() => fronts.map((f) => (f ? (f.cut && f.useCut ? f.cut : f.photo) : null)), [fronts])
+  const drawOpts = useMemo(() => ({ photo, view, fgs: fgPhotos, mark, style }), [photo, view, fgPhotos, mark, style])
   useEffect(() => {
     if (!open || !card || !canvas.current) return
     boxes.current = drawStory(canvas.current, card, { ...drawOpts, guides: true, selected }) ?? {}
   }, [open, card, drawOpts, selected, fonts])
 
   const setText = (key: LayerKey, patch: Partial<TextStyle>) => setStyle((st) => ({ ...st, text: { ...st.text, [key]: { ...st.text[key], ...patch } } }))
-  const setFgStyle = (patch: Partial<FgStyle>) => setStyle((st) => ({ ...st, fg: { ...st.fg, ...patch } }))
-  const pick = async (which: 'bg' | 'fg', f?: File) => {
+  const setFgStyle = (i: number, patch: Partial<FgStyle>) => setStyle((st) => ({ ...st, fgs: st.fgs.map((f, k) => (k === i ? { ...f, ...patch } : f)) }))
+  const setFront = (i: number, f: Front | null) => setFronts((all) => all.map((x, k) => (k === i ? f : x)))
+  /** a layout brings its own treatment of the photo and puts the front photos where it wants them */
+  const chooseLayout = (l: StoryLayout) => setStyle((st) => ({ ...st, layout: l, ...layoutLook(l), fgs: st.fgs.map((f, i) => ({ ...defaultFg(l, i), frame: f.frame, shadow: f.shadow })) }))
+  const pick = async (which: 'bg' | number, f?: File) => {
     if (!f) return
     setNote('')
     try {
       const p = await loadPhoto(f)
-      if (which === 'bg') { setPhoto(p); setView(DEFAULT_VIEW); if (style.layout === 'plain') setStyle((st) => ({ ...st, layout: 'full' })) }
-      else { cutRun.current++; setFg(p); setFgCut(null); setCutting(null); setCutNote(''); setSelected('fg') }
+      if (which === 'bg') { setPhoto(p); setView(DEFAULT_VIEW); if (style.layout === 'plain') chooseLayout('full') }
+      else { cutRun.current++; setCutting(null); setCutNote(null); setFront(which, { photo: p, cut: null, useCut: true }); setSlot(which); setSelected(fgTarget(which)) }
     } catch { setNote('這張照片讀不出來，換一張試試（建議 JPG 或 PNG）。') }
   }
 
@@ -128,8 +145,8 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
   const down = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     const p = at(e)
     const hit = hitTest(boxes.current, p.x, p.y)
-    const target = hit ?? (photo && style.layout !== 'plain' ? 'bg' : null)
-    if (hit) { setSelected(hit); if (hit === 'fg') setPanel('photo'); else { setLayer(hit); setPanel('text') } }
+    const target = hit ?? (photo && frame ? 'bg' : null)
+    if (hit) { setSelected(hit); const i = fgIndex(hit); if (i >= 0) { setSlot(i); setPanel('photo') } else { setLayer(hit as LayerKey); setPanel('text') } }
     else setSelected(null)
     if (!target) return
     drag.current = { x: e.clientX, y: e.clientY, target }
@@ -141,9 +158,10 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
     const { k } = at(e)
     const dx = (e.clientX - d.x) * k, dy = (e.clientY - d.y) * k
     drag.current = { ...d, x: e.clientX, y: e.clientY }
-    if (d.target === 'bg') { if (photo) setView((v) => panView(v, dx, dy, photo.width, photo.height, frameH)) }
-    else if (d.target === 'fg') setStyle((st) => ({ ...st, fg: { ...st.fg, cx: st.fg.cx + dx, cy: st.fg.cy + dy } }))
-    else { const key = d.target; setStyle((st) => ({ ...st, text: { ...st.text, [key]: { ...st.text[key], dx: st.text[key].dx + dx, dy: st.text[key].dy + dy } } })) }
+    const fi = d.target === 'bg' ? -1 : fgIndex(d.target)
+    if (d.target === 'bg') { if (photo && frame) setView((v) => panView(v, dx, dy, photo.width, photo.height, frame.h, frame.w)) }
+    else if (fi >= 0) setStyle((st) => ({ ...st, fgs: st.fgs.map((f, k) => (k === fi ? { ...f, cx: f.cx + dx, cy: f.cy + dy } : f)) }))
+    else { const key = d.target as LayerKey; setStyle((st) => ({ ...st, text: { ...st.text, [key]: { ...st.text[key], dx: st.text[key].dx + dx, dy: st.text[key].dy + dy } } })) }
   }
   const up = () => { drag.current = null }
 
@@ -163,23 +181,33 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
     } finally { setBusy(false) }
   }
 
-  const cut = async () => {
-    if (!fg || cutting) return
+  const cut = async (i: number) => {
+    const f = fronts[i]
+    if (!f || cutting) return
     const run = ++cutRun.current
-    setCutNote(''); setCutting({ stage: 'prepare' })
+    setCutNote(null); setCutting({ slot: i, p: { stage: 'prepare' } })
     try {
-      const c = await removeBackground(fg, (p) => { if (cutRun.current === run) setCutting(p) })
+      const c = await removeBackground(f.photo, (p) => { if (cutRun.current === run) setCutting({ slot: i, p }) })
       if (cutRun.current !== run) return
-      setFgCut(c); setUseCut(true); setCutNote('去背完成。不滿意可以取消勾選「使用去背」換回原圖。')
+      setFronts((all) => all.map((x, k) => (k === i && x ? { ...x, cut: c, useCut: true } : x)))
+      setCutNote({ slot: i, text: '去背完成。不滿意可以取消勾選「使用去背」換回原圖。' })
     } catch (e) {
-      if (cutRun.current === run) setCutNote(`去背沒有成功：${e instanceof Error ? e.message : '不明原因'}。可以換一張主體清楚的照片再試。`)
+      if (cutRun.current === run) setCutNote({ slot: i, text: `去背沒有成功：${e instanceof Error ? e.message : '不明原因'}。可以換一張主體清楚的照片再試。` })
     } finally { if (cutRun.current === run) setCutting(null) }
   }
-  const cuttingText = !cutting ? '' : cutting.stage === 'download' ? `下載去背工具 ${cutting.total ? Math.round((cutting.loaded / cutting.total) * 100) : Math.round(cutting.loaded / 1e6)}${cutting.total ? '%' : ' MB'}（約 55 MB，只有第一次要下載）` : cutting.stage === 'prepare' ? '準備去背工具…' : '正在去背，大約要 10～30 秒…'
+  const cp = cutting?.p
+  const cuttingText = !cp ? '' : cp.stage === 'download' ? `下載去背工具 ${cp.total ? Math.round((cp.loaded / cp.total) * 100) : Math.round(cp.loaded / 1e6)}${cp.total ? '%' : ' MB'}（約 55 MB，只有第一次要下載）` : cp.stage === 'prepare' ? '準備去背工具…' : '正在去背，大約要 10～30 秒…'
+  const layers = layersFor(style.layout)
+  const layerNow: LayerKey = layers.some((l) => l.key === layer) ? layer : layers[0].key
+  const front = fronts[slot]
+  const fgStyle = style.fgs[slot]
+  const filled = fronts.filter(Boolean).length
+  // the slots offered: those with a photo, then one empty one to add the next
+  const slots = fronts.map((_, i) => i).filter((i) => fronts[i] || i === fronts.findIndex((x) => !x))
 
-  const t = style.text[layer]
+  const t = style.text[layerNow]
   const swatches = ['', '#ffffff', style.accent, '#1d1d1f', '#f2c14e', '#ff5a4e', '#7fb2ff']
-  const hint = selected === 'fg' ? '拖曳移動前景照片' : selected ? '拖曳移動這段文字' : photo && style.layout !== 'plain' ? '點文字或前景照片可以選取；拖曳空白處移動背景照片' : '點文字可以選取、拖曳移動'
+  const hint = fgIndex(selected) >= 0 ? '拖曳移動前景照片' : selected ? '拖曳移動這段文字' : photo && frame ? '點文字或前景照片可以選取；拖曳空白處移動背景照片' : '點文字可以選取、拖曳移動'
 
   return (
     <Sheet open={open} onClose={onClose} ariaLabel="分享限時動態" side="bottom" desktopFrom="sm" panelClassName="sm:max-w-5xl max-h-[94vh]">
@@ -214,17 +242,44 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
                       className="w-full rounded-[10px] bg-surface-3/60 border border-transparent px-3 py-2 text-[14px] text-ink resize-none focus:bg-surface focus:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] focus:outline-none" />
                     <span className="text-[11.5px] text-muted text-right tnum">{headline.length} / {HEADLINE_MAX}</span>
                   </div>
+                  {template && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label htmlFor="story-title" className="text-[12px] text-muted">海報標題（用「/」換行）</label>
+                        {style.title !== DEFAULT_TITLE && <button type="button" onClick={() => setStyle((st) => ({ ...st, title: DEFAULT_TITLE }))} className="inline-flex items-center gap-1 text-[12px] text-ink-2 hover:text-ink cursor-pointer"><RotateCcw className="size-3" />還原</button>}
+                      </div>
+                      <input id="story-title" maxLength={TITLE_MAX} value={style.title} onChange={(e) => setStyle((st) => ({ ...st, title: e.target.value }))}
+                        className="w-full h-10 rounded-[10px] bg-surface-3/60 border border-transparent px-3 text-[14px] text-ink focus:bg-surface focus:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] focus:outline-none" />
+                    </div>
+                  )}
+                  {template && (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <label htmlFor="story-statline" className="text-[12px] text-muted">數據行（可以自己改）</label>
+                        {customLine?.id === id && customLine.text !== base?.statLine && <button type="button" onClick={() => setCustomLine(null)} className="inline-flex items-center gap-1 text-[12px] text-ink-2 hover:text-ink cursor-pointer"><RotateCcw className="size-3" />還原</button>}
+                      </div>
+                      <input id="story-statline" maxLength={STAT_MAX} value={line} onChange={(e) => setCustomLine({ id, text: e.target.value })}
+                        className="w-full h-10 rounded-[10px] bg-surface-3/60 border border-transparent px-3 text-[14px] text-ink tnum focus:bg-surface focus:border-[color-mix(in_srgb,var(--ink)_30%,transparent)] focus:outline-none" />
+                      <span className="text-[11.5px] text-muted">斜切海報、直排姓名用這一行；左欄數據直接列出各項數字。</span>
+                    </div>
+                  )}
                 </div>
               )}
 
               {panel === 'photo' && (
                 <div className="flex flex-col gap-4">
-                  <Field label="版型">
+                  <Field label="數據卡">
                     <div className="flex flex-wrap gap-1.5">
-                      {LAYOUTS.map((l) => <Chip key={l} on={style.layout === l} onClick={() => setStyle((st) => ({ ...st, layout: l }))}>{LAYOUT_LABEL[l]}</Chip>)}
+                      {DATA_LAYOUTS.map((l) => <Chip key={l} on={style.layout === l} onClick={() => chooseLayout(l)}>{LAYOUT_LABEL[l]}</Chip>)}
                     </div>
                   </Field>
-                  <Group title="背景照片" note={photo && style.layout === 'plain' ? '「純數據」版型不顯示背景照片，換成滿版或上照片下數據就會出現。' : undefined}>
+                  <Field label="海報模板（PLAYER OF THE GAME）">
+                    <div className="flex flex-wrap gap-1.5">
+                      {TEMPLATE_LAYOUTS.map((l) => <Chip key={l} on={style.layout === l} onClick={() => chooseLayout(l)}>{LAYOUT_LABEL[l]}</Chip>)}
+                    </div>
+                    {template && <p className="text-[11.5px] text-muted">建議：背景放一張動作照，前景放一到三張照片並按「自動去背」。換版型時，前景照片會回到這個版型的預設位置。</p>}
+                  </Field>
+                  <Group title="背景照片" note={photo && !frame ? '「純數據」版型不顯示背景照片，換成其他版型就會出現。' : style.layout === 'column' ? '左欄數據把背景照片放在右側的框裡。' : undefined}>
                     <input ref={bgFile} type="file" accept="image/*" className="sr-only" aria-label="選背景照片" onChange={(e) => { void pick('bg', e.target.files?.[0]); e.target.value = '' }} />
                     <div className="flex flex-wrap items-center gap-2">
                       <Button size="sm" variant="outline" icon={<ImagePlus />} onClick={() => bgFile.current?.click()}>{photo ? '換一張' : '選照片'}</Button>
@@ -236,27 +291,32 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
                       <Range label="模糊" value={style.blur} min={0} max={20} step={0.5} onChange={(v) => setStyle((st) => ({ ...st, blur: v }))} />
                     </>}
                   </Group>
-                  <Group title="前景照片" note="縮小疊在前面，例如一張球員的照片。">
-                    <input ref={fgFile} type="file" accept="image/*" className="sr-only" aria-label="選前景照片" onChange={(e) => { void pick('fg', e.target.files?.[0]); e.target.value = '' }} />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button size="sm" variant="outline" icon={<ImagePlus />} onClick={() => fgFile.current?.click()}>{fg ? '換一張' : '選照片'}</Button>
-                      {fg && <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => setFgStyle({ cx: DEFAULT_FG.cx, cy: DEFAULT_FG.cy })}>位置還原</Button>}
-                      {fg && <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => { cutRun.current++; setFg(null); setFgCut(null); setCutting(null); setCutNote(''); setSelected(null) }}>拿掉</Button>}
-                    </div>
-                    {fg && canCutout() && (
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex flex-wrap items-center gap-3">
-                          {!fgCut && <Button size="sm" variant="primary" icon={<Wand2 />} disabled={!!cutting} onClick={() => void cut()}>{cutting ? '去背中…' : '自動去背'}</Button>}
-                          {fgCut && <Check label="使用去背" checked={useCut} onChange={setUseCut} />}
-                        </div>
-                        <p className="text-[11.5px] text-muted" role="status">{cuttingText || cutNote || '在這台裝置上計算，照片不會上傳。第一次要下載約 55 MB 的去背工具（建議用 Wi‑Fi），之後會快很多。'}</p>
+                  <Group title="前景照片" note="疊在前面，例如去背後的球員；最多三張，可以排成連續動作。">
+                    {filled > 0 && (
+                      <div className="flex flex-wrap gap-1.5" role="group" aria-label="前景照片">
+                        {slots.map((i) => <Chip key={i} on={slot === i} onClick={() => { setSlot(i); if (fronts[i]) setSelected(fgTarget(i)) }}>{fronts[i] ? `前景 ${i + 1}` : '＋ 再加一張'}</Chip>)}
                       </div>
                     )}
-                    {fg && <>
-                      <Range label="大小" value={style.fg.scale} min={FG_SCALE_MIN} max={FG_SCALE_MAX} step={0.01} onChange={(v) => setFgStyle({ scale: v })} />
+                    <input ref={fgFile} type="file" accept="image/*" className="sr-only" aria-label={`選前景照片 ${slot + 1}`} onChange={(e) => { void pick(slot, e.target.files?.[0]); e.target.value = '' }} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="outline" icon={<ImagePlus />} onClick={() => fgFile.current?.click()}>{front ? '換一張' : '選照片'}</Button>
+                      {front && <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => { const d = defaultFg(style.layout, slot); setFgStyle(slot, { cx: d.cx, cy: d.cy, scale: d.scale }) }}>位置還原</Button>}
+                      {front && <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => { if (cutting?.slot === slot) { cutRun.current++; setCutting(null) } setFront(slot, null); setCutNote(null); setSelected(null) }}>拿掉</Button>}
+                    </div>
+                    {front && canCutout() && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-wrap items-center gap-3">
+                          {!front.cut && <Button size="sm" variant="primary" icon={<Wand2 />} disabled={!!cutting} onClick={() => void cut(slot)}>{cutting?.slot === slot ? '去背中…' : '自動去背'}</Button>}
+                          {front.cut && <Check label="使用去背" checked={front.useCut} onChange={(v) => setFront(slot, { ...front, useCut: v })} />}
+                        </div>
+                        <p className="text-[11.5px] text-muted" role="status">{(cutting?.slot === slot && cuttingText) || (cutNote?.slot === slot && cutNote.text) || (cutting ? `前景 ${cutting.slot + 1} 正在去背，好了再做這張。` : '在這台裝置上計算，照片不會上傳。第一次要下載約 55 MB 的去背工具（建議用 Wi‑Fi），之後會快很多。')}</p>
+                      </div>
+                    )}
+                    {front && fgStyle && <>
+                      <Range label="大小" value={fgStyle.scale} min={FG_SCALE_MIN} max={FG_SCALE_MAX} step={0.01} onChange={(v) => setFgStyle(slot, { scale: v })} />
                       <div className="flex flex-wrap gap-4">
-                        <Check label="白框" checked={style.fg.frame} onChange={(v) => setFgStyle({ frame: v })} />
-                        <Check label="陰影" checked={style.fg.shadow} onChange={(v) => setFgStyle({ shadow: v })} />
+                        <Check label="白框" checked={fgStyle.frame} onChange={(v) => setFgStyle(slot, { frame: v })} />
+                        <Check label="陰影" checked={fgStyle.shadow} onChange={(v) => setFgStyle(slot, { shadow: v })} />
                       </div>
                     </>}
                   </Group>
@@ -268,28 +328,28 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
                 <div className="flex flex-col gap-4">
                   <Field label="要調整的文字">
                     <div className="flex flex-wrap gap-1.5">
-                      {LAYERS.map((l) => <Chip key={l.key} on={layer === l.key} dim={!style.text[l.key].show} onClick={() => { setLayer(l.key); setSelected(l.key) }}>{l.label}</Chip>)}
+                      {layers.map((l) => <Chip key={l.key} on={layerNow === l.key} dim={!style.text[l.key].show} onClick={() => { setLayer(l.key); setSelected(l.key) }}>{l.label}</Chip>)}
                     </div>
                   </Field>
-                  <Group title={LAYERS.find((l) => l.key === layer)!.label}>
-                    <Check label="顯示" checked={t.show} onChange={(v) => setText(layer, { show: v })} />
-                    <Range label="大小" value={t.scale} min={SCALE_MIN} max={SCALE_MAX} step={0.01} onChange={(v) => setText(layer, { scale: v })} format={(v) => `${Math.round(v * 100)}%`} />
+                  <Group title={layers.find((l) => l.key === layerNow)!.label}>
+                    <Check label="顯示" checked={t.show} onChange={(v) => setText(layerNow, { show: v })} />
+                    <Range label="大小" value={t.scale} min={SCALE_MIN} max={SCALE_MAX} step={0.01} onChange={(v) => setText(layerNow, { scale: v })} format={(v) => `${Math.round(v * 100)}%`} />
                     <Field label="顏色">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {swatches.map((c, i) => (
-                          <button key={i} type="button" aria-label={c ? `顏色 ${c}` : '預設顏色'} aria-pressed={t.color === c} onClick={() => setText(layer, { color: c })}
+                          <button key={i} type="button" aria-label={c ? `顏色 ${c}` : '預設顏色'} aria-pressed={t.color === c} onClick={() => setText(layerNow, { color: c })}
                             className={cx('size-8 rounded-full border cursor-pointer grid place-items-center text-[10px] text-ink-2', t.color === c ? 'ring-2 ring-offset-2 ring-[var(--accent)] ring-offset-[var(--surface)]' : 'border-border-strong')}
                             style={c ? { background: c } : undefined}>{c ? '' : '預設'}</button>
                         ))}
                         <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-2 ml-1">自選
-                          <input type="color" aria-label="自選顏色" value={t.color || style.ink} onChange={(e) => setText(layer, { color: e.target.value })} className="size-8 rounded cursor-pointer bg-transparent" />
+                          <input type="color" aria-label="自選顏色" value={t.color || style.ink} onChange={(e) => setText(layerNow, { color: e.target.value })} className="size-8 rounded cursor-pointer bg-transparent" />
                         </label>
                       </div>
                     </Field>
-                    <Select label="字型" aria-label="字型" value={t.font} onChange={(e) => setText(layer, { font: e.target.value as FontKey })} options={(Object.keys(FONT_LABEL) as FontKey[]).map((f) => ({ value: f, label: FONT_LABEL[f] }))} />
+                    <Select label="字型" aria-label="字型" value={t.font} onChange={(e) => setText(layerNow, { font: e.target.value as FontKey })} options={(Object.keys(FONT_LABEL) as FontKey[]).map((f) => ({ value: f, label: FONT_LABEL[f] }))} />
                     <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => setText(layer, { dx: 0, dy: 0 })}>位置還原</Button>
-                      <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setText(layer, defaultStyle().text[layer])}>這段還原</Button>
+                      <Button size="sm" variant="ghost" icon={<Crosshair />} onClick={() => setText(layerNow, { dx: 0, dy: 0 })}>位置還原</Button>
+                      <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => setText(layerNow, defaultStyle().text[layerNow])}>這段還原</Button>
                     </div>
                   </Group>
                   <p className="text-[11.5px] text-muted">也可以直接在預覽圖上點文字選取，按住拖曳移動。</p>
@@ -325,7 +385,7 @@ export function StoryDialog({ open, onClose, player, gameId }: StoryDialogProps)
               <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border mt-1 pt-3">
                 {shareable && <Button variant="primary" icon={<Share2 />} disabled={busy} onClick={() => void out('share')}>分享</Button>}
                 <Button variant={shareable ? 'outline' : 'primary'} icon={<Download />} disabled={busy} onClick={() => void out('download')}>下載圖片</Button>
-                <Button variant="ghost" icon={<RotateCcw />} onClick={() => { setStyle(defaultStyle()); setView(DEFAULT_VIEW); setSelected(null) }}>版面回到預設</Button>
+                <Button variant="ghost" icon={<RotateCcw />} onClick={() => { setStyle(defaultStyle()); setView(DEFAULT_VIEW); setSelected(null); setCustomLine(null) }}>版面回到預設</Button>
                 <Button variant="ghost" onClick={onClose}>關閉</Button>
               </div>
               <p className="text-[12px] text-ink-2" role="status">{note || (shareable ? '按「分享」後選 Instagram → 限時動態。' : '下載後傳到手機，在 Instagram 新增限時動態時選這張圖。')}</p>
