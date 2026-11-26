@@ -551,6 +551,8 @@ export interface PaPanelProps {
   /** who stood at a position when we fielded an inning (the 登錄名單, data/gameRoster defenseTimeline): shown next to
    *  the positions in 我隊守備失誤, so an error charged to the wrong player is seen */
   fielderAt?: FielderAt
+  /** (their plate appearances, 修改資料) who stood where for this one, changeable from here on (DefenseByInning `at`) */
+  defense?: ReactNode
 }
 
 /**
@@ -829,7 +831,7 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
 
 // the pitches 修改資料 inserts or changes to (the result's own last pitch — 擊進場內, 觸身 — comes from the result)
 const PITCH_EDIT: Array<[string, string]> = [['B', '壞球'], ['CS', '好球・未揮'], ['SS', '揮空'], ['F', '界外'], ['T', '擦棒']]
-function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, deleteNote, onInsert, onMove, fixed, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing }: PaPanelProps) {
+function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChange, onNav, onClose, onDelete, deleteNote, onInsert, onMove, fixed, others = [], onChangeOther, timeline, onRebuild, onOppPitcher, oppStint, onOppBats, oppSlotCount = 1, fielderAt, nextMissing, defense }: PaPanelProps) {
   const whoAt = side === 'pit' ? (pos: string) => (pos === 'P' ? (pa as PitchingPA).pitcher || undefined : fielderAt?.(pa.inning, pos, index)) : undefined
   const set = (patch: Partial<AnyPA>) => onChange({ ...pa, ...patch } as AnyPA)
   // a play after a later pitch now follows the one before it
@@ -1033,6 +1035,8 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         </div>
       </Section>
       )}
+
+      {defense && <Section title="守備陣容" aside={<span className="text-[11px] text-muted">這個打席我隊誰守哪裡；在這裡換人，從這個打席起生效</span>}>{defense}</Section>}
 
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pa.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
 

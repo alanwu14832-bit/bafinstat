@@ -726,7 +726,13 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
           if (window.confirm(`依打擊結果重建第 ${rows[i].inning} 局的跑者：安打依壘數推進、保送擠壘、犧飛回本壘、雙殺與野選讓被封殺的跑者出局。\n這局原本記 ${before} 分，重建後是 ${after} 分。${plays}\n之後可以在壘包圖上逐一修正。按「儲存修改」才會生效。`)) { const why = commitHalf(side, rows, rb); if (why) window.alert(`沒辦法重建：${why}`) }
         }}
         others={side === 'bat' ? batRows.slice(0, i).map((pa, k) => ({ index: k, pa })).filter((o) => o.pa.inning === batRows[i].inning && stillOn(o.pa)) : []}
-        onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} fielderAt={fielderAt} />
+        onChangeOther={(k, pa) => setBat((b) => b.map((x, m) => (m === k ? toBatDraft(pa) : x)))} fielderAt={fielderAt}
+        // (their plate appearances, not while the game is still being recorded) who stood where, changeable from this one on
+        defense={side === 'pit' && !live ? (
+          <DefenseByInning roster={rosterNow} innings={1} homeAway={game.homeAway} names={names} bench={bench} subs={subs} reentry={reentry}
+            at={{ inning: rows[i].inning, row: rows.slice(0, i).filter((r) => r.inning === rows[i].inning).length }}
+            onAdd={(x) => { setSubs((l) => [...l, x]); laterBats(x) }} onRemove={(k) => setSubs((l) => l.filter((_, m) => m !== k))} />
+        ) : undefined} />
     )
   }
   const [error, setError] = useState<string | null>(null)
