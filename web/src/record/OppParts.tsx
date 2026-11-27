@@ -56,7 +56,7 @@ export function OppBatsChips({ value, onPick }: { value?: OppBats | '?'; onPick:
       <div className="inline-flex rounded-[var(--radius-sm)] bg-surface p-0.5 gap-0.5 border border-border">
         {BATS.map((b) => (
           <button key={b} type="button" aria-pressed={value === b} onClick={() => onPick(b)}
-            className={cx('h-9 min-w-12 px-2.5 rounded-[6px] text-[13px] font-medium cursor-pointer', value === b ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2')}>{OPP_BATS_LABEL[b]}</button>
+            className={cx('h-11 pointer-fine:h-9 min-w-12 px-2.5 rounded-[6px] text-[13px] font-medium cursor-pointer', value === b ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2')}>{OPP_BATS_LABEL[b]}</button>
         ))}
       </div>
     </div>

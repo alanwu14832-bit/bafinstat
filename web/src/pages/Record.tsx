@@ -24,7 +24,7 @@ import { RosterSortToggle, useRosterSort } from '../components/ui/RosterSortTogg
 import { Badge } from '../components/ui/Badge'
 import { Sheet } from '../components/ui/Sheet'
 import { BOARD, PlateBadge } from '../components/ui/Scoreboard'
-import { isPA, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
+import { isPA, OPP_BATS_LABEL, pitchesByPitcher, POSITIONS, posNum, PRACTICE_PREFIX, type Game, type OutAt, type Registration } from '../data/types'
 import { playedGames } from '../data/filters'
 import { registrationByKey, registrationFor } from '../data/registrations'
 import { gameLabel, scheduledGames } from '../data/schedule'
@@ -838,7 +838,6 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
       <div className="flex items-center gap-1.5 flex-wrap">
         <Button variant="ghost" size="sm" icon={focus ? <Minimize2 /> : <Maximize2 />} onClick={onToggleFocus} aria-pressed={focus}>{focus ? <><span className="max-[400px]:hidden">離開全螢幕</span><span className="min-[401px]:hidden">離開</span></> : '全螢幕'}</Button>
         <Button variant="ghost" size="sm" icon={<Type />} onClick={onToggleLarge} aria-pressed={large} title="按鈕和字放大一級，大太陽下比較好看（這台裝置會記住）">{large ? '一般字' : '大字'}</Button>
-        <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
         {/* 主客 set wrong: switch before the first plate appearance is sent (who bats first follows) */}
         {canSwitchHomeAway(state) && <Button variant="ghost" size="sm" onClick={() => {
           const to = state.game.homeAway === '主' ? '客場（我隊先攻）' : '主場（對方先攻）'
@@ -846,7 +845,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
         }}>切換主客場</Button>}
         {!practice && <Button variant="ghost" size="sm" icon={<RefreshCw />} onClick={onAbandon}>放棄這場</Button>}
         {!practice && !state.suspended && <Button variant="ghost" size="sm" onClick={() => { if (window.confirm('保留這場比賽（因雨、天黑暫停，改天續賽）？\n進度會留在雲端和這台裝置；保留期間比賽頁寫「保留中」，不算進戰績。續賽時按「恢復比賽」接著記。')) act((s) => ({ ...s, suspended: new Date().toISOString() })) }}>保留比賽</Button>}
-        <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish} className="ml-auto">{practice ? '結束練習' : '結束比賽'}</Button>
+        {/* the two that end something sit together at the end, apart from how the screen looks (2026-11-27 audit: 結束半局
+            sat between 大字 and 切換主客場) */}
+        <span className="ml-auto flex items-center gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => { if (window.confirm('確定手動結束這個半局？壘上跑者會記為殘壘。')) act(endHalf) }}>結束半局</Button>
+          <Button variant="outline" size="sm" icon={<Flag />} onClick={onFinish}>{practice ? '結束練習' : '結束比賽'}</Button>
+        </span>
       </div>
     </div>
   )
@@ -897,7 +901,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
                   <div className="min-w-0"><div className="text-[12px] text-muted truncate">{t('我隊')}投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical-text' : countTone === 'warning' ? 'text-warning-text' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
                     <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical-text' : restTone === 'warning' ? 'text-warning-text' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">{t('對方')}第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
-                      {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => apply((s) => setOppBats(s, b))} />}</div>
+                      {oppBatsOn && !askOppBats && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => apply((s) => setOppBats(s, b))} />}</div>
                     {batsHint && <p role="status" className="text-[12px] text-warning-text basis-full">{batsHint}</p>}
                     {state.oppNames && !intra && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
@@ -949,7 +953,16 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 <PitchPlays pitches={state.pitches} events={state.plays} />
                 {state.pitches.length > 0 && <Button variant="outline" size="sm" className="ml-auto shrink-0" icon={<Delete />} onClick={() => apply(undoPitch)} aria-label="刪最後一球">刪一球</Button>}
               </div>
-              {waitFor && !due && <p role="status" className="text-[13px] font-medium text-ink">{waitFor}{askOppHand ? '（看不出來就按「不知道」）' : '（左右開弓就選他這次站的那邊）'}</p>}
+              {waitFor && !due && askOppBats && !askOppHand ? (
+                // (2026-11-27 audit: the pad simply went grey with one line under it, which read as frozen in the sun)
+                <div role="group" aria-label="對方打者左打或右打" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft p-3 flex flex-col gap-2">
+                  <p role="status" className="text-[15px] font-semibold text-ink">{t(`對方第 ${state.oppOrder} 棒`)}{oppName ? ` ${oppName}` : ''}：左打還是右打？</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['L', 'R'] as const).map((b) => <button key={b} type="button" onClick={() => apply((s) => setOppBats(s, b))} className="press h-14 rounded-[var(--radius-sm)] bg-ink text-bg text-[17px] font-semibold cursor-pointer hover:bg-[color-mix(in_srgb,var(--ink)_86%,var(--bg))]">{OPP_BATS_LABEL[b]}</button>)}
+                  </div>
+                  <span className="text-[12px] text-ink-2">先選對方打者左打或右打才能記投球；左右開弓就選他這次站的那邊</span>
+                </div>
+              ) : waitFor && !due ? <p role="status" className="text-[13px] font-medium text-ink">{waitFor}{askOppHand ? '（看不出來就按「不知道」）' : '（左右開弓就選他這次站的那邊）'}</p> : null}
               <PitchPad onPitch={(code) => { if (inPlay || waitFor || holdOver || held) return; apply((s) => addPitch(s, code)); if (speedAsked(state)) setSpeedAt(state.pitches.length); if (code === 'IP') toResults() }} disabled={!!plan || inPlay || due || !!waitFor || holdOver || held} twoStrikes={c.strikes === 2} />
             </div>
 
@@ -1095,7 +1108,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-3 max-sm:px-3 max-sm:py-2 max-sm:bg-surface max-sm:border-t max-sm:border-border max-sm:items-stretch">
                     <p className="text-[12px] text-ink-2 truncate max-sm:text-left" aria-live="polite">{planSummary}</p>
                     <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needBall || needErrBy} aria-describedby={needBall || needErrBy ? 'pa-missing' : undefined} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
-                    {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] text-critical-text">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
+                    {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] font-medium text-ink-2">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
                   </div>
                 </div>
               </div>
@@ -1280,7 +1293,7 @@ function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }:
         {opts.filter((o) => batter || o.v === 'out' || o.v === 'home' || (typeof o.v === 'number' && o.v >= min)).map((o) => (
           <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.v === 'out' && mistake ? mistake.set(false) : onChange(o.v))}
             title={o.v === 'out' && !batter ? '在壘上出局（被封殺、刺殺、觸殺）' : undefined}
-            className={cx('h-9 pointer-fine:h-8 min-w-9 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical-text')}>{o.l}</button>
+            className={cx('h-11 pointer-fine:h-8 min-w-11 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[13px] pointer-fine:text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical-text')}>{o.l}</button>
         ))}
       </div>
       {mistake && value === 'out' && (

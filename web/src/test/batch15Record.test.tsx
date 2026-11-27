@@ -78,8 +78,8 @@ describe('紀錄比賽: 三安, then out on the bases on the same play', () => {
     fireEvent.click(within(row).getByRole('button', { name: '自己跑壘失誤' }))
     expect(within(row).getByRole('button', { name: '出局' }).getAttribute('aria-pressed')).toBe('true')
     expect(within(row).getByRole('button', { name: '自己跑壘失誤' }).getAttribute('aria-pressed')).toBe('true')
-    // touch targets: 36px on a phone, 32px only with a mouse (like 修改資料's chips)
-    for (const b of within(row).getAllByRole('button')) if (['出局', '3B', '得分'].includes(b.textContent ?? '')) expect(b.className).toMatch(/(^| )h-9 pointer-fine:h-8 min-w-9/)
+    // touch targets: 44px on a phone (2026-11-27 audit), 32px only with a mouse
+    for (const b of within(row).getAllByRole('button')) if (['出局', '3B', '得分'].includes(b.textContent ?? '')) expect(b.className).toMatch(/(^| )h-11 pointer-fine:h-8 min-w-11/)
     fireEvent.click(screen.getByRole('button', { name: /送出這個打席/ }))
     await wait(50)
     const b = draft().batting[0]

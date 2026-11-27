@@ -97,6 +97,15 @@ A database change needs a migration in both repos, and the user must run it in b
   (`withOwnListed`: the same count, read one way only); their 落點 fielder picked again for a 失誤進壘 on the play is that same error;
   `ourDoubledResult` makes an old row (落點 SS + 2B listed) 待核對, `theirDoubledResult` is only noted in 修改資料 (their list
   cannot say "twice on purpose"). A caught fly (外飛／內飛／界外飛) never puts the batter on a base (FLY_CAUGHT in Record, GameEditor).
+- 看得清楚、按得到＋紀錄比賽球場好用 (2026-11-27, from an impeccable critique; all three sites): text-only colour tokens
+  `--accent-text / --good-text / --warning-text / --critical-text` (styles/tokens.css, Tailwind `text-accent-text`…) for small text,
+  the fills keep `--accent` etc.; the 系隊's amber text is #9a5f0c (5.2:1 on white), the other sites' accents already pass so theirs
+  equal `--accent`; the dark scoreboard keeps the bright ones. Select/Input show the focus ring, Tabs draw it inside; a
+  「跳到主要內容」 link (`.skip-link` → `main#main`); Card titles are h2; on touch Button md / Select / Input are 44 px and `.tap-44`
+  (index.css) gives smaller controls a 44 px target. 紀錄比賽: PitchPad tiles are filled like the scoreboard's lights (`pitchTone`:
+  壞球 BOARD.ball, the strikes BOARD.strike, 擊進場內 BOARD.bg; unavailable = dashed, unfilled), ResultChips tinted per group
+  (`GROUP_HUE`; off = dashed), the batting side asked by a big 左打／右打 card (the small chips come back once picked), 必填 落點／軌跡
+  a neutral tag and edge (送出 still waits), 結束半局 next to 結束比賽, the record buttons 44 px on touch.
 - 2026-11-25 (players' and recorders' asks): 打擊 page's 擊球強度 is a 強擊率 Hard Hit% bar chart (強 ÷ batted balls with a 強度);
   即時比分 shows 球速 (under each pitch of 本打席, the last one, the pitcher's 最快 today) lit 黃 125–134 / 紅 135+ (`speedTone` in
   data/speeds.ts; theme colours `speedClass` in the 文字轉播 and pitch chips); 修改資料 stays open after 儲存修改 (GameView remounts

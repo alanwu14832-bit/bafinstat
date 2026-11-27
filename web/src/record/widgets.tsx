@@ -7,6 +7,7 @@ import { LOC_HOLES, OUT_AT_LABEL, posNum, type OutAt } from '../data/types'
 import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
 import { cx } from '../lib/format'
 import { OUT_RESULTS } from './model'
+import { BOARD } from '../components/ui/Scoreboard'
 
 export const PITCH_BUTTONS: Array<{ code: string; label: string; hint: string }> = [
   { code: 'B', label: '壞球', hint: 'B' }, { code: 'CS', label: '好球・未揮', hint: 'CS' }, { code: 'SS', label: '揮空', hint: 'SS' }, { code: 'F', label: '界外', hint: 'F' }, { code: 'IP', label: '擊進場內', hint: 'IP' },
@@ -32,19 +33,30 @@ export function OutAtChips({ value, onPick, name }: { value?: OutAt; onPick: (at
   return (
     <div className="basis-full flex items-center gap-1.5 flex-wrap" role="group" aria-label={`${name ? `${name} ` : ''}死在哪個壘包`}>
       <span className="text-[12px] text-ink-2 mr-0.5">死在</span>
-      {OUT_AT_CHOICES.map((b) => <button key={String(b)} type="button" aria-label={`死在${OUT_AT_LABEL[b]}`} aria-pressed={value === b} onClick={() => onPick(b)} className={cx(chipBtn(value === b), 'h-9 pointer-fine:h-8 min-w-9 px-2.5 text-[12px]')}>{OUT_AT_LABEL[b]}</button>)}
+      {OUT_AT_CHOICES.map((b) => <button key={String(b)} type="button" aria-label={`死在${OUT_AT_LABEL[b]}`} aria-pressed={value === b} onClick={() => onPick(b)} className={cx(chipBtn(value === b), 'h-11 pointer-fine:h-8 min-w-11 px-2.5 text-[13px] pointer-fine:text-[12px]')}>{OUT_AT_LABEL[b]}</button>)}
     </div>
   )
 }
 
-/** The five big pitch buttons. */
+/** A pitch button's fill: the light it turns on on the scoreboard (壞球 the B light, the strikes the S light), 擊進場內 the
+ *  board itself. Dark figures on the lights, the board's light figures on the board (all ≥ 7:1). */
+export function pitchTone(code: string): { background: string; color: string } {
+  if (code === 'B') return { background: BOARD.ball, color: '#0c2416' }
+  if (code === 'IP') return { background: BOARD.bg, color: BOARD.ink }
+  return { background: BOARD.strike, color: '#231503' }
+}
+/** The five big pitch buttons, filled like the scoreboard lights they feed so each reads at a glance in the sun
+ *  (2026-11-27 audit: white outlined chips, the same weight as everything else). Unavailable they turn plainly off:
+ *  no fill, a dashed edge — never a paler copy of the lit one. */
 /** With two strikes a 擦棒 button joins them: a foul tip held by the catcher is strike three (T). */
 export function PitchPad({ onPitch, disabled, twoStrikes }: { onPitch: (code: string) => void; disabled?: boolean; twoStrikes?: boolean }) {
   return (
     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
       {[...PITCH_BUTTONS, ...(twoStrikes ? [{ code: 'T', label: '擦棒', hint: '被捕＝三振' }] : [])].map((b) => (
-        <button key={b.code} type="button" onClick={() => onPitch(b.code)} disabled={disabled} className={cx(bigBtn, 'flex flex-col items-center justify-center leading-tight disabled:opacity-40')}>
-          <span>{b.label}</span><span className="text-[10px] text-muted tnum">{b.hint}</span>
+        <button key={b.code} type="button" onClick={() => onPitch(b.code)} disabled={disabled} style={disabled ? undefined : pitchTone(b.code)}
+          className={cx('press h-14 pointer-fine:h-12 rounded-[var(--radius-sm)] text-[15px] font-semibold flex flex-col items-center justify-center leading-tight cursor-pointer transition-[filter] motion-reduce:transition-none',
+            disabled ? 'border border-dashed border-border-strong bg-transparent text-muted cursor-default' : 'shadow-[0_1px_2px_rgba(0,0,0,0.18)] hover:brightness-105 active:brightness-95')}>
+          <span>{b.label}</span><span className="text-[10px] font-medium opacity-75 tnum">{b.hint}</span>
         </button>
       ))}
     </div>
@@ -52,15 +64,27 @@ export function PitchPad({ onPitch, disabled, twoStrikes }: { onPitch: (code: st
 }
 
 /** 安打／上壘／出局 result chips; `value` is shown selected. With `only`, the other results are greyed out (after IP: a ball in play). */
+/** Each result group's hue (安打 green, 上壘 blue, 出局 red), only as a faint tint and an edge: the result names stay ink. */
+const GROUP_HUE: Record<string, string> = { 安打: 'var(--good)', 上壘: 'var(--series-7)', 出局: 'var(--critical)' }
 export function ResultChips({ value, onPick, only, disabled, off }: { value?: string; onPick: (result: string) => void; only?: Set<string>; /** all greyed out (a question to answer first) */ disabled?: boolean; /** these greyed out (雙殺 with two out) */ off?: Set<string> }) {
   return (
     <div className="flex flex-col gap-2.5">
-      {RESULT_GROUPS.map((g) => (
-        <div key={g.label} className="flex items-start gap-2">
-          <span className="text-[12px] text-muted w-8 shrink-0 h-9 inline-flex items-center">{g.label}</span>
-          <div className="flex flex-wrap gap-1.5">{g.items.map((r) => <button key={r} type="button" aria-pressed={value === r} disabled={disabled || (!!only && !only.has(r)) || !!off?.has(r)} onClick={() => onPick(r)} className={cx(chipBtn(value === r), 'disabled:opacity-30 disabled:cursor-default')}>{r}</button>)}</div>
-        </div>
-      ))}
+      {RESULT_GROUPS.map((g) => {
+        const hue = GROUP_HUE[g.label] ?? 'var(--ink)'
+        return (
+          <div key={g.label} className="flex items-start gap-2">
+            <span className="text-[12px] font-medium text-ink-2 w-9 shrink-0 h-11 pointer-fine:h-9 inline-flex items-center gap-1"><span aria-hidden className="size-1.5 rounded-full shrink-0" style={{ background: hue }} />{g.label}</span>
+            <div className="flex flex-wrap gap-1.5">{g.items.map((r) => {
+              const isOff = disabled || (!!only && !only.has(r)) || !!off?.has(r)
+              const on = value === r
+              return <button key={r} type="button" aria-pressed={on} disabled={isOff} onClick={() => onPick(r)}
+                style={on || isOff ? undefined : { background: `color-mix(in srgb, ${hue} 9%, var(--surface))`, borderColor: `color-mix(in srgb, ${hue} 45%, var(--border-strong))` }}
+                className={cx('h-11 pointer-fine:h-9 min-w-[3.25rem] px-3 rounded-[var(--radius-sm)] border text-[14px] pointer-fine:text-[13px] font-medium transition-colors motion-reduce:transition-none',
+                  on ? 'border-ink bg-ink text-bg cursor-pointer' : isOff ? 'border-dashed border-border bg-transparent text-muted/70 cursor-default' : 'text-ink cursor-pointer hover:brightness-[0.98]')}>{r}</button>
+            })}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -72,27 +96,29 @@ export function BattedBallPicker({ result, value, onChange, required }: { result
   const set = (patch: BattedBall) => onChange({ ...value, ...patch })
   const needLoc = !!required && !value.loc
   const needTraj = !!required && !value.traj
-  const ring = 'rounded-[var(--radius-sm)] outline-2 outline-offset-4 outline-dashed outline-[color-mix(in_srgb,var(--critical)_55%,transparent)]'
+  // (a neutral reminder, not the error red: nothing has gone wrong yet — 送出 simply waits for it; 2026-11-27 audit)
+  const ring = 'rounded-[var(--radius-sm)] outline-2 outline-offset-4 outline-dashed outline-[color-mix(in_srgb,var(--ink)_28%,transparent)]'
+  const need = <span className="ml-1.5 inline-flex items-center h-5 px-1.5 rounded-full bg-surface-3 text-[11px] font-medium text-ink-2">必填</span>
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
       <div role="group" aria-label="落點" data-missing={needLoc || undefined} className={cx('w-fit', needLoc && ring)}>
-        <div className={cx('text-[12px] mb-1', needLoc ? 'text-critical-text font-medium' : 'text-ink-2')}>落點{needLoc ? '（必填，點接球或落地的位置）' : ''}</div>
-        <div className="grid grid-cols-3 gap-1 w-[150px]">
+        <div className={cx('text-[12px] mb-1', needLoc ? 'text-ink font-medium' : 'text-ink-2')}>落點{needLoc ? <>{need}<span className="ml-1.5 font-normal text-ink-2">點接球或落地的位置</span></> : ''}</div>
+        <div className="grid grid-cols-3 gap-1 w-[168px] pointer-fine:w-[150px]">
           {LOC_GRID.flat().map((n, i) => n === null ? <span key={i} /> : (
-            <button key={i} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
+            <button key={i} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-11 pointer-fine:h-9 rounded-[6px] border text-[13px] pointer-fine:text-[12px] font-medium tnum cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-border-strong bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
           ))}
         </div>
         {!OUT_RESULTS.has(result) && result !== '野選' && (
-          <div className="mt-2 w-[150px]">
+          <div className="mt-2 w-[168px] pointer-fine:w-[150px]">
             <div className="text-[11px] text-muted mb-1">穿越／落地的縫隙</div>
             <div className="flex flex-wrap gap-1">
-              {LOC_HOLE_KEYS.map((n) => <button key={n} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-7 px-2 rounded-[6px] border text-[11px] font-medium cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-dashed border-border bg-surface hover:bg-surface-2')}>{LOC_HOLES[n]}</button>)}
+              {LOC_HOLE_KEYS.map((n) => <button key={n} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 rounded-[6px] border text-[12px] pointer-fine:text-[11px] font-medium cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-dashed border-border-strong bg-surface hover:bg-surface-2')}>{LOC_HOLES[n]}</button>)}
             </div>
           </div>
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical-text font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P', 'B'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : t === 'P' ? '內野飛球 P' : '觸擊 B'}</button>)}</div></div>
+        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-ink font-medium' : 'text-ink-2')}>軌跡{needTraj ? need : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P', 'B'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : t === 'P' ? '內野飛球 P' : '觸擊 B'}</button>)}</div></div>
         <div><div className="text-[12px] text-ink-2 mb-1">強度{required ? <span className="text-muted">（預設中）</span> : null}</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
       </div>
     </div>
