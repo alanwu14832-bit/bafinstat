@@ -10,7 +10,7 @@
  * Every plate appearance is then one batter's and one pitcher's, on either side. 隊內賽 stay out of the team's 戰績 (勝敗,
  * 得失分) and, by default, of every number; the 隊內賽 filter (Filters.intra) counts them too, or only them (`intraView`).
  */
-import { errorsOf, UNKNOWN_FIELDER, withOurErrors } from './errors'
+import { errorsOf, UNKNOWN_FIELDER, withOurErrors, withOwnListed } from './errors'
 import { fieldersOf, normalizeDataset } from './normalize'
 import { isPlaced, OPP_PR_UNNAMED, oppBatterName, POSITION_BY_NUMBER, type BattingPA, type Dataset, type FieldingLine, type Filters, type Game, type OppBats, type OppHand, type PitchingPA, type Player } from './types'
 import { inferAll, playCounts, reachedOn } from '../record/timeline'
@@ -129,7 +129,7 @@ export function mirrorGame(game: Game, rows: { batting: BattingPA[]; pitching: P
       gameId: id, inning: b.inning, outsBefore: b.outsBefore, basesBefore: b.basesBefore, oppOrder: b.order, pitcher: pitchers[i] ?? '',
       oppBatter: b.batter || undefined, runner: b.runner,
       pitches: b.pitches, speeds: b.speeds, result: b.result, loc: b.loc, traj: b.traj, quality: b.quality,
-      sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, errors: withOurErrors([], list, b.result, b.loc), rbi: b.rbi || undefined,
+      sba: 0, cs: 0, wp: 0, pb: 0, pk: 0, errors: withOwnListed(withOurErrors([], list, b.result, b.loc), b.result, b.loc), rbi: b.rbi || undefined,
       oppBats: batsOf(player.get(b.batter)), code: b.run > 0 || b.code === 'R' ? 'ER' : b.code, note: b.note, events: b.events,
     })
   })

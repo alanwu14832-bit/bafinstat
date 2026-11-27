@@ -24,7 +24,7 @@
  *   - 代跑: ours through substitute() (BattingPA.runner + a PR substitution); theirs through pinchRunOpp()
  *     (PitchingPA.runner, a name or 對方代跑): either way the runner keeps the row he reached on, only the name changes.
  */
-import { UNKNOWN_FIELDER, withOurErrors } from '../data/errors'
+import { resultErrorPos, UNKNOWN_FIELDER, withOurErrors, withOwnListed } from '../data/errors'
 import { alignSpeeds, speedOf } from '../data/speeds'
 import { chargesMinus, chargesOrNone, chargesSum, defenseTimeline } from '../data/gameRoster'
 import { END_PITCH, HIT_BASE_COUNT, isNoBatter, isPA, isPlaced, OPP_PR_UNNAMED, oppPrMark, RELIEF, UNFINISHED, oppBatterName, oppPinchHitter, POSITION_BY_NUMBER, TIEBREAK, TRAJ_OF, type BattingPA, type DayRosterSub, type Game, type GameDayRoster, type OppBats, type OppHand, type OutAt, type PitchingPA, type PlayEvent, type PriorPitch, type SubCharges } from '../data/types'
@@ -1077,7 +1077,10 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
     const slot = s.lineup[s.slot]
     // 對方失誤: the ones pressed (and 失誤進壘 between pitches), plus a 失誤進壘 on the play — whose (their fielders), or
     // 不知道; on a 失誤 result the extra bases came on that same error unless another fielder is named
-    const onPlay = plan.errAdv?.length ? (plan.errBy?.length ? plan.errBy : plan.result === '失誤' ? [] : [UNKNOWN_FIELDER]) : []
+    // (their list never holds the 失誤 result's own error: its 落點's fielder picked here is that same error, not a second one)
+    const own = resultErrorPos(plan)
+    const picked = (plan.errBy ?? []).filter((x, i, all) => !(x === own && all.indexOf(x) === i))
+    const onPlay = plan.errAdv?.length ? (plan.errBy?.length ? picked : plan.result === '失誤' ? [] : [UNKNOWN_FIELDER]) : []
     const oppErrors = [...(s.extras.oppErrors ?? []), ...onPlay]
     batting.push({ ...base, order: s.slot + 1, pos: slot?.pos || undefined, batter: ph2 && plan.result === '三振' && ph2.in === slot?.name ? ph2.out : slot?.name ?? '', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: plan.rbi, note, ...(oppErrors.length ? { errors: oppErrors } : {}), ...oppFields(s.oppPitcher) })
     rowIndex = batting.length - 1
@@ -1091,6 +1094,8 @@ export function commitPA(s: RecordState, plan: PAPlan): RecordState {
       if (pos === own && ownSeen) { ownSeen = false; continue }
       errors.push(pos)
     }
+    // (the result's own written out next to the others: the same count, read one way only)
+    errors.splice(0, errors.length, ...withOwnListed(errors, plan.result, plan.loc))
     const bats = oppBatsNow(s)
     pitching.push({ ...base, oppOrder: s.oppOrder, pitcher: s.pitcher, oppBatter: (s.oppPh2 && plan.result === '三振' ? s.oppPh2.was : oppBatterOf(s)) || undefined, ...extras, ...(errors.length ? { errors } : {}), ...(plan.rbi > 0 ? { rbi: plan.rbi } : {}), ...(bats === 'L' || bats === 'R' ? { oppBats: bats } : {}), ...(s.priorPitchers?.length ? { priorPitchers: s.priorPitchers.map((p) => ({ ...p })) } : {}), note })
     rowIndex = pitching.length - 1
@@ -1346,7 +1351,7 @@ export function settlePending(s: RecordState): RecordState {
     return { ...s, batting: s.batting.map((q, i) => (i === last ? { ...b, ...(errors.length ? { errors } : {}) } : q)), plays: [], extras: { ...EXTRAS0 } }
   }
   const p = row as PitchingPA
-  const errors = withOurErrors(p.errors, x.errors ?? [], p.result, p.loc)
+  const errors = withOwnListed(withOurErrors(p.errors, x.errors ?? [], p.result, p.loc), p.result, p.loc)
   const settled: PitchingPA = { ...p, sba: p.sba + x.sba, cs: p.cs + x.cs, wp: p.wp + x.wp, pb: p.pb + x.pb, pk: p.pk + x.pk, ...(errors.length ? { errors } : {}) }
   return { ...s, pitching: s.pitching.map((q, i) => (i === last ? settled : q)), subs: settlePaSubs(s, true), plays: [], extras: { ...EXTRAS0 } }
 }

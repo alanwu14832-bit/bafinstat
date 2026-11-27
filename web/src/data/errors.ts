@@ -12,7 +12,7 @@
  *    own position as soon as another error at that position goes in (withOurErrors), and the count stays right.
  * A 趁傳進壘 is not an error (a throw to another base, nobody's fault), a 失誤進壘 is.
  */
-import { POSITION_BY_NUMBER, type BattingPA, type PitchingPA, type PlayEvent } from './types'
+import { POSITION_BY_NUMBER, POSITION_NUMBER, type BattingPA, type PitchingPA, type PlayEvent } from './types'
 
 export const FIELD_POSITIONS = ['P', 'C', '1B', '2B', '3B', 'SS', 'LF', 'CF', 'RF'] as const
 /** Their error, fielder not known (「不知道」). Only in BattingPA.errors. */
@@ -47,6 +47,44 @@ function withResult(list: string[], result: string, loc?: number): { positions: 
   const own = resultError(result, loc)
   if (own && (own.pos ? !list.includes(own.pos) : !list.length)) { if (own.pos) positions.push(own.pos); else unknown++ }
   return { positions, unknown }
+}
+
+/** The fielder a 失誤 result is charged to: its 落點's, when the 落點 is one fielder's spot (兩人之間 names nobody). */
+export function resultErrorPos(p: { result: string; loc?: number }): string | undefined {
+  return p.result === '失誤' && p.loc ? POSITION_BY_NUMBER[p.loc] : undefined
+}
+/** The 落點 that charges a 失誤 result to `pos` (its number: P 1 … RF 9). */
+export const fielderLoc = (pos: string): number | undefined => POSITION_NUMBER[pos]
+
+/**
+ * Our 失誤 result with more errors listed that may be that same one: other fielders listed, not the 落點's, more than the
+ * row's 失誤進壘 plays between pitches explain. The 落點 is one error and every listed fielder one more, so a grounder to
+ * short that the first baseman dropped, typed as 落點 SS + 1B, counts two (2026-11-27: the 系隊's 11/13 game read 10
+ * errors this way). Null when it reads one way only: the 落點's fielder listed as well is two errors on purpose.
+ */
+export function ourDoubledResult(p: Pick<PitchingPA, 'errors' | 'result' | 'loc' | 'events'>): { own: string; others: string[] } | null {
+  const own = resultErrorPos(p)
+  const list = p.errors ?? []
+  if (!own || !list.length || list.includes(own) || list.length <= errAdvanceErrors(p)) return null
+  return { own, others: [...new Set(list)] }
+}
+/**
+ * Their 失誤 result with its 落點's fielder listed again: their list never holds the result's own, so that is a second
+ * error by him — usually the same one picked again for a runner's 失誤進壘 on the play. Returns the fielder, or null.
+ */
+export function theirDoubledResult(b: Pick<BattingPA, 'errors' | 'result' | 'loc' | 'events'>): string | null {
+  const own = resultErrorPos(b)
+  if (!own) return null
+  return (b.errors ?? []).filter((x) => x === own).length > errPlays(b.events).between ? own : null
+}
+
+/**
+ * Our list with a 失誤 result's own error written out whenever other fielders are listed, so it reads one way only (see
+ * ourDoubledResult): the count stays — 落點 SS with C listed is two errors either way, now stored as SS、C.
+ */
+export function withOwnListed(list: string[], result: string, loc?: number): string[] {
+  const own = resultErrorPos({ result, loc })
+  return own && list.length && !list.includes(own) ? [own, ...list] : list
 }
 
 /**

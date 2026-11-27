@@ -2,7 +2,8 @@
  * Row-level consistency checks for one game. Complements the game-level warnings in normalize.ts by
  * pointing at the exact plate appearance that looks wrong, so a scorer can fix it in the editor.
  */
-import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, isRelief, isUnfinished, LOC_HOLES, orderCycle, type BattingPA, type PitchingPA, type PlayEvent } from './types'
+import { HIT_BASE_COUNT, isHoleLoc, isPA, isPlaced, isRelief, isUnfinished, LOC_HOLES, orderCycle, POSITION_NUMBER, type BattingPA, type PitchingPA, type PlayEvent } from './types'
+import { ourDoubledResult } from './errors'
 import { pitchTotals } from './stats'
 import { hasRunnerPlays } from '../record/timeline'
 
@@ -198,6 +199,17 @@ export function auditGame(batting: BattingPA[], pitching: PitchingPA[], place: A
     if (rbi > 0 && (p.result === '三振' || p.result === '雙殺' || p.result === '失誤')) out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：「${p.result}」通常不會有打點` })
     if (rbi > 0 && (p.result === '外飛' || p.result === '界外飛') && (p.outsBefore ?? 0) < 2) out.push({ side: 'pit', index: i, message: sacFlyMessage(`第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒`, p.result) })
     if ((p.code === 'R' || p.code === 'ER') && OUT_RESULTS.has(p.result) && p.result !== '犧飛' && p.result !== '三振') out.push({ side: 'pit', index: i, message: `第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒：出局（${p.result}）卻記為失分代碼 ${p.code}` })
+    const twice = ourDoubledResult(p)
+    if (twice) out.push({ side: 'pit', index: i, message: doubledMessage(`第 ${p.inning} 局・對第 ${p.oppOrder ?? '?'} 棒`, twice.own, twice.others, place) })
   })
   return out
+}
+
+/** Our 失誤 result plus other fielders listed (data/errors ourDoubledResult): counted as more errors than were perhaps made. */
+function doubledMessage(where: string, own: string, others: string[], place: AuditPlace): string {
+  const head = `${where}：結果「失誤」已經算給落點的 ${own}，又另外記了 ${others.join('、')} 失誤，共算 ${others.length + 1} 次`
+  const o = others[0]
+  if (place === 'excel') return `${head}。如果是同一次失誤：「落點」改填 ${POSITION_NUMBER[o] ?? o}、「守備失誤」清空；真的是兩次，「守備失誤」也填上 ${own}`
+  const fix = `在「這次失誤算給」點 ${o}，再把「我隊守備失誤」的 ${o} 減掉；真的是兩次，在「我隊守備失誤」把 ${own} 也點一下`
+  return `${head}。如果是同一次失誤：${place === 'page' ? `到「修改資料」打開這個打席，${fix}` : fix}`
 }
