@@ -96,7 +96,7 @@ export function WinProbChart({ events, rows, teamName, resultLabel, live = false
       </div>
       {onPick && tapped && (
         <div className="flex justify-end -mt-1">
-          <button type="button" onClick={() => onPick(tapped)} className="min-h-9 px-3 rounded-[6px] text-[13px] font-medium text-accent hover:bg-surface-2/60 cursor-pointer">
+          <button type="button" onClick={() => onPick(tapped)} className="min-h-9 px-3 rounded-[6px] text-[13px] font-medium text-accent-text hover:bg-surface-2/60 cursor-pointer">
             看第 {tapped.inning} 局{tapped.half === 'top' ? '上' : '下'}的逐球 →
           </button>
         </div>

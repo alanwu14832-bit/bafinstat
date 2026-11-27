@@ -131,7 +131,7 @@ function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, 
               <td className="px-1 py-1 whitespace-nowrap">
                 <button type="button" title="上移" aria-label="上移" onClick={() => move(i, -1)} className="size-6 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30" disabled={i === 0}><ArrowUp className="size-3.5" /></button>
                 <button type="button" title="下移" aria-label="下移" onClick={() => move(i, 1)} className="size-6 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30" disabled={i === rows.length - 1}><ArrowDown className="size-3.5" /></button>
-                <button type="button" title="刪除此列" aria-label="刪除此列" onClick={() => onChange(rows.filter((_, k) => k !== i))} className="size-6 inline-flex items-center justify-center rounded text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-3.5" /></button>
+                <button type="button" title="刪除此列" aria-label="刪除此列" onClick={() => onChange(rows.filter((_, k) => k !== i))} className="size-6 inline-flex items-center justify-center rounded text-muted hover:text-critical-text hover:bg-surface-2 cursor-pointer"><Trash2 className="size-3.5" /></button>
               </td>
             </tr>
           ))}
@@ -897,7 +897,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
         {infoOpen && <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Field label="日期"><Input type="date" value={game.date} onChange={(e) => g('date', e.target.value)} className="tnum" /></Field>
           <Field label="開賽時間"><Input type="time" value={game.time ?? ''} onChange={text('time')} className="tnum" /></Field>
-          <Field label="結束時間" hint={duration ? (isLongGame(duration) ? <span className="text-warning">{LONG_GAME_NOTE}</span> : `比賽時間 ${formatDuration(duration)}`) : undefined}><Input type="time" value={game.endTime ?? ''} onChange={text('endTime')} className="tnum" /></Field>
+          <Field label="結束時間" hint={duration ? (isLongGame(duration) ? <span className="text-warning-text">{LONG_GAME_NOTE}</span> : `比賽時間 ${formatDuration(duration)}`) : undefined}><Input type="time" value={game.endTime ?? ''} onChange={text('endTime')} className="tnum" /></Field>
           <Field label="杯賽" hint={regMove || undefined}><Input value={game.tournament} onChange={(e) => g('tournament', e.target.value)} /></Field>
           <Field label="對手"><Input value={game.opponent} onChange={(e) => g('opponent', e.target.value)} /></Field>
           <Field label="主客"><Select value={game.homeAway} onChange={(e) => g('homeAway', e.target.value as Game['homeAway'])} options={[{ value: '主', label: '主場' }, { value: '客', label: '客場' }]} className="w-full" /></Field>
@@ -966,7 +966,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-[12px] font-medium text-ink-2">替補紀錄 <span className="text-muted font-normal tnum">{subs.length} 筆・紀錄比賽時自動記下</span></div>
-                {subs.length > 0 && <Button size="sm" variant="ghost" icon={<Trash2 />} className="text-critical hover:text-critical" onClick={() => { if (window.confirm('清除這場所有替補紀錄（代打、代跑、守備、換投）？儲存修改後才會生效。')) setSubs([]) }}>清除替補紀錄</Button>}
+                {subs.length > 0 && <Button size="sm" variant="ghost" icon={<Trash2 />} className="text-critical-text hover:text-critical-text" onClick={() => { if (window.confirm('清除這場所有替補紀錄（代打、代跑、守備、換投）？儲存修改後才會生效。')) setSubs([]) }}>清除替補紀錄</Button>}
               </div>
               {subs.length > 0 ? (
                 <ol className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[13px] text-ink-2">
@@ -974,7 +974,7 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
                   {subs.map((x, i) => [x, i] as const).sort(([a], [b]) => (a.inning - b.inning) || (a.half === b.half ? 0 : a.half === 'top' ? -1 : 1) || ((a.row ?? 0) - (b.row ?? 0))).map(([x, i]) => (
                     <li key={i} className="pl-3 pr-1 py-1 tnum flex items-center gap-2 min-h-10">
                       <span className="flex-1 min-w-0">{subText(x)}</span>
-                      <button type="button" aria-label={`刪除這筆替補紀錄：${subText(x)}`} onClick={() => setSubs((l) => l.filter((_, k) => k !== i))} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>
+                      <button type="button" aria-label={`刪除這筆替補紀錄：${subText(x)}`} onClick={() => setSubs((l) => l.filter((_, k) => k !== i))} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical-text hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>
                     </li>
                   ))}
                 </ol>
@@ -989,18 +989,18 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
         )}
       </section>
 
-      {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical" />{error}</div>}
+      {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical-text" />{error}</div>}
 
       {/* phones: the save bar stays at the bottom of the screen while scrolling through the plate appearances */}
       <div className="flex items-center gap-2 flex-wrap justify-end pt-1 max-sm:sticky max-sm:bottom-2 max-sm:z-10 max-sm:rounded-[var(--radius-sm)] max-sm:border max-sm:border-border max-sm:bg-surface max-sm:px-3 max-sm:py-2 max-sm:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.35)]">
         {changes > 0 ? <span aria-live="polite" className="text-[12px] font-medium text-ink-2 tnum mr-auto">{changes} 處修改還沒儲存</span>
-          : savedNote ? <span aria-live="polite" className="inline-flex items-center gap-1 text-[12px] font-medium text-good mr-auto"><CheckCircle2 className="size-3.5" />{savedNote}</span> : null}
-        {missingBall && <span role="status" className="text-[12px] text-warning basis-full sm:basis-auto text-right">{missingBall}<span className="inline-block max-sm:hidden">（清單上標{MISSING_BALL_TAGS}，</span><span className="inline-block max-sm:hidden">可以先儲存）</span></span>}
+          : savedNote ? <span aria-live="polite" className="inline-flex items-center gap-1 text-[12px] font-medium text-good-text mr-auto"><CheckCircle2 className="size-3.5" />{savedNote}</span> : null}
+        {missingBall && <span role="status" className="text-[12px] text-warning-text basis-full sm:basis-auto text-right">{missingBall}<span className="inline-block max-sm:hidden">（清單上標{MISSING_BALL_TAGS}，</span><span className="inline-block max-sm:hidden">可以先儲存）</span></span>}
         {/* (nothing left unsaved: 結束修改 goes back to the game page) */}
         <Button variant="outline" onClick={cancel} disabled={busy}>{changes ? '取消' : '結束修改'}</Button>
         <Button variant="primary" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存修改'}</Button>
       </div>
-      <Button variant="ghost" icon={<Trash2 />} className="self-start -mt-2 text-critical hover:text-critical" disabled={busy} onClick={() => { if (window.confirm(`確定刪除 ${game.id}（${game.date} vs ${game.opponent}）？這會移除這場所有打席與守備紀錄。`)) void onDelete() }}>刪除這場比賽</Button>
+      <Button variant="ghost" icon={<Trash2 />} className="self-start -mt-2 text-critical-text hover:text-critical-text" disabled={busy} onClick={() => { if (window.confirm(`確定刪除 ${game.id}（${game.date} vs ${game.opponent}）？這會移除這場所有打席與守備紀錄。`)) void onDelete() }}>刪除這場比賽</Button>
     </div>
   )
 }

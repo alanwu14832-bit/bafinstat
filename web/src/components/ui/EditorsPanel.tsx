@@ -135,7 +135,7 @@ export function EditorsPanel() {
                 <div className="min-w-0 flex-1 basis-48">
                   <div className="truncate text-ink">{e.email}{mine && <span className="text-muted">（你）</span>}</div>
                   {e.note && <div className="truncate text-xs text-muted">{e.note}</div>}
-                  {editorState(e).label && <div className={cx('text-xs', editorState(e).tone === 'good' ? 'text-good' : 'text-warning')}>{editorState(e).label}</div>}
+                  {editorState(e).label && <div className={cx('text-xs', editorState(e).tone === 'good' ? 'text-good-text' : 'text-warning-text')}>{editorState(e).label}</div>}
                 </div>
                 {rolesKnown && e.role && (mine
                   ? <span className="text-xs font-medium text-ink-2 px-2">{ROLE_LABEL[e.role]}</span>
@@ -171,7 +171,7 @@ export function EditorsPanel() {
               <li><span className="font-medium text-ink tnum">{many.add.length}</span> 個可以新增{many.add.length > MEMBER_BATCH_MAX && `（一次最多 ${MEMBER_BATCH_MAX} 個：先新增前 ${MEMBER_BATCH_MAX} 個，其餘再貼一次）`}</li>
               {many.listed.length > 0 && <li>{many.listed.length} 個已經在名單裡，會略過：{many.listed.slice(0, 3).join('、')}{many.listed.length > 3 && '…'}</li>}
               {many.repeated.length > 0 && <li>{many.repeated.length} 個重複貼了，只新增一次</li>}
-              {many.unread.length > 0 && <li className="text-warning">{many.unread.length} 行找不到 email，會略過：{many.unread.slice(0, 3).map((l) => `「${l}」`).join('')}{many.unread.length > 3 && '…'}</li>}
+              {many.unread.length > 0 && <li className="text-warning-text">{many.unread.length} 行找不到 email，會略過：{many.unread.slice(0, 3).map((l) => `「${l}」`).join('')}{many.unread.length > 3 && '…'}</li>}
             </ul>
           )}
           <Button type="submit" size="sm" icon={<UsersRound />} disabled={busy || !many.add.length} className="self-start">
@@ -198,7 +198,7 @@ export function EditorsPanel() {
                       <span className="figure text-[15px] font-bold tracking-wider text-ink tnum select-all">{formatInviteCode(r.code)}</span>
                       <Button size="sm" variant="ghost" icon={copied.has(r.email) ? <Check /> : <Copy />} aria-label={`複製要傳給 ${r.email} 的訊息`} onClick={() => copyRow(r)}>{copied.has(r.email) ? '已複製' : '複製訊息'}</Button>
                     </>
-                  ) : <span className="text-xs text-critical basis-full sm:basis-auto">{r.error}</span>}
+                  ) : <span className="text-xs text-critical-text basis-full sm:basis-auto">{r.error}</span>}
                 </li>
               ))}
             </ul>

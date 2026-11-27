@@ -101,7 +101,7 @@ export function GameCard({ s, teamName, star, onOpen, className, issues = 0 }: {
       </div>
       {(decided || star) && (
         <div className="relative flex flex-col gap-0.5 text-[12px] text-ink-2 min-w-0">
-          {star && <span className="truncate"><span className="text-accent font-semibold">本場焦點</span> {star.name} {star.text}</span>}
+          {star && <span className="truncate"><span className="text-accent-text font-semibold">本場焦點</span> {star.name} {star.text}</span>}
           {decided && <span className="truncate text-muted">{decided}</span>}
         </div>
       )}

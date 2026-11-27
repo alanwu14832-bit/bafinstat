@@ -45,7 +45,7 @@ export function ComparePicker({ names, selected, main, onChange, max = 8, roster
             <p className="text-[13px] text-ink-2 mt-1">最多再選 {max} 位（連同 {main} 共 {max + 1} 位）；用目前的篩選範圍比較</p>
           </div>
           <Input icon={<Search />} size="sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜尋姓名或背號" aria-label="搜尋比較的球員" />
-          {full && <p className="text-[12px] text-warning">已選 {max} 位</p>}
+          {full && <p className="text-[12px] text-warning-text">已選 {max} 位</p>}
           <div className="max-h-[46vh] overflow-y-auto">
             <PlayerChips names={shown} selected={selected} onToggle={toggle} disabled={full ? new Set(shown) : undefined} empty={q ? '沒有符合的球員' : '這個分頁沒有其他有數據的球員'} />
           </div>

@@ -28,7 +28,7 @@ function ResultChip({ s }: { s: GameSummary }) {
         className="press relative inline-flex flex-col items-center justify-center w-11 h-12 rounded-[10px] text-[11px] leading-none gap-1 bg-accent-soft text-[color-mix(in_srgb,var(--accent)_70%,var(--ink))]">
         <span className="absolute top-1 right-1 inline-flex"><LiveDot /></span>
         <span className="font-semibold whitespace-nowrap">進行中</span>
-        <span className="figure tabular-nums opacity-80">{s.runsUs}:{s.runsOpp}</span>
+        <span className="figure tabular-nums">{s.runsUs}:{s.runsOpp}</span>
       </Link>
     )
   }
@@ -37,7 +37,7 @@ function ResultChip({ s }: { s: GameSummary }) {
       className={cx('press inline-flex flex-col items-center justify-center w-11 h-12 rounded-[10px] text-[11px] leading-none gap-1 transition-colors',
         r === 'W' ? 'bg-accent text-accent-ink' : r === 'L' ? 'bg-surface-3 text-ink-2' : 'border border-border-strong text-ink-2')}>
       <span className="figure text-[17px] font-bold">{resultText(r)}</span>
-      <span className="figure tabular-nums opacity-80">{s.runsUs}:{s.runsOpp}</span>
+      <span className="figure tabular-nums">{s.runsUs}:{s.runsOpp}</span>
     </Link>
   )
 }
@@ -46,7 +46,7 @@ export function StoryCard({ s, i, link = true }: { s: Story; i: number; link?: b
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className={cx('text-[11px] font-semibold tracking-[0.08em]', s.tone === 'bad' ? 'text-critical' : 'text-accent')}>{s.kicker}</span>
+        <span className={cx('text-[11px] font-semibold tracking-[0.08em]', s.tone === 'bad' ? 'text-critical-text' : 'text-accent-text')}>{s.kicker}</span>
         {s.player && link && <ArrowUpRight aria-hidden className="size-3.5 text-muted opacity-0 -translate-x-0.5 transition-[opacity,translate] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0" />}
       </div>
       {s.figure && <div className="figure text-[30px] font-bold leading-none text-ink mt-2">{s.figure}</div>}
@@ -175,7 +175,7 @@ export function SeasonHero({ summary, summaries, stories, next, title }: { summa
               </Link>
             )}
             <Link to="/games?view=schedule" className="press inline-flex items-center gap-2 text-[12px] text-ink-2 hover:text-ink rounded-full bg-surface-2 px-3 h-8">
-              <CalendarDays className="size-3.5 text-accent" />
+              <CalendarDays className="size-3.5 text-accent-text" />
               {next ? <span>下一場 <span className="tnum font-medium text-ink">{dayLabel(next.date)}{next.time ? ` ${next.time}` : ''}</span> vs <span className="font-medium text-ink">{next.opponent}</span></span> : <span>下一場 <span className="font-medium text-ink">未排定</span></span>}
             </Link>
           </div>

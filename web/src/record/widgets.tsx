@@ -76,7 +76,7 @@ export function BattedBallPicker({ result, value, onChange, required }: { result
   return (
     <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-3">
       <div role="group" aria-label="落點" data-missing={needLoc || undefined} className={cx('w-fit', needLoc && ring)}>
-        <div className={cx('text-[12px] mb-1', needLoc ? 'text-critical font-medium' : 'text-ink-2')}>落點{needLoc ? '（必填，點接球或落地的位置）' : ''}</div>
+        <div className={cx('text-[12px] mb-1', needLoc ? 'text-critical-text font-medium' : 'text-ink-2')}>落點{needLoc ? '（必填，點接球或落地的位置）' : ''}</div>
         <div className="grid grid-cols-3 gap-1 w-[150px]">
           {LOC_GRID.flat().map((n, i) => n === null ? <span key={i} /> : (
             <button key={i} type="button" aria-pressed={value.loc === n} onClick={() => set({ loc: value.loc === n ? undefined : n })} className={cx('h-9 rounded-[6px] border text-[12px] font-medium tnum cursor-pointer', value.loc === n ? 'border-ink bg-ink text-bg' : 'border-border bg-surface hover:bg-surface-2')}>{n} <span className="opacity-70">{LOC_LABEL[n]}</span></button>
@@ -92,7 +92,7 @@ export function BattedBallPicker({ result, value, onChange, required }: { result
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P', 'B'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : t === 'P' ? '內野飛球 P' : '觸擊 B'}</button>)}</div></div>
+        <div role="group" aria-label="軌跡" data-missing={needTraj || undefined} className={cx(needTraj && ring)}><div className={cx('text-[12px] mb-1', needTraj ? 'text-critical-text font-medium' : 'text-ink-2')}>軌跡{needTraj ? '（必填）' : ''}</div><div className="flex gap-1.5 flex-wrap">{(['G', 'F', 'L', 'P', 'B'] as const).map((t) => <button key={t} type="button" aria-pressed={value.traj === t} onClick={() => set({ traj: value.traj === t ? undefined : t })} className={chipBtn(value.traj === t)}>{t === 'G' ? '滾地 G' : t === 'F' ? '飛球 F' : t === 'L' ? '平飛 L' : t === 'P' ? '內野飛球 P' : '觸擊 B'}</button>)}</div></div>
         <div><div className="text-[12px] text-ink-2 mb-1">強度{required ? <span className="text-muted">（預設中）</span> : null}</div><div className="flex gap-1.5">{(['強', '中', '弱'] as const).map((q) => <button key={q} type="button" aria-pressed={value.quality === q} onClick={() => set({ quality: value.quality === q ? undefined : q })} className={chipBtn(value.quality === q)}>{q}</button>)}</div></div>
       </div>
     </div>

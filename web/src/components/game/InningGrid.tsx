@@ -4,7 +4,7 @@ import { cx } from '../../lib/format'
 import { ScrollX } from '../ui/ScrollFade'
 
 const TONE: Record<SheetCell['tone'], string> = {
-  hit: 'font-semibold text-accent',
+  hit: 'font-semibold text-accent-text',
   out: 'text-muted',
   on: 'text-ink',
   other: 'text-ink-2',

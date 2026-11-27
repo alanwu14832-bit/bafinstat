@@ -20,7 +20,7 @@ export function AccountsPage() {
           <ol className="flex flex-col divide-y divide-border">
             {LEVELS.map(([who, what], i) => (
               <li key={who} className="py-3 first:pt-0 last:pb-0 flex gap-3">
-                <span className="figure text-[15px] font-bold text-accent w-5 shrink-0">{i}</span>
+                <span className="figure text-[15px] font-bold text-accent-text w-5 shrink-0">{i}</span>
                 <div><div className="text-[14px] font-semibold text-ink">{who}</div><p className="text-[13px] text-ink-2 leading-relaxed mt-0.5">{what}</p></div>
               </li>
             ))}

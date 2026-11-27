@@ -150,7 +150,7 @@ export function OppPitcherSheet({ open, onClose, current, options, earlierRows, 
           {!hand && <span className="text-[11px] text-muted">一定要選一個（看不出來就選「不知道」）</span>}
         </div>
         {!current && earlierRows > 0 && <p className="text-[12px] text-ink-2">這半局前面 {earlierRows} 個打席也會記成這位投手</p>}
-        {renamed && <p role="status" className="text-[12px] text-warning">名字換成 {name.trim()}：如果是換了一位投手，請改選上面的「對方換投」（更正會把 {current!.name} 投過的打席都改成 {name.trim()}）</p>}
+        {renamed && <p role="status" className="text-[12px] text-warning-text">名字換成 {name.trim()}：如果是換了一位投手，請改選上面的「對方換投」（更正會把 {current!.name} 投過的打席都改成 {name.trim()}）</p>}
         {quickChange && mode === 'change' && <p className="text-[12px] text-muted">點左投／右投／不知道就完成換投（要記名字先填好姓名）</p>}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>

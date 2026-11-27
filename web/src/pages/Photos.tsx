@@ -50,15 +50,15 @@ function AlbumForm({ initial, presetGameId, onSave, onCancel, onDelete }: { init
           <Field label="相簿名稱"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例如 2026 春訓" /></Field>
           <Field label="日期"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="tnum" /></Field>
         </>) : <Field label="類型"><Select value={kind} onChange={(e) => setKind(e.target.value === 'video' ? 'video' : 'photo')} className="w-full" options={[{ value: 'photo', label: '照片相簿' }, { value: 'video', label: '比賽影片' }]} /></Field>}
-        <Field label={video ? '影片連結' : '相簿連結'} className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical">請貼完整的連結（以 https:// 開頭）</span> : undefined}><Input value={url} onChange={(e) => changeUrl(e.target.value)} placeholder={video ? 'https://youtu.be/…' : 'https://drive.google.com/drive/folders/…'} inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} /></Field>
+        <Field label={video ? '影片連結' : '相簿連結'} className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical-text">請貼完整的連結（以 https:// 開頭）</span> : undefined}><Input value={url} onChange={(e) => changeUrl(e.target.value)} placeholder={video ? 'https://youtu.be/…' : 'https://drive.google.com/drive/folders/…'} inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} /></Field>
         <Field label="攝影師（選填）"><Input value={photographer} onChange={(e) => setPhotographer(e.target.value)} placeholder="誰拍的" /></Field>
         <Field label={video ? '說明（選填）' : '備註（選填）'}><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={video ? '例如 上半場、本壘後方' : '例如 只有上半場、原檔另外索取'} /></Field>
       </div>
-      {error && <p className="mt-3 text-[13px] text-critical">{error}</p>}
+      {error && <p className="mt-3 text-[13px] text-critical-text">{error}</p>}
       <div className="mt-4 flex items-center gap-2">
         <Button variant="primary" onClick={() => void submit()} disabled={busy}>{busy ? '儲存中…' : '儲存'}</Button>
         <Button variant="ghost" onClick={onCancel} icon={<X />}>取消</Button>
-        {onDelete && <Button variant="ghost" className="ml-auto text-critical" icon={<Trash2 />} onClick={() => { if (window.confirm(video ? '移除這個影片連結？（影片本身不會被刪）' : '移除這個相簿連結？（照片本身不會被刪）')) void onDelete() }}>移除</Button>}
+        {onDelete && <Button variant="ghost" className="ml-auto text-critical-text" icon={<Trash2 />} onClick={() => { if (window.confirm(video ? '移除這個影片連結？（影片本身不會被刪）' : '移除這個相簿連結？（照片本身不會被刪）')) void onDelete() }}>移除</Button>}
       </div>
     </Card>
   )
@@ -94,7 +94,7 @@ export function PhotosPage() {
       <PageHeader title="相簿" description="每場比賽與活動的照片與影片連結。照片放在攝影師的 Google Drive，點進去就能看、單張或整個資料夾下載；比賽影片點了會在新分頁打開。"
         actions={canEdit ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => { setPreset(undefined); setEditing('new') }}>新增相簿連結</Button> : undefined} />
       {!supported && <div role="status" className="rounded-[var(--radius-sm)] bg-surface-2 px-3 py-2.5 text-[13px] text-ink-2">{ALBUMS_SETUP_NOTE}</div>}
-      {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
+      {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical-text">{error}</div>}
       {editing === 'new' && <AlbumForm initial={null} presetGameId={preset} onSave={save} onCancel={() => { setEditing(null); setPreset(undefined) }} />}
       {sorted.length === 0 && missing.length === 0 && editing !== 'new' && (
         <Card><EmptyState icon={<Camera />} title="還沒有相簿" description={canEdit ? '請攝影師把照片放到 Google Drive 資料夾並開啟連結分享，再按右上角新增。' : '等紀錄員貼上相簿連結後就會出現在這裡。'} /></Card>

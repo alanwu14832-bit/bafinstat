@@ -20,7 +20,7 @@ export function KeyPlays({ events, rows, onPick }: { events: GameEvent[]; rows: 
               <span className="text-[14px] text-ink leading-snug">{eventText(e, rows, { count: true })}</span>
             </span>
             <span className="shrink-0 flex flex-col items-end gap-0.5">
-              <span className={cx('text-[15px] font-semibold tnum', e.wpa > 0 ? 'text-good' : e.wpa < 0 ? 'text-critical' : 'text-ink-2')}>{signedPts(e.wpa)}</span>
+              <span className={cx('text-[15px] font-semibold tnum', e.wpa > 0 ? 'text-good-text' : e.wpa < 0 ? 'text-critical-text' : 'text-ink-2')}>{signedPts(e.wpa)}</span>
               <span className="text-[11px] text-muted tnum">LI {e.li.toFixed(1)}</span>
             </span>
           </>

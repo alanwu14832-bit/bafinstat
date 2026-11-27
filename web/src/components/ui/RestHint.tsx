@@ -20,7 +20,7 @@ export function RestHint({ name, asOf, excludeGameId, className }: { name: strin
   const last = s?.days[s.days.length - 1]
   if (!s || !last) return null
   return (
-    <p className={cx('text-[12px] leading-snug', s.available ? 'text-muted' : 'text-warning', className)}>
+    <p className={cx('text-[12px] leading-snug', s.available ? 'text-muted' : 'text-warning-text', className)}>
       {s.available ? `${name} 上次 ${md(last.date)} 投 ${last.pitches} 球，可以出賽` : `${name} ${s.reason ?? ''}，${mdWeek(s.earliest)}起可投（Pitch Smart 建議）`}
     </p>
   )

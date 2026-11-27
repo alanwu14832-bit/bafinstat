@@ -113,7 +113,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                       <span className="font-medium text-ink">{isPlaced(p) && isBat(side, p) ? (p.runner || p.batter || '（未填）') : whoOf(side, p)}</span>
                       {isBat(side, p) && p.pos && <span className="text-[11px] text-muted">{p.pos}</span>}
                       {pitcher && <span className="text-[11px] text-muted">投手 {pitcher}</span>}
-                      {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical')}>{p.result || '沒有結果'}</span>}
+                      {!isPlaced(p) && <span className={cx('font-semibold', p.result ? 'text-ink' : 'text-critical-text')}>{p.result || '沒有結果'}</span>}
                       {isNoBatter(p) && <span className="text-[11px] text-muted">不算打席</span>}
                       {p.code && (() => {
                         // the out code on a runner's own row, though he was put out later: say where (第 11 打席壘死)
@@ -125,7 +125,7 @@ export function PaList({ side, rows, flags, onOpen, onInsert, extraInnings, onAd
                         <span key={row} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] bg-surface-2 text-ink-2">{rowName(side, rows[row])} 壘死{rows[row].code && CODE_LABEL[rows[row].code!] ? `・${CODE_LABEL[rows[row].code!]}` : ''}</span>
                       ))}
                       {missingBattedBall(p).length > 0 && <span title={`這個擊球還沒記${missingBattedBall(p).join('、')}（可以先儲存，之後再補）`} className="text-[11px] px-1.5 h-5 inline-flex items-center rounded-[4px] border border-[color-mix(in_srgb,var(--warning)_55%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,transparent)] text-ink">{missingBattedBallTag(missingBattedBall(p))}</span>}
-                      {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
+                      {flags.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex items-center gap-1 text-[11px] text-warning-text"><AlertTriangle className="size-3.5" />{flags.get(i)!.length}</span>}
                     </span>
                     <span className="flex items-center gap-2 flex-wrap text-[11px] text-muted">
                       {(p.outsBefore !== undefined || p.basesBefore) && <span className="tnum">{[p.outsBefore !== undefined && `${p.outsBefore} 出局`, p.basesBefore && `壘上 ${p.basesBefore}`].filter(Boolean).join('・')}</span>}
@@ -185,7 +185,7 @@ function RunPath({ pa }: { pa: BattingPA }) {
       {steps.map((st, i) => (
         <Fragment key={i}>
           {i > 0 && <ChevronRight className="size-3.5 text-muted" />}
-          <span className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-[6px] border', st.end === 'run' ? 'border-[color-mix(in_srgb,var(--good)_45%,transparent)] text-ink' : st.end === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_40%,transparent)] text-critical' : 'border-border text-ink-2')}>
+          <span className={cx('inline-flex items-center gap-1 h-6 px-2 rounded-[6px] border', st.end === 'run' ? 'border-[color-mix(in_srgb,var(--good)_45%,transparent)] text-ink' : st.end === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_40%,transparent)] text-critical-text' : 'border-border text-ink-2')}>
             {st.label}{st.base && st.base < 4 ? <span className="text-muted tnum">{st.base}B</span> : null}
           </span>
         </Fragment>
@@ -193,7 +193,7 @@ function RunPath({ pa }: { pa: BattingPA }) {
     </span>
   )
 }
-const runBtn = (out?: boolean, on?: boolean) => cx('h-9 pointer-fine:h-8 px-2.5 rounded-[6px] border text-[12px] font-medium cursor-pointer', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2', out && 'text-critical'))
+const runBtn = (out?: boolean, on?: boolean) => cx('h-9 pointer-fine:h-8 px-2.5 rounded-[6px] border text-[12px] font-medium cursor-pointer', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2', out && 'text-critical-text'))
 /** The 紀錄比賽 runner menu, applied to one row. */
 function RunButtons({ pa, onChange, label }: { pa: BattingPA; onChange: (pa: BattingPA) => void; label: string }) {
   const ending = runEnding(pa)
@@ -291,12 +291,12 @@ function EndPicker({ value, from, onPick, label, mistake, batter }: { value: End
       {opts.map((o) => (
         <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.v === 'out' && mistake ? mistake.set(false) : onPick(o.v))}
           title={o.v === 'out' && !batter ? '在壘上出局（被封殺、刺殺、觸殺）' : undefined}
-          className={cx('h-9 pointer-fine:h-8 min-w-11 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? (o.v === 'out' ? 'bg-critical text-bg' : 'bg-ink text-bg') : cx('text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && 'text-critical'))}>{o.l}</button>
+          className={cx('h-9 pointer-fine:h-8 min-w-11 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? (o.v === 'out' ? 'bg-critical text-bg' : 'bg-ink text-bg') : cx('text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && 'text-critical-text'))}>{o.l}</button>
       ))}
     </div>
       {mistake && value === 'out' && (
         <button type="button" aria-pressed={mistake.on} onClick={() => mistake.set(!mistake.on)} title="衝過頭、飛球回不去被雙殺、離壘被觸殺這種自己跑壞的才勾；被封殺、刺殺不勾"
-          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
+          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical-text bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
           <span aria-hidden className={cx('size-3.5 rounded-[3px] border inline-flex items-center justify-center text-[10px] leading-none', mistake.on ? 'border-critical bg-critical text-bg' : 'border-border')}>{mistake.on ? '✓' : ''}</span>自己跑壘失誤
         </button>
       )}
@@ -355,7 +355,7 @@ function PlayBuilder({ side, pitches, tl }: { side: PaSide; pitches: number; tl:
               <OutAtChips onPick={(at) => { tl.onPlay(askOut.t, 'out', askOut.rows, at); setAskOut(null); setWho([]) }} />
             </div>
           )}
-          {hint && <p role="alert" className="text-[12px] text-critical">{hint}</p>}
+          {hint && <p role="alert" className="text-[12px] text-critical-text">{hint}</p>}
         </>
       ) : <p className="text-[12px] text-muted">{t ? `第 ${t} 球後` : '第一球前'}壘上沒有跑者</p>}
     </div>
@@ -402,9 +402,9 @@ function OurErrors({ pa, onChange, who }: { pa: PitchingPA; onChange: (pa: AnyPA
         })}
       </div>
       {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：算一次，給「這次失誤算給」選的人；下面只點另外又失誤的。</p>}
-      {doubled && <p role="alert" className="text-[12px] text-warning">結果「失誤」已經算給 {doubled.own}，下面又記了 {doubled.others.join('、')}，共算 {errorsOf(pa).positions.length + errorsOf(pa).unknown} 次。同一次失誤的話：在「這次失誤算給」點 {doubled.others[0]}，再把下面的 {doubled.others[0]} 按 − 減掉；真的是兩次，下面把 {doubled.own} 也點一下（就不會再提醒）。</p>}
+      {doubled && <p role="alert" className="text-[12px] text-warning-text">結果「失誤」已經算給 {doubled.own}，下面又記了 {doubled.others.join('、')}，共算 {errorsOf(pa).positions.length + errorsOf(pa).unknown} 次。同一次失誤的話：在「這次失誤算給」點 {doubled.others[0]}，再把下面的 {doubled.others[0]} 按 − 減掉；真的是兩次，下面把 {doubled.own} 也點一下（就不會再提醒）。</p>}
       {ownPos && (pa.errors?.length ?? 0) < errAdvanceErrors(pa) && <p className="text-[12px] text-muted">結果「{pa.result}」那次（{ownPos}）另外算：跑者「失誤進壘」若也是 {ownPos} 失誤，點一下 {ownPos} 會算成 2 次。</p>}
-      {errPlay && !pa.errors?.length && <p role="alert" className="text-[12px] text-critical">有跑者「失誤進壘」：請點是誰失誤（沒點不能儲存）</p>}
+      {errPlay && !pa.errors?.length && <p role="alert" className="text-[12px] text-critical-text">有跑者「失誤進壘」：請點是誰失誤（沒點不能儲存）</p>}
     </Section>
   )
 }
@@ -428,7 +428,7 @@ function TheirErrors({ pa, onChange }: { pa: BattingPA; onChange: (pa: AnyPA) =>
       <div className="flex flex-wrap gap-1.5">
         {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => <CountButton key={pos} label={pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)} value={list.filter((x) => x === pos).length} onChange={(v) => set(pos, v)} />)}
       </div>
-      {doubled && <p role="alert" className="text-[12px] text-warning">對方 {doubled} 算了 2 次：打擊結果「失誤」一次，這裡又記了一次。同一次失誤的話，把這裡的 {doubled} 按 − 減掉；真的是他失誤兩次就不用改。</p>}
+      {doubled && <p role="alert" className="text-[12px] text-warning-text">對方 {doubled} 算了 2 次：打擊結果「失誤」一次，這裡又記了一次。同一次失誤的話，把這裡的 {doubled} 按 − 減掉；真的是他失誤兩次就不用改。</p>}
     </Section>
   )
 }
@@ -512,7 +512,7 @@ function TimelineRunners({ side, pa, tl, picked }: { side: PaSide; pa: AnyPA; tl
           {step.batter !== 'out' && step.batter !== 'home' && <span className="text-[11px] text-muted">他打完停在哪一壘；之後的盜壘、暴投等在下一個打席記</span>}
         </li>
       </ul>
-      {tl.notice && <p role="alert" className="text-[12px] text-critical">{tl.notice}</p>}
+      {tl.notice && <p role="alert" className="text-[12px] text-critical-text">{tl.notice}</p>}
     </div>
   )
 }
@@ -715,7 +715,7 @@ function UnfinishedPanel({ side, pa, index, total, issues, names, pitcherNames, 
               <>
                 <Button size="sm" variant="outline" onClick={() => setSel({ ...sel, mode: 'insert' })}>在前面插入一球</Button>
                 <Button size="sm" variant="outline" onClick={() => setSel({ ...sel, mode: 'change' })}>改成…</Button>
-                <Button size="sm" variant="ghost" className="text-critical hover:text-critical" onClick={() => { remove(sel.i); setSel(null) }}>刪除這一球</Button>
+                <Button size="sm" variant="ghost" className="text-critical-text hover:text-critical-text" onClick={() => { remove(sel.i); setSel(null) }}>刪除這一球</Button>
               </>
             ) : UNFINISHED_PITCHES.map(([code, label]) => (
               <Button key={code} size="sm" variant="outline" onClick={() => { if (sel.mode === 'insert') insert(sel.i, code); else change(sel.i, code); setSel(null) }}>{label}</Button>
@@ -728,17 +728,17 @@ function UnfinishedPanel({ side, pa, index, total, issues, names, pitcherNames, 
           {UNFINISHED_PITCHES.map(([code, label]) => <Button key={code} size="sm" variant="outline" onClick={() => add(code)}>{label}</Button>)}
         </div>
         <SpeedsField key={`${index}-${pa.pitches.length}`} pitches={pa.pitches.length} speeds={pa.speeds} onChange={(speeds) => set({ speeds })} />
-        {over && <p role="alert" className="text-[12px] text-warning">已經 {over === '保送' ? '4 壞球' : '3 好球'}了，打席應該已經結束：請確認逐球，或把這一列刪掉、改記在一般打席。</p>}
+        {over && <p role="alert" className="text-[12px] text-warning-text">已經 {over === '保送' ? '4 壞球' : '3 好球'}了，打席應該已經結束：請確認逐球，或把這一列刪掉、改記在一般打席。</p>}
         {pit && !!pit.priorPitchers?.length && <p className="text-[12px] text-muted">其中前 {pit.priorPitchers.reduce((a, p) => a + p.pitches, 0)} 球是換下的投手投的（{pit.priorPitchers.map((p) => `${p.name} ${p.pitches} 球`).join('、')}），算他的。</p>}
       </Section>
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pa.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
-          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning-text" />{m}</div>)}
         </div>
       )}
       <div className="flex pt-2 border-t border-border">
-        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onDelete}>刪除這一列</Button>}
+        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical-text hover:text-critical-text" onClick={onDelete}>刪除這一列</Button>}
       </div>
     </div>
   )
@@ -772,11 +772,11 @@ function ReliefPanel({ pa, index, total, issues, pitcherNames, onChange, onNav, 
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pit.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
-          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning-text" />{m}</div>)}
         </div>
       )}
       <div className="flex pt-2 border-t border-border">
-        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onDelete}>刪除這一列</Button>}
+        {!fixed && <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical-text hover:text-critical-text" onClick={onDelete}>刪除這一列</Button>}
       </div>
     </div>
   )
@@ -824,12 +824,12 @@ function PlacedPanel({ side, pa, index, total, issues, names, pitcherNames, onCh
       <label className="flex flex-col gap-1 text-[12px] font-medium text-ink-2">備註<Input value={pa.note ?? ''} onChange={(e) => set({ note: e.target.value || undefined })} /></label>
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
-          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning-text" />{m}</div>)}
         </div>
       )}
       {onRemovePlaced && (
         <div className="flex pt-2 border-t border-border">
-          <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={onRemovePlaced}>刪除這局的突破僵局跑者</Button>
+          <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical-text hover:text-critical-text" onClick={onRemovePlaced}>刪除這局的突破僵局跑者</Button>
         </div>
       )}
     </div>
@@ -950,7 +950,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
               <>
                 <Button size="sm" variant="outline" onClick={() => setPitchSel({ ...pitchSel, mode: 'insert' })}>在前面插入一球</Button>
                 <Button size="sm" variant="outline" onClick={() => setPitchSel({ ...pitchSel, mode: 'change' })}>改成…</Button>
-                <Button size="sm" variant="ghost" className="text-critical hover:text-critical" onClick={() => { removePitch(pitchSel.i); setPitchSel(null) }}>刪除這一球</Button>
+                <Button size="sm" variant="ghost" className="text-critical-text hover:text-critical-text" onClick={() => { removePitch(pitchSel.i); setPitchSel(null) }}>刪除這一球</Button>
               </>
             ) : PITCH_EDIT.map(([code, label]) => (
               <Button key={code} size="sm" variant="outline" onClick={() => { if (pitchSel.mode === 'insert') insertPitch(pitchSel.i, code); else changePitch(pitchSel.i, code); setPitchSel(null) }}>{label}</Button>
@@ -959,7 +959,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
           </div>
         )}
         {/* why the last change to the runners did not go through, right where it was tried */}
-        {timeline?.notice && <p role="alert" className="text-[12px] text-critical">{timeline.notice}</p>}
+        {timeline?.notice && <p role="alert" className="text-[12px] text-critical-text">{timeline.notice}</p>}
         <SpeedsField key={`${index}-${pa.pitches.length}`} pitches={pa.pitches.length} speeds={pa.speeds} onChange={(speeds) => set({ speeds })} />
         <PitchPad onPitch={(code) => { if (pa.pitches[pa.pitches.length - 1] !== 'IP') set({ pitches: [...pa.pitches, code], ...(pa.speeds ? { speeds: [...pa.speeds.slice(0, pa.pitches.length), null] } : {}) }) }} disabled={pa.pitches[pa.pitches.length - 1] === 'IP'} twoStrikes={count(pa.pitches).strikes === 2} />
         {timeline && <PlayBuilder side={side} pitches={pa.pitches.length} tl={timeline} />}
@@ -1049,7 +1049,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
 
       {issues.length > 0 && (
         <div role="status" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2 text-[12px] text-ink flex flex-col gap-1">
-          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning" />{m}</div>)}
+          {issues.map((m) => <div key={m} className="flex items-start gap-1.5"><AlertTriangle className="size-3.5 mt-0.5 shrink-0 text-warning-text" />{m}</div>)}
           {/* 上壘卻記出局碼 (saved before 壘上跑者 counted it): one click */}
           {bat && needsOutOnBase(bat) && (
             <Button size="sm" variant="outline" className="self-start" onClick={() => {
@@ -1065,7 +1065,7 @@ function PlayPanel({ side, pa, index, total, issues, names, pitcherNames, onChan
         <Button size="sm" variant="ghost" icon={<Plus />} onClick={() => onInsert(index + 1, pa.inning)}>在後面插入</Button>
         <Button size="sm" variant="ghost" icon={<ArrowUp />} aria-label="往前移" title="往前移" onClick={() => onMove(-1)} disabled={index === 0} />
         <Button size="sm" variant="ghost" icon={<ArrowDown />} aria-label="往後移" title="往後移" onClick={() => onMove(1)} disabled={index >= total - 1} />
-        <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical hover:text-critical" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？${deleteNote ? `\n${deleteNote()}` : ''}\n（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
+        <Button size="sm" variant="ghost" icon={<Trash2 />} className="ml-auto text-critical-text hover:text-critical-text" onClick={() => { if (window.confirm(`刪除第 ${index + 1} 個打席？${deleteNote ? `\n${deleteNote()}` : ''}\n（按「儲存修改」後才會生效）`)) onDelete() }}>刪除這個打席</Button>
       </div>}
     </div>
   )

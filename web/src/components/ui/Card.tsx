@@ -31,7 +31,7 @@ export function Card({ title, subtitle, noteOpen, action, children, className, b
       {hasHeader && (
         <header className={cx('flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-2 sm:gap-x-4 px-5 pt-5', flush ? 'pb-4 border-b border-border' : 'pb-3')}>
           <div className="min-w-0 sm:flex-1 sm:min-w-[9rem]">
-            {title && <div className="flex items-center gap-1.5 min-w-0"><h3 className="text-[16px] text-ink leading-6 truncate">{title}</h3>{info.button}</div>}
+            {title && <div className="flex items-center gap-1.5 min-w-0"><h2 className="text-[16px] text-ink leading-6 truncate">{title}</h2>{info.button}</div>}
             {title ? info.panel : subtitle && <p className="text-xs text-muted leading-4 mt-0.5">{subtitle}</p>}
           </div>
           {action && <div className="min-w-0 max-w-full flex items-center sm:justify-end gap-2 flex-wrap sm:-my-1">{action}</div>}

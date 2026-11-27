@@ -283,7 +283,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
   }
   const startRow = (
     <div className="mt-4 pt-4 border-t border-border flex flex-col gap-2 sm:items-end">
-      {error && <span className="text-[13px] text-critical">{error}</span>}
+      {error && <span className="text-[13px] text-critical-text">{error}</span>}
       <Button variant="primary" size="lg" onClick={start} className="w-full sm:w-auto">{practice ? '開始練習' : '開始紀錄'}</Button>
     </div>
   )
@@ -380,7 +380,7 @@ function Setup({ onStart, practice = false }: { onStart: (s: RecordState) => voi
             <div key={i} className="flex items-center gap-2">
               <PlateBadge size={28} active={!!l.name}>{i + 1}</PlateBadge>
               <PlayerSelect aria-label={`第 ${i + 1} 棒`} value={l.name} onChange={(v) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, name: v } : x)))} names={ourPick} taken={inLineup} tag={benchTag} placeholder="球員" className="flex-1 min-w-0" />
-              <Select value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
+              <Select aria-label={`第 ${i + 1} 棒守位`} value={l.pos} onChange={(e) => setLineup((ls) => ls.map((x, k) => (k === i ? { ...x, pos: e.target.value } : x)))} options={[{ value: '', label: '守位' }, ...POSITIONS.map((p) => ({ value: p, label: posNum(p) }))]} className="w-[92px]" />
             </div>
           ))}
         </div>
@@ -829,7 +829,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
   const secondary = (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 text-[12px] text-muted min-h-9">
-        <span role="status" className={cx('min-w-0 inline-flex items-center gap-1.5', save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>
+        <span role="status" className={cx('min-w-0 inline-flex items-center gap-1.5', save.tone === 'failed' && 'text-critical-text font-medium', save.tone === 'pending' && 'text-warning-text')}>
           <span aria-hidden className={cx('size-2 rounded-full shrink-0', save.tone === 'failed' ? 'bg-critical' : save.tone === 'pending' ? 'bg-warning' : 'bg-good')} />{save.status}
         </span>
         {state.firstPitchAt && <span className="tnum shrink-0" title="比賽時間會依第一球和最後一個打席的時間自動帶入">{hhmm(state.firstPitchAt)} 開賽</span>}
@@ -895,10 +895,10 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               ) : (
                 <div className="flex items-center gap-3 min-w-0">
                   <PlateBadge size={44} active={false}>{state.oppOrder}</PlateBadge>
-                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">{t('我隊')}投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical' : countTone === 'warning' ? 'text-warning' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
-                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical' : restTone === 'warning' ? 'text-warning' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">{t('對方')}第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
+                  <div className="min-w-0"><div className="text-[12px] text-muted truncate">{t('我隊')}投手 {state.pitcher}・用球 <span className={cx('tnum font-semibold', countTone === 'critical' ? 'text-critical-text' : countTone === 'warning' ? 'text-warning-text' : 'text-ink')} title={`提醒 ${params.pitchWarn} 球、上限 ${params.pitchMax} 球（可在資料匯入頁調整）`}>{currentCount}{countTone === 'critical' ? `・已達 ${params.pitchMax} 球` : countTone === 'warning' ? '・注意' : ''}</span></div>
+                    <div className={cx('text-[12px] leading-snug', restTone === 'critical' ? 'text-critical-text' : restTone === 'warning' ? 'text-warning-text' : 'text-muted')} title={`${TEAM.pitchRest.source}，只是提醒`}>{restNow.available ? restHint.short : `休息未滿，${mdWeek(restNow.earliest)}起才建議出賽・這場後${restHint.rest ? `需休 ${restHint.rest} 天` : '不用多休'}`}{restHint.warn ? `・${restHint.warn}` : ''}{otherToday ? `（今天共 ${currentCount + otherToday} 球）` : ''}</div><div className="flex items-center gap-x-2 gap-y-1 flex-wrap"><div className="font-display text-[22px] font-bold text-ink leading-7 truncate min-w-0">{t('對方')}第 {state.oppOrder} 棒{oppName && <span className="ml-1.5">{oppName}</span>}</div>
                       {oppBatsOn && <OppBatsChips value={oppBatsNow(state)} onPick={(b) => apply((s) => setOppBats(s, b))} />}</div>
-                    {batsHint && <p role="status" className="text-[12px] text-warning basis-full">{batsHint}</p>}
+                    {batsHint && <p role="status" className="text-[12px] text-warning-text basis-full">{batsHint}</p>}
                     {state.oppNames && !intra && <button type="button" onClick={() => { setOppLineupOpen(true); setToast(null) }} className="h-9 pointer-fine:h-7 text-[12px] text-ink-2 hover:text-ink underline underline-offset-2 cursor-pointer">{state.oppLineup?.[state.oppOrder - 1] ? '改姓名／代打' : '＋填姓名'}</button>}</div>
                 </div>
               )}
@@ -1064,9 +1064,9 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     </div>
                   </div>
                 )}
-                {problems.length > 0 && <div role="alert" className="text-[12px] text-critical flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m.includes('規則 5.08') ? m : `${m}，請調整跑者去向`}</span>)}</div>}
-                {!problems.length && thirdWarn && <p role="status" className="text-[12px] text-warning">{thirdWarn}</p>}
-                {!problems.length && ruleWarns.map((m) => <p key={m} role="status" className="text-[12px] text-warning">{m}</p>)}
+                {problems.length > 0 && <div role="alert" className="text-[12px] text-critical-text flex flex-col gap-0.5">{problems.map((m) => <span key={m}>{m.includes('規則 5.08') ? m : `${m}，請調整跑者去向`}</span>)}</div>}
+                {!problems.length && thirdWarn && <p role="status" className="text-[12px] text-warning-text">{thirdWarn}</p>}
+                {!problems.length && ruleWarns.map((m) => <p key={m} role="status" className="text-[12px] text-warning-text">{m}</p>)}
                 {walkOff && <p role="status" className="text-[13px] font-semibold text-ink">再見！比賽在致勝的那一分回來時結束：只算到這一分，安打照致勝跑者推進的壘數記（規則 9.06(f)）</p>}
                 <label className="flex items-center gap-2 text-[12px] text-ink-2">備註<Input aria-label="這個打席的備註" value={plan.note ?? ''} maxLength={200} onChange={(e) => setPlan({ ...plan, note: e.target.value })} placeholder="選填，例如強襲投手、裁判改判" className="flex-1 min-w-0" /></label>
                 <div className="flex items-center gap-4 flex-wrap">
@@ -1095,7 +1095,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <div className="ml-auto max-sm:w-full flex flex-col items-end gap-1 max-sm:sticky max-sm:bottom-0 max-sm:z-10 max-sm:-mx-3 max-sm:px-3 max-sm:py-2 max-sm:bg-surface max-sm:border-t max-sm:border-border max-sm:items-stretch">
                     <p className="text-[12px] text-ink-2 truncate max-sm:text-left" aria-live="polite">{planSummary}</p>
                     <Button variant="primary" size="lg" onClick={confirm} disabled={problems.length > 0 || needBall || needErrBy} aria-describedby={needBall || needErrBy ? 'pa-missing' : undefined} className="max-sm:w-full">{willEnd ? '送出並結束半局' : '送出這個打席'}</Button>
-                    {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] text-critical">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
+                    {(needBall || needErrBy) && <span id="pa-missing" className="text-[12px] text-critical-text">{[missingBattedBallText(missingBall), needErrBy ? '還沒點誰失誤' : ''].filter(Boolean).join('；')}</span>}
                   </div>
                 </div>
               </div>
@@ -1124,7 +1124,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                     <PlateBadge size={28} active={i === state.slot}>{i + 1}</PlateBadge>
                     <span className="text-[13px] font-medium text-ink flex-1 truncate">{l.name}</span>
                     {/* while we field, the position each one stands at now (an error there is his) */}
-                    <span className={cx('text-[12px] tnum shrink-0', side === 'opp' ? 'h-6 px-2 inline-flex items-center rounded-full border border-border text-ink font-medium' : 'text-muted')}>{side !== 'opp' ? l.pos : l.pos === 'PH' || l.pos === 'PR' || !l.pos ? <span className="text-warning">{l.pos === 'PR' ? '代跑' : l.pos === 'PH' ? '代打' : '—'}・沒守位</span> : `守 ${posNum(l.pos)}`}</span>
+                    <span className={cx('text-[12px] tnum shrink-0', side === 'opp' ? 'h-6 px-2 inline-flex items-center rounded-full border border-border text-ink font-medium' : 'text-muted')}>{side !== 'opp' ? l.pos : l.pos === 'PH' || l.pos === 'PR' || !l.pos ? <span className="text-warning-text">{l.pos === 'PR' ? '代跑' : l.pos === 'PH' ? '代打' : '—'}・沒守位</span> : `守 ${posNum(l.pos)}`}</span>
                   </button>
                 </li>
               ))}
@@ -1244,7 +1244,7 @@ function SpeedPad({ at, state, onClose, onSave }: { at: number | null; state: Re
             {last && <div className="text-[12px] text-muted tnum">上一球 {last}</div>}
           </div>
           <div aria-live="polite" className="h-14 rounded-[10px] bg-surface-2 flex items-center justify-center text-[30px] font-bold tnum text-ink">{text || <span className="text-muted text-[16px] font-normal">幾公里？</span>}{text && <span className="text-[14px] font-normal text-muted ml-1">km/h</span>}</div>
-          {msg && <p role="alert" className="text-[12px] text-critical text-center">{msg}</p>}
+          {msg && <p role="alert" className="text-[12px] text-critical-text text-center">{msg}</p>}
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="球速數字鍵盤">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => <button key={d} type="button" className={key} onClick={() => press(d)}>{d}</button>)}
             <button type="button" className={key} aria-label="刪一個數字" onClick={() => { setMsg(null); setText((t) => t.slice(0, -1)) }}>⌫</button>
@@ -1280,12 +1280,12 @@ function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }:
         {opts.filter((o) => batter || o.v === 'out' || o.v === 'home' || (typeof o.v === 'number' && o.v >= min)).map((o) => (
           <button key={o.l} type="button" aria-pressed={isOn(o)} onClick={() => (o.v === 'out' && mistake ? mistake.set(false) : onChange(o.v))}
             title={o.v === 'out' && !batter ? '在壘上出局（被封殺、刺殺、觸殺）' : undefined}
-            className={cx('h-9 pointer-fine:h-8 min-w-9 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical')}>{o.l}</button>
+            className={cx('h-9 pointer-fine:h-8 min-w-9 pointer-fine:min-w-0 px-2.5 rounded-[6px] text-[12px] font-medium cursor-pointer', isOn(o) ? 'bg-ink text-bg' : 'text-ink-2 hover:text-ink hover:bg-surface-2', o.v === 'out' && !isOn(o) && 'text-critical-text')}>{o.l}</button>
         ))}
       </div>
       {mistake && value === 'out' && (
         <button type="button" aria-pressed={mistake.on} onClick={() => mistake.set(!mistake.on)} title="衝過頭、飛球回不去被雙殺、離壘被觸殺這種自己跑壞的才勾；被封殺、刺殺不勾"
-          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
+          className={cx('h-9 pointer-fine:h-8 px-2.5 rounded-full border text-[12px] font-medium cursor-pointer inline-flex items-center gap-1.5', mistake.on ? 'border-critical text-critical-text bg-[color-mix(in_srgb,var(--critical)_10%,transparent)]' : 'border-border text-ink-2 hover:text-ink hover:bg-surface-2')}>
           <span aria-hidden className={cx('size-3.5 rounded-[3px] border inline-flex items-center justify-center text-[10px] leading-none', mistake.on ? 'border-critical bg-critical text-bg' : 'border-border')}>{mistake.on ? '✓' : ''}</span>自己跑壘失誤
         </button>
       )}
@@ -1589,7 +1589,7 @@ function RecordScreen({ practice }: { practice: boolean }) {
             <div className="fixed inset-0 z-[60] bg-bg text-ink overflow-y-auto" role="region" aria-label="全螢幕紀錄">
               <div className="max-w-[var(--content-max)] mx-auto px-3 py-3 md:px-6 md:py-5 flex flex-col gap-4">
                 {/* (two lines on a narrow phone: the game, then the sync state — neither cut short) */}
-                <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink">{state.game.date}・vs {state.game.opponent}</span><span className={cx(save.tone === 'failed' && 'text-critical font-medium', save.tone === 'pending' && 'text-warning')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
+                <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-[12px] text-muted">{practice && <PracticeTag />}<span className="font-medium text-ink">{state.game.date}・vs {state.game.opponent}</span><span className={cx(save.tone === 'failed' && 'text-critical-text font-medium', save.tone === 'pending' && 'text-warning-text')}>{save.status}</span><button type="button" onClick={toggleFocus} className="ml-auto inline-flex items-center gap-1 text-ink-2 hover:text-ink cursor-pointer"><Minimize2 className="size-3.5" />離開全螢幕</button></div>
                 <Live state={state} apply={apply} undo={undo} canUndo={history.length > 0} save={save} onAbandon={abandon} onFinish={openFinish} focus onToggleFocus={toggleFocus} large={large} onToggleLarge={toggleLarge} oppHandOn={oppHandOn} oppBatsOn={oppBatsOn} practice={practice} />
               </div>
             </div>, document.body)
@@ -1608,7 +1608,7 @@ function RecordScreen({ practice }: { practice: boolean }) {
                 <Field label="結束"><Input type="time" value={finish.end} onChange={(e) => setFinish({ ...finish, end: e.target.value })} className="tnum" /></Field>
                 {(() => {
                   const d = durationMinutes(finish.start, finish.end)
-                  return <span className={cx('col-span-2 sm:col-span-1 sm:h-10 sm:pointer-fine:h-9 flex items-center text-[13px] tnum', isLongGame(d) ? 'text-warning' : 'text-ink')}>{d ? (isLongGame(d) ? LONG_GAME_NOTE : `共 ${formatDuration(d)}`) : ''}</span>
+                  return <span className={cx('col-span-2 sm:col-span-1 sm:h-10 sm:pointer-fine:h-9 flex items-center text-[13px] tnum', isLongGame(d) ? 'text-warning-text' : 'text-ink')}>{d ? (isLongGame(d) ? LONG_GAME_NOTE : `共 ${formatDuration(d)}`) : ''}</span>
                 })()}
               </div>
               <p className="text-[12px] text-muted">{finish.live ? '依第一球和最後一個打席的時間自動帶入；看影片補記的話請改成實際時間' : '這場不是現場即時紀錄，時間可以自己填或留空'}</p>

@@ -68,9 +68,9 @@ export function StrikeRatioCard({ rows, onPick, className }: { rows: StrikeRatio
                     <span className="absolute inset-y-0 left-0 bg-[var(--series-1)] rounded-l-[4px]" style={{ width: `${pct * 100}%` }} />
                     <span aria-hidden className="absolute inset-y-0 border-l border-dashed border-ink/60" style={{ left: `${STRIKE_REFERENCE * 100}%` }} />
                     {/* the share on the blue part; a sliver too thin for it gets it just after */}
-                    <span className={cx('absolute inset-y-0 flex items-center px-2 text-[12px] font-semibold tnum', pct >= 0.18 ? 'left-0 text-bg' : 'text-ink')} style={pct >= 0.18 ? undefined : { left: `${pct * 100}%` }}>{label}</span>
+                    <span className={cx('absolute inset-y-0 flex items-center px-2 text-[12px] font-semibold tnum', pct >= 0.18 ? 'left-0 text-accent-ink' : 'text-ink')} style={pct >= 0.18 ? undefined : { left: `${pct * 100}%` }}>{label}</span>
                   </span>
-                  <span className="w-[5.5rem] shrink-0 text-[11px] text-muted tnum whitespace-nowrap">{n} 球{small && <span className="ml-1 text-warning">樣本少</span>}</span>
+                  <span className="w-[5.5rem] shrink-0 text-[11px] text-muted tnum whitespace-nowrap">{n} 球{small && <span className="ml-1 text-warning-text">樣本少</span>}</span>
                 </>
               )
               return (

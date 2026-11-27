@@ -82,7 +82,7 @@ export function LeaderStrip({ leaders, numbers, caption, id }: { leaders: Leader
               <Reveal delay={0.04 * i} y={6} className="h-full">
                 <Link to={l.to} className="lift group h-full flex flex-col gap-1.5 rounded-[var(--radius-sm)] px-3 py-3 hover:bg-[color-mix(in_srgb,var(--surface-2)_70%,transparent)]">
                   <span className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold tracking-[0.06em] text-accent">{l.label}</span>
+                    <span className="text-[11px] font-semibold tracking-[0.06em] text-accent-text">{l.label}</span>
                     <ArrowUpRight aria-hidden className="size-3.5 text-muted opacity-0 transition-opacity duration-[var(--dur-base)] group-hover:opacity-100" />
                   </span>
                   <span className="figure text-[30px] md:text-[34px] font-bold text-ink leading-none">{l.value}</span>

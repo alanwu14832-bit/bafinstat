@@ -43,7 +43,7 @@ export function EditorClaim() {
   return (
     <form className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] p-3 text-[13px]"
       onSubmit={(e) => { e.preventDefault(); void submit() }}>
-      <div className="flex items-start gap-2 text-ink"><KeyRound className="size-4 mt-0.5 shrink-0 text-warning" /><span>{WHY[access]}</span></div>
+      <div className="flex items-start gap-2 text-ink"><KeyRound className="size-4 mt-0.5 shrink-0 text-warning-text" /><span>{WHY[access]}</span></div>
       {canEnter && (
         <>
           <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="邀請碼（例：K7Q2M-9XAPD）" aria-label="邀請碼" autoComplete="one-time-code" className="tnum tracking-wider" />

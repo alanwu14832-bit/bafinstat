@@ -84,7 +84,7 @@ function CompareValue({ text, state, side }: { text: string; state: 'win' | 'los
   if (state === 'win') {
     return (
       <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 tnum font-semibold text-ink bg-[color-mix(in_srgb,var(--accent)_22%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--accent)_55%,transparent)]">
-        {side === 'b' && <span aria-hidden className="text-[10px] text-accent">◀</span>}{text}{side === 'a' && <span aria-hidden className="text-[10px] text-accent">▶</span>}
+        {side === 'b' && <span aria-hidden className="text-[10px] text-accent-text">◀</span>}{text}{side === 'a' && <span aria-hidden className="text-[10px] text-accent-text">▶</span>}
         <span className="sr-only">（較佳）</span>
       </span>
     )

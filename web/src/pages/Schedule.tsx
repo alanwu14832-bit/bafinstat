@@ -66,12 +66,12 @@ function GameForm({ initial, onSave, onCancel, onDelete }: { initial: Game | nul
         <Field label="場地"><Input value={g.venue ?? ''} onChange={(e) => set('venue', e.target.value)} placeholder="例如 台大棒球場" /></Field>
         <Field label="集合／備註" className="col-span-2"><Input value={g.note ?? ''} onChange={(e) => set('note', e.target.value)} placeholder="例如 12:30 球場集合、穿白色球衣" /></Field>
       </div>
-      {error && <p className="mt-3 text-[13px] text-critical">{error}</p>}
+      {error && <p className="mt-3 text-[13px] text-critical-text">{error}</p>}
       <div className="mt-4 flex items-center gap-2 flex-wrap">
         <Button variant="primary" onClick={() => void submit()} disabled={busy}>{busy ? '儲存中…' : '儲存'}</Button>
         <Button variant="ghost" onClick={onCancel} icon={<X />}>取消</Button>
         {initial && <Button variant="ghost" onClick={() => void onSave({ ...g, status: g.status === 'cancelled' ? 'scheduled' : 'cancelled' })}>{g.status === 'cancelled' ? '恢復這場' : '標記為取消'}</Button>}
-        {onDelete && <Button variant="ghost" className="ml-auto text-critical" icon={<Trash2 />} onClick={() => { if (window.confirm('刪除這筆賽程？')) void onDelete() }}>刪除</Button>}
+        {onDelete && <Button variant="ghost" className="ml-auto text-critical-text" icon={<Trash2 />} onClick={() => { if (window.confirm('刪除這筆賽程？')) void onDelete() }}>刪除</Button>}
       </div>
     </Card>
   )
@@ -111,7 +111,7 @@ export function ScheduleSection() {
             <span className="text-[15px] font-semibold text-ink">vs {g.opponent}</span>
             <Badge>{g.homeAway === '主' ? '主場' : '客場'}</Badge>
             {g.tournament && <span className="text-[12px] text-muted">{g.tournament}</span>}
-            {tone === 'up' && <span className={cx('text-[12px] font-medium', soon ? 'text-accent' : 'text-muted')}>{whenLabel(g.date)}</span>}
+            {tone === 'up' && <span className={cx('text-[12px] font-medium', soon ? 'text-accent-text' : 'text-muted')}>{whenLabel(g.date)}</span>}
             {tone === 'off' && <Badge variant="critical">已取消</Badge>}
             {liveIds.has(g.id) && <Link to="/live" aria-label="比賽進行中，看即時比分" className="inline-flex items-center min-h-9"><LiveBadge /></Link>}
           </div>
@@ -132,7 +132,7 @@ export function ScheduleSection() {
 
   return (
     <>
-      {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical">{error}</div>}
+      {error && <div role="alert" className="rounded-[var(--radius-sm)] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2.5 text-[13px] text-critical-text">{error}</div>}
       {editing === 'new' && <GameForm initial={null} onSave={save} onCancel={() => setEditing(null)} />}
       <Card title="接下來" subtitle={upcoming.length ? '點日曆圖示可加到 Google 日曆；比賽當天紀錄員在「紀錄比賽」選這場就能開始記' : undefined}
         action={canEdit && editing !== 'new' ? <Button variant="primary" size="sm" icon={<Plus />} onClick={() => setEditing('new')}>新增賽程</Button> : undefined} flush>

@@ -54,13 +54,13 @@ export function StatTile({ label, value, format = 'int', display, delta, deltaFo
       <div className="flex items-center justify-between gap-2">
         <span className="relative z-[2] text-xs text-muted font-medium truncate"><StatHint label={label}>{label}</StatHint></span>
         {icon && <span className="text-muted [&>svg]:size-3.5">{icon}</span>}
-        {to && <span className="inline-flex items-center gap-0.5 shrink-0 text-muted">{toLabel && <span className="text-[11px] opacity-80 group-hover:opacity-100">{toLabel}</span>}<ChevronRight aria-hidden className="size-3.5 shrink-0 opacity-60 transition-[translate,opacity] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0.5" /></span>}
+        {to && <span className="inline-flex items-center gap-0.5 shrink-0 text-muted">{toLabel && <span className="text-[11px]">{toLabel}</span>}<ChevronRight aria-hidden className="size-3.5 shrink-0 opacity-60 transition-[translate,opacity] duration-[var(--dur-base)] group-hover:opacity-100 group-hover:translate-x-0.5" /></span>}
       </div>
       <div className={cx('figure font-semibold leading-none text-ink', compact ? 'text-[20px]' : 'text-[24px]')}><RollingNumber text={text} onView={count} /></div>
       {(note || delta !== undefined) && (
         <div className="flex items-center gap-2 text-xs tnum min-w-0">
           {delta !== undefined && (
-            <span className={cx('inline-flex items-center gap-0.5 font-medium whitespace-nowrap', good && 'text-good', bad && 'text-critical', !good && !bad && 'text-muted')}>
+            <span className={cx('inline-flex items-center gap-0.5 font-medium whitespace-nowrap', good && 'text-good-text', bad && 'text-critical-text', !good && !bad && 'text-muted')}>
               {good ? <ArrowUpRight className="size-3" /> : bad ? <ArrowDownRight className="size-3" /> : null}
               {deltaText}
               {deltaLabel && <span className="text-muted font-normal ml-0.5">{deltaLabel}</span>}
