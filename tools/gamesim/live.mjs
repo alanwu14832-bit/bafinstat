@@ -101,7 +101,7 @@ const newPitcher = async (name) => {
 }
 
 // ---------------------------------------------------------------- reading /live
-const card = () => lv.locator('section', { has: lv.locator('h3', { hasText: /^文字轉播$/ }) }).first()
+const card = () => lv.locator('section', { has: lv.locator('h2, h3', { hasText: /^文字轉播$/ }) }).first()
 const board = () => lv.locator('main').locator('div.\\@container').first()
 async function reload() { await lv.goto(`${URL}/live`, { waitUntil: 'networkidle' }); await lv.waitForTimeout(350) }
 const rowValue = async (label) => (await board().locator('span', { hasText: new RegExp(`^${label}$`) }).first().locator('xpath=following-sibling::span[1]').innerText().catch(() => '')).trim()

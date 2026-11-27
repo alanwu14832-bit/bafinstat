@@ -59,12 +59,13 @@ export function AppShell({ children, filters }: AppShellProps) {
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[auto_minmax(0,1fr)] print:block bg-bg text-ink">
+      <a href="#main" className="skip-link print:hidden">跳到主要內容</a>
       <LiveGamesPoller />
       <Sidebar />
       <MobileDrawer />
       <div className="min-w-0 flex flex-col">
         {filters === undefined ? <TopBar /> : <TopBar>{filters}</TopBar>}
-        <main className="flex-1 min-w-0">
+        <main id="main" tabIndex={-1} className="flex-1 min-w-0 focus:outline-none">
           {ARCHIVE && (
             <div role="status" className="print:hidden max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
               <div className="flex items-center gap-2 flex-wrap rounded-[12px] bg-[color-mix(in_srgb,var(--warning)_14%,var(--surface))] px-3 py-2 text-[13px] text-ink">
@@ -77,7 +78,7 @@ export function AppShell({ children, filters }: AppShellProps) {
           {stale && (
             <div role="status" className="print:hidden max-w-[var(--content-max)] mx-auto px-4 md:px-10 pt-4 -mb-2">
               <div className="flex items-center gap-2 rounded-[12px] bg-[color-mix(in_srgb,var(--critical)_10%,var(--surface))] px-3 py-2 text-[13px] text-ink">
-                <CloudOff className="size-4 text-critical shrink-0" />
+                <CloudOff className="size-4 text-critical-text shrink-0" />
                 <span className="min-w-0 flex-1">顯示的是上次同步的資料{cloud.lastSync ? `（${new Date(cloud.lastSync).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}）` : ''}，雲端目前連不上。</span>
                 <button type="button" onClick={() => void useDataStore.getState().loadCloud()} className="text-[13px] font-medium underline underline-offset-2 cursor-pointer">重新連線</button>
               </div>

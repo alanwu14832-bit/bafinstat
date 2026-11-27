@@ -48,7 +48,7 @@ function MobileFilters({ always = false, keys }: { always?: boolean; keys: Filte
       <Sheet open={open} onClose={() => setOpen(false)} ariaLabel="篩選" side="bottom" desktopFrom="never" className={always ? undefined : 'xl:hidden'} panelClassName="max-h-[88vh]"
         header={<div className="px-4 h-11 flex items-center justify-between">
           <span className="text-sm font-semibold text-ink">篩選{count > 0 && <span className="text-muted font-normal ml-1.5 tnum">{count} 項生效</span>}</span>
-          <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="size-9 -mr-2 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer"><X className="size-5" /></button>
+          <button type="button" onClick={() => setOpen(false)} aria-label="關閉篩選" className="tap-44 size-9 -mr-2 inline-flex items-center justify-center rounded-full text-ink-2 hover:bg-surface-2 active:bg-surface-3 cursor-pointer"><X className="size-5" /></button>
         </div>}>
         <div className="px-4 pt-2 pb-4">
           <FilterBar layout="stack" keys={keys} />
@@ -98,7 +98,7 @@ export function TopBar({ children: given }: TopBarProps) {
       {/* a little wider than the page content: the one-row filters need ~1,100px next to the toggles */}
       <div className="max-w-[calc(var(--content-max)+240px)] mx-auto px-4 md:px-8 h-14 flex items-center gap-3">
         <button type="button" aria-label="開啟選單" onClick={() => setMobileNavOpen(true)}
-          className="lg:hidden size-9 -ml-2 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer shrink-0">
+          className="tap-44 lg:hidden size-9 -ml-2 inline-flex items-center justify-center rounded-[var(--radius-sm)] text-ink-2 hover:bg-surface-2 cursor-pointer shrink-0">
           <Menu className="size-5" />
         </button>
         <div ref={labelRef} className={cx(!cramped && 'xl:hidden', 'text-[15px] font-semibold text-ink whitespace-nowrap truncate min-w-0')}>{item?.label ?? '頁面'}</div>

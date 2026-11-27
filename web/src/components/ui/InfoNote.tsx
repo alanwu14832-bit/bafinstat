@@ -14,8 +14,8 @@ export function useInfoNote(note: ReactNode, opts: { className?: string; what?: 
   const button = (
     <button type="button" aria-expanded={open} aria-controls={id} aria-label={open ? `收起${label}` : `看${label}`} title={open ? `收起${label}` : `看${label}`}
       onClick={(e) => { e.stopPropagation(); setOpen((o) => !o) }}
-      // a 24px dot with a 40px touch target around it
-      className={cx('print:hidden relative shrink-0 inline-flex items-center justify-center size-6 rounded-full cursor-pointer transition-colors motion-reduce:transition-none before:absolute before:-inset-2 before:content-[""]',
+      // a 24px dot with a 44px touch target around it
+      className={cx('print:hidden relative shrink-0 inline-flex items-center justify-center size-6 rounded-full cursor-pointer transition-colors motion-reduce:transition-none before:absolute before:-inset-2.5 before:content-[""]',
         open ? 'bg-accent-soft text-ink' : 'text-muted hover:text-ink hover:bg-surface-2')}>
       <Info aria-hidden className="size-[15px]" strokeWidth={1.9} />
     </button>

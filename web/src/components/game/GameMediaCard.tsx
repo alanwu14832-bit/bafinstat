@@ -39,17 +39,17 @@ function LinkForm({ kind, gameId, existing, onDone }: { kind: Kind; gameId: stri
   return (
     <div className="rounded-[var(--radius-sm)] border border-border p-3 flex flex-col gap-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label={video ? '影片連結' : '相簿連結'} className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical">{BAD_URL}</span> : undefined}>
+        <Field label={video ? '影片連結' : '相簿連結'} className="sm:col-span-2" hint={url.trim() && !isValidAlbumUrl(url) ? <span className="text-critical-text">{BAD_URL}</span> : undefined}>
           <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={video ? 'https://youtu.be/…' : 'https://drive.google.com/drive/folders/…'} inputMode="url" aria-invalid={!!url.trim() && !isValidAlbumUrl(url)} />
         </Field>
         {!video && <Field label="攝影師（選填）"><Input value={photographer} onChange={(e) => setPhotographer(e.target.value)} placeholder="誰拍的" /></Field>}
         <Field label="說明（選填）"><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={video ? '例如 上半場、本壘後方' : '例如 只有上半場'} /></Field>
       </div>
-      {error && <p role="alert" className="text-[13px] text-critical">{error}</p>}
+      {error && <p role="alert" className="text-[13px] text-critical-text">{error}</p>}
       <div className="flex items-center gap-2">
         <Button variant="primary" size="sm" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存'}</Button>
         <Button variant="ghost" size="sm" icon={<X />} onClick={onDone}>取消</Button>
-        {existing && <Button variant="ghost" size="sm" className="ml-auto text-critical" icon={<Trash2 />} onClick={() => void remove()} disabled={busy}>移除</Button>}
+        {existing && <Button variant="ghost" size="sm" className="ml-auto text-critical-text" icon={<Trash2 />} onClick={() => void remove()} disabled={busy}>移除</Button>}
       </div>
     </div>
   )

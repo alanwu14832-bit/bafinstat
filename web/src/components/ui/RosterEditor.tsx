@@ -79,7 +79,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
           <div className="flex gap-4 flex-wrap tnum"><span>新增 <b className="text-ink">{preview.merge.added.length}</b></span><span>更新 <b className="text-ink">{preview.merge.updated.length}</b></span><span>沒有變動 <b className="text-ink">{preview.merge.unchanged}</b></span></div>
           {preview.merge.added.length > 0 && <div className="text-ink-2"><span className="text-muted">新增：</span>{preview.merge.added.join('、')}</div>}
           {preview.merge.updated.length > 0 && <ul className="text-ink-2 flex flex-col gap-0.5">{preview.merge.updated.map((u) => <li key={u.name}><span className="font-medium text-ink">{u.name}</span>：{u.changes.join('；')}</li>)}</ul>}
-          {preview.parsed.warnings.map((w) => <div key={w} className="flex items-start gap-1.5 text-[12px] text-ink-2"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />{w}</div>)}
+          {preview.parsed.warnings.map((w) => <div key={w} className="flex items-start gap-1.5 text-[12px] text-ink-2"><AlertTriangle className="size-3.5 text-warning-text shrink-0 mt-0.5" />{w}</div>)}
           <div className="flex gap-2 justify-end pt-1"><Button size="sm" variant="ghost" onClick={() => setPreview(null)}>取消</Button><Button size="sm" variant="primary" onClick={applyPreview} disabled={!preview.merge.added.length && !preview.merge.updated.length}>套用到名單</Button></div>
         </div>
       )}
@@ -101,7 +101,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
                   {r.original && withRecords.has(r.original) ? (
                     <span className="inline-flex size-7 items-center justify-center text-muted" title="已有比賽紀錄，不能刪除；要離隊請改狀態"><Trash2 className="size-3.5 opacity-30" /></span>
                   ) : (
-                    <button type="button" onClick={() => setRows((rs) => (r.original ? rs.map((x, k) => (k === i ? { ...x, removed: !x.removed } : x)) : rs.filter((_, k) => k !== i)))} title={r.removed ? '取消刪除' : '刪除'} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-3.5" /></button>
+                    <button type="button" onClick={() => setRows((rs) => (r.original ? rs.map((x, k) => (k === i ? { ...x, removed: !x.removed } : x)) : rs.filter((_, k) => k !== i)))} title={r.removed ? '取消刪除' : '刪除'} className="size-7 inline-flex items-center justify-center rounded text-muted hover:text-critical-text hover:bg-surface-2 cursor-pointer"><Trash2 className="size-3.5" /></button>
                   )}
                 </td>
               </tr>
@@ -111,7 +111,7 @@ export function RosterEditor({ base, busy, onSave, onCancel }: { base: Dataset; 
         <div className="px-2 py-2 border-t border-border"><Button size="sm" variant="ghost" icon={<Plus />} onClick={() => setRows((rs) => [...rs, { original: '', player: { name: '', status: '現役' }, removed: false }])}>新增球員</Button></div>
       </div>
       <p className="text-[12px] text-muted">改姓名會連同所有比賽紀錄一起改；已有紀錄的球員不能刪除，請把狀態改成「離隊」或「畢業」，名單會把他們排到後面。{touched.size > 0 && ' 淡色列是剛從 Excel 套用的變動，確認後按「儲存名單」。'}</p>
-      {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical" />{error}</div>}
+      {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical-text" />{error}</div>}
       <div className="flex justify-end gap-2"><Button variant="outline" onClick={onCancel} disabled={busy}>取消</Button><Button variant="primary" onClick={() => void save()} disabled={busy}>{busy ? '儲存中…' : '儲存名單'}</Button></div>
     </div>
   )

@@ -88,7 +88,7 @@ function OrderRow({ item, index, last, pos, names, taken, onPick, onMove }: { it
       </button>
       <PlateBadge size={28} active={!!item.name}>{index + 1}</PlateBadge>
       <PlayerSelect size="sm" aria-label={`第 ${index + 1} 棒`} value={item.name} onChange={onPick} names={names} taken={taken} placeholder="—" className="flex-1 min-w-0" />
-      <span className={cx('w-[48px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical')}>{item.name ? (pos ? posNum(pos) : '無守位') : ''}</span>
+      <span className={cx('w-[48px] text-center text-[12px] font-medium tnum', pos ? 'text-ink' : 'text-critical-text')}>{item.name ? (pos ? posNum(pos) : '無守位') : ''}</span>
       <div className="hidden sm:flex shrink-0">
         <button type="button" aria-label="上移" onClick={() => onMove(-1)} disabled={index === 0} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowUp className="size-3.5" /></button>
         <button type="button" aria-label="下移" onClick={() => onMove(1)} disabled={last} className="size-9 pointer-fine:size-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-surface-2 cursor-pointer disabled:opacity-30"><ArrowDown className="size-3.5" /></button>
@@ -217,7 +217,7 @@ export function LineupPage() {
             ))}
           </Reorder.Group>
           <div className="px-4 py-3 border-t border-border flex flex-col gap-2">
-            {issues.length ? issues.map((t) => <div key={t} className="text-[12px] text-warning flex items-start gap-1.5"><span className="mt-[5px] size-1.5 rounded-full bg-warning shrink-0" />{t}</div>) : <Badge variant="good">陣容完整</Badge>}
+            {issues.length ? issues.map((t) => <div key={t} className="text-[12px] text-warning-text flex items-start gap-1.5"><span className="mt-[5px] size-1.5 rounded-full bg-warning shrink-0" />{t}</div>) : <Badge variant="good">陣容完整</Badge>}
             <div className="text-[12px] text-muted">{lineup.updatedAt ? `已存在這台裝置・${new Date(lineup.updatedAt).toLocaleString('zh-TW')}` : '還沒開始排'}</div>
           </div>
         </Card>

@@ -139,8 +139,8 @@ export function ImportPage() {
             <div className="text-xs text-muted">.xlsx・會辨識「打席紀錄／投球紀錄」、「單場-打擊／單場-投球」，或舊格式的「當日比賽統計」</div>
             <input ref={inputRef} type="file" accept=".xlsx,.xlsm,.xls" className="hidden" onChange={onPick} />
           </div>
-          {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical" /><span>{error}</span></div>}
-          {done && <div role="status" className="mt-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--good)_35%,transparent)] bg-[color-mix(in_srgb,var(--good)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good" /><span>{done}</span></div>}
+          {error && <div role="alert" className="mt-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical-text" /><span>{error}</span></div>}
+          {done && <div role="status" className="mt-4 flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--good)_35%,transparent)] bg-[color-mix(in_srgb,var(--good)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good-text" /><span>{done}</span></div>}
           {pending && (
             <div className="mt-4 rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)]">
               <div className="px-4 py-3 flex items-center gap-2 flex-wrap"><Badge variant="accent">{MODE_LABEL[pending.report.mode]}</Badge><span className="text-[13px] font-medium text-ink truncate">{pending.file}</span></div>
@@ -156,7 +156,7 @@ export function ImportPage() {
                 {[['比賽', pending.report.games], ['打席', pending.report.batting], ['投球打席', pending.report.pitching], ['守備列', pending.report.fielding], ['球員', pending.report.roster], ...(pending.report.registrations ? [['報名名單', pending.report.registrations]] : []), ...(pending.report.missingBall ? [['缺落點／軌跡', pending.report.missingBall]] : [])].map(([k, v]) => <Metric key={String(k)} label={String(k)} value={v} />)}
               </dl>
               {pending.report.warnings.length > 0 && (
-                <ul className="px-4 py-3 text-xs text-ink-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">{pending.report.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />{w}</li>)}</ul>
+                <ul className="px-4 py-3 text-xs text-ink-2 flex flex-col gap-1.5 max-h-48 overflow-y-auto">{pending.report.warnings.map((w) => <li key={w} className="flex gap-1.5"><AlertTriangle className="size-3.5 text-warning-text shrink-0 mt-0.5" />{w}</li>)}</ul>
               )}
               {cloudReadOnly && <div className="px-4 py-3 text-xs text-ink-2">雲端模式：請先在右側登入，才能把資料寫入全隊共用的資料庫。</div>}
               <div className="px-4 py-3 flex gap-2 flex-wrap">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assetUrl, resolveTeam, TEAM_DEFAULTS } from './teamDefaults'
+import { accentCss, assetUrl, resolveTeam, TEAM_DEFAULTS } from './teamDefaults'
 
 describe('team config', () => {
   it('keeps BaFiN when nothing is set', () => {
@@ -48,5 +48,18 @@ describe('team config', () => {
     expect(assetUrl('mark.png', '/bafinstat/')).toBe('/bafinstat/mark.png')
     expect(assetUrl('/team/mark.png', '/')).toBe('/team/mark.png')
     expect(assetUrl('https://x.org/a.png', '/b/')).toBe('https://x.org/a.png')
+  })
+})
+
+describe('the team colour as small text (2026-11-27 audit)', () => {
+  it('has its own text colour, written with the accent; a team that sets only its accent gets the accent as text', () => {
+    const t = resolveTeam({})
+    expect(t.accentText).toBe(TEAM_DEFAULTS.accentText)
+    expect(accentCss(t)).toContain(`--accent-text:${TEAM_DEFAULTS.accentText};`)
+    // dark mode: the dark accent, which already reads on the dark surfaces
+    expect(accentCss(t)).toContain(`--accent-text:${t.accentDark};`)
+    expect(resolveTeam({ VITE_TEAM_ACCENT: '#123456' }).accentText).toBe('#123456')
+    expect(resolveTeam({ VITE_TEAM_ACCENT: '#123456', VITE_TEAM_ACCENT_TEXT: '#0a1b2c' }).accentText).toBe('#0a1b2c')
+    expect(resolveTeam({ VITE_TEAM_ACCENT_TEXT: 'red' }).accentText).toBe(TEAM_DEFAULTS.accentText)
   })
 })

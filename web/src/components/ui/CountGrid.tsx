@@ -51,9 +51,9 @@ export function CountGrid({ rows, ctx, side, roster }: { rows: Array<BattingPA |
                     style={{ background: shade(c.line.ops, c.small) }}
                     className={cx('w-full min-h-12 rounded-[var(--radius-sm)] border flex flex-col items-center justify-center py-1 cursor-pointer transition-colors motion-reduce:transition-none',
                       picked === c.key ? 'border-ink' : 'border-border hover:border-[color-mix(in_srgb,var(--ink)_30%,transparent)]',
-                      c.small ? 'text-muted' : 'text-ink')}>
+                      c.small ? 'text-ink-2' : 'text-ink')}>
                     <span className="figure text-[16px] font-semibold leading-5 tnum">{c.line.pa ? f3(c.line.ops) : '—'}</span>
-                    <span className="text-[10px] leading-3 text-muted tnum">{c.line.pa} 打席</span>
+                    <span className="text-[10px] leading-3 text-ink-2 tnum">{c.line.pa} 打席</span>
                   </button>
                 </td>
               ))}

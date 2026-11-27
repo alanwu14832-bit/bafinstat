@@ -65,7 +65,7 @@ export function QuickLoginSettings() {
               {status.updated_at && <span className="text-muted">（{status.updated_by ?? '紀錄員'} 於 {new Date(status.updated_at).toLocaleDateString('zh-TW')} 設定）</span>}
             </p>
             {status.locked_until && (
-              <div role="alert" className="flex flex-wrap items-center gap-2 text-[12px] text-critical">
+              <div role="alert" className="flex flex-wrap items-center gap-2 text-[12px] text-critical-text">
                 <span>有人輸錯太多次，快速登入暫停到 {new Date(status.locked_until).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}。如果是有人故意亂試，可以先解除；常常發生就換一組密碼。</span>
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void unlock()}>解除暫停</Button>
               </div>

@@ -109,7 +109,7 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
                 className={cx('w-full min-h-10 flex items-center gap-1.5 px-2.5 rounded-[var(--radius-sm)] border text-left cursor-pointer transition-colors',
                   pos === p ? 'border-ink bg-surface-2' : name ? 'border-border bg-surface hover:bg-surface-2' : 'border-dashed border-[color-mix(in_srgb,var(--warning)_60%,transparent)] bg-surface')}>
                 <span className="text-[11px] text-muted tnum shrink-0 w-11">{posNum(p)}</span>
-                <span className={cx('truncate flex-1', name ? 'text-ink font-medium' : 'text-warning')}>{name ?? '沒有人'}</span>
+                <span className={cx('truncate flex-1', name ? 'text-ink font-medium' : 'text-warning-text')}>{name ?? '沒有人'}</span>
                 {changed.has(p) && <span className="text-[10px] font-medium text-muted border border-border rounded px-1 leading-4 shrink-0">換</span>}
               </button>
             </li>
@@ -158,13 +158,13 @@ export function DefenseByInning({ roster, innings, homeAway, names, bench = [], 
           </div>
         </div>
       )}
-      {empty.length > 0 && <p role="status" className="text-[12px] text-warning">{here ? '這個打席' : `第 ${at} 局`} {empty.map(posNum).join('、')} 沒有人守：點那個守位補人。</p>}
+      {empty.length > 0 && <p role="status" className="text-[12px] text-warning-text">{here ? '這個打席' : `第 ${at} 局`} {empty.map(posNum).join('、')} 沒有人守：點那個守位補人。</p>}
       {mine.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-[12px] text-ink-2" aria-label={here ? '這個打席的變動' : `第 ${at} 局的變動`}>
           {mine.map(({ x, i }) => (
             <li key={i} className="flex items-center gap-2 min-h-9">
               <span className="flex-1 min-w-0">{describe(x)}</span>
-              {onRemove && <button type="button" aria-label={`刪除這個變動：${describe(x)}`} onClick={() => { onRemove(i); setPos(''); setWho(''); setForWho('') }} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>}
+              {onRemove && <button type="button" aria-label={`刪除這個變動：${describe(x)}`} onClick={() => { onRemove(i); setPos(''); setWho(''); setForWho('') }} className="shrink-0 size-9 pointer-fine:size-8 inline-flex items-center justify-center rounded-[6px] text-muted hover:text-critical-text hover:bg-surface-2 cursor-pointer"><Trash2 className="size-4" /></button>}
             </li>
           ))}
         </ul>
@@ -178,7 +178,7 @@ export function ErrorFixNotice({ fixes, onApply }: { fixes: ErrorFix[]; onApply:
   if (!fixes.length) return null
   return (
     <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[12px] text-ink">
-      <div className="flex items-start gap-2"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning" /><span>守備表的失誤和逐打席紀錄＋登錄名單的守位對不起來（換人後的守位以前沒有記下來）：</span></div>
+      <div className="flex items-start gap-2"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning-text" /><span>守備表的失誤和逐打席紀錄＋登錄名單的守位對不起來（換人後的守位以前沒有記下來）：</span></div>
       <ul className="flex flex-col gap-0.5 pl-6 tnum">
         {fixes.map((f) => <li key={`${f.player}|${f.pos}`}>{f.player} {f.pos}：失誤 {f.from} → {f.to}</li>)}
       </ul>

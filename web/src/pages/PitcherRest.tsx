@@ -36,7 +36,7 @@ function PitcherRow({ s, number }: { s: RestStatus; number?: string }) {
       </div>
       {s.warnings.length > 0 && (
         <ul className="flex flex-col gap-0.5">
-          {s.warnings.map((w) => <li key={w} className="text-[12px] text-warning leading-snug">{w}</li>)}
+          {s.warnings.map((w) => <li key={w} className="text-[12px] text-warning-text leading-snug">{w}</li>)}
         </ul>
       )}
     </li>

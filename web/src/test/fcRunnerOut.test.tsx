@@ -70,8 +70,8 @@ describe('紀錄比賽: 逐打席', () => {
     let s = newGame(game, lineup, '甲')
     s = commitPA(addPitch(s, 'IP'), { ...defaultPlan(s, '一安'), loc: 7, traj: 'L' })
     start(s)
-    const log = screen.getByText('逐打席', { selector: 'h3' }).closest('section')!
-    const order = screen.getByText('打線', { selector: 'h3' }).closest('section')!
+    const log = screen.getByText('逐打席', { selector: 'h2' }).closest('section')!
+    const order = screen.getByText('打線', { selector: 'h2' }).closest('section')!
     expect(log.compareDocumentPosition(order) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(within(log).getByText('甲'))
     const sheet = await screen.findByRole('dialog', { name: '修改這個打席' })

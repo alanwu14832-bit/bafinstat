@@ -40,7 +40,7 @@ export function CloudPanel() {
     <Card title="雲端資料庫" subtitle={cloud.lastSync ? `最後同步 ${new Date(cloud.lastSync).toLocaleString('zh-TW')}` : '尚未同步'}
       action={<Badge variant={cloud.status === 'ready' ? 'good' : cloud.status === 'error' ? 'critical' : 'neutral'}>{status}</Badge>}>
       <div className="flex flex-col gap-3 text-[13px]">
-        {cloud.error && <div className="text-critical">{cloud.error}</div>}
+        {cloud.error && <div className="text-critical-text">{cloud.error}</div>}
         {cloud.user ? (
           <>
             {cloud.user.is_anonymous ? (

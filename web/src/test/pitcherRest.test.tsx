@@ -92,7 +92,7 @@ describe('紀錄比賽：休息未滿的投手', () => {
     writeDraft({ ...newGame({ id: 'PRACTICE-20261009', date: '2026-10-09', tournament: '練習', opponent: '練習對手', homeAway: '主' }, lineup, '王投手'), practice: true }, PRACTICE_KEY)
     render(<MemoryRouter initialEntries={['/record?practice=1']}><RecordPage /></MemoryRouter>)
     const line = screen.getByText(/休息未滿，10\/12（一）起才建議出賽・這場後不用多休/)
-    expect(line).toHaveClass('text-warning')
+    expect(line).toHaveClass('text-warning-text')
     expect(screen.queryByText(/^不用休息/)).toBeNull()
     cleanup()
     writeDraft(null, PRACTICE_KEY)

@@ -134,7 +134,7 @@ export const RUNNER_EVENTS: Array<{ ev: RunnerEvent; label: string; side?: Side;
   { ev: 'score', label: '得分' }, { ev: 'pkSafe', label: '牽制（安全）' }, { ev: 'cs', label: '盜壘失敗', out: true }, { ev: 'pk', label: '牽制出局', out: true }, { ev: 'pocs', label: '牽制後盜壘失敗', out: true }, { ev: 'out', label: '壘死', out: true },
 ]
 // (pressed: the ink colours replace the surface ones — added after them, bg-surface would still win in the stylesheet)
-const bigBtn = (out?: boolean, on?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border text-[14px] font-medium cursor-pointer transition-colors', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2 active:bg-surface-3', out && 'text-critical'))
+const bigBtn = (out?: boolean, on?: boolean) => cx('h-12 px-2 rounded-[var(--radius-sm)] border text-[14px] font-medium cursor-pointer transition-colors', on ? 'border-ink bg-ink text-bg' : cx('border-border bg-surface hover:bg-surface-2 active:bg-surface-3', out && 'text-critical-text'))
 
 export interface RunnerSheetProps {
   open: boolean
@@ -347,8 +347,8 @@ export function SubSheet(p: SubSheetProps) {
                 return (
                   <button key={n} type="button" aria-pressed={p.newPitcher === n} disabled={p.pitchers.disabled.has(n)} onClick={() => p.setNewPitcher(p.newPitcher === n ? '' : n)} className={chip(p.newPitcher === n)}>
                     {n}{p.pitchers.tag(n) && <span className="text-[11px] opacity-60 ml-0.5">{p.pitchers.tag(n)}</span>}
-                    {c ? <span className={cx('ml-1 text-[11px] tnum', p.pitchTone(c) === 'critical' ? 'text-critical' : p.pitchTone(c) === 'warning' ? 'text-warning' : 'opacity-60')}>{c} 球</span> : null}
-                    {note && <span className={cx('ml-1 text-[11px] tnum', note.tone === 'warning' && p.newPitcher !== n ? 'text-warning' : 'opacity-60')}>{note.text}</span>}
+                    {c ? <span className={cx('ml-1 text-[11px] tnum', p.pitchTone(c) === 'critical' ? 'text-critical-text' : p.pitchTone(c) === 'warning' ? 'text-warning-text' : 'opacity-60')}>{c} 球</span> : null}
+                    {note && <span className={cx('ml-1 text-[11px] tnum', note.tone === 'warning' && p.newPitcher !== n ? 'text-warning-text' : 'opacity-60')}>{note.text}</span>}
                   </button>
                 )
               })}

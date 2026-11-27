@@ -53,7 +53,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
   const tournaments = useMemo(() => [...new Set([...games.map((g) => g.tournament?.trim()), ...registrations.map((r) => r.tournament)])].filter((t): t is string => !!t).sort((a, b) => a.localeCompare(b, 'zh-Hant')), [games, registrations])
 
   if (!supported) {
-    return <div role="status" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning" />{REGISTRATIONS_UNSUPPORTED}</div>
+    return <div role="status" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning-text" />{REGISTRATIONS_UNSUPPORTED}</div>
   }
 
   const edit = (r: Registration | null) => {
@@ -125,7 +125,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
                   <button type="button" aria-current={on || undefined} onClick={() => { setPicked(key); setDraft(null); setError(null) }}
                     className={cx(chip(on), 'max-w-full md:w-full text-left inline-flex items-center truncate')}>
                     <span className="truncate">{label(r)}</span><span className={cx('tnum font-normal shrink-0', on ? 'opacity-70' : 'text-muted')}>・{r.players.length} 人</span>
-                    {orphanRegistration(r, registrations, games).orphan && <AlertTriangle aria-label="還沒有比賽用這個杯賽名稱" className={cx('size-3.5 shrink-0 ml-1', on ? 'opacity-80' : 'text-warning')} />}
+                    {orphanRegistration(r, registrations, games).orphan && <AlertTriangle aria-label="還沒有比賽用這個杯賽名稱" className={cx('size-3.5 shrink-0 ml-1', on ? 'opacity-80' : 'text-warning-text')} />}
                   </button>
                 </li>
               )
@@ -143,7 +143,7 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
               <Field label="杯賽"><Input value={draft.tournament} onChange={(e) => setDraft({ ...draft, tournament: e.target.value })} list="registration-tournaments" placeholder="例如 大專盃" /></Field>
             </div>
             <datalist id="registration-tournaments">{tournaments.map((t) => <option key={t} value={t} />)}</datalist>
-            {clash && <p className="flex items-start gap-1.5 text-[12px] text-ink-2"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" />已經有「{label(clash)}」的名單（{clash.players.length} 人），儲存會覆蓋它。</p>}
+            {clash && <p className="flex items-start gap-1.5 text-[12px] text-ink-2"><AlertTriangle className="size-3.5 text-warning-text shrink-0 mt-0.5" />已經有「{label(clash)}」的名單（{clash.players.length} 人），儲存會覆蓋它。</p>}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[12px] font-medium text-ink-2">報名球員</span>
               <Badge variant={draft.players.size ? 'accent' : 'neutral'}>{draft.players.size} 人</Badge>
@@ -167,9 +167,9 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
               </div>
             )}
             <p className="text-[12px] text-muted">沒選任何人＝這個杯賽不限制，先發陣容與紀錄比賽列出全隊。</p>
-            {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical" />{error}</div>}
+            {error && <div role="alert" className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--critical)_35%,transparent)] bg-[color-mix(in_srgb,var(--critical)_8%,transparent)] px-3 py-2.5 text-[13px] text-ink"><AlertTriangle className="size-4 shrink-0 mt-0.5 text-critical-text" />{error}</div>}
             <div className="flex items-center gap-2 flex-wrap pt-1">
-              {draft.original && <Button variant="ghost" icon={<Trash2 />} className="text-critical hover:text-critical" disabled={saving} onClick={() => void remove()}>刪除</Button>}
+              {draft.original && <Button variant="ghost" icon={<Trash2 />} className="text-critical-text hover:text-critical-text" disabled={saving} onClick={() => void remove()}>刪除</Button>}
               <div className="ml-auto flex gap-2">
                 <Button variant="outline" onClick={() => { setDraft(null); setError(null) }} disabled={saving}>取消</Button>
                 <Button variant="primary" onClick={() => void save()} disabled={saving}>{saving ? '儲存中…' : '儲存'}</Button>
@@ -187,9 +187,9 @@ export function RegistrationEditor({ registrations, roster, games, supported, ca
             </div>
             {orphan.orphan && (
               <div role="status" className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)] px-3 py-2.5 text-[12px] text-ink">
-                <span className="flex items-start gap-2"><AlertTriangle className="size-4 shrink-0 mt-px text-warning" />{selected.season} 年還沒有比賽用這個杯賽名稱。先報名、比賽還沒排進賽程的話不用管；杯賽改過名的話，名單也要跟著改{canEdit ? '（按「編輯」改杯賽）' : ''}。</span>
+                <span className="flex items-start gap-2"><AlertTriangle className="size-4 shrink-0 mt-px text-warning-text" />{selected.season} 年還沒有比賽用這個杯賽名稱。先報名、比賽還沒排進賽程的話不用管；杯賽改過名的話，名單也要跟著改{canEdit ? '（按「編輯」改杯賽）' : ''}。</span>
                 {canEdit && orphan.suggestion && <Button size="sm" variant="outline" className="self-start" disabled={saving} onClick={() => void renameTo(selected, orphan.suggestion!)}>改成「{orphan.suggestion}」</Button>}
-                {error && <span role="alert" className="text-critical">{error}</span>}
+                {error && <span role="alert" className="text-critical-text">{error}</span>}
               </div>
             )}
             {selected.players.length ? (

@@ -10,7 +10,7 @@ import type { Dataset } from '../../data/types'
 const cell = (s?: Share) => {
   if (!s || !s.d) return <span className="text-muted">—</span>
   const p = s.n / s.d
-  return <span className={p < 0.9 ? 'text-warning font-medium' : p < 1 ? 'text-ink' : 'text-ink-2'}>{Math.round(p * 100)}%<span className="ml-1.5 text-[11px] text-muted font-normal">{s.n}/{s.d}</span></span>
+  return <span className={p < 0.9 ? 'text-warning-text font-medium' : p < 1 ? 'text-ink' : 'text-ink-2'}>{Math.round(p * 100)}%<span className="ml-1.5 text-[11px] text-muted font-normal">{s.n}/{s.d}</span></span>
 }
 
 export function CompletenessCard({ ds }: { ds: Pick<Dataset, 'batting' | 'pitching' | 'roster'> }) {

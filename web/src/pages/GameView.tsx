@@ -394,7 +394,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             <Title className="text-[20px] md:text-[22px] font-semibold tracking-[-0.02em] leading-7 text-ink mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap">
               <span>{intra ? `${names.us} ` : `${TEAM_NAME} `}<span className="tnum">{current.runsUs}</span><span className="text-muted mx-1.5">:</span><span className="tnum">{current.runsOpp}</span> {current.game.opponent}</span>
               <span className="inline-flex items-center gap-1.5">{intra && !live ? <Badge>隊內賽</Badge> : unsure ? <PendingBadge /> : resultBadge(current.result, current.game.id)}{current.game.isDemo && <Badge variant="outline">示範</Badge>}</span>
-              {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent underline underline-offset-2">看即時比分</Link>}
+              {live && <Link to="/live" className="inline-flex items-center min-h-9 text-[13px] font-medium text-accent-text underline underline-offset-2">看即時比分</Link>}
             </Title>
             {(current.game.winningPitcher || current.game.losingPitcher || current.game.savePitcher || current.game.holds?.length || current.game.recorder) && (
               <p className="text-[12px] text-ink-2 mt-1.5 flex flex-wrap gap-x-3">
@@ -416,7 +416,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             {editable && !editing && canEdit && (
               <>
                 <Button variant="outline" size="sm" icon={<Pencil />} onClick={() => { setNotice(null); setEditing(true) }} title="修改這場比賽的輸入資料（僅登入的紀錄員）">修改資料</Button>
-                <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical hover:text-critical" disabled={cloud.pushing}
+                <Button variant="ghost" size="sm" icon={<Trash2 />} aria-label="刪除這場比賽" title="刪除這場比賽" className="text-critical-text hover:text-critical-text" disabled={cloud.pushing}
                   onClick={() => { if (window.confirm(`確定刪除 ${id}（${current.game.date} vs ${current.game.opponent}）？這會移除這場所有打席與守備紀錄，無法復原。`)) void deleteGame(id).then(onClose).catch((e) => setNotice({ kind: 'warn', lines: [e instanceof Error ? e.message : String(e)] })) }} />
               </>
             )}
@@ -427,8 +427,8 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
           <div className="flex items-center gap-3 flex-wrap">
             <Tabs size="sm" aria-label="檢視" value={tab} onChange={(t) => { setTab(t); setTarget(undefined); setFilter('all') }} items={tabs} />
             {issues.length > 0 ? (
-              <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning" />{issues.length} 項待核對</button>
-            ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good" />已核對：{AUDIT_SCOPE}</span>}
+              <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning-text" />{issues.length} 項待核對</button>
+            ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good-text" />已核對：{AUDIT_SCOPE}</span>}
           </div>
         )}
       </div>
@@ -437,7 +437,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
         <StoryDialog open={story} onClose={() => setStory(false)} gameId={id} />
         {notice && (
           <div role="status" className={cx('flex items-start gap-2 rounded-[var(--radius-sm)] border px-3 py-2.5 text-[13px] text-ink', notice.kind === 'ok' ? 'border-[color-mix(in_srgb,var(--good)_35%,transparent)] bg-[color-mix(in_srgb,var(--good)_8%,transparent)]' : 'border-[color-mix(in_srgb,var(--warning)_45%,transparent)] bg-[color-mix(in_srgb,var(--warning)_10%,transparent)]')}>
-            {notice.kind === 'ok' ? <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good" /> : <AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning" />}
+            {notice.kind === 'ok' ? <CheckCircle2 className="size-4 shrink-0 mt-0.5 text-good-text" /> : <AlertTriangle className="size-4 shrink-0 mt-0.5 text-warning-text" />}
             <ul className="flex flex-col gap-0.5">{notice.lines.map((l) => <li key={l}>{l}</li>)}</ul>
           </div>
         )}
@@ -460,7 +460,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
           <>
             {showIssues && issues.length > 0 && (
               <ul className="rounded-[var(--radius-sm)] border border-border divide-y divide-[var(--border)] text-[12px]">
-                {issues.map((i, k) => <li key={k} className="px-3 py-2 flex gap-2 items-start"><AlertTriangle className="size-3.5 text-warning shrink-0 mt-0.5" /><button type="button" className="text-left text-ink hover:underline cursor-pointer" onClick={() => setTab(i.side)}>{i.message}</button></li>)}
+                {issues.map((i, k) => <li key={k} className="px-3 py-2 flex gap-2 items-start"><AlertTriangle className="size-3.5 text-warning-text shrink-0 mt-0.5" /><button type="button" className="text-left text-ink hover:underline cursor-pointer" onClick={() => setTab(i.side)}>{i.message}</button></li>)}
                 {repairs.length > 0 && (
                   <li className="px-3 py-2.5 flex flex-col gap-2 bg-surface-2/50">
                     <span className="text-ink-2">盜壘次數比跑壘紀錄多 {repairs.length} 處：{repairs.map((f) => `${f.name} ${f.from}→${f.to}`).join('、')}。這通常是舊版「修改資料」重複計算造成的。</span>
@@ -491,7 +491,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
                   <ul className="flex flex-col gap-3.5">
                     {recap.map((l) => (
                       <li key={l.kind} className="flex flex-col gap-1">
-                        <span className="text-[11px] font-semibold tracking-[0.08em] text-accent">{l.label}</span>
+                        <span className="text-[11px] font-semibold tracking-[0.08em] text-accent-text">{l.label}</span>
                         <p className="text-[14px] text-ink leading-relaxed">{l.text}</p>
                         <span className="flex gap-3 text-[12px]">
                           {l.inning && l.side && <button type="button" onClick={() => goInning(l.side!, l.inning!)} className="inline-flex items-center min-h-9 pointer-fine:min-h-0 text-ink-2 underline underline-offset-2 cursor-pointer hover:text-ink">看第 {l.inning} 局逐球</button>}

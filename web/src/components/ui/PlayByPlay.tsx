@@ -51,7 +51,7 @@ function PlayPill({ e, who, big, onRemove }: { e: PlayEvent; who?: string; big?:
   const text = `${who ? `${who} ` : ''}${playText(e)}`
   const cls = cx('inline-flex items-center gap-1 rounded-full border font-medium whitespace-nowrap',
     big ? 'h-8 px-2.5 text-[12px]' : 'h-5 px-1.5 text-[11px]',
-    e.to === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_45%,transparent)] text-critical' : e.to === 'home' ? 'border-[color-mix(in_srgb,var(--good)_50%,transparent)] text-ink' : 'border-[color-mix(in_srgb,var(--accent)_55%,transparent)] text-ink')
+    e.to === 'out' ? 'border-[color-mix(in_srgb,var(--critical)_45%,transparent)] text-critical-text' : e.to === 'home' ? 'border-[color-mix(in_srgb,var(--good)_50%,transparent)] text-ink' : 'border-[color-mix(in_srgb,var(--accent)_55%,transparent)] text-ink')
   return onRemove
     ? <button type="button" onClick={onRemove} title={`刪除：${playWhen(e.at)} ${text}`} aria-label={`刪除跑壘事件：${playWhen(e.at)} ${text}`} className={cx(cls, 'cursor-pointer hover:ring-2 hover:ring-[var(--critical)]/40')}>{text}<X className="size-3 opacity-60" /></button>
     : <span title={`${playWhen(e.at)}：${text}`} className={cls}>{text}</span>
@@ -134,7 +134,7 @@ function WpaCell({ w }: { w?: RowWin }) {
   if (!w) return <td className={cx(td, 'text-muted')}>—</td>
   return (
     <td className={cx(td, 'whitespace-nowrap')} title={wpaTitle(w)}>
-      <span className={cx('font-medium tnum', w.wpa > 0.005 ? 'text-good' : w.wpa < -0.005 ? 'text-critical' : 'text-ink-2')}>{signedPtsBetween(w.weResult, w.weAfter)}</span>
+      <span className={cx('font-medium tnum', w.wpa > 0.005 ? 'text-good-text' : w.wpa < -0.005 ? 'text-critical-text' : 'text-ink-2')}>{signedPtsBetween(w.weResult, w.weAfter)}</span>
       {/* FanGraphs: LI above 2 is high leverage, 0.85–2 medium */}
       <div className="mt-1">{w.li > 2 ? <Badge variant="warning">高關鍵 LI {w.li.toFixed(1)}</Badge> : <span className="text-[11px] text-muted tnum">LI {w.li.toFixed(1)}</span>}</div>
     </td>
@@ -184,7 +184,7 @@ export function BattingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording 
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="我隊進攻" cols={win ? 10 : 9} />}
                 <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning-text"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
                   <td className={td}>{p.order ?? ''}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.batter}{p.pos ? <span className="text-muted font-normal text-xs ml-1">{p.pos}</span> : null}{marks.has(i) && <div className="mt-1"><Badge variant="outline">{marks.get(i)}</Badge></div>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} speeds={p.speeds} events={p.events} /></td>
@@ -241,7 +241,7 @@ export function PitchingPlayByPlay({ pas, flags, onRbi, onOpen, visible, wording
               <Fragment key={i}>
                 {header && <InningHeader inning={p.inning} half="對方進攻" cols={win ? 10 : 9} />}
                 <tr {...openRow(onOpen, i)} className={cx('border-t border-border hover:bg-surface-2/60', onOpen && 'cursor-pointer', changed && !header && 'border-t-2 border-t-[color-mix(in_srgb,var(--accent)_55%,transparent)]', flags?.has(i) && 'bg-[color-mix(in_srgb,var(--warning)_9%,transparent)]')}>
-                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
+                  <td className={cx(td, 'text-muted whitespace-nowrap')}>{flags?.has(i) && <span title={flags.get(i)!.join('\n')} className="inline-flex align-middle mr-1 text-warning-text"><AlertTriangle className="size-3.5" /></span>}{onOpen && <Pencil aria-hidden className="inline size-3 mr-1 align-[-1px] text-muted" />}{situation(p)}</td>
                   <td className={td}>{p.oppOrder ?? ''}{p.oppBatter ? <span className="text-muted text-xs ml-1">{p.oppBatter}</span> : null}</td>
                   <td className={cx(td, 'font-medium whitespace-nowrap')}>{p.pitcher}{changed && <Badge variant="accent" className="ml-1.5">換投</Badge>}</td>
                   <td className={td}><PitchPlays pitches={p.pitches} speeds={p.speeds} events={p.events} /></td>
