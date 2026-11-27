@@ -956,7 +956,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
               {waitFor && !due && askOppBats && !askOppHand ? (
                 // (2026-11-27 audit: the pad simply went grey with one line under it, which read as frozen in the sun)
                 <div role="group" aria-label="對方打者左打或右打" className="rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-accent-soft p-3 flex flex-col gap-2">
-                  <p role="status" className="text-[15px] font-semibold text-ink">{t(`對方第 ${state.oppOrder} 棒`)}{oppName ? ` ${oppName}` : ''}：左打還是右打？</p>
+                  <p role="status" className="text-[16px] font-semibold text-ink">{t(`對方第 ${state.oppOrder} 棒`)}{oppName ? ` ${oppName}` : ''}：左打還是右打？</p>
                   <div className="grid grid-cols-2 gap-2">
                     {(['L', 'R'] as const).map((b) => <button key={b} type="button" onClick={() => apply((s) => setOppBats(s, b))} className="press h-14 rounded-[var(--radius-sm)] bg-ink text-bg text-[17px] font-semibold cursor-pointer hover:bg-[color-mix(in_srgb,var(--ink)_86%,var(--bg))]">{OPP_BATS_LABEL[b]}</button>)}
                   </div>

@@ -35,6 +35,9 @@ export const TEAM_DEFAULTS = {
   accent: '#c8811a',
   accentDark: '#e2a03a',
   accentInk: '#1a1207',
+  /** VITE_TEAM_ACCENT_TEXT: the team colour as small text on the light background (≥ 4.5:1, WCAG AA); the accent itself
+   *  when it is dark enough. Dark mode uses VITE_TEAM_ACCENT_DARK. (2026-11-27 audit: the 系隊's amber was 3.2:1 as text.) */
+  accentText: '#9a5f0c',
   accentInkDark: '#1a1207',
   /** 投手休息表 (no VITE_ variable: edit here, per team). MLB Pitch Smart 19–22 歲建議 — a recommendation, not a league
    *  rule, and the site never blocks a pitching change with it. tiers = [most pitches that day, rest days]; past the last
@@ -91,6 +94,7 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
   // only #rgb / #rrggbb: the value is written into a <style> tag
   const color = (key: string, fallback: string) => { const v = str(key, ''); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v) ? v : fallback }
   const innings = Number(env.VITE_TEAM_INNINGS)
+  const accent = color('VITE_TEAM_ACCENT', TEAM_DEFAULTS.accent)
   const seed = str('VITE_TEAM_SEED', '')
   const tb = str('VITE_TEAM_TIEBREAK', '').toLowerCase()
   const tiebreak = ['2', '12', '123'].includes(tb) ? tb : ['0', 'off', 'false', 'no'].includes(tb) ? '' : TEAM_DEFAULTS.tiebreak
@@ -109,7 +113,9 @@ export function resolveTeam(env: Record<string, string | boolean | undefined>): 
     seasonStart: Number.isInteger(seasonStart) && seasonStart >= 1 && seasonStart <= 12 ? seasonStart : TEAM_DEFAULTS.seasonStart,
     seed: seed ? !['0', 'false', 'no', 'off'].includes(seed.toLowerCase()) : TEAM_DEFAULTS.seed,
     filePrefix: str('VITE_TEAM_FILE_PREFIX', TEAM_DEFAULTS.filePrefix),
-    accent: color('VITE_TEAM_ACCENT', TEAM_DEFAULTS.accent),
+    accent,
+    // (a team that sets its own accent but no text colour gets the accent as text)
+    accentText: color('VITE_TEAM_ACCENT_TEXT', accent === TEAM_DEFAULTS.accent ? TEAM_DEFAULTS.accentText : accent),
     accentDark: color('VITE_TEAM_ACCENT_DARK', TEAM_DEFAULTS.accentDark),
     accentInk: color('VITE_TEAM_ACCENT_INK', TEAM_DEFAULTS.accentInk),
     accentInkDark: color('VITE_TEAM_ACCENT_INK_DARK', TEAM_DEFAULTS.accentInkDark),
@@ -134,11 +140,11 @@ function siteUrl(v: string): string | null {
 /** The team colour as CSS variables: :root for light mode, dark mode the same way tokens.css switches. `html:root` outranks
  *  tokens.css's `:root`, whichever stylesheet loads last. */
 export function accentCss(t: TeamConfig): string {
-  const vars = (accent: string, ink: string) => `--accent:${accent};--accent-ink:${ink};`
-  const dark = vars(t.accentDark, t.accentInkDark)
+  const vars = (accent: string, ink: string, text: string) => `--accent:${accent};--accent-ink:${ink};--accent-text:${text};`
+  const dark = vars(t.accentDark, t.accentInkDark, t.accentDark)
   // the scoreboard surfaces are dark in either theme: they always take the dark-mode pair
   const board = `--accent-board:${t.accentDark};--accent-board-ink:${t.accentInkDark};`
-  return `html:root{${vars(t.accent, t.accentInk)}${board}}@media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${dark}}}html:root[data-theme="dark"]{${dark}}`
+  return `html:root{${vars(t.accent, t.accentInk, t.accentText)}${board}}@media (prefers-color-scheme: dark){html:root:not([data-theme="light"]){${dark}}}html:root[data-theme="dark"]{${dark}}`
 }
 
 /** A file in web/public (resolved against the site's base path) or an absolute URL, as is. */

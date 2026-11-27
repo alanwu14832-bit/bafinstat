@@ -99,8 +99,9 @@ A database change needs a migration in both repos, and the user must run it in b
   cannot say "twice on purpose"). A caught fly (外飛／內飛／界外飛) never puts the batter on a base (FLY_CAUGHT in Record, GameEditor).
 - 看得清楚、按得到＋紀錄比賽球場好用 (2026-11-27, from an impeccable critique; all three sites): text-only colour tokens
   `--accent-text / --good-text / --warning-text / --critical-text` (styles/tokens.css, Tailwind `text-accent-text`…) for small text,
-  the fills keep `--accent` etc.; the 系隊's amber text is #9a5f0c (5.2:1 on white), the other sites' accents already pass so theirs
-  equal `--accent`; the dark scoreboard keeps the bright ones. Select/Input show the focus ring, Tabs draw it inside; a
+  the fills keep `--accent` etc.; `--accent-text` is the team's `accentText` (teamDefaults, VITE_TEAM_ACCENT_TEXT, written by
+  `accentCss` next to the accent): the 系隊's #9a5f0c (5.2:1 on white), the other sites' own accent (it already passes); the dark
+  scoreboard keeps the bright ones. Select/Input show the focus ring, Tabs draw it inside; a
   「跳到主要內容」 link (`.skip-link` → `main#main`); Card titles are h2; on touch Button md / Select / Input are 44 px and `.tap-44`
   (index.css) gives smaller controls a 44 px target. 紀錄比賽: PitchPad tiles are filled like the scoreboard's lights (`pitchTone`:
   壞球 BOARD.ball, the strikes BOARD.strike, 擊進場內 BOARD.bg; unavailable = dashed, unfilled), ResultChips tinted per group

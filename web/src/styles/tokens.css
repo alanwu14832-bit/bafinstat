@@ -54,8 +54,9 @@
   --serious: #d97a45;
   --critical: #cf4a3f;
   /* the same colours as small text on the background and the surfaces (≥ 4.5:1, WCAG AA): the fills above stay as they are.
-     The amber accent is 3.2:1 on white, so its text is a deeper amber (2026-11-27 audit) */
-  --accent-text: #9a5f0c;
+     --accent-text comes with the team colour (config/teamDefaults accentCss: the 系隊's amber is 3.2:1 as text, so its text is
+     a deeper amber); this is its fallback (2026-11-27 audit) */
+  --accent-text: var(--accent);
   --good-text: #257a4b;
   --warning-text: #8a6200;
   --critical-text: #b93a30;

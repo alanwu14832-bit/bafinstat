@@ -54,7 +54,7 @@ export function PitchPad({ onPitch, disabled, twoStrikes }: { onPitch: (code: st
     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
       {[...PITCH_BUTTONS, ...(twoStrikes ? [{ code: 'T', label: '擦棒', hint: '被捕＝三振' }] : [])].map((b) => (
         <button key={b.code} type="button" onClick={() => onPitch(b.code)} disabled={disabled} style={disabled ? undefined : pitchTone(b.code)}
-          className={cx('press h-14 pointer-fine:h-12 rounded-[var(--radius-sm)] text-[15px] font-semibold flex flex-col items-center justify-center leading-tight cursor-pointer transition-[filter] motion-reduce:transition-none',
+          className={cx('press h-14 pointer-fine:h-12 rounded-[var(--radius-sm)] text-[16px] font-semibold flex flex-col items-center justify-center leading-tight cursor-pointer transition-[filter] motion-reduce:transition-none',
             disabled ? 'border border-dashed border-border-strong bg-transparent text-muted cursor-default' : 'shadow-[0_1px_2px_rgba(0,0,0,0.18)] hover:brightness-105 active:brightness-95')}>
           <span>{b.label}</span><span className="text-[10px] font-medium opacity-75 tnum">{b.hint}</span>
         </button>
