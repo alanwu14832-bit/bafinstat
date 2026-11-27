@@ -85,3 +85,16 @@ describe('修改資料: 外飛 with the runner home is a 犧飛', () => {
     expect(auditGame([], [theirs]).some((x) => x.side === 'pit' && x.message.includes('應該記成「犧飛」'))).toBe(true)
   })
 })
+
+describe('修改資料: a caught fly keeps the batter out (2026-11-27 audit)', () => {
+  it('putting the 外飛 batter on a base is refused with what to change instead', async () => {
+    const g = { id: 'G20261125-01', date: '2026-11-25', tournament: '大專盃', opponent: '測試隊', homeAway: '客' as const, innings: 7 }
+    const rows: BattingPA[] = [{ gameId: g.id, inning: 1, outsBefore: 0, basesBefore: '無', order: 1, batter: '嚴敬翔', pitches: ['IP'], result: '外飛', loc: 7, traj: 'F', sb: 0, cs: 0, advOnError: 0, outOnBase: 0, run: 0, rbi: 0, code: 'I' }]
+    render(<GameEditor initial={{ game: g, batting: rows, pitching: [], fielding: [] }} roster={['嚴敬翔']} onSave={async () => undefined} onCancel={() => {}} onDelete={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /^修改第 1 個打席/ }))
+    const batter = screen.getByRole('group', { name: '嚴敬翔 這打席結束時' })
+    fireEvent.click(within(batter).getByRole('button', { name: '1B' }))
+    expect((await screen.findAllByText(/「外飛」是高飛球被接殺、打者出局，不能上壘/)).length).toBeGreaterThan(0)
+  })
+})
+

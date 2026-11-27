@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  addOppError, addPitch, commitPA, defaultPlan, endHalf, newGame, oppPitchCount, pinchHitOpp, setOppPitcher, removeOppError, runnerEvent, setOppRbi, settlePending, toGameEdit, type PAPlan, type RecordState,
+  addError, addOppError, addPitch, commitPA, defaultPlan, endHalf, newGame, oppPitchCount, pinchHitOpp, setOppPitcher, removeOppError, runnerEvent, setOppRbi, settlePending, toGameEdit, type PAPlan, type RecordState,
 } from './model'
 import { describeChange } from './summary'
 import { normalizeGameEdit } from '../data/edit'
@@ -134,6 +134,32 @@ describe('the same fielder twice in one plate appearance is two errors (review)'
     s = settlePending(s)
     expect(s.pitching[0].errors).toEqual(['SS', 'SS'])
     expect(summary(s).errorsUs).toBe(2)
+  })
+})
+
+describe('a 失誤 result counted once however the fielder is picked (2026-11-27 audit)', () => {
+  it('we bat: their 落點 fielder picked again for the 失誤進壘 on the play is that same error', () => {
+    let s = newGame(away, lineup, '壬')
+    s = play(s, '失誤', { loc: 6, batter: 2, errAdv: ['batter'], errBy: ['SS'] })
+    expect(s.batting[0].errors).toBeUndefined()
+    expect(summary(s).errorsOpp).toBe(1)
+    s = play(s, '失誤', { loc: 6, batter: 2, errAdv: ['batter'], errBy: ['SS', 'RF'] })
+    expect(s.batting[1].errors).toEqual(['RF'])
+    expect(summary(s).errorsOpp).toBe(3)
+  })
+  it('we field: an error pressed before a 失誤 elsewhere is stored with the result’s own written out (no 待核對)', () => {
+    let s = newGame(home, lineup, '壬')
+    s = addPitch(s, 'F')
+    s = addError(s, 'C')   // the catcher drops a foul pop
+    s = play(s, '失誤', { loc: 6 })
+    expect(s.pitching[0].errors).toEqual(['SS', 'C'])
+    expect(summary(s).errorsUs).toBe(2)
+  })
+  it('we field: 「這次失誤算給」 1B on a grounder to short is one error, his', () => {
+    let s = newGame(home, lineup, '壬')
+    s = play(s, '失誤', { loc: 3 })
+    expect(errorsOf(s.pitching[0])).toEqual({ positions: ['1B'], unknown: 0 })
+    expect(summary(s).errorsUs).toBe(1)
   })
 })
 

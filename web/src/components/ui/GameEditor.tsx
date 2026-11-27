@@ -62,6 +62,8 @@ const cell = cx(inputCls('sm'), 'h-7 px-1.5 text-[12px] rounded-[6px] w-full')
 const FC_FROM = new Set(['內滾', '犧觸'])
 /** 外飛／界外飛 (caught: the batter out) and a runner scoring on it, with fewer than two out: a 犧飛 (rule 9.08(d)) */
 const SF_FROM = new Set(['外飛', '界外飛'])
+/** caught flies: the batter is out (onEnd will not put him on a base) */
+const FLY_CAUGHT = new Set(['外飛', '內飛', '界外飛'])
 
 function EditableTable<T extends object>({ rows, cols, onChange, blank, listId, names }: { rows: T[]; cols: Col<T>[]; onChange: (rows: T[]) => void; blank: (prev?: T) => T; listId: string; names: string[] }) {
   const update = (i: number, key: keyof T, raw: string, kind: Kind) => {
@@ -419,6 +421,11 @@ export function GameEditor({ initial, roster, busy, onSave, onCancel, onDelete, 
       return next.length ? { ...rest, errors: next } : rest
     }
     const onEnd = (who: number | 'batter', end: End, base: Array<BattingPA | PitchingPA> = rows) => {
+      // 外飛／內飛／界外飛 is a caught fly: the batter cannot be put on a base (not caught: 失誤; fell in: a hit)
+      if (who === 'batter' && end !== 'out' && FLY_CAUGHT.has(rows[i].result) && step.batter === 'out') {
+        setTlNotice(`「${rows[i].result}」是高飛球被接殺、打者出局，不能上壘。沒接到請把打擊結果改成「失誤」；球落地是安打，改成「一安」等`)
+        return
+      }
       // 內滾／犧觸 (the batter out) and now a runner put out on that play: the batter was safe — a 野選 (both out
       // would have been 雙殺). The result follows, so the out goes to the runner and the batter stands on first.
       if (who !== 'batter' && end === 'out' && FC_FROM.has(rows[i].result) && step.batter === 'out' && step.dest[who] !== 'out') {

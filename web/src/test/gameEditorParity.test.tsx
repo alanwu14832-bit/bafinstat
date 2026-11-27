@@ -66,7 +66,8 @@ describe('修改資料 counts errors like 紀錄比賽 (batch 11 review)', () =>
     fireEvent.click(screen.getByRole('tab', { name: /投球/ }))
     fireEvent.click(screen.getByRole('button', { name: /^修改第 2 個打席/ }))
     const box = (await screen.findByText('我隊守備失誤')).closest('section') as HTMLElement
-    fireEvent.click(within(box).getByRole('button', { name: '6 SS' }))
+    // (the counter, not 「這次失誤算給」 above it)
+    fireEvent.click(within(box).getAllByRole('button', { name: '6 SS' }).find((b) => !b.closest('[aria-label="這次失誤算給"]'))!)
     fireEvent.click(screen.getByRole('button', { name: '儲存修改' }))
     await vi.waitFor(() => expect(onSave).toHaveBeenCalled())
     const saved = (onSave.mock.calls[0] as unknown as [GameEdit])[0].pitching[1]

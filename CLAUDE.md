@@ -91,6 +91,12 @@ A database change needs a migration in both repos, and the user must run it in b
   one-value / `all` links still read). 主客 and 隊內賽 stay single.
 - 犧飛 (2026-11-25, a recorder's report): sending a runner home on a 外飛／界外飛 with fewer than two out turns the result into 犧飛
   (SF_FROM in Record and GameEditor, like FC_FROM's 野選); `data/audit` flags an old 外飛／界外飛 with an RBI as 待核對.
+- 失誤只算一次 (2026-11-27 audit; all three sites): a 失誤 result is one error, its 落點's fielder's. 「這次失誤算給」
+  (`components/ui/ErrorFielderPicker`, 紀錄比賽 and 修改資料) moves the 落點 to the fielder who erred instead of typing him as a
+  second error (the 系隊's 11/13 game read 10 errors that way). 紀錄比賽 writes the result's own position out next to other errors
+  (`withOwnListed`: the same count, read one way only); their 落點 fielder picked again for a 失誤進壘 on the play is that same error;
+  `ourDoubledResult` makes an old row (落點 SS + 2B listed) 待核對, `theirDoubledResult` is only noted in 修改資料 (their list
+  cannot say "twice on purpose"). A caught fly (外飛／內飛／界外飛) never puts the batter on a base (FLY_CAUGHT in Record, GameEditor).
 - 2026-11-25 (players' and recorders' asks): 打擊 page's 擊球強度 is a 強擊率 Hard Hit% bar chart (強 ÷ batted balls with a 強度);
   即時比分 shows 球速 (under each pitch of 本打席, the last one, the pitcher's 最快 today) lit 黃 125–134 / 紅 135+ (`speedTone` in
   data/speeds.ts; theme colours `speedClass` in the 文字轉播 and pitch chips); 修改資料 stays open after 儲存修改 (GameView remounts

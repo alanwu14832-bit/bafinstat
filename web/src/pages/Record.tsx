@@ -35,7 +35,8 @@ import { durationMinutes, formatDuration, isLongGame, LONG_GAME_NOTE } from '../
 import { addDays, hhmm, localDate } from '../lib/dates'
 import { HoldPicker } from '../components/ui/HoldPicker'
 import { holdCandidates, reliefEntries, runsByInning } from '../data/pitchingSituations'
-import { FIELD_POSITIONS, UNKNOWN_FIELDER } from '../data/errors'
+import { FIELD_POSITIONS, resultErrorPos, UNKNOWN_FIELDER } from '../data/errors'
+import { ErrorFielderPicker } from '../components/ui/ErrorFielderPicker'
 import { cx } from '../lib/format'
 import { setSpeed, setSpeedOn, speedAsked, canSwitchHomeAway, switchHomeAway,
   addError, addExtra, addPitch, balk, beyondDefault, BIP_RESULTS, missingBattedBall, missingBattedBallText, removeError, thirdOutRule, walkOffRunner, baseOutsFirst, courtesyRunner, liveBall, NO_BIP_OUT, OUT_HOW_LABEL, refreshPlan, outAtAsked, changePitcher, commitPA, count, defaultOutAt, defaultPlan, defaultRbi, liveSplit, endHalf, impliedResult, newGame, nextGameId, offense, planProblems, planWarnings, runnerEvent, wildPitch, score, setOppOrder, reentryMode, setReentryMode, setSlot, subCandidates, substitute, toGameEdit, toggleEarned, undoPitch,
@@ -617,6 +618,12 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
     setRbiTouched(false); planFrom.current = state.pitches.at(-1) === 'IP' ? 'ip' : 'pick'
   }
   const setDest = (row: number | 'batter', d: Dest) => {
+    // 外飛／內飛／界外飛 is a caught fly: the batter is out, he cannot be put on a base (2026-11-27 audit: a fly that fell in,
+    // a runner thrown out at home, was saved as 外飛 with the batter on base). Not caught: 失誤; fell in: a hit.
+    if (plan && row === 'batter' && d !== 'out' && FLY_CAUGHT.has(plan.result) && plan.batter === 'out') {
+      setToast({ id: Date.now(), text: `「${plan.result}」是高飛球被接殺、打者出局，不能上壘。沒接到請按「改結果」選「失誤」；球落地是安打，選「一安」等` })
+      return
+    }
     // 內滾／犧觸 (the batter out) and a runner put out on the play: the batter was safe — a 野選 (both out is 雙殺).
     // The plan becomes 野選 (batted ball kept), with this runner out.
     if (plan && row !== 'batter' && d === 'out' && FC_FROM.has(plan.result) && plan.batter === 'out' && plan.runners[row] !== 'out') {
@@ -981,7 +988,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 )}
                 {side === 'opp' && errOpen && (
                   <div className="basis-full flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[11px] text-muted basis-full">誰失誤（例如一安＋左外野漏接點 LF）</span>
+                    <span className="text-[11px] text-muted basis-full">誰失誤（例如一安＋左外野漏接點 LF；打擊結果是「失誤」的那次不用再點，用「這次失誤算給」選人）</span>
                     {FIELD_POSITIONS.map((pos) => {
                       const n = (state.extras.errors ?? []).filter((x) => x === pos).length
                       return (
@@ -1014,6 +1021,7 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                   <button type="button" onClick={() => { lastBall.current = plan.loc || plan.traj ? { loc: plan.loc, traj: plan.traj, quality: plan.quality } : null; setPlan(null) }} className="h-9 text-[12px] text-ink-2 hover:text-ink cursor-pointer inline-flex items-center gap-1"><X className="size-3.5" />改結果</button>
                 </div>
                 {!NO_BATTED_BALL.has(plan.result) && <BattedBallPicker result={plan.result} value={plan} onChange={(v) => setPlan({ ...plan, ...v })} required />}
+                {plan.result === '失誤' && <ErrorFielderPicker loc={plan.loc} onPick={(loc) => setPlan({ ...plan, loc })} name={side === 'opp' ? fielderName : undefined} ours={side === 'opp'} />}
                 <div>
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-[12px] text-ink-2">跑者去向</span>
@@ -1040,14 +1048,14 @@ function Live({ state, apply, undo, canUndo, onFinish, onAbandon, save, focus, o
                 {side === 'us' && !!plan.errAdv?.length && (
                   // 失誤進壘 while we bat: their error; who, if the recorder saw it (else it counts as 不知道)
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[12px] text-ink-2">{t('對方誰失誤')}<span className="text-muted ml-1.5">算對方失誤；沒看清楚可以不點{plan.result === '失誤' ? '（和打擊結果是同一次失誤就不用點）' : ''}</span></div>
+                    <div className="text-[12px] text-ink-2">{t('對方誰失誤')}<span className="text-muted ml-1.5">算對方失誤；沒看清楚可以不點{plan.result === '失誤' ? `（和打擊結果是同一次失誤就不用點${resultErrorPos(plan) ? `，點 ${resultErrorPos(plan)} 也不會多算` : ''}）` : ''}</span></div>
                     <ErrorByChips value={plan.errBy ?? []} onChange={(v) => setPlan({ ...plan, errBy: v })} unknown label={t('對方誰失誤')} />
                   </div>
                 )}
                 {side === 'opp' && !!plan.errAdv?.length && (
                   // 失誤進壘 while we field: whose error it was (counted as our error on this plate appearance)
                   <div className="flex flex-col gap-1.5">
-                    <div className="text-[12px] text-ink-2">誰失誤<span className="text-muted ml-1.5">{t('算我隊守備失誤')}；兩人都有就都點</span></div>
+                    <div className="text-[12px] text-ink-2">誰失誤<span className="text-muted ml-1.5">{t('算我隊守備失誤')}；兩人都有就都點{resultErrorPos(plan) ? `；和打擊結果同一次失誤就點 ${resultErrorPos(plan)}（不會多算）` : ''}</span></div>
                     <div className="flex flex-wrap gap-1.5" role="group" aria-label="誰失誤">
                       {FIELD_POSITIONS.map((pos) => {
                         const on = !!plan.errBy?.includes(pos)
@@ -1257,6 +1265,8 @@ const INNINGS_CHOICES = Array.from({ length: 12 }, (_, k) => ({ value: String(k 
 const FC_FROM = new Set(['內滾', '犧觸'])
 /** 外飛／界外飛 (caught: the batter out) and a runner scoring on it, with fewer than two out: a 犧飛 (rule 9.08(d)) */
 const SF_FROM = new Set(['外飛', '界外飛'])
+/** caught flies: the batter is out (setDest will not put him on a base) */
+const FLY_CAUGHT = new Set(['外飛', '內飛', '界外飛'])
 
 function DestRow({ label, value, onChange, min, batter, extra, mistake, outAt }: { label: string; value: Dest; onChange: (d: Dest) => void; min: number; batter?: boolean; extra?: ReactNode; mistake?: { on: boolean; set: (on: boolean) => void }; /** 壘死: 死在哪個壘包 (shown while `show`) */ outAt?: { show: boolean; value: OutAt; set: (a: OutAt) => void; name: string } }) {
   // a runner put out on the bases is 壘死 (the batter: 出局); 「自己跑壘失誤」 next to it says it was his own mistake

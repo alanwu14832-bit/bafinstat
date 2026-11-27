@@ -15,7 +15,8 @@ import { isNoBatter, isPlaced, isUnfinished, missingBattedBallTag, type OutAt, O
 import { count, impliedResult, missingBattedBall, type Base } from '../../record/model'
 import { AdvChoice, BattedBallPicker, chipBtn, NO_BATTED_BALL, OutAtChips, PitchPad, ResultChips, type ExtraBases } from '../../record/widgets'
 import { applyRunEvent, basePath, rowName, RUN_EVENTS, runEnding, toggleBase, undoRunStep, withResult, type RunEvent } from '../../record/paEdit'
-import { errAdvanceErrors, errorsOf, errorsText, FIELD_POSITIONS, oppErrorList, setOurErrorCount, UNKNOWN_FIELDER } from '../../data/errors'
+import { errAdvanceErrors, errorsOf, errorsText, FIELD_POSITIONS, oppErrorList, ourDoubledResult, setOurErrorCount, theirDoubledResult, UNKNOWN_FIELDER } from '../../data/errors'
+import { ErrorFielderPicker } from './ErrorFielderPicker'
 import { batterEndFor, batterOutMark, inningsOf, isBatterOutMark, midOf, OUT_PLAYS, placedBases, type End, type Step } from '../../record/timeline'
 import { balksIn, playLabel } from '../../data/plays'
 import { parseTiebreakBases } from '../../record/tiebreak'
@@ -387,18 +388,21 @@ function OurErrors({ pa, onChange, who }: { pa: PitchingPA; onChange: (pa: AnyPA
   const errPlay = !!pa.events?.some((e) => e.kind === 'err' && (!e.play || pa.result !== '失誤'))
   // the result's own error position (a 失誤 at its 落點, 妨礙 = C)
   const ownPos = pa.result === '妨礙' ? 'C' : pa.result === '失誤' && pa.loc ? POSITION_BY_NUMBER[pa.loc] : undefined
+  const doubled = ourDoubledResult(pa)
   const [open, setOpen] = useState(n > 0 || pa.result === '失誤' || errPlay)
   useEffect(() => { if (pa.result === '失誤' || errPlay) setOpen(true) }, [pa.result, errPlay])
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="self-start h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border border-dashed border-border-strong text-[12px] font-medium text-ink-2 hover:text-ink cursor-pointer">＋ 我隊守備失誤</button>
   return (
-    <Section title="我隊守備失誤" aside={<span className="text-[11px] text-muted">例如一安＋左外野漏接 → 點 LF；失誤兩次就點兩下</span>}>
+    <Section title="我隊守備失誤" aside={<span className="text-[11px] text-muted">例如一安＋左外野漏接 → 點 LF；失誤兩次就點兩下{pa.result === '失誤' ? '；打擊結果「失誤」那次用上面的「這次失誤算給」' : ''}</span>}>
+      {pa.result === '失誤' && <ErrorFielderPicker loc={pa.loc} onPick={(loc) => onChange({ ...pa, loc })} name={(pos) => who?.(pos) ? <span className="font-normal opacity-70 ml-1">{who(pos)}</span> : null} ours />}
       <div className="flex flex-wrap gap-1.5">
         {FIELD_POSITIONS.map((pos) => {
           const k = (pa.errors ?? []).filter((x) => x === pos).length
           return <CountButton key={pos} label={posNum(pos)} sub={who?.(pos)} value={k} onChange={(v) => { const errors = setOurErrorCount(pa, pos, v); const nx: PitchingPA = { ...pa, errors }; if (!errors.length) delete nx.errors; onChange(nx) }} />
         })}
       </div>
-      {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：沒點守位時，依落點算一次失誤。</p>}
+      {pa.result === '失誤' && !pa.errors?.length && <p className="text-[12px] text-muted">結果是「失誤」：算一次，給「這次失誤算給」選的人；下面只點另外又失誤的。</p>}
+      {doubled && <p role="alert" className="text-[12px] text-warning">結果「失誤」已經算給 {doubled.own}，下面又記了 {doubled.others.join('、')}，共算 {errorsOf(pa).positions.length + errorsOf(pa).unknown} 次。同一次失誤的話：在「這次失誤算給」點 {doubled.others[0]}，再把下面的 {doubled.others[0]} 按 − 減掉；真的是兩次，下面把 {doubled.own} 也點一下（就不會再提醒）。</p>}
       {ownPos && (pa.errors?.length ?? 0) < errAdvanceErrors(pa) && <p className="text-[12px] text-muted">結果「{pa.result}」那次（{ownPos}）另外算：跑者「失誤進壘」若也是 {ownPos} 失誤，點一下 {ownPos} 會算成 2 次。</p>}
       {errPlay && !pa.errors?.length && <p role="alert" className="text-[12px] text-critical">有跑者「失誤進壘」：請點是誰失誤（沒點不能儲存）</p>}
     </Section>
@@ -409,8 +413,9 @@ function OurErrors({ pa, onChange, who }: { pa: PitchingPA; onChange: (pa: AnyPA
  *  result is counted by itself; a 失誤進壘 adds a 不知道 here that can be changed to the fielder. */
 function TheirErrors({ pa, onChange }: { pa: BattingPA; onChange: (pa: AnyPA) => void }) {
   const list = oppErrorList(pa)
-  const [open, setOpen] = useState(list.length > 0)
-  useEffect(() => { if (list.length) setOpen(true) }, [list.length])
+  const doubled = theirDoubledResult(pa)
+  const [open, setOpen] = useState(list.length > 0 || pa.result === '失誤')
+  useEffect(() => { if (list.length || pa.result === '失誤') setOpen(true) }, [list.length, pa.result])
   if (!open) return <button type="button" onClick={() => setOpen(true)} className="self-start h-9 pointer-fine:h-8 px-3 rounded-[var(--radius-sm)] border border-dashed border-border-strong text-[12px] font-medium text-ink-2 hover:text-ink cursor-pointer">＋ 對方守備失誤</button>
   const set = (pos: string, v: number) => {
     const errors = [...list.filter((x) => x !== pos), ...Array.from({ length: v }, () => pos)]
@@ -418,10 +423,12 @@ function TheirErrors({ pa, onChange }: { pa: BattingPA; onChange: (pa: AnyPA) =>
     onChange(errors.length ? { ...rest, errors } : rest)
   }
   return (
-    <Section title="對方守備失誤" aside={<span className="text-[11px] text-muted">例如捕手漏接界外飛球 → 點 C；打擊結果「失誤」那次不用再點</span>}>
+    <Section title="對方守備失誤" aside={<span className="text-[11px] text-muted">例如捕手漏接界外飛球 → 點 C；打擊結果「失誤」那次不用再點{pa.result === '失誤' ? '，用上面的「這次失誤算給」選人' : ''}</span>}>
+      {pa.result === '失誤' && <ErrorFielderPicker loc={pa.loc} onPick={(loc) => onChange({ ...pa, loc })} ours={false} />}
       <div className="flex flex-wrap gap-1.5">
         {[...FIELD_POSITIONS, UNKNOWN_FIELDER].map((pos) => <CountButton key={pos} label={pos === UNKNOWN_FIELDER ? '不知道' : posNum(pos)} value={list.filter((x) => x === pos).length} onChange={(v) => set(pos, v)} />)}
       </div>
+      {doubled && <p role="alert" className="text-[12px] text-warning">對方 {doubled} 算了 2 次：打擊結果「失誤」一次，這裡又記了一次。同一次失誤的話，把這裡的 {doubled} 按 − 減掉；真的是他失誤兩次就不用改。</p>}
     </Section>
   )
 }
