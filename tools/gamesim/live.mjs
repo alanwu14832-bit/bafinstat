@@ -255,6 +255,8 @@ const big = lv.getByRole('dialog', { name: '即時比分大螢幕' })
 if (!(await big.count()) || !(await big.getByText('最新', { exact: true }).count())) fails.push('大螢幕沒有打開或沒有「最新」')
 await lv.screenshot({ path: `${S}/live-360-big.png` })
 await lv.keyboard.press('Escape')
+// (a headless browser stays fullscreen after the dialog closes, and a fullscreen window cannot be resized)
+await lv.evaluate(() => document.fullscreenElement && document.exitFullscreen().catch(() => {})); await lv.waitForTimeout(300)
 await lv.setViewportSize({ width: 1400, height: 1000 })
 
 // ---------------------------------------------------------------- batch 13: mid-game the game says 比賽進行中, not 勝／敗
