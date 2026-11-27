@@ -1,12 +1,14 @@
 name: 測試通過就自動上線
 
-# 推到開發分支後，先合併最新的 main，再對合併後的版本跑測試與建置，通過才推進 main；
+# 推到 claude/ 開頭的開發分支後，先合併最新的 main，再對合併後的版本跑測試與建置，通過才推進 main；
 # Vercel 與 GitHub Pages 都是看 main，所以合併完網站就會自己更新，不用再開 PR。
+# （每次 Claude 工作階段的分支名稱都不一樣，所以認 claude/**，和校隊的 NTUBAstat 一樣；以前只認
+#   claude/baseball-stats-platform-avxula，2026-11-26 起用別的分支開 PR 直接合併的更新就沒有跑測試、也沒存「網站版本」。）
 # 要暫停自動上線：GitHub → Actions → 左邊選這個 workflow → 右上 ⋯ → Disable workflow。
 
 on:
   push:
-    branches: ['claude/baseball-stats-platform-avxula']
+    branches: ['claude/**']
   workflow_dispatch:
 
 permissions:
