@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, Camera, CheckCircle2, Info, Maximize2, Pencil, Printer, Share2, Smartphone, Trash2, Video, X } from 'lucide-react'
 import { StoryDialog } from '../components/ui/StoryDialog'
+import { TeamLogo } from '../components/ui/TeamLogo'
+import { OppMark } from '../components/ui/GameCard'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { LineScoreBoard, PlateBadge } from '../components/ui/Scoreboard'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -124,8 +127,12 @@ function LineScore({ s, usName = TEAM_NAME }: { s: GameSummary; /** our side's n
   const us = { name: usName, line: boardLine(s, 'us'), r: s.runsUs, h: s.hitsUs, e: s.errorsUs, us: true }
   const top = s.game.homeAway === '主' ? opp : us
   const bottom = s.game.homeAway === '主' ? us : opp
+  // a phone: the compact board (the teams' marks, R H E pinned at the right edge) so the final score is on screen without
+  // scrolling sideways (2026-11-27 audit: R/H/E were cut off at 390 px; /live already did this)
+  const narrow = useMediaQuery('(max-width: 639px)')
+  const mark = (t: typeof us) => (t.us || isIntra(s.game) ? <TeamLogo size={18} /> : <OppMark name={t.name} size={18} />)
   return (
-    <LineScoreBoard innings={n} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.us }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.us }} />
+    <LineScoreBoard innings={n} compact={narrow} top={{ name: top.name, line: top.line, r: top.r, h: top.h, e: top.e, us: top.us, mark: mark(top) }} bottom={{ name: bottom.name, line: bottom.line, r: bottom.r, h: bottom.h, e: bottom.e, us: bottom.us, mark: mark(bottom) }} />
   )
 }
 
@@ -268,7 +275,9 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
   const statOpp = useMemo(() => { const m = new Map(oppLines.map((l) => [l.label, { ab: l.ab, h: l.h, rbi: l.rbi }])); return (n: string) => m.get(n) }, [oppLines])
   const notes = useMemo(() => gameNotes(current, ds), [current, ds])
   const sets = useMemo(() => ({ bat: pbpFilterSets(pbpBat, 'bat', keyRows.bat), pit: pbpFilterSets(pbpPit, 'pit', keyRows.pit) }), [pbpBat, pbpPit, keyRows])
-  const issues = useMemo(() => auditGame(pbpBat, pbpPit), [pbpBat, pbpPit])
+  // 待核對 is the recorders' to-do: only 紀錄員／管理者 see it (2026-11-27, the user's call — a parent reading a game page saw
+  // 「3 項待核對」 and 「已核對：…」)
+  const issues = useMemo(() => (canEdit ? auditGame(pbpBat, pbpPit) : []), [canEdit, pbpBat, pbpPit])
   // 文字轉播: both sides in one story, with who ran where (the 逐球 tables stay the detailed view)
   // (隊內賽: 「我隊」「對方」 read as the two sides' names; no 本季第幾支 for a game the season does not count)
   const feed = useMemo(() => {
@@ -428,7 +437,7 @@ export function GameView({ summary: given, mode, onClose, initialTab = 'summary'
             <Tabs size="sm" aria-label="檢視" value={tab} onChange={(t) => { setTab(t); setTarget(undefined); setFilter('all') }} items={tabs} />
             {issues.length > 0 ? (
               <button type="button" onClick={() => setShowIssues((v) => !v)} className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[6px] text-[12px] font-medium bg-[color-mix(in_srgb,var(--warning)_14%,transparent)] text-ink cursor-pointer"><AlertTriangle className="size-3.5 text-warning-text" />{issues.length} 項待核對</button>
-            ) : <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good-text" />已核對：{AUDIT_SCOPE}</span>}
+            ) : canEdit ? <span className="inline-flex items-center gap-1.5 text-[12px] text-muted"><CheckCircle2 className="size-3.5 text-good-text" />已核對：{AUDIT_SCOPE}</span> : null}
           </div>
         )}
       </div>

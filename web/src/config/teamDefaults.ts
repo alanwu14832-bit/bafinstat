@@ -61,9 +61,10 @@ export const TEAM_DEFAULTS = {
   /** VITE_TEAM_OPEN_STATS (1 / 0): the 球員 pages (打擊, 投球, 守備, 球員, 相簿, the full 總覽) are open to everyone, no
    *  account needed; only 紀錄員 and 管理者 sign in. 系隊 chose this on 2026-11-17; with 0 those pages need a 球員 account. */
   openStats: true,
-  /** VITE_TEAM_QUAL_RULE (team / college): the 排行門檻 a leaderboard opens with — 隊內 (PA ≥ 1) or 大專規程 (PA ≥
-   *  2.1 × 球隊場數, IP ≥ 1 × 場數; data/qualify.ts). The viewer can still switch. */
-  qualRule: 'team' as 'team' | 'college',
+  /** VITE_TEAM_QUAL_RULE (team / college): the 排行門檻 a leaderboard opens with — 隊內 (PA ≥ 1) or 規定打席 (大專規程: PA ≥
+   *  2.1 × 球隊場數, IP ≥ 1 × 場數; data/qualify.ts). The viewer can still switch. 規定打席 since 2026-11-27 (the user's call:
+   *  總覽, 打擊, 投球 and 球員 had named different leaders — one with 3 at bats). */
+  qualRule: 'college' as 'team' | 'college',
   /** VITE_TEAM_OG_IMAGE: the 1200×630 link-preview picture: a file in web/public or a full URL. Without the file the
    *  build uses the logo and a small preview card. */
   ogImage: 'og.png',

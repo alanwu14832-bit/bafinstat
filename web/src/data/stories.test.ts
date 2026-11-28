@@ -59,7 +59,9 @@ describe('數據故事：全隊', () => {
 
 describe('數據故事：個人', () => {
   it('describes a player through streaks and team ranks', () => {
-    const ds = season([[3, 1], [4, 2], [5, 0], [2, 1], [1, 3], [2, 2]])
+    const base = season([[3, 1], [4, 2], [5, 0], [2, 1], [1, 3], [2, 2]])
+    // (規定打席 is 2.1 × 6 games = 13: 甲 needs one more than his two a game to be ranked)
+    const ds = { ...base, batting: [...base.batting, bat(base.games[0].id, '甲', '保送')] }
     const s = playerStories('甲', input(ds), 5)
     expect(s[0]).toMatchObject({ kicker: '連續安打', figure: '6' })
     expect(s.some((x) => x.kicker.startsWith('打擊率'))).toBe(true)

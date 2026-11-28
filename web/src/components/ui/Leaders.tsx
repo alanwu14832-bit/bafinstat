@@ -62,7 +62,7 @@ export const tieNote = (l: LeaderResult | null) => (l?.by && l.tied ? `同率 ${
  * 領先者: who leads the page's key numbers, at the top of 打擊 / 投球 / 守備 so the page has a main character before
  * the big table. Same glow and stitching as the homepage hero, quieter.
  */
-export function LeaderStrip({ leaders, numbers, caption, id }: { leaders: Leader[]; numbers?: Map<string, string | undefined>; caption?: string; id?: string }) {
+export function LeaderStrip({ leaders, numbers, caption, id, rule }: { leaders: Leader[]; numbers?: Map<string, string | undefined>; caption?: string; id?: string; /** the minimum for the rates, said under the title (not only behind the ⓘ) */ rule?: string }) {
   // the conditions (門檻, 篩選) sit behind the ⓘ; a caption written as 「・依上方篩選…」 loses its leading dot there
   const info = useInfoNote(caption ? caption.replace(/^・/, '') : null, { what: '領先者' })
   if (!leaders.length) return null
@@ -70,13 +70,23 @@ export function LeaderStrip({ leaders, numbers, caption, id }: { leaders: Leader
     <section id={id} aria-label="領先者" className="relative overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-card)] scroll-mt-28">
       <HeroGlow size="sm" strength={0.7} />
       <div className="relative px-5 md:px-6 pt-4">
-        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2 tracking-[0.08em]"><span>領先者</span>{info.button}</div>
+        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink-2 tracking-[0.08em]"><span>領先者</span>{info.button}{rule && <span className="ml-1 font-normal tracking-normal text-muted">{rule}</span>}</div>
         {info.panel}
       </div>
       {/* phones swipe through the leaders (like the homepage 看點); wider screens show them side by side */}
       <ul className={cx('relative flex overflow-x-auto snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden p-2 md:p-3 md:grid md:overflow-visible', leaders.length >= 5 ? 'md:grid-cols-5' : leaders.length === 4 ? 'md:grid-cols-4' : 'md:grid-cols-3')}>
         {leaders.map((l, i) => {
           const first = l.names[0]
+          // nobody qualifies yet: the rate says so instead of crowning a tiny sample
+          if (!first) return (
+            <li key={l.label} className="min-w-0 shrink-0 w-[44%] snap-start md:w-auto">
+              <div className="h-full flex flex-col gap-1.5 rounded-[var(--radius-sm)] px-3 py-3">
+                <span className="text-[11px] font-semibold tracking-[0.06em] text-accent-text">{l.label}</span>
+                <span className="text-[20px] md:text-[22px] font-bold text-ink-2 leading-[30px] md:leading-[34px]">{l.value}</span>
+                {l.note && <span className="text-[11px] text-muted">{l.note}</span>}
+              </div>
+            </li>
+          )
           return (
             <li key={l.label} className="min-w-0 shrink-0 w-[44%] snap-start md:w-auto">
               <Reveal delay={0.04 * i} y={6} className="h-full">
