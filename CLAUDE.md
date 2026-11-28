@@ -107,6 +107,17 @@ A database change needs a migration in both repos, and the user must run it in b
   壞球 BOARD.ball, the strikes BOARD.strike, 擊進場內 BOARD.bg; unavailable = dashed, unfilled), ResultChips tinted per group
   (`GROUP_HUE`; off = dashed), the batting side asked by a big 左打／右打 card (the small chips come back once picked), 必填 落點／軌跡
   a neutral tag and edge (送出 still waits), 結束半局 next to 結束比賽, the record buttons 44 px on touch.
+- 一致與記得 (2026-11-27, package C of the same critique; all three sites): one minimum for every leader — 規定打席 (`qualRule`
+  'college', data/qualify: PA ≥ 2.1 × games, IP ≥ 1 × games) on 打擊, 投球 and 總覽's 本季看點 (`qualifiedBatters` /
+  `qualifiedPitchers` in data/stories); a rate nobody has reached yet reads 樣本還小 (a `Leader` with no names, not a link) and
+  `LeaderStrip rule` says the minimum. 待核對 (game page, 比賽 list) shows for 紀錄員／管理者 only. A `PageHeader` description
+  folds behind the ⓘ like a Card's. 球員 opens on the player this device looked at last (`bafin.players.last.v1`; a link wins
+  and updates it), on 投球 for a pitcher (`primaryPos === 'P'`), and folds the 百分位 card and the splits under a small
+  sample (10 打席 / 10 出局, less when the season is short: `batFloor` / `pitFloor`); a 換球員 chip. The game page's line score
+  is compact on phones with the teams' marks. Game cards list the away team first. 總覽's runs-by-inning chart stops at the
+  innings really played. `src/test/packageC.test.tsx`.
+  This site and the 校隊's: the top bar's theme and 黑／宋 sit behind one 「外觀」 button (`layout/AppearanceMenu.tsx`), and
+  即時比分 between games is a card with 最近一場 (score, link) and 下一場 (date, time, 看賽程).
 - 2026-11-25 (players' and recorders' asks): 打擊 page's 擊球強度 is a 強擊率 Hard Hit% bar chart (強 ÷ batted balls with a 強度);
   即時比分 shows 球速 (under each pitch of 本打席, the last one, the pitcher's 最快 today) lit 黃 125–134 / 紅 135+ (`speedTone` in
   data/speeds.ts; theme colours `speedClass` in the 文字轉播 and pitch chips); 修改資料 stays open after 儲存修改 (GameView remounts

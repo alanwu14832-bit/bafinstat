@@ -105,8 +105,10 @@ export function PitchingPage() {
     }
     // 大專規程: an ERA tie goes to more innings, then fewer hits
     const eraTies = college ? [{ get: (p: PitchingLine) => p.outs, label: '投球局數' }, { get: (p: PitchingLine) => p.h, low: true, label: '被安打少' }] : undefined
-    add('防禦率', leaderOf(s.pitchers, (p) => p.era, { low: true, qualifies: q, ties: eraTies }), (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`)
-    add('WHIP', leaderOf(s.pitchers, (p) => p.whip, { low: true, qualifies: q }), (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`)
+    const early = (label: string) => s.pitchers.length > 0 && out.push({ label, value: '樣本還小', names: [], to: '', note: `還沒有人達 IP ≥ ${minIP}` })
+    const eraL = leaderOf(s.pitchers, (p) => p.era, { low: true, qualifies: q, ties: eraTies }), whipL = leaderOf(s.pitchers, (p) => p.whip, { low: true, qualifies: q })
+    if (eraL) add('防禦率', eraL, (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`); else early('防禦率')
+    if (whipL) add('WHIP', whipL, (v) => f2(v), (n) => `${line(n)?.ipDisplay} 局`); else early('WHIP')
     add('三振', leaderOf(s.pitchers, (p) => p.k), String, (n) => `${line(n)?.bf} 名打者`)
     add('投球局數', leaderOf(s.pitchers, (p) => p.outs), (v) => `${Math.floor(v / 3)}.${v % 3}`, (n) => `${line(n)?.g} 場`)
     add('勝投', leaderOf(s.pitchers, (p) => p.w), String, (n) => `${line(n)?.w} 勝 ${line(n)?.l} 敗`)
@@ -123,7 +125,7 @@ export function PitchingPage() {
   const csvButton = <Button size="sm" variant="ghost" icon={<Download />} title="把目前的表格（全部欄位）下載成 CSV，可用 Excel 開" onClick={() => downloadCsv(`投手成績.csv`, full, withNumbers(rows, s.dataset.roster), [`${TEAM_NAME} 投手成績`, scopeText(csvFilters, s.games), `ERA、FIP 以每場 ${params.inningsPerGame} 局換算；FIP 常數 ${params.fipConstant.toFixed(3)}；未達門檻（${college ? '大專規程' : '隊內'}）：IP < ${minIP}`, winNote, `來源：${window.location.href}`])}>CSV</Button>
 
   const qualSelect = <Select size="sm" label="門檻" aria-label="排行門檻" value={rule} onChange={(e) => setRule(e.target.value === 'college' ? 'college' : 'team')}
-    options={[{ value: 'team', label: `隊內（IP ≥ ${ipDisplay(minOutsPitched('team', s.summary.games)).replace(/\.0$/, '')}）` }, { value: 'college', label: `大專規程（IP ≥ ${ipDisplay(minOutsPitched('college', s.summary.games)).replace(/\.0$/, '')}）` }]} />
+    options={[{ value: 'team', label: `隊內（IP ≥ ${ipDisplay(minOutsPitched('team', s.summary.games)).replace(/\.0$/, '')}）` }, { value: 'college', label: `規定投球局（IP ≥ ${ipDisplay(minOutsPitched('college', s.summary.games)).replace(/\.0$/, '')}）` }]} />
   // 情境拆分: the batters the whole staff faced, or one pitcher's (by batters faced)
   const [splitWho, setSplitWho] = useState('')
   const splitRows = useMemo(() => (splitWho ? s.pitching.filter((p) => p.pitcher === splitWho) : s.pitching), [s.pitching, splitWho])
@@ -146,7 +148,7 @@ export function PitchingPage() {
         actions={<Button variant="outline" size="sm" icon={<BedDouble />} to="/pitching/rest" title="依 Pitch Smart 建議看每位投手要休幾天、哪天可以再投">投手休息表</Button>} />
       <SectionNav items={[{ id: 'leaders', label: '領先者' }, { id: 'stats', label: '成績表' }, { id: 'platoon', label: '左右打' }, { id: 'splits', label: '情境' }, { id: 'charts', label: '圖表' }]} />
       <DemoBanner />
-      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} caption={college ? `・大專規程：防禦率、WHIP 需 IP ≥ ${minIP}（1 局 × ${s.summary.games} 場）；防禦率同數比投球局數多、再比被安打少` : `・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
+      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} rule={`防禦率、WHIP：${college ? '規定投球局' : '隊內'} IP ≥ ${minIP}`} caption={college ? `・規定投球局：防禦率、WHIP 需 IP ≥ ${minIP}（大專規程 1 局 × ${s.summary.games} 場）；防禦率同數比投球局數多、再比被安打少` : `・依上方篩選；防禦率、WHIP 需 IP ≥ ${minIP}`} />
       <StatGroup>
         <StatTile label="團隊 ERA" to="?view=basic&sort=era&dir=asc#stats" value={s.teamPitch.era ?? 0} format="era" note={`${s.teamPitch.ipDisplay} IP`} />
         <StatTile label="團隊 FIP" to="?view=advanced&sort=fip&dir=asc#stats" value={s.teamPitch.fip ?? 0} format="era" />

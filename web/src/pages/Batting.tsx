@@ -107,8 +107,10 @@ export function BattingPage() {
       hr: [ab, { get: (b: BattingLine) => b.rbi, label: '打點' }],
       rbi: [ab, { get: (b: BattingLine) => b.tb, label: '壘打數' }],
     } : { avg: undefined, hr: undefined, rbi: undefined }
-    add('打擊率', leaderOf(s.batters, (b) => b.avg, { qualifies: q, ties: ties.avg }), f3, (n) => `${line(n)?.h} 安 / ${line(n)?.ab} 打數`)
-    add('OPS', leaderOf(s.batters, (b) => b.ops, { qualifies: q }), f3, (n) => `${line(n)?.pa} 打席`)
+    const early = (label: string) => s.batters.length > 0 && out.push({ label, value: '樣本還小', names: [], to: '', note: `還沒有人達 PA ≥ ${minPA}` })
+    const avgL = leaderOf(s.batters, (b) => b.avg, { qualifies: q, ties: ties.avg }), opsL = leaderOf(s.batters, (b) => b.ops, { qualifies: q })
+    if (avgL) add('打擊率', avgL, f3, (n) => `${line(n)?.h} 安 / ${line(n)?.ab} 打數`); else early('打擊率')
+    if (opsL) add('OPS', opsL, f3, (n) => `${line(n)?.pa} 打席`); else early('OPS')
     add('全壘打', leaderOf(s.batters, (b) => b.hr, { ties: ties.hr }), String)
     add('安打', leaderOf(s.batters, (b) => b.h), String, (n) => `${line(n)?.ab} 打數`)
     add('打點', leaderOf(s.batters, (b) => b.rbi, { ties: ties.rbi }), String)
@@ -128,7 +130,7 @@ export function BattingPage() {
 
   // 門檻: 隊內 (PA ≥ 1) or 大專規程 (PA ≥ 2.1 × games); remembered on this device and kept in the link
   const qualSelect = <Select size="sm" label="門檻" aria-label="排行門檻" value={rule} onChange={(e) => setRule(e.target.value === 'college' ? 'college' : 'team')}
-    options={[{ value: 'team', label: `隊內（PA ≥ ${minPlateAppearances('team', s.summary.games)}）` }, { value: 'college', label: `大專規程（PA ≥ ${minPlateAppearances('college', s.summary.games)}）` }]} />
+    options={[{ value: 'team', label: `隊內（PA ≥ ${minPlateAppearances('team', s.summary.games)}）` }, { value: 'college', label: `規定打席（PA ≥ ${minPlateAppearances('college', s.summary.games)}）` }]} />
   // 情境拆分: the whole team, or one batter (by plate appearances)
   const [splitWho, setSplitWho] = useState('')
   const splitRows = useMemo(() => (splitWho ? s.batting.filter((p) => p.batter === splitWho) : s.batting), [s.batting, splitWho])
@@ -153,7 +155,7 @@ export function BattingPage() {
       <PageHeader scoped title="打擊" description={`${s.batters.length} 位打者。排行門檻 PA ≥ ${minPA}${college ? '（大專規程）' : ''}。`} />
       <SectionNav items={[{ id: 'leaders', label: '領先者' }, { id: 'stats', label: '成績表' }, { id: 'platoon', label: '左右投' }, { id: 'splits', label: '情境' }, { id: 'charts', label: '圖表' }]} />
       <DemoBanner />
-      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} caption={college ? `・大專規程：打擊率、OPS 需 PA ≥ ${minPA}（2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
+      <LeaderStrip id="leaders" leaders={leaders} numbers={numbers} rule={`打擊率、OPS：${college ? '規定打席' : '隊內'} PA ≥ ${minPA}`} caption={college ? `・規定打席：打擊率、OPS 需 PA ≥ ${minPA}（大專規程 2.1 × ${s.summary.games} 場，小數進位）；同數依規程比較` : `・依上方篩選；打擊率、OPS 需 PA ≥ ${minPA}`} />
       <Card id="stats" title="打擊成績" subtitle={`點欄位標題排序；點球員開啟個人檔案。OPS+、wRC+ 以目前篩選範圍的全隊為 100${minPA > 1 ? `；PA < ${minPA} 標${college ? '還差幾個打席' : '「未達門檻」'}，不列入打擊率、OPS 領先者` : '；率值旁的小字是分子／分母，樣本少時請一起看'}${view === 'advanced' ? `。${winNote}` : view === 'batted' ? '。每個比率只算有記那一項的擊球，小字是 分子/分母；GB＋LD＋FB＋PU＝100%（PU 是內野飛球），Pull／Center／Oppo 用球員名單的打擊慣用加落點；BABIP 不含全壘打與觸擊' : ''}`} flush action={<span className="flex items-center gap-3 flex-wrap justify-end">{tableView.toggle}{csvButton}{printButton}{qualSelect}<Checkbox label="只看達門檻" checked={qualifiedOnly} onChange={setQualifiedOnly} /></span>}>
         {/* the column set sits right on the table it changes (on a phone the table is screens below the page title) */}
         <div className="px-5 py-3 border-b border-border"><Tabs size="sm" aria-label="欄位組" value={view} onChange={setView} items={[{ value: 'basic', label: '基本' }, { value: 'advanced', label: '進階' }, { value: 'process', label: '過程指標' }, { value: 'batted', label: '擊球剖面' }]} /></div>
@@ -168,7 +170,7 @@ export function BattingPage() {
         <BarChartCard title="強擊率 Hard Hit%" subtitle={`強勁擊球 ÷ 有記強度的擊球，由高到低（有記強度的擊球 ≥ 3 的打者，前 12 名）${teamHard === null ? '' : `；全隊 ${(teamHard * 100).toFixed(1)}%`}`}
           data={hardHit} onBarClick={openPlayer} series={[{ key: 'hard', label: '強擊率' }]} layout="horizontal" showLabels categoryWidth={64}
           formatValue={(v) => `${v.toFixed(1)}%`} nameFor={(_k, d) => `強擊率（強 ${d.n}）`} />
-        <BarChartCard title="選球紀律" subtitle="三振率 K% 與保送率 BB%，打席多的在上面（達門檻打者，前 12 名）；名字下面是打席數，點長條看那位球員" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%' }, { key: 'BB%', label: 'BB%' }]} layout="horizontal" showLabels xSubKey="pa" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
+        <BarChartCard title="選球紀律" subtitle="三振率 K% 與保送率 BB%，打席多的在上面（達門檻打者，前 12 名）；名字下面是打席數，點長條看那位球員" data={discipline} onBarClick={openPlayer} series={[{ key: 'K%', label: 'K%', color: 'var(--series-2)' }, { key: 'BB%', label: 'BB%', color: 'var(--series-1)' }]} layout="horizontal" showLabels xSubKey="pa" categoryWidth={64} formatValue={(v) => `${v.toFixed(1)}%`} />
       </div>
       </Section>
     </>

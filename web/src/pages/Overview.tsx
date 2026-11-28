@@ -82,7 +82,13 @@ export function OverviewPage() {
     const t = teamBatting(s.dataset, s.batting.filter((p) => window.includes(p.gameId)))
     return { id: summaries[i].game.id, name: shortDate(summaries[i].game.date), ops: Number((t.ops ?? 0).toFixed(3)), obp: Number((t.obp ?? 0).toFixed(3)) }
   }), [summaries, s.batting, s.dataset])
-  const innings = useMemo(() => summary.runsByInningUs.map((v, i) => ({ name: `${i + 1}`, us: v, opp: summary.runsByInningOpp[i] ?? 0 })).filter((_, i) => i < 9), [summary])
+  // the team's regulation innings (7 for a 7-inning team), plus any extra inning that was played (2026-11-27 audit: a 7-inning
+  // team's chart ran 1–9)
+  const innings = useMemo(() => {
+    const played = summary.runsByInningUs.reduce((n, v, i) => (v || summary.runsByInningOpp[i] ? i + 1 : n), 0)
+    const n = Math.min(9, Math.max(TEAM.innings, played))
+    return summary.runsByInningUs.map((v, i) => ({ name: `${i + 1}`, us: v, opp: summary.runsByInningOpp[i] ?? 0 })).filter((_, i) => i < n)
+  }, [summary])
   const spray = useMemo(() => sprayCounts(s.batting), [s.batting])
   // defense: amateur games turn on errors more than anything else
   const errors = useMemo(() => {

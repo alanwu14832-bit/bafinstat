@@ -33,7 +33,7 @@ export const COLLEGE_TIES = {
   hr: ['打數少', '打點'],
 } as const
 
-export const QUAL_RULE_LABEL: Record<QualRule, string> = { team: '隊內', college: '大專規程' }
+export const QUAL_RULE_LABEL: Record<QualRule, string> = { team: '隊內', college: '規定打席' }
 
 // ---------------------------------------------------------------- batch 5: career minimums (紀錄簿, 生涯)
 /** 生涯 rate lists: 2.1 打席 per game over every game, capped at 100 打席. */

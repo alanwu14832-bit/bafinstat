@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Menu, SlidersHorizontal, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
-import { FontToggle, ThemeToggle } from './ThemeToggle'
+import { AppearanceMenu } from './AppearanceMenu'
 import { findNavItem } from './nav'
 import { activeFilterCount, FilterBar } from './FilterBar'
 import { useUiStore } from '../../store/ui'
@@ -107,7 +107,7 @@ export function TopBar({ children: given }: TopBarProps) {
         <div className="flex items-center gap-2 ml-auto shrink-0">
           {keys.length > 0 && <MobileFilters always={cramped} keys={keys} />}
           <CloudStatus />
-          <div className="hidden lg:flex items-center gap-2"><FontToggle /><ThemeToggle /></div>
+          <div className="hidden lg:flex items-center"><AppearanceMenu /></div>
         </div>
       </div>
     </header>

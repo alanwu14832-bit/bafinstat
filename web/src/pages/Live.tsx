@@ -1,8 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
-import { EmptyState } from '../components/ui/EmptyState'
 import { Diamond } from '../record/Diamond'
 import { AnimatePresence, motion } from 'framer-motion'
 import { BOARD, CountLights, LineScoreBoard, type BoardTeam } from '../components/ui/Scoreboard'
@@ -24,9 +22,11 @@ import { useLiveGames } from '../hooks/useLiveGames'
 import { useDataStore } from '../store/data'
 import { TEAM_NAME } from '../data/seed'
 import { withSideNames } from '../data/intrasquad'
-import { HIT_BASE_COUNT, OPP_BATS_LABEL, oppBatterName } from '../data/types'
+import { HIT_BASE_COUNT, OPP_BATS_LABEL, oppBatterName, type Game } from '../data/types'
 import { cx } from '../lib/format'
-import { NON_AB_RESULTS } from '../data/stats'
+import { NON_AB_RESULTS, resultText, summarizeGame, type GameSummary } from '../data/stats'
+import { playedGames } from '../data/filters'
+import { Button } from '../components/ui/Button'
 import { f3 } from '../lib/fmt'
 import { alignSpeeds, speedFacts, speedTone } from '../data/speeds'
 import { TEAM } from '../config/team'
@@ -52,6 +52,47 @@ const WIDE = '(min-width: 1280px)'
  *  laptop (narrower, the board's matchup row would cut the batter's name) */
 const BIG_WIDE = '(min-width: 1880px)'
 
+const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
+const dayText = (iso: string) => { const d = new Date(`${iso}T00:00:00`); return `${d.getMonth() + 1}/${d.getDate()}（${WEEKDAY[d.getDay()]}）` }
+
+/** Nothing on: how the last game ended and when the next one is, so a parent who opens the link between games is not left
+ *  on a dead end (2026-11-27 audit: a grey card naming the last opponent, no score, no schedule). */
+function IdleCard({ error, next, last }: { error: string | null; next?: Game; last?: GameSummary }) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center gap-2 text-[13px] text-ink-2"><span aria-hidden className="size-2 rounded-full bg-[var(--border-strong)]" />目前沒有進行中的比賽</div>
+        {error && <p className="text-[13px] text-critical-text">{error}</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {last && (
+            <section aria-label="最近一場" className="flex flex-col gap-1.5 min-w-0">
+              <span className="text-[12px] text-muted">最近一場・{dayText(last.game.date)} vs {last.game.opponent}</span>
+              <span className="flex items-end gap-3">
+                <span className="figure text-[44px] font-bold leading-none text-ink tnum">{last.runsUs}<span className="text-muted mx-1.5">:</span>{last.runsOpp}</span>
+                <span className="pb-1 text-[16px] font-semibold text-ink">{resultText(last.result)}</span>
+              </span>
+              <span className="text-[13px] text-ink-2 truncate">{[last.game.tournament, last.game.venue].filter(Boolean).join('・')}</span>
+              <span><Button size="sm" variant="outline" to={`/games?game=${encodeURIComponent(last.game.id)}`}>看這場的成績</Button></span>
+            </section>
+          )}
+          <section aria-label="下一場" className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-[12px] text-muted">下一場</span>
+            {next ? (
+              <>
+                <span className="figure text-[32px] font-bold leading-none text-ink">{dayText(next.date)}{next.time ? <span className="text-ink-2 ml-2">{next.time}</span> : null}</span>
+                <span className="text-[15px] font-semibold text-ink">vs {next.opponent}</span>
+                <span className="text-[13px] text-ink-2 truncate">{[next.tournament, next.venue].filter(Boolean).join('・')}</span>
+              </>
+            ) : <span className="text-[15px] text-ink-2">還沒排定</span>}
+            <span><Button size="sm" variant="outline" to="/games?view=schedule">看賽程</Button></span>
+          </section>
+        </div>
+        <p className="text-[12px] text-muted">比賽開始後，這裡會每 5 秒自動更新比分、壘包和每一球，不需登入。</p>
+      </div>
+    </Card>
+  )
+}
+
 /** Public live scoreboard. Reads the in-progress state the recorder's device keeps in sync (cloud), or this device's own draft. */
 export function LivePage() {
   // (the shared list of games in progress with their recording states, read every 5 s while this page is open:
@@ -59,18 +100,16 @@ export function LivePage() {
   const { drafts, error } = useLiveGames({ pollMs: POLL_MS, full: true })
   const base = useDataStore((s) => s.base)
   const live = drafts[0] ?? null
-  const lastFinal = useMemo(() => [...base.games].filter((g) => !g.status).sort((a, b) => (a.date < b.date ? 1 : -1))[0], [base.games])
+  // the last game played (with its rows: a game entered with nothing recorded is not one) and the next one on the schedule
+  const lastFinal = useMemo(() => { const g = playedGames(base).slice(-1)[0]; return g ? summarizeGame(base, g, new Set()) : undefined }, [base])
   const today = new Date().toISOString().slice(0, 10)
-  const nextGame = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0], [base.games, today])
+  const nextGame = useMemo(() => base.games.filter((g) => g.status === 'scheduled' && g.date >= today).sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))[0], [base.games, today])
 
   if (!live) {
     return (
       <>
         <PageHeader title="即時比分" description="紀錄員在「紀錄比賽」逐球輸入時，這一頁會每 5 秒自動更新，不需登入。" />
-        <Card>
-          <EmptyState title="目前沒有進行中的比賽" description={error ?? (nextGame ? `下一場：${nextGame.date}${nextGame.time ? ` ${nextGame.time}` : ''} vs ${nextGame.opponent}${nextGame.venue ? `・${nextGame.venue}` : ''}` : lastFinal ? `最近一場：${lastFinal.date} vs ${lastFinal.opponent}，到「比賽」頁查看完整成績。` : undefined)}
-            action={<span className="inline-flex gap-4 text-[13px]">{nextGame && <Link to="/games?view=schedule" className="underline underline-offset-2 text-ink">看賽程</Link>}{lastFinal && <Link to={`/games?game=${encodeURIComponent(lastFinal.id)}`} className="underline underline-offset-2 text-ink">看最近一場</Link>}</span>} />
-        </Card>
+        <IdleCard error={error} next={nextGame} last={lastFinal} />
       </>
     )
   }

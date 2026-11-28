@@ -13,6 +13,7 @@ import { ScheduleSection, daysToNextGame } from './Schedule'
 import { GameView, resultBadge } from './GameView'
 import { useDataStore } from '../store/data'
 import { auditGame } from '../data/audit'
+import { useAccess } from '../hooks/useAccess'
 import { useStats } from '../hooks/useStats'
 import { filterGames } from '../data/filters'
 import { intraView, isIntra, isMirror, sideNames, storedId } from '../data/intrasquad'
@@ -72,7 +73,9 @@ export function GamesPage() {
   // each game's 本場焦點
   const stars = useMemo(() => new Map(listed.map((g) => [g.game.id, gameStar(s.full, g.game.id)])), [listed, s.full])
   // 待核對 per game (the same check as inside the game), so the games that need correcting stand out in the list
-  const issueCounts = useMemo(() => new Map(listed.map((g) => [g.game.id, auditGame(s.full.batting.filter((p) => p.gameId === g.game.id), s.full.pitching.filter((p) => p.gameId === g.game.id)).length])), [listed, s.full])
+  // (only for 紀錄員／管理者: it is their to-do, not something to show a visitor)
+  const canCheck = useAccess().level >= 2
+  const issueCounts = useMemo(() => new Map(canCheck ? listed.map((g) => [g.game.id, auditGame(s.full.batting.filter((p) => p.gameId === g.game.id), s.full.pitching.filter((p) => p.gameId === g.game.id)).length]) : []), [canCheck, listed, s.full])
   // a game outside the filter can still be opened from a link (a 隊內賽 side's id opens the game it was made from)
   const current = useMemo(() => { const id = open && storedId(open); const g = s.full.games.find((x) => x.id === id); return g ? listed.find((x) => x.game.id === g.id) ?? summarizeGame(s.full, g) : null }, [open, s.full, listed])
   return (

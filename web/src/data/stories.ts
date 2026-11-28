@@ -4,6 +4,7 @@
  * Thresholds keep them honest for amateur sample sizes: a leader needs a fair share of the team's plate
  * appearances / innings, a hot streak needs at-bats behind it.
  */
+import { minOutsPitched, minPlateAppearances } from './qualify'
 import { battingLines, finishedSummaries, isHitResult, NON_AB_RESULTS, pitchingLines, type BattingLine, type GameSummary, type PitchingLine } from './stats'
 import type { BattingPA, Dataset, PitchingPA, Player, StatParams } from './types'
 import { DEFAULT_PARAMS, isPA } from './types'
@@ -72,9 +73,10 @@ export function hitStreak(games: Array<{ h: number; ab?: number; sf?: number }>)
 }
 
 /** Batters with a fair share of the plate appearances: at least 2 per team game and at least 10. */
-export const qualifiedBatters = (lines: BattingLine[], games: number) => lines.filter((l) => l.pa >= Math.max(10, games * 2))
+/** 規定打席 / 規定投球局 (data/qualify, 大專規程): the same minimum as the 打擊 and 投球 pages' leaders (2026-11-27: 總覽 used its own) */
+export const qualifiedBatters = (lines: BattingLine[], games: number) => lines.filter((l) => l.pa >= minPlateAppearances('college', games))
 /** Pitchers with at least one inning per team game and at least 3 innings. */
-export const qualifiedPitchers = (lines: PitchingLine[], games: number) => lines.filter((l) => l.outs >= Math.max(9, games * 3))
+export const qualifiedPitchers = (lines: PitchingLine[], games: number) => lines.filter((l) => l.outs >= minOutsPitched('college', games))
 
 const top = <T,>(xs: T[], key: (x: T) => number | null, dir: 'max' | 'min' = 'max'): T | undefined => {
   const ok = xs.filter((x) => key(x) !== null)
@@ -178,9 +180,9 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
   const lines = battingLines(dataset, batting, params)
   const q = qualifiedBatters(lines, games)
   const avg = top(q, (l) => l.avg)
-  if (avg) add({ id: `avg-${avg.name}`, kicker: '打擊率領先', figure: f3(avg.avg), tone: 'neutral', player: avg.name, text: `${avg.name} ${avg.ab} 打數 ${avg.h} 安，打擊率全隊最高` })
+  if (avg) add({ id: `avg-${avg.name}`, kicker: '打擊率領先', figure: f3(avg.avg), tone: 'neutral', player: avg.name, text: `${avg.name} ${avg.ab} 打數 ${avg.h} 安，達規定打席的打者中打擊率最高` })
   const ops = top(q, (l) => l.ops)
-  if (ops) add({ id: `ops-${ops.name}`, kicker: 'OPS 領先', figure: f3(ops.ops), tone: 'neutral', player: ops.name, text: `${ops.name} 上壘率 ${f3(ops.obp)}、長打率 ${f3(ops.slg)}，攻擊指數全隊第一` })
+  if (ops) add({ id: `ops-${ops.name}`, kicker: 'OPS 領先', figure: f3(ops.ops), tone: 'neutral', player: ops.name, text: `${ops.name} 上壘率 ${f3(ops.obp)}、長打率 ${f3(ops.slg)}，達規定打席的打者中攻擊指數第一` })
   const hr = top(lines.filter((l) => l.hr > 0), (l) => l.hr)
   if (hr) add({ id: `hr-${hr.name}`, kicker: '全壘打', figure: String(hr.hr), tone: 'neutral', player: hr.name, text: `${hr.name} 已敲 ${hr.hr} 支全壘打，全隊最多` })
   const sb = top(lines.filter((l) => l.sb >= 3), (l) => l.sb)
@@ -188,7 +190,7 @@ export function teamStories({ dataset, summaries, batting, pitching, params = DE
 
   const pl = pitchingLines(pitching, summaries.map((s) => s.game), params)
   const era = top(qualifiedPitchers(pl, games), (l) => l.era, 'min')
-  if (era) add({ id: `era-${era.name}`, kicker: '防禦率最佳', figure: f2(era.era), tone: 'neutral', player: era.name, text: `${era.name} 投 ${era.ipDisplay} 局，防禦率全隊最低` })
+  if (era) add({ id: `era-${era.name}`, kicker: '防禦率最佳', figure: f2(era.era), tone: 'neutral', player: era.name, text: `${era.name} 投 ${era.ipDisplay} 局，達規定投球局的投手中防禦率最低` })
   const k = top(pl.filter((l) => l.k >= 5), (l) => l.k)
   if (k) add({ id: `k-${k.name}`, kicker: '三振', figure: String(k.k), tone: 'neutral', player: k.name, text: `${k.name} 投 ${k.ipDisplay} 局送出 ${k.k} 次三振，全隊最多` })
 
